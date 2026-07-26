@@ -12,7 +12,7 @@ from services._audit_payloads_rrhh import (
     payload_alta_empleado, payload_baja_empleado, payload_update_empleado,
 )
 from services._empleados_export import construir_filas_export
-from services._empleados_utils import empleado_or_404, ensure_legajo_unico
+from services._empleados_utils import empleado_or_404, ensure_legajo_unico, ensure_no_ciclo_manager
 from services.audit_service import AuditService
 from services.export import Descarga, build_export
 from utils.errors import AppError
@@ -60,6 +60,8 @@ class EmpleadoService:
             AppError: EMPLEADO_NOT_FOUND (404) si el ID no existe o no pertenece a la empresa.
         """
         ensure_legajo_unico(self._repo, data.legajo, empresa_id, str(id))
+        if data.manager_id is not None:  # solo al ASIGNAR un superior (limpiar a null no puede ciclar)
+            ensure_no_ciclo_manager(self._repo, id, data.manager_id)
         prior = self._repo.find_by_id(str(id), empresa_id)
         empleado = empleado_or_404(self._repo.update(str(id), data, empresa_id))
         self._audit.registrar(**payload_update_empleado(prior, empleado, usuario_id, empleado.empresa_id))

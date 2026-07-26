@@ -115,13 +115,13 @@ class EmpleadoRepo:
     def update(self, id: str, data: EmpleadoUpdate, empresa_id: Optional[UUID] = None) -> Optional[EmpleadoResponse]:
         """Actualiza solo los campos no-None y devuelve el registro actualizado. Si empresa_id se provee, restringe el WHERE."""
         patch = {k: v for k, v in data.model_dump(exclude_none=True).items()}
+        # manager_id: null explícito = limpiar (exclude_none lo descarta; exclude_unset lo detecta).
+        if "manager_id" in data.model_dump(exclude_unset=True):
+            patch["manager_id"] = str(data.manager_id) if data.manager_id else None
         if not patch:
             return self.find_by_id(id, empresa_id)
-
         if "area_id" in patch:
             patch["area_id"] = str(patch["area_id"])
-        if "manager_id" in patch:
-            patch["manager_id"] = str(patch["manager_id"])
         if "fecha_ingreso" in patch:
             patch["fecha_ingreso"] = str(patch["fecha_ingreso"])
         if "fecha_nacimiento" in patch and patch["fecha_nacimiento"]:

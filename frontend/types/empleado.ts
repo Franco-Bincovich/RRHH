@@ -66,7 +66,7 @@ export interface EmpleadoCreate {
   dni?: string
   cuil?: string
   legajo?: string
-  manager_id?: string // superior inmediato (id)
+  manager_id?: string | null // superior inmediato (id); null explícito = limpiar (desasignar)
   cargo?: string // DEPRECADO (se quita en S6); el form ya no lo manda
   rol?: string // DEPRECADO (se quita en S6)
   dias_vacaciones_asignados?: number

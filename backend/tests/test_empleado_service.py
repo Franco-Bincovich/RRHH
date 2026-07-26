@@ -34,6 +34,8 @@ from utils.errors import AppError
 
 _ID = UUID("11111111-1111-1111-1111-111111111111")
 _EMPRESA = UUID("99999999-9999-9999-9999-999999999999")
+_B = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+_C = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
 
 
 def _resp(**over) -> EmpleadoResponse:
@@ -76,6 +78,7 @@ class _FakeRepo:
     def __init__(self) -> None:
         self.legajo_existing = None            # find_by_legajo
         self.by_id = None                      # find_by_id (prior + update echo)
+        self.by_id_map = None                  # opcional: id→EmpleadoResponse para caminar la cadena de managers
         self.update_returns = self._SENTINEL   # None simula "no encontrado"
         self.soft_delete_returns = True
         self.find_all_returns = ([], 0)
@@ -92,6 +95,9 @@ class _FakeRepo:
         return _resp()
 
     def find_by_id(self, id, empresa_id=None):
+        # Con by_id_map, resuelve por id (para caminar la cadena de managers); el resto cae a by_id.
+        if self.by_id_map is not None and str(id) in self.by_id_map:
+            return self.by_id_map[str(id)]
         return self.by_id
 
     def update(self, id, data, empresa_id=None):
@@ -171,6 +177,49 @@ def test_update_legajo_duplicado_409_no_actualiza():
         _svc(repo).update_empleado(_ID, EmpleadoUpdate(legajo="L-009"), _EMPRESA, "u1")
     assert e.value.code == "LEGAJO_DUPLICADO"
     assert repo.updated is None  # cortó antes de tocar el update
+
+
+# ─── Superior inmediato (manager_id): asignar / anti-ciclos ─────────────────────────
+
+def test_update_asignar_superior_sin_ciclo_ok():
+    repo, audit = _FakeRepo(), _FakeAudit()
+    repo.by_id = _resp()  # prior + eco del update (el editado cae a by_id)
+    repo.by_id_map = {str(_B): _resp(id=str(_B), manager_id=None)}  # el superior no tiene manager → sin ciclo
+    _svc(repo, audit).update_empleado(_ID, EmpleadoUpdate(manager_id=_B), _EMPRESA, "u1")
+    _, data_arg = repo.updated
+    assert str(data_arg.manager_id) == str(_B)
+    assert [c["evento"] for c in audit.calls] == ["update_empleado"]
+
+
+def test_update_autoreferencia_rechazada_400():
+    repo = _FakeRepo(); repo.by_id = _resp()
+    with pytest.raises(AppError) as e:  # un empleado no puede ser su propio superior
+        _svc(repo).update_empleado(_ID, EmpleadoUpdate(manager_id=_ID), _EMPRESA, "u1")
+    assert e.value.code == "MANAGER_CICLO" and e.value.status_code == 400
+    assert repo.updated is None  # no persistió
+
+
+def test_update_ciclo_directo_A_B_rechazado_400():
+    # Editando A y asignándole a B como superior, con B ya teniendo a A como superior.
+    repo = _FakeRepo(); repo.by_id = _resp()
+    repo.by_id_map = {str(_B): _resp(id=str(_B), manager_id=str(_ID))}
+    with pytest.raises(AppError) as e:
+        _svc(repo).update_empleado(_ID, EmpleadoUpdate(manager_id=_B), _EMPRESA, "u1")
+    assert e.value.code == "MANAGER_CICLO" and e.value.status_code == 400
+    assert repo.updated is None
+
+
+def test_update_ciclo_indirecto_A_B_C_A_rechazado_400():
+    # A→B→C→A: asignar a A el superior B, con la cadena B→C y C→A ya existente.
+    repo = _FakeRepo(); repo.by_id = _resp()
+    repo.by_id_map = {
+        str(_B): _resp(id=str(_B), manager_id=str(_C)),
+        str(_C): _resp(id=str(_C), manager_id=str(_ID)),
+    }
+    with pytest.raises(AppError) as e:
+        _svc(repo).update_empleado(_ID, EmpleadoUpdate(manager_id=_B), _EMPRESA, "u1")
+    assert e.value.code == "MANAGER_CICLO" and e.value.status_code == 400
+    assert repo.updated is None
 
 
 # ─── Baja (soft delete) ───────────────────────────────────────────────────────────

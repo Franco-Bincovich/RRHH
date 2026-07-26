@@ -30,3 +30,22 @@ def empleado_or_404(empleado: Optional[EmpleadoResponse]) -> EmpleadoResponse:
     if not empleado:
         raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
     return empleado
+
+
+def ensure_no_ciclo_manager(repo: EmpleadoRepo, empleado_id, manager_id, max_saltos: int = 50) -> None:
+    """Lanza MANAGER_CICLO (400) si asignar `manager_id` como superior de `empleado_id` crea una
+    jerarquía circular. Sube por la cadena de managers del candidato (find_by_id); si en algún
+    salto se llega al propio empleado, hay ciclo — incluye la auto-referencia (manager == empleado).
+    `max_saltos` es la red contra datos ya corruptos: si la cadena no termina, se asume ciclo."""
+    if manager_id is None:
+        return
+    emp = str(empleado_id)
+    actual: Optional[str] = str(manager_id)
+    for _ in range(max_saltos):
+        if actual == emp:
+            raise AppError("El superior asignado genera una jerarquía circular", "MANAGER_CICLO", 400)
+        nodo = repo.find_by_id(actual)
+        if nodo is None or nodo.manager_id is None:
+            return
+        actual = str(nodo.manager_id)
+    raise AppError("El superior asignado genera una jerarquía circular", "MANAGER_CICLO", 400)

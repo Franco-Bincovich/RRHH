@@ -77,7 +77,7 @@ export function buildPayload(form: FormData): Omit<EmpleadoCreate, "empresa_id">
     dni: form.dni || undefined,
     cuil: form.cuil || undefined,
     legajo: form.legajo || undefined,
-    manager_id: form.manager_id || undefined,
+    manager_id: form.manager_id || null,  // null explícito = "Sin superior" (limpiar); undefined = no tocar
     dias_vacaciones_asignados: form.dias_vacaciones_asignados
       ? parseInt(form.dias_vacaciones_asignados, 10)
       : undefined,
