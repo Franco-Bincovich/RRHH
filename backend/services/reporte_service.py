@@ -15,7 +15,9 @@ from schemas.reporte import HistorialItem, ReporteResponse
 from services.reporte_adhoc import generate_adhoc
 from services.reporte_anual import generate_anual_consolidado
 from services.reporte_generators import (
+    generate_altas_bajas,
     generate_costos,
+    generate_distribucion,
     generate_headcount,
     generate_onboarding,
     generate_rotacion,
@@ -73,6 +75,8 @@ class ReporteService:
         generators = {
             "headcount":          lambda: generate_headcount(mes_e, anio_e, empresa_id),
             "rotacion":           lambda: generate_rotacion(mes_e, anio_e, empresa_id),
+            "altas_bajas":        lambda: generate_altas_bajas(mes_e, anio_e, empresa_id),
+            "distribucion":       lambda: generate_distribucion(empresa_id),
             "costos":             lambda: generate_costos(mes_e, anio_e, empresa_id),
             "vacantes":           lambda: generate_vacantes(empresa_id),
             "onboarding":         lambda: generate_onboarding(empresa_id),
@@ -86,6 +90,8 @@ class ReporteService:
         nombres = {
             "headcount":         f"Headcount — {periodo_str(mes_e, anio_e)}",
             "rotacion":          f"Rotación — {periodo_str(mes_e, anio_e)}",
+            "altas_bajas":       f"Altas y bajas — {periodo_str(mes_e, anio_e)}",
+            "distribucion":      "Distribución de plantilla",
             "costos":            f"Costos — {periodo_str(mes_e, anio_e)}",
             "vacantes":          "Pipeline de Vacantes",
             "onboarding":        "Progreso de Onboarding",
@@ -109,7 +115,7 @@ class ReporteService:
             empresa_id=empresa_id,
             parametros=(
                 {"anio": anio_e} if tipo == "anual_consolidado"
-                else None if tipo in ("vacantes", "onboarding", "adhoc")
+                else None if tipo in ("vacantes", "onboarding", "adhoc", "distribucion")
                 else {"mes": mes_e, "anio": anio_e}
             ),
         )

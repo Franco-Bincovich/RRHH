@@ -1,6 +1,6 @@
 import { apiFetch, API_BASE, authHeaders } from "./api"
 
-export type TipoReporte = "headcount" | "rotacion" | "costos" | "vacantes" | "onboarding" | "adhoc" | "anual_consolidado"
+export type TipoReporte = "headcount" | "rotacion" | "altas_bajas" | "distribucion" | "costos" | "vacantes" | "onboarding" | "adhoc" | "anual_consolidado"
 
 export interface ReporteGenerarRequest {
   tipo: TipoReporte

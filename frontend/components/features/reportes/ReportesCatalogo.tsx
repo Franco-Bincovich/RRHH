@@ -1,4 +1,4 @@
-import { Briefcase, CalendarDays, DollarSign, RefreshCw, UserCheck, Users } from "lucide-react"
+import { Briefcase, CalendarDays, DollarSign, PieChart, RefreshCw, UserCheck, UserPlus, Users } from "lucide-react"
 
 import { ReporteCard, type ReporteEstandar } from "./ReporteCard"
 
@@ -20,6 +20,22 @@ const REPORTES_ESTANDAR: ReporteEstandar[] = [
       "Índice de rotación voluntaria e involuntaria, análisis de causas de egreso y comparativa histórica por trimestre.",
     icon: RefreshCw,
     usaPeriodo: true,
+  },
+  {
+    id: "altas_bajas",
+    titulo: "Altas y bajas",
+    descripcion:
+      "Listado nominal de ingresos y egresos del período: nombre, área y fecha (y motivo en las bajas).",
+    icon: UserPlus,
+    usaPeriodo: true,
+  },
+  {
+    id: "distribucion",
+    titulo: "Distribución de plantilla",
+    descripcion:
+      "Composición de la dotación activa por seniority, modalidad de contratación y turno. Los no especificados se agrupan aparte.",
+    icon: PieChart,
+    usaPeriodo: false,
   },
   {
     id: "costos",
