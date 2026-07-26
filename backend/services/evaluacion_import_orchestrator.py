@@ -26,6 +26,10 @@ from services.evaluacion_service import EvaluacionService
 from utils.errors import AppError
 from utils.logger import logger
 
+# Sufijo del período mientras el lote nuevo se construye: lo hace distinto del período real, así
+# la UNIQUE(empresa_id, periodo) permite que el nuevo y el previo coexistan hasta el rename final.
+_SUFIJO_TEMP = "::importando::"
+
 
 class EvaluacionImportOrchestrator:
     def __init__(self, persistencia: Optional[EvaluacionService] = None,
@@ -56,28 +60,68 @@ class EvaluacionImportOrchestrator:
             periodo_existe=prior is not None, registros_a_pisar=a_pisar)
 
     def confirmar(self, req: ConfirmarRequest, usuario_id: Optional[str] = None) -> ConfirmarResponse:
-        """Persiste el payload aprobado. Pisa el período previo si existe. UN evento de auditoría."""
+        """Persiste el payload aprobado SIN ventana de pérdida. La UNIQUE(empresa_id, periodo)
+        impide dos lotes del mismo período, así que: (a) crea el lote con período TEMPORAL,
+        (b-d) persiste evaluados/resultados/equivalencias, (e) VERIFICA POR CONTEO, (f) recién
+        entonces borra el previo, (g) renombra al período real. Si algo falla antes de (f) el
+        previo queda intacto y el temporal se limpia. UN evento de auditoría (con el período real)."""
         emp = str(req.empresa_id)
         self._validar_empresa(emp, req.evaluados)
         prior = self._repo.find_lote_by_periodo(emp, req.periodo)
-        if prior:
-            self._repo.delete_lote(str(prior.id))
         lote = self._svc.crear_lote(LoteCreate(
-            empresa_id=req.empresa_id, periodo=req.periodo,
+            empresa_id=req.empresa_id, periodo=f"{req.periodo} {_SUFIJO_TEMP}",
             importado_por=UUID(usuario_id) if usuario_id else None))
-        guardados = self._svc.guardar_evaluados(lote.id, [pl.a_evaluado_create(e) for e in req.evaluados])
-        id_por_nombre = {(g.apellido_evaluado, g.nombre_evaluado): g.id for g in guardados}
-        n_res = sum(
-            self._svc.guardar_resultados(id_por_nombre[(e.apellido_evaluado, e.nombre_evaluado)],
-                                         pl.a_resultado_creates(e))
-            for e in req.evaluados)
-        n_eq = self._guardar_equivalencias(emp, req.evaluados, usuario_id)
+        try:
+            n_ev, n_res, n_eq = self._persistir_y_verificar(lote.id, req, emp, usuario_id)  # b–e
+        except Exception:
+            self._limpiar_temporal(lote.id)  # best-effort; el prior sigue intacto, no tapa el error
+            raise
+        if prior:
+            self._repo.delete_lote(str(prior.id))                      # f — único paso destructivo
+        self._renombrar_al_real(lote.id, req.periodo)                  # g — ventana f→g (recuperable)
         self._audit.registrar(**payload_importacion_evaluaciones(
-            str(lote.id), req.periodo, emp, len(guardados), n_res, n_eq, bool(prior), usuario_id))
+            str(lote.id), req.periodo, emp, n_ev, n_res, n_eq, bool(prior), usuario_id))
         logger.info("Import de evaluaciones confirmado",
-                    extra={"lote_id": str(lote.id), "evaluados": len(guardados), "resultados": n_res})
-        return ConfirmarResponse(lote_id=lote.id, evaluados=len(guardados), resultados=n_res,
+                    extra={"lote_id": str(lote.id), "evaluados": n_ev, "resultados": n_res})
+        return ConfirmarResponse(lote_id=lote.id, evaluados=n_ev, resultados=n_res,
                                  equivalencias=n_eq, piso_periodo_anterior=bool(prior))
+
+    def _persistir_y_verificar(self, lote_id: UUID, req: ConfirmarRequest, emp: str,
+                               usuario_id: Optional[str]) -> tuple:
+        """Pasos b–e: persiste y VERIFICA POR CONTEO antes de tocar el lote previo. La verificación
+        es el corazón del fix: un insert parcial silencioso DEBE detectarse acá (no alcanza con
+        'no hubo excepción'). Devuelve (n_evaluados, n_resultados, n_equivalencias)."""
+        guardados = self._svc.guardar_evaluados(lote_id, [pl.a_evaluado_create(e) for e in req.evaluados])
+        if len(guardados) != len(req.evaluados):
+            raise AppError("Evaluados guardados no coinciden con el lote", "IMPORT_INCOMPLETO", 500)
+        id_por_nombre = {(g.apellido_evaluado, g.nombre_evaluado): g.id for g in guardados}
+        esperados, n_res = 0, 0
+        for e in req.evaluados:
+            creates = pl.a_resultado_creates(e)
+            esperados += len(creates)
+            n_res += self._svc.guardar_resultados(id_por_nombre[(e.apellido_evaluado, e.nombre_evaluado)], creates)
+        if n_res != esperados:
+            raise AppError("Resultados guardados no coinciden con el lote", "IMPORT_INCOMPLETO", 500)
+        n_eq = self._guardar_equivalencias(emp, req.evaluados, usuario_id)
+        return len(guardados), n_res, n_eq
+
+    def _limpiar_temporal(self, lote_id: UUID) -> None:
+        """Borrado best-effort del lote temporal ante fallo en b–e. No re-lanza: no debe tapar el
+        error original (el caller re-lanza el suyo)."""
+        try:
+            self._repo.delete_lote(str(lote_id))
+        except Exception:  # noqa: BLE001 — limpieza best-effort
+            logger.error("No se pudo limpiar el lote temporal huérfano", extra={"lote_id": str(lote_id)})
+
+    def _renombrar_al_real(self, lote_id: UUID, periodo: str) -> None:
+        """Paso g. Si falla, el lote quedó COMPLETO con nombre temporal y el previo ya se borró —
+        no es pérdida, es recuperable renombrando a mano. Se loguea a ERROR con lote_id y período."""
+        try:
+            self._repo.update_periodo_lote(str(lote_id), periodo)
+        except Exception:
+            logger.error("Import completo pero el rename al período real falló — renombrar a mano",
+                         extra={"lote_id": str(lote_id), "periodo": periodo})
+            raise
 
     def _validar_empresa(self, empresa_id: str, evaluados: List[EvaluadoConfirm]) -> None:
         """Fail-closed: ningún empleado_id puede ser de otra empresa (la barandilla del matcheo)."""

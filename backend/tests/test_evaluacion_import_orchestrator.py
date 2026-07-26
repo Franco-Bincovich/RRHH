@@ -42,8 +42,12 @@ EMPRESA = uuid4()
 # ── Fakes ─────────────────────────────────────────────────────────────────────
 
 class _FakeSvc:
-    def __init__(self) -> None:
+    # drop_evaluados / drop_resultados simulan un insert parcial SILENCIOSO (persiste de menos)
+    # para probar la verificación por conteo del orchestrator.
+    def __init__(self, drop_evaluados: int = 0, drop_resultados: int = 0) -> None:
         self.lote_creado = None
+        self._drop_ev = drop_evaluados
+        self._drop_res = drop_resultados
 
     def crear_lote(self, data):
         self.lote_creado = LoteResponse(id=uuid4(), empresa_id=data.empresa_id, periodo=data.periodo,
@@ -51,17 +55,24 @@ class _FakeSvc:
         return self.lote_creado
 
     def guardar_evaluados(self, lote_id, filas):
-        return [EvaluadoResponse(id=uuid4(), lote_id=lote_id, created_at=datetime.now(timezone.utc),
-                                 **f.model_dump()) for f in filas]
+        creados = [EvaluadoResponse(id=uuid4(), lote_id=lote_id, created_at=datetime.now(timezone.utc),
+                                    **f.model_dump()) for f in filas]
+        return creados[: len(creados) - self._drop_ev] if self._drop_ev else creados
 
     def guardar_resultados(self, evaluado_id, filas):
-        return len(filas)
+        n = len(filas)
+        if self._drop_res > 0:  # persiste de menos una sola vez
+            n -= self._drop_res
+            self._drop_res = 0
+        return n
 
 
 class _FakeRepo:
-    def __init__(self, prior=None, evaluados_prior=0, delete_ok=True) -> None:
+    def __init__(self, prior=None, evaluados_prior=0, delete_ok=True, rename_ok=True) -> None:
         self.prior, self._n_prior, self.borrados = prior, evaluados_prior, []
         self._delete_ok = delete_ok
+        self._rename_ok = rename_ok
+        self.renombrados = []  # (lote_id, periodo) de cada update_periodo_lote
 
     def find_lote_by_periodo(self, empresa_id, periodo):
         return self.prior
@@ -75,6 +86,12 @@ class _FakeRepo:
     def delete_lote(self, id):
         self.borrados.append(id)
         return self._delete_ok
+
+    def update_periodo_lote(self, id, periodo):
+        if not self._rename_ok:
+            raise AppError("Error al renombrar el lote de evaluación", "DB_ERROR", 500)
+        self.renombrados.append((id, periodo))
+        return self.prior  # el valor no lo usa el orchestrator
 
 
 class _FakeMatcheo:
@@ -169,15 +186,62 @@ def test_confirmar_reimporta_pisa_y_audita_una_vez():
     e1, e2 = uuid4(), uuid4()
     prior = LoteResponse(id=uuid4(), empresa_id=EMPRESA, periodo="Ciclo 2026",
                          importado_por=None, created_at=datetime.now(timezone.utc))
-    repo, audit = _FakeRepo(prior=prior), _FakeAudit()
-    orch = EvaluacionImportOrchestrator(persistencia=_FakeSvc(), repo=repo,
+    svc, repo, audit = _FakeSvc(), _FakeRepo(prior=prior), _FakeAudit()
+    orch = EvaluacionImportOrchestrator(persistencia=svc, repo=repo,
                                         matcheo_repo=_FakeMatcheo([e1, e2]), audit=audit)
     req = ConfirmarRequest(empresa_id=EMPRESA, periodo="Ciclo 2026", evaluados=[
         _confirm(e1, "GODOY", "SOL"), _confirm(e2, "AMADO", "ANDREA")])
     r = orch.confirmar(req, usuario_id=str(uuid4()))
     assert r.piso_periodo_anterior is True and repo.borrados == [str(prior.id)]
     assert r.evaluados == 2 and r.resultados == 4
+    # el lote nuevo se creó con sufijo temporal y se renombró al período REAL (sin residuo)
+    assert svc.lote_creado.periodo == "Ciclo 2026 ::importando::"
+    assert repo.renombrados == [(str(svc.lote_creado.id), "Ciclo 2026")]
     assert len(audit.eventos) == 1 and audit.eventos[0]["evento"] == "importacion_evaluaciones"
+
+
+def test_confirmar_primer_import_sin_prior_ok():
+    e1 = uuid4()
+    svc, repo = _FakeSvc(), _FakeRepo(prior=None)  # no hay período previo
+    orch = EvaluacionImportOrchestrator(persistencia=svc, repo=repo,
+                                        matcheo_repo=_FakeMatcheo([e1]), audit=_FakeAudit())
+    req = ConfirmarRequest(empresa_id=EMPRESA, periodo="Ciclo 2026", evaluados=[_confirm(e1)])
+    r = orch.confirmar(req)
+    assert r.piso_periodo_anterior is False and repo.borrados == []  # no borró nada
+    assert repo.renombrados == [(str(svc.lote_creado.id), "Ciclo 2026")]  # igual renombra al real
+
+
+def test_confirmar_evaluados_incompletos_no_borra_el_viejo():
+    # EL test: si se persisten MENOS evaluados de los esperados, la verificación por conteo lo
+    # detecta, se lanza AppError, el lote VIEJO sigue intacto y el temporal huérfano se limpia.
+    e1, e2 = uuid4(), uuid4()
+    prior = _lote()
+    svc, repo, audit = _FakeSvc(drop_evaluados=1), _FakeRepo(prior=prior), _FakeAudit()
+    orch = EvaluacionImportOrchestrator(persistencia=svc, repo=repo,
+                                        matcheo_repo=_FakeMatcheo([e1, e2]), audit=audit)
+    req = ConfirmarRequest(empresa_id=EMPRESA, periodo="Ciclo 2026", evaluados=[
+        _confirm(e1, "GODOY", "SOL"), _confirm(e2, "AMADO", "ANDREA")])
+    with pytest.raises(AppError) as exc:
+        orch.confirmar(req)
+    assert exc.value.code == "IMPORT_INCOMPLETO" and exc.value.status_code == 500
+    assert str(prior.id) not in repo.borrados            # el VIEJO NO se borró
+    assert repo.borrados == [str(svc.lote_creado.id)]    # solo se limpió el temporal huérfano
+    assert repo.renombrados == [] and audit.eventos == []  # no llegó a renombrar ni auditar
+
+
+def test_confirmar_resultados_incompletos_no_borra_el_viejo():
+    e1 = uuid4()
+    prior = _lote()
+    svc, repo, audit = _FakeSvc(drop_resultados=1), _FakeRepo(prior=prior), _FakeAudit()
+    orch = EvaluacionImportOrchestrator(persistencia=svc, repo=repo,
+                                        matcheo_repo=_FakeMatcheo([e1]), audit=audit)
+    req = ConfirmarRequest(empresa_id=EMPRESA, periodo="Ciclo 2026", evaluados=[_confirm(e1, n_res=3)])
+    with pytest.raises(AppError) as exc:
+        orch.confirmar(req)
+    assert exc.value.code == "IMPORT_INCOMPLETO"
+    assert str(prior.id) not in repo.borrados
+    assert repo.borrados == [str(svc.lote_creado.id)]    # temporal limpiado
+    assert audit.eventos == []
 
 
 def test_confirmar_guarda_solo_equivalencias_marcadas():

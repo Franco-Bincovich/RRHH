@@ -17,6 +17,17 @@ _EVALUADOS = "evaluacion_evaluados"
 _RESULTADOS = "evaluacion_resultados"
 
 
+def _insert_completo(tabla: str, filas: List[dict], error_msg: str) -> List[dict]:
+    """Inserta `filas` (bulk); [] si no hay. DB_ERROR si el insert no devuelve TODAS las esperadas
+    (no silencia parcial/vacío) — para que la verificación por conteo del import sea confiable."""
+    if not filas:
+        return []
+    data = supabase_admin.table(tabla).insert(filas).execute().data or []
+    if len(data) != len(filas):
+        raise AppError(error_msg, "DB_ERROR", 500)
+    return data
+
+
 class EvaluacionRepo:
     # ── Lotes ──
     def crear_lote(self, datos: dict) -> LoteResponse:
@@ -43,9 +54,14 @@ class EvaluacionRepo:
         res = supabase_admin.table(_LOTES).delete().eq("id", id).execute()
         return bool(res and res.data)
 
+    def update_periodo_lote(self, id: str, periodo: str) -> None:
+        """Renombra el período de un lote (por id). DB_ERROR si el update no afecta ninguna fila."""
+        res = supabase_admin.table(_LOTES).update({"periodo": periodo}).eq("id", id).execute()
+        if not res or not res.data:
+            raise AppError("Error al renombrar el lote de evaluación", "DB_ERROR", 500)
+
     def find_lotes(self, empresa_id: Optional[str] = None) -> List[LoteResponse]:
-        """Lotes (más recientes primero) enriquecidos con nombre de empresa, de quién importó
-        y conteo de evaluados (lookups batch, sin N+1). Filtrados por empresa si se indica."""
+        """Lotes (recientes primero) enriquecidos (empresa, quién importó, conteo), lookups batch."""
         q = supabase_admin.table(_LOTES).select("*")
         if empresa_id:
             q = q.eq("empresa_id", empresa_id)
@@ -54,11 +70,9 @@ class EvaluacionRepo:
 
     # ── Evaluados ──
     def crear_evaluados(self, filas: List[dict]) -> List[EvaluadoResponse]:
-        """Inserta N evaluados en una sola llamada. [] si no hay filas."""
-        if not filas:
-            return []
-        res = supabase_admin.table(_EVALUADOS).insert(filas).execute()
-        return [EvaluadoResponse.model_validate(r) for r in (res.data or [])] if res else []
+        """Inserta N evaluados (bulk). [] si no hay; DB_ERROR si el insert no devuelve todas."""
+        data = _insert_completo(_EVALUADOS, filas, "Error al guardar los evaluados del lote")
+        return [EvaluadoResponse.model_validate(r) for r in data]
 
     def find_evaluados(self, lote_id: str) -> List[EvaluadoResponse]:
         """Evaluados de un lote, ordenados por apellido y nombre."""
@@ -68,11 +82,9 @@ class EvaluacionRepo:
 
     # ── Resultados ──
     def crear_resultados(self, filas: List[dict]) -> List[ResultadoResponse]:
-        """Inserta N resultados en una sola llamada. [] si no hay filas."""
-        if not filas:
-            return []
-        res = supabase_admin.table(_RESULTADOS).insert(filas).execute()
-        return [ResultadoResponse.model_validate(r) for r in (res.data or [])] if res else []
+        """Inserta N resultados (bulk). [] si no hay; DB_ERROR si el insert no devuelve todas."""
+        data = _insert_completo(_RESULTADOS, filas, "Error al guardar los resultados del lote")
+        return [ResultadoResponse.model_validate(r) for r in data]
 
     def find_resultados(self, evaluado_id: str) -> List[ResultadoResponse]:
         """Resultados de un evaluado, en el orden de columnas del archivo."""
