@@ -12,6 +12,7 @@ que aquel archivo no se modifique. El diff se reusa de `AuditService._diff` (no 
 reimplementa).
 """
 from typing import Optional
+from uuid import uuid4
 
 from services.audit_service import AuditService, _jsonable
 
@@ -176,7 +177,9 @@ def payload_importacion_nomina(
     Refleja el resumen: nuevos, actualizados (dedup DNI), con faltantes y no cargados.
     empresa_id None: el lote puede crear empleados en varias empresas (columna Organismo)."""
     return {
-        "usuario_id": usuario_id, "entidad": "empleado", "registro_id": "lote_nomina",
+        # registro_id = id DE EVENTO (uuid4 generado), no de recurso: el import de nómina no
+        # persiste un lote con id propio (a diferencia de evaluaciones). NO "corregir" a un id real.
+        "usuario_id": usuario_id, "entidad": "empleado", "registro_id": str(uuid4()),
         "accion": "INSERT", "evento": "importacion_nomina", "empresa_id": None,
         "datos_anteriores": None,
         "datos_nuevos": {
