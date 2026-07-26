@@ -2,7 +2,7 @@
 // selector de ciclo; la empresa la resuelve el header (el lote ya la fija en el backend).
 import { apiFetch, API_BASE, ApiError, authHeaders, descargarArchivo } from "@/services/api"
 import type {
-  EvaluadoListadoResponse, FichaResponse, LotesResponse, MetricasResponse,
+  EvaluadoListadoResponse, FichaResponse, LotesBulkResult, LotesResponse, MetricasResponse,
 } from "@/types/evaluacionReportes"
 
 const BASE = "/api/evaluaciones/resultados"
@@ -15,6 +15,22 @@ export interface FiltrosEvaluados {
 
 export async function fetchLotesEvaluaciones(): Promise<LotesResponse> {
   return apiFetch<LotesResponse>(`${BASE}/lotes`)
+}
+
+/**
+ * Historial: TODOS los lotes de TODAS las empresas. Fuerza X-Empresa-Id "todas" (consolidado)
+ * para no depender del selector del sidebar — el backend ya desacopló el listado y el borrado.
+ */
+export async function fetchLotesHistorial(): Promise<LotesResponse> {
+  return apiFetch<LotesResponse>(`${BASE}/lotes`, { headers: { "X-Empresa-Id": "todas" } })
+}
+
+/** Baja múltiple: devuelve la clasificación { eliminados, fallidos } (no aborta si uno falla). */
+export async function deleteLotesBulk(loteIds: string[]): Promise<LotesBulkResult> {
+  return apiFetch<LotesBulkResult>(`${BASE}/lotes/eliminar`, {
+    method: "POST",
+    body: JSON.stringify({ lote_ids: loteIds }),
+  })
 }
 
 /**

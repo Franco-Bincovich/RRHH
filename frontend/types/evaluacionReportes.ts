@@ -6,11 +6,24 @@ export interface LoteEvaluacion {
   periodo: string
   importado_por: string | null
   created_at: string
+  empresa_nombre: string | null
+  importado_por_nombre: string | null
+  evaluados: number
 }
 
 export interface LotesResponse {
   items: LoteEvaluacion[]
   total: number
+}
+
+export interface LoteBulkError {
+  id: string
+  motivo: string
+}
+
+export interface LotesBulkResult {
+  eliminados: string[]
+  fallidos: LoteBulkError[]
 }
 
 export interface ResumenCiclo {

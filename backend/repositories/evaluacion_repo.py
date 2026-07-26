@@ -7,6 +7,7 @@ Supabase (res and res.data), como en cesion_repo/empleado_repo. Un repo más a p
 from typing import List, Optional
 
 from integrations.supabase_client import supabase_admin
+from repositories._evaluacion_lotes_enrich import enriquecer_lotes
 from schemas.evaluacion_resultados import EvaluadoResponse, LoteResponse, ResultadoResponse
 from utils.errors import AppError
 from utils.logger import logger
@@ -43,12 +44,13 @@ class EvaluacionRepo:
         return bool(res and res.data)
 
     def find_lotes(self, empresa_id: Optional[str] = None) -> List[LoteResponse]:
-        """Lotes (más recientes primero), filtrados por empresa si se indica."""
+        """Lotes (más recientes primero) enriquecidos con nombre de empresa, de quién importó
+        y conteo de evaluados (lookups batch, sin N+1). Filtrados por empresa si se indica."""
         q = supabase_admin.table(_LOTES).select("*")
         if empresa_id:
             q = q.eq("empresa_id", empresa_id)
         res = q.order("created_at", desc=True).execute()
-        return [LoteResponse.model_validate(r) for r in (res.data or [])] if res else []
+        return enriquecer_lotes(res.data or [] if res else [])
 
     # ── Evaluados ──
     def crear_evaluados(self, filas: List[dict]) -> List[EvaluadoResponse]:

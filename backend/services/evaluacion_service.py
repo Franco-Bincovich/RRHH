@@ -10,7 +10,7 @@ from uuid import UUID
 from repositories.evaluacion_repo import EvaluacionRepo
 from schemas.evaluacion_resultados import (
     EvaluadoCreate, EvaluadoListResponse, EvaluadoResponse,
-    LoteCreate, LoteListResponse, LoteResponse,
+    LoteBulkError, LoteCreate, LoteListResponse, LoteResponse, LotesBulkResult,
     ResultadoCreate, ResultadoListResponse,
 )
 from services._audit_payloads_ev import payload_baja_lote_evaluaciones
@@ -51,22 +51,20 @@ class EvaluacionService:
         } for f in filas]
         return len(self._repo.crear_resultados(payload))
 
-    def delete_lote(self, lote_id: UUID, empresa_id: Optional[UUID],
-                    usuario_id: Optional[str] = None) -> None:
+    def delete_lote(self, lote_id: UUID, usuario_id: Optional[str] = None) -> None:
         """Elimina una importación completa: el CASCADE de las FK se lleva evaluados y resultados.
 
-        Orden estricto: (1) exige empresa activa —en consolidado no se borra—, (2) carga el lote y
-        valida que sea de esa empresa, (3) toma el snapshot ANTES de borrar (después del CASCADE no
-        se puede reconstruir), (4) borra, (5) audita. Las equivalencias de nombres NO cascadean
+        La empresa del lote (lote.empresa_id, ya cargado) es la autoritativa —el borrado NO
+        depende de la empresa activa del header; el gate WRITE del router (admin_rrhh) es lo único
+        que lo protege, y por producto todo admin ve todas las empresas—. Orden: (1) carga el lote
+        (404 si no existe), (2) snapshot ANTES de borrar (después del CASCADE no se reconstruye),
+        (3) borra, (4) audita con la empresa del lote. Las equivalencias de nombres NO cascadean
         (cuelgan de empresa_id) y sobreviven a propósito: son el aprendizaje del matcheo.
 
-        Raises: EMPRESA_REQUERIDA (400), LOTE_NOT_FOUND (404), DB_ERROR (500).
+        Raises: LOTE_NOT_FOUND (404), DB_ERROR (500).
         """
-        if empresa_id is None:
-            raise AppError("Seleccioná una empresa para eliminar", "EMPRESA_REQUERIDA", 400)
         lote = self._repo.find_lote_by_id(str(lote_id))
-        if not lote or str(lote.empresa_id) != str(empresa_id):
-            # Mismo mensaje y code que "no existe": un lote de otra empresa no se confirma.
+        if not lote:
             raise AppError("Importación no encontrada", "LOTE_NOT_FOUND", 404)
         n_evaluados = len(self._repo.find_evaluados(str(lote_id)))
         if not self._repo.delete_lote(str(lote_id)):
@@ -75,6 +73,22 @@ class EvaluacionService:
             str(lote_id), lote.periodo, str(lote.empresa_id), n_evaluados, usuario_id))
         logger.info("Importación de evaluaciones eliminada",
                     extra={"lote_id": str(lote_id), "periodo": lote.periodo})
+
+    def delete_lotes_bulk(self, lote_ids: List[UUID],
+                          usuario_id: Optional[str] = None) -> LotesBulkResult:
+        """Baja múltiple: borra lote por lote con éxito parcial (patrón proyectos). No aborta si
+        uno falla; clasifica en eliminados / fallidos por id. Cada baja emite su propio evento de
+        auditoría (vía delete_lote), nunca uno agregado."""
+        eliminados, fallidos = [], []
+        for lid in lote_ids:
+            try:
+                self.delete_lote(lid, usuario_id)
+                eliminados.append(lid)
+            except AppError as exc:
+                fallidos.append(LoteBulkError(id=lid, motivo=exc.message))
+        logger.info("Baja múltiple de lotes de evaluaciones",
+                    extra={"eliminados": len(eliminados), "fallidos": len(fallidos)})
+        return LotesBulkResult(eliminados=eliminados, fallidos=fallidos)
 
     # ── Lectura ──
     def listar_lotes(self, empresa_id: Optional[UUID] = None) -> LoteListResponse:

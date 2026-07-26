@@ -5,7 +5,7 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { PageHeader } from "@/components/layout/PageHeader"
-import { EliminarLoteButton } from "@/components/features/evaluaciones/EliminarLoteButton"
+import { HistorialImportaciones } from "@/components/features/evaluaciones/HistorialImportaciones"
 import { ImportarEvaluacionesPanel } from "@/components/features/evaluaciones/importar/ImportarEvaluacionesPanel"
 import { MetricasPanel } from "@/components/features/evaluaciones/reportes/MetricasPanel"
 import { EvaluadosResultadosPanel } from "@/components/features/evaluaciones/resultados/EvaluadosResultadosPanel"
@@ -13,21 +13,23 @@ import { useCanWrite } from "@/hooks/useCanWrite"
 import { useLotesEvaluaciones } from "@/hooks/useLotesEvaluaciones"
 import { ClipboardList } from "lucide-react"
 
-type Tab = "metricas" | "evaluados" | "importar"
+type Tab = "metricas" | "evaluados" | "importar" | "importaciones"
 
 const SELECT_CLASS =
   "min-h-9 rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
 export default function EvaluacionesPage() {
   const canWrite = useCanWrite() // write en evaluaciones = admin_rrhh
-  const { lotes, loteId, setLoteId, cargando, recargar } = useLotesEvaluaciones()
+  const { lotes, loteId, setLoteId, cargando } = useLotesEvaluaciones()
   const [tab, setTab] = useState<Tab>("metricas")
-  const loteActivo = lotes.find((l) => l.id === loteId)
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "metricas", label: "Métricas" },
     { id: "evaluados", label: "Evaluados" },
-    ...(canWrite ? [{ id: "importar" as Tab, label: "Importar resultados" }] : []),
+    ...(canWrite ? [
+      { id: "importar" as Tab, label: "Importar resultados" },
+      { id: "importaciones" as Tab, label: "Importaciones" },
+    ] : []),
   ]
   const sinCiclos = !cargando && !loteId
 
@@ -35,7 +37,7 @@ export default function EvaluacionesPage() {
     <div>
       <PageHeader title="Evaluaciones de desempeño" description="Resultados importados y métricas del ciclo" />
 
-      {lotes.length > 1 && tab !== "importar" && (
+      {lotes.length > 1 && (tab === "metricas" || tab === "evaluados") && (
         <label className="mb-4 flex flex-col gap-1 text-xs text-muted-foreground">
           Ciclo
           <select className={SELECT_CLASS} value={loteId ?? ""} onChange={(e) => setLoteId(e.target.value)}>
@@ -59,26 +61,9 @@ export default function EvaluacionesPage() {
         ))}
       </div>
 
-      {tab === "importar" && canWrite && (
-        <div className="space-y-8">
-          <ImportarEvaluacionesPanel />
-          {loteActivo && (
-            <section className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-              <h3 className="text-sm font-semibold text-foreground">Eliminar una importación</h3>
-              <p className="mb-4 mt-1.5 text-sm text-muted-foreground">
-                Si subiste los archivos equivocados, podés borrar por completo la importación del
-                período <strong className="text-foreground">{loteActivo.periodo}</strong>.
-              </p>
-              <EliminarLoteButton
-                loteId={loteActivo.id}
-                periodo={loteActivo.periodo}
-                onEliminado={recargar}
-              />
-            </section>
-          )}
-        </div>
-      )}
-      {tab !== "importar" && sinCiclos && (
+      {tab === "importar" && canWrite && <ImportarEvaluacionesPanel />}
+      {tab === "importaciones" && canWrite && <HistorialImportaciones />}
+      {(tab === "metricas" || tab === "evaluados") && sinCiclos && (
         <EmptyState
           icon={<ClipboardList />}
           title="Todavía no hay resultados importados"

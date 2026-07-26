@@ -6,8 +6,9 @@ existente, y confirmar con reimportación que pisa, guardado selectivo de equiva
 evaluado sin candidato (empleado_id null) y el rechazo de un empleado de otra empresa.
 
 Incluye además la baja de un lote (EvaluacionService.delete_lote), que reusa el mismo
-_FakeRepo: borrado con snapshot auditado, aislamiento por empresa, consolidado rechazado
-y fallo del repo.
+_FakeRepo: borrado con snapshot auditado, borrado desacoplado de la empresa activa (un lote
+de otra empresa se borra igual), 404 del inexistente, fallo del repo, y la baja múltiple
+(delete_lotes_bulk) con éxito parcial clasificado.
 """
 import os
 
@@ -221,7 +222,7 @@ def _lote(empresa_id=None, periodo="Ciclo 2026") -> LoteResponse:
 def test_delete_lote_borra_y_audita_con_snapshot():
     lote, usuario = _lote(), str(uuid4())
     repo, audit = _FakeRepo(prior=lote, evaluados_prior=10), _FakeAudit()
-    EvaluacionService(repo=repo, audit=audit).delete_lote(lote.id, EMPRESA, usuario)
+    EvaluacionService(repo=repo, audit=audit).delete_lote(lote.id, usuario)
     assert repo.borrados == [str(lote.id)]
     assert len(audit.eventos) == 1
     ev = audit.eventos[0]
@@ -233,24 +234,23 @@ def test_delete_lote_borra_y_audita_con_snapshot():
     assert ev["datos_nuevos"] is None
 
 
-def test_delete_lote_de_otra_empresa_es_404_indistinguible_de_inexistente():
-    ajeno = _lote(empresa_id=uuid4())  # existe, pero es de otra empresa
-    repo, audit = _FakeRepo(prior=ajeno), _FakeAudit()
-    with pytest.raises(AppError) as de_otra:
-        EvaluacionService(repo=repo, audit=audit).delete_lote(ajeno.id, EMPRESA)
-    with pytest.raises(AppError) as inexistente:
-        EvaluacionService(repo=_FakeRepo(), audit=_FakeAudit()).delete_lote(uuid4(), EMPRESA)
-    assert de_otra.value.code == inexistente.value.code == "LOTE_NOT_FOUND"
-    assert de_otra.value.message == inexistente.value.message
-    assert de_otra.value.status_code == 404
-    assert repo.borrados == [] and audit.eventos == []
+def test_delete_lote_de_otra_empresa_ahora_borra():
+    # Desacople: el borrado ya NO depende de la empresa activa. Un lote de cualquier empresa
+    # se borra igual (el gate WRITE del router es lo único que protege). La auditoría usa la
+    # empresa del propio lote, no la del header.
+    ajeno = _lote(empresa_id=uuid4())
+    repo, audit = _FakeRepo(prior=ajeno, evaluados_prior=4), _FakeAudit()
+    EvaluacionService(repo=repo, audit=audit).delete_lote(ajeno.id)
+    assert repo.borrados == [str(ajeno.id)]
+    assert len(audit.eventos) == 1
+    assert audit.eventos[0]["empresa_id"] == str(ajeno.empresa_id)
 
 
-def test_delete_lote_sin_empresa_activa_rechaza():
-    repo, audit = _FakeRepo(prior=_lote()), _FakeAudit()
-    with pytest.raises(AppError) as exc:  # consolidado: X-Empresa-Id "todas" → None
-        EvaluacionService(repo=repo, audit=audit).delete_lote(uuid4(), None)
-    assert exc.value.code == "EMPRESA_REQUERIDA" and exc.value.status_code == 400
+def test_delete_lote_inexistente_es_404():
+    repo, audit = _FakeRepo(), _FakeAudit()
+    with pytest.raises(AppError) as exc:
+        EvaluacionService(repo=repo, audit=audit).delete_lote(uuid4())
+    assert exc.value.code == "LOTE_NOT_FOUND" and exc.value.status_code == 404
     assert repo.borrados == [] and audit.eventos == []
 
 
@@ -258,6 +258,18 @@ def test_delete_lote_falla_si_el_repo_no_borro():
     lote = _lote()
     repo, audit = _FakeRepo(prior=lote, evaluados_prior=3, delete_ok=False), _FakeAudit()
     with pytest.raises(AppError) as exc:
-        EvaluacionService(repo=repo, audit=audit).delete_lote(lote.id, EMPRESA)
+        EvaluacionService(repo=repo, audit=audit).delete_lote(lote.id)
     assert exc.value.code == "DB_ERROR" and exc.value.status_code == 500
     assert audit.eventos == []  # no se audita un borrado que no ocurrió
+
+
+def test_delete_lotes_bulk_clasifica_valido_e_inexistente():
+    lote, inexistente = _lote(), uuid4()
+    repo, audit = _FakeRepo(prior=lote, evaluados_prior=5), _FakeAudit()
+    r = EvaluacionService(repo=repo, audit=audit).delete_lotes_bulk([lote.id, inexistente])
+    assert r.eliminados == [lote.id]
+    assert len(r.fallidos) == 1
+    assert r.fallidos[0].id == inexistente and r.fallidos[0].motivo == "Importación no encontrada"
+    assert repo.borrados == [str(lote.id)]          # solo el válido se borró
+    assert len(audit.eventos) == 1                  # un evento por baja efectiva, no agregado
+    assert audit.eventos[0]["registro_id"] == str(lote.id)

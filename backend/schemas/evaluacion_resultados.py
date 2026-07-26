@@ -31,11 +31,31 @@ class LoteResponse(BaseModel):
     periodo: str
     importado_por: Optional[UUID] = None
     created_at: datetime
+    # Campos derivados del historial (los puebla find_lotes con lookups batch; en las lecturas
+    # por id quedan en su default, que no exponen conteo/nombres).
+    empresa_nombre: Optional[str] = None
+    importado_por_nombre: Optional[str] = None
+    evaluados: int = 0
 
 
 class LoteListResponse(BaseModel):
     items: List[LoteResponse]
     total: int
+
+
+class LotesBulkDelete(BaseModel):
+    """Baja múltiple: ids de los lotes a eliminar (multi-selección del historial)."""
+    lote_ids: List[UUID]
+
+
+class LoteBulkError(BaseModel):
+    id: UUID
+    motivo: str  # mensaje legible del AppError (no encontrado / error de DB)
+
+
+class LotesBulkResult(BaseModel):
+    eliminados: List[UUID]
+    fallidos: List[LoteBulkError]
 
 
 # ── Evaluados ─────────────────────────────────────────────────────────────────

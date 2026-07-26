@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
 from schemas.evaluacion_reportes import EvaluadoListadoResponse, FichaResponse, MetricasResponse
-from schemas.evaluacion_resultados import LoteListResponse
+from schemas.evaluacion_resultados import LoteListResponse, LotesBulkDelete, LotesBulkResult
 from services.evaluacion_reportes_service import EvaluacionReportesService
 from services.evaluacion_service import EvaluacionService
 from utils.empresa import get_empresa_id
@@ -31,9 +31,17 @@ async def listar_lotes(request: Request) -> LoteListResponse:
                dependencies=[Depends(require_permission(Seccion.EVALUACIONES, Accion.WRITE))])
 async def eliminar_lote(lote_id: UUID, request: Request) -> None:
     """Elimina una importación completa (CASCADE a evaluados y resultados). El _GATE del archivo
-    es READ, así que este endpoint lleva su propia dependency WRITE = solo admin_rrhh."""
-    EvaluacionService().delete_lote(lote_id, get_empresa_id(request),
-                                    request.state.user.get("id", "system"))
+    es READ, así que este endpoint lleva su propia dependency WRITE = solo admin_rrhh. La empresa
+    del lote es la autoritativa: se borra cualquier lote sin importar la empresa activa del header."""
+    EvaluacionService().delete_lote(lote_id, request.state.user.get("id", "system"))
+
+
+@router.post("/lotes/eliminar", response_model=LotesBulkResult,
+             dependencies=[Depends(require_permission(Seccion.EVALUACIONES, Accion.WRITE))])
+async def eliminar_lotes_bulk(body: LotesBulkDelete, request: Request) -> LotesBulkResult:
+    """Baja múltiple (multi-selección del historial): borra varios lotes con éxito parcial —no
+    aborta si uno falla— y cada baja audita por separado. Gate WRITE = solo admin_rrhh."""
+    return EvaluacionService().delete_lotes_bulk(body.lote_ids, request.state.user.get("id", "system"))
 
 
 @router.get("/lotes/{lote_id}/metricas", response_model=MetricasResponse, dependencies=_GATE)
