@@ -53,9 +53,10 @@ async def get_historial(
 @router.get("/{reporte_id}/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def exportar_reporte(
     reporte_id: UUID,
+    request: Request,
     formato: Literal["pdf", "excel"] = Query(...),
     svc: ReporteExportService = Depends(_export_service),
 ) -> Response:
-    export = svc.build_export(reporte_id, formato)
+    export = svc.build_export(reporte_id, formato, get_empresa_id(request))
     headers = {"Content-Disposition": f'attachment; filename="{export.filename}"'}
     return Response(content=export.content, media_type=export.media_type, headers=headers)

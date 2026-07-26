@@ -33,10 +33,18 @@ class _FakeRepo:
 
 
 _RID = UUID("550e8400-e29b-41d4-a716-446655440000")
-_REPORTE = SimpleNamespace(
-    nombre="Headcount — Enero 2026",
-    datos={"total_empleados": 5, "por_area": [{"area": "Tec", "total": 5}]},
-)
+_EMP_A = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+_EMP_B = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+
+
+def _reporte(empresa_id=None) -> SimpleNamespace:
+    return SimpleNamespace(
+        nombre="Headcount — Enero 2026", empresa_id=empresa_id,
+        datos={"total_empleados": 5, "por_area": [{"area": "Tec", "total": 5}]},
+    )
+
+
+_REPORTE = _reporte()
 
 
 class TestNoRegresion:
@@ -59,3 +67,26 @@ class TestNoRegresion:
             svc.build_export(_RID, "pdf")
         assert exc.value.status_code == 404
         assert exc.value.code == "REPORTE_NOT_FOUND"
+
+
+class TestValidacionEmpresa:
+    def test_reporte_de_otra_empresa_es_404(self) -> None:
+        # reporte de empresa A, request en empresa B → 404 (mismo code que "no encontrado")
+        svc = ReporteExportService(repo=_FakeRepo(_reporte(empresa_id=_EMP_A)))
+        with pytest.raises(AppError) as exc:
+            svc.build_export(_RID, "pdf", _EMP_B)
+        assert exc.value.status_code == 404 and exc.value.code == "REPORTE_NOT_FOUND"
+
+    def test_reporte_consolidado_null_es_visible(self) -> None:
+        # reporte consolidado (empresa_id null) → exportable desde cualquier empresa
+        svc = ReporteExportService(repo=_FakeRepo(_reporte(empresa_id=None)))
+        assert len(svc.build_export(_RID, "pdf", _EMP_B).content) > 0
+
+    def test_reporte_de_la_propia_empresa_ok(self) -> None:
+        svc = ReporteExportService(repo=_FakeRepo(_reporte(empresa_id=_EMP_A)))
+        assert len(svc.build_export(_RID, "pdf", _EMP_A).content) > 0
+
+    def test_modo_consolidado_del_request_permite_cualquiera(self) -> None:
+        # request sin empresa activa (None = "Todas") → puede exportar un reporte de cualquier empresa
+        svc = ReporteExportService(repo=_FakeRepo(_reporte(empresa_id=_EMP_A)))
+        assert len(svc.build_export(_RID, "pdf", None).content) > 0

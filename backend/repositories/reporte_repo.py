@@ -49,7 +49,7 @@ class ReporteRepo:
 
     def find_by_id(self, reporte_id: str) -> Optional[ReporteResponse]:
         """Retorna un reporte completo (incluye datos) por su ID, o None si no existe."""
-        res = supabase_admin.table(_TABLE).select("id, nombre, tipo, datos, generado_por, created_at").eq("id", reporte_id).limit(1).execute()
+        res = supabase_admin.table(_TABLE).select("id, nombre, tipo, datos, generado_por, created_at, empresa_id").eq("id", reporte_id).limit(1).execute()
         if not res.data:
             return None
         r = res.data[0]

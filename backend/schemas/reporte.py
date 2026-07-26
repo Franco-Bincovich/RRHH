@@ -24,6 +24,7 @@ class ReporteResponse(BaseModel):
     datos: Dict[str, Any]
     generado_por: str
     created_at: datetime
+    empresa_id: Optional[UUID] = None  # null = consolidado (visible para todas las empresas)
 
 
 class HistorialItem(BaseModel):
