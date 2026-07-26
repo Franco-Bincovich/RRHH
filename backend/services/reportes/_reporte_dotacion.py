@@ -9,30 +9,38 @@ from integrations.supabase_client import supabase_admin
 from services.reportes._common import _eid, periodo_str, rango_mes
 
 
-def generate_headcount(mes: int, anio: int, empresa_id: Optional[UUID] = None) -> Dict[str, Any]:
+def generate_headcount(mes: int, anio: int, empresa_id: Optional[UUID] = None,
+                       area_id: Optional[UUID] = None) -> Dict[str, Any]:
     """
     Genera datos reales de headcount: total activos, ingresos/bajas del período y distribución por área.
-    Filtra por empresa_id si se provee.
+    Filtra por empresa_id y/o area_id si se proveen (empleados.area_id, directo).
     """
     ini, fin = rango_mes(mes, anio)
     eid = _eid(empresa_id)
+    aid = _eid(area_id)
     db = supabase_admin
 
     activos_q = db.table("empleados").select("area_id", count="exact").eq("estado", "activo")
     if eid:
         activos_q = activos_q.eq("empresa_id", eid)
+    if aid:
+        activos_q = activos_q.eq("area_id", aid)
     activos_res = activos_q.execute()
     total = activos_res.count or 0
 
     ingresos_q = db.table("empleados").select("id", count="exact").gte("fecha_ingreso", ini).lte("fecha_ingreso", fin)
     if eid:
         ingresos_q = ingresos_q.eq("empresa_id", eid)
+    if aid:
+        ingresos_q = ingresos_q.eq("area_id", aid)
     ingresos = ingresos_q.execute().count or 0
 
     bajas_q = (db.table("empleados").select("id", count="exact").eq("estado", "baja")
                .gte("updated_at", f"{ini}T00:00:00").lte("updated_at", f"{fin}T23:59:59"))
     if eid:
         bajas_q = bajas_q.eq("empresa_id", eid)
+    if aid:
+        bajas_q = bajas_q.eq("area_id", aid)
     bajas = bajas_q.execute().count or 0
 
     areas_q = db.table("areas").select("id, nombre").eq("activo", True)
@@ -59,29 +67,39 @@ def generate_headcount(mes: int, anio: int, empresa_id: Optional[UUID] = None) -
     }
 
 
-def generate_rotacion(mes: int, anio: int, empresa_id: Optional[UUID] = None) -> Dict[str, Any]:
+def generate_rotacion(mes: int, anio: int, empresa_id: Optional[UUID] = None,
+                      area_id: Optional[UUID] = None) -> Dict[str, Any]:
     """
     Genera datos reales de rotación: ingresos, bajas y tasa del período.
-    Filtra por empresa_id si se provee.
+    Filtra por empresa_id (y area_id: empleados.area_id directo en activos/ingresos; en bajas,
+    offboarding_instancias no tiene area_id → join inner por empleado).
     """
     ini, fin = rango_mes(mes, anio)
     eid = _eid(empresa_id)
+    aid = _eid(area_id)
     db = supabase_admin
 
     activos_q = db.table("empleados").select("id", count="exact").eq("estado", "activo")
     if eid:
         activos_q = activos_q.eq("empresa_id", eid)
+    if aid:
+        activos_q = activos_q.eq("area_id", aid)
     empleados_activos = activos_q.execute().count or 0
 
     ingresos_q = db.table("empleados").select("id", count="exact").gte("fecha_ingreso", ini).lte("fecha_ingreso", fin)
     if eid:
         ingresos_q = ingresos_q.eq("empresa_id", eid)
+    if aid:
+        ingresos_q = ingresos_q.eq("area_id", aid)
     ingresos = ingresos_q.execute().count or 0
 
-    off_q = (db.table("offboarding_instancias").select("motivo")
+    off_sel = "motivo, empleados!inner(area_id)" if aid else "motivo"
+    off_q = (db.table("offboarding_instancias").select(off_sel)
              .gte("created_at", f"{ini}T00:00:00").lte("created_at", f"{fin}T23:59:59"))
     if eid:
         off_q = off_q.eq("empresa_id", eid)
+    if aid:
+        off_q = off_q.eq("empleados.area_id", aid)
     off_res = off_q.execute()
     bajas = len(off_res.data or [])
 

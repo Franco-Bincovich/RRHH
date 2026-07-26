@@ -1,12 +1,18 @@
 import { apiFetch, API_BASE, authHeaders } from "./api"
 
-export type TipoReporte = "headcount" | "rotacion" | "altas_bajas" | "distribucion" | "costos" | "vacantes" | "onboarding" | "adhoc" | "anual_consolidado"
+export type TipoReporte = "headcount" | "rotacion" | "altas_bajas" | "distribucion" | "costos" | "vacantes" | "onboarding" | "adhoc" | "anual_consolidado" | "saldos_vacaciones" | "ausentismo" | "listado_vac_aus" | "presupuesto" | "capacitacion" | "auditoria"
+
+export type VistaAusentismo = "total" | "injustificado" | "ambos"
 
 export interface ReporteGenerarRequest {
   tipo: TipoReporte
   mes?: number
   anio?: number
   prompt?: string
+  // Armado manual: empresa y área salen del FORM, NO del selector del sidebar.
+  empresa_id?: string // omitido = consolidado (todas las empresas)
+  area_id?: string // omitido = todas las áreas de la empresa
+  vista?: VistaAusentismo // solo ausentismo
 }
 
 export interface ReporteResponse {

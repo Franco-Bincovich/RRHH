@@ -9,15 +9,19 @@ from integrations.supabase_client import supabase_admin
 from services.reportes._common import _eid
 
 
-def generate_vacantes(empresa_id: Optional[UUID] = None) -> Dict[str, Any]:
+def generate_vacantes(empresa_id: Optional[UUID] = None,
+                      area_id: Optional[UUID] = None) -> Dict[str, Any]:
     """
     Genera datos reales del pipeline de vacantes activas, agrupados por estado y área.
-    Filtra por empresa_id si se provee.
+    Filtra por empresa_id y/o area_id (vacantes.area_id, directo).
     """
     eid = _eid(empresa_id)
+    aid = _eid(area_id)
     q = supabase_admin.table("vacantes").select("id, titulo, estado, areas(nombre)").neq("estado", "cerrada").order("created_at", desc=True)
     if eid:
         q = q.eq("empresa_id", eid)
+    if aid:
+        q = q.eq("area_id", aid)
     rows = q.execute().data or []
 
     por_estado: dict[str, int] = {}
@@ -39,17 +43,23 @@ def generate_vacantes(empresa_id: Optional[UUID] = None) -> Dict[str, Any]:
     }
 
 
-def generate_onboarding(empresa_id: Optional[UUID] = None) -> Dict[str, Any]:
+def generate_onboarding(empresa_id: Optional[UUID] = None,
+                        area_id: Optional[UUID] = None) -> Dict[str, Any]:
     """
     Genera datos reales del progreso de onboardings activos.
-    Filtra por empresa_id si se provee.
+    Filtra por empresa_id; y por area_id vía join inner por empleado (onboarding_instancias
+    no tiene area_id).
     """
     eid = _eid(empresa_id)
+    aid = _eid(area_id)
+    emb = "empleados!inner(nombre, apellido)" if aid else "empleados(nombre, apellido)"
     q = (supabase_admin.table("onboarding_instancias")
-         .select("id, progreso, created_at, empleados(nombre, apellido)")
+         .select(f"id, progreso, created_at, {emb}")
          .eq("estado", "en_progreso").order("created_at", desc=True))
     if eid:
         q = q.eq("empresa_id", eid)
+    if aid:
+        q = q.eq("empleados.area_id", aid)
     rows = q.execute().data or []
 
     detalle = []

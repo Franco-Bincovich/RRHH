@@ -30,14 +30,16 @@ async def generar_reporte(
     service: ReporteService = Depends(_service),
 ) -> ReporteResponse:
     generado_por = getattr(request.state, "user", {}).get("email", "Sistema")
-    empresa_id = get_empresa_id(request)
+    # Armado manual: la empresa/área del reporte salen del BODY (form), NO del header del sidebar.
     return service.generar(
         tipo=body.tipo,
         mes=body.mes,
         anio=body.anio,
         prompt=body.prompt,
         generado_por=generado_por,
-        empresa_id=empresa_id,
+        empresa_id=body.empresa_id,
+        area_id=body.area_id,
+        vista=body.vista,
     )
 
 

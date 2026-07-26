@@ -5,8 +5,11 @@ import { type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { generarReporte, type TipoReporte } from "@/services/reportes"
-import { AnioSelector, ANO_ACTUAL, MES_ACTUAL, PeriodoSelector } from "./PeriodoSelectors"
+import { generarReporte, type TipoReporte, type VistaAusentismo } from "@/services/reportes"
+import type { Area } from "@/types/area"
+import type { Empresa } from "@/types/empresa"
+import { EmpresaAreaSelector } from "./EmpresaAreaSelector"
+import { AnioSelector, ANO_ACTUAL, MES_ACTUAL, PeriodoSelector, VistaSelector } from "./PeriodoSelectors"
 
 export interface ReporteEstandar {
   id: TipoReporte
@@ -15,21 +18,36 @@ export interface ReporteEstandar {
   icon: LucideIcon
   usaPeriodo: boolean
   usaAnio?: boolean
+  usaArea?: boolean // false = sin selector de área (ej. anual_consolidado, transversal). Default: true.
+  usaVista?: boolean // true = selector de vista total/injustificado/ambos (solo ausentismo)
 }
 
 export function ReporteCard({
   reporte,
   canWrite,
+  empresas,
+  areas,
   onSuccess,
 }: {
   reporte: ReporteEstandar
   canWrite: boolean
+  empresas: Empresa[]
+  areas: Area[]
   onSuccess: () => void
 }) {
   const Icon = reporte.icon
+  const usaArea = reporte.usaArea !== false
   const [mes, setMes] = useState(MES_ACTUAL)
   const [anio, setAnio] = useState(ANO_ACTUAL)
+  const [empresaId, setEmpresaId] = useState("")
+  const [areaId, setAreaId] = useState("")
+  const [vista, setVista] = useState<VistaAusentismo>("ambos")
   const [loading, setLoading] = useState(false)
+
+  function handleEmpresaChange(v: string) {
+    setEmpresaId(v)
+    setAreaId("") // el área depende de la empresa: al cambiarla, se resetea
+  }
 
   async function handleGenerar() {
     setLoading(true)
@@ -38,6 +56,10 @@ export function ReporteCard({
         tipo: reporte.id,
         ...(reporte.usaPeriodo ? { mes, anio } : {}),
         ...(reporte.usaAnio ? { anio } : {}),
+        // Empresa/área del FORM (no del sidebar); omitidas = consolidado / todas las áreas.
+        ...(empresaId ? { empresa_id: empresaId } : {}),
+        ...(usaArea && areaId ? { area_id: areaId } : {}),
+        ...(reporte.usaVista ? { vista } : {}),
       })
       toast.success(`${reporte.titulo} generado exitosamente`)
       onSuccess()
@@ -62,6 +84,17 @@ export function ReporteCard({
         </div>
       </div>
 
+      <EmpresaAreaSelector
+        id={reporte.id}
+        empresas={empresas}
+        areas={areas}
+        empresaId={empresaId}
+        areaId={areaId}
+        usaArea={usaArea}
+        onEmpresaChange={handleEmpresaChange}
+        onAreaChange={setAreaId}
+      />
+
       {reporte.usaPeriodo && (
         <PeriodoSelector
           id={reporte.id}
@@ -74,6 +107,10 @@ export function ReporteCard({
 
       {reporte.usaAnio && (
         <AnioSelector id={reporte.id} anio={anio} onAnioChange={setAnio} />
+      )}
+
+      {reporte.usaVista && (
+        <VistaSelector id={reporte.id} vista={vista} onVistaChange={(v) => setVista(v as VistaAusentismo)} />
       )}
 
       {canWrite && (

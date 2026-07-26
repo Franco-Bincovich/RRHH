@@ -16,11 +16,17 @@ from services.reporte_adhoc import generate_adhoc
 from services.reporte_anual import generate_anual_consolidado
 from services.reporte_generators import (
     generate_altas_bajas,
+    generate_ausentismo,
+    generate_auditoria,
+    generate_capacitacion,
     generate_costos,
     generate_distribucion,
     generate_headcount,
+    generate_listado_vac_aus,
     generate_onboarding,
+    generate_presupuesto,
     generate_rotacion,
+    generate_saldos_vacaciones,
     generate_vacantes,
     periodo_str,
 )
@@ -48,6 +54,8 @@ class ReporteService:
         prompt: Optional[str] = None,
         generado_por: str = "Sistema",
         empresa_id: Optional[UUID] = None,
+        area_id: Optional[UUID] = None,
+        vista: Optional[str] = None,
     ) -> ReporteResponse:
         """
         Genera un reporte del tipo indicado, lo persiste en el historial y lo retorna.
@@ -73,15 +81,21 @@ class ReporteService:
         anio_e = anio or hoy.year
 
         generators = {
-            "headcount":          lambda: generate_headcount(mes_e, anio_e, empresa_id),
-            "rotacion":           lambda: generate_rotacion(mes_e, anio_e, empresa_id),
-            "altas_bajas":        lambda: generate_altas_bajas(mes_e, anio_e, empresa_id),
-            "distribucion":       lambda: generate_distribucion(empresa_id),
-            "costos":             lambda: generate_costos(mes_e, anio_e, empresa_id),
-            "vacantes":           lambda: generate_vacantes(empresa_id),
-            "onboarding":         lambda: generate_onboarding(empresa_id),
+            "headcount":          lambda: generate_headcount(mes_e, anio_e, empresa_id, area_id),
+            "rotacion":           lambda: generate_rotacion(mes_e, anio_e, empresa_id, area_id),
+            "altas_bajas":        lambda: generate_altas_bajas(mes_e, anio_e, empresa_id, area_id),
+            "distribucion":       lambda: generate_distribucion(empresa_id, area_id),
+            "costos":             lambda: generate_costos(mes_e, anio_e, empresa_id, area_id),
+            "vacantes":           lambda: generate_vacantes(empresa_id, area_id),
+            "onboarding":         lambda: generate_onboarding(empresa_id, area_id),
             "adhoc":              lambda: generate_adhoc(prompt or "", empresa_id),
             "anual_consolidado":  lambda: generate_anual_consolidado(anio_e, empresa_id),
+            "saldos_vacaciones":  lambda: generate_saldos_vacaciones(mes_e, anio_e, empresa_id, area_id),
+            "ausentismo":         lambda: generate_ausentismo(mes_e, anio_e, empresa_id, area_id, vista or "ambos"),
+            "listado_vac_aus":    lambda: generate_listado_vac_aus(mes_e, anio_e, empresa_id, area_id),
+            "presupuesto":        lambda: generate_presupuesto(mes_e, anio_e, empresa_id, area_id),
+            "capacitacion":       lambda: generate_capacitacion(mes_e, anio_e, empresa_id, area_id),
+            "auditoria":          lambda: generate_auditoria(mes_e, anio_e, empresa_id),
         }
 
         if tipo not in generators:
@@ -97,6 +111,12 @@ class ReporteService:
             "onboarding":        "Progreso de Onboarding",
             "adhoc":             f"Análisis IA: {(prompt or '')[:60]}",
             "anual_consolidado": f"Informe Anual {anio_e}",
+            "saldos_vacaciones": f"Saldos de vacaciones — {periodo_str(mes_e, anio_e)}",
+            "ausentismo":        f"Ausentismo por área — {periodo_str(mes_e, anio_e)}",
+            "listado_vac_aus":   f"Vacaciones y ausencias — {periodo_str(mes_e, anio_e)}",
+            "presupuesto":       f"Presupuesto vs real — {periodo_str(mes_e, anio_e)}",
+            "capacitacion":      f"Capacitación por área — {periodo_str(mes_e, anio_e)}",
+            "auditoria":         f"Auditoría — {periodo_str(mes_e, anio_e)}",
         }
 
         try:

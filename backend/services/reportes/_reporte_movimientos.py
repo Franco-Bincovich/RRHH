@@ -21,17 +21,21 @@ def _area(r: dict) -> str:
     return (r.get("areas") or {}).get("nombre") or "Sin área"
 
 
-def generate_altas_bajas(mes: int, anio: int, empresa_id: Optional[UUID] = None) -> Dict[str, Any]:
+def generate_altas_bajas(mes: int, anio: int, empresa_id: Optional[UUID] = None,
+                         area_id: Optional[UUID] = None) -> Dict[str, Any]:
     """Listado nominal de altas (por fecha_ingreso) y bajas (por fecha_egreso) del período.
-    Filtra por empresa_id si se provee."""
+    Filtra por empresa_id y/o area_id (empleados.area_id, directo)."""
     ini, fin = rango_mes(mes, anio)
     eid = _eid(empresa_id)
+    aid = _eid(area_id)
     db = supabase_admin
 
     altas_q = (db.table("empleados").select(f"nombre, apellido, fecha_ingreso, {_AREA_EMBED}")
                .gte("fecha_ingreso", ini).lte("fecha_ingreso", fin).order("fecha_ingreso"))
     if eid:
         altas_q = altas_q.eq("empresa_id", eid)
+    if aid:
+        altas_q = altas_q.eq("area_id", aid)
     altas: List[dict] = [
         {"empleado": _nombre(r), "area": _area(r), "fecha_ingreso": str(r.get("fecha_ingreso") or "")}
         for r in (altas_q.execute().data or [])
@@ -42,6 +46,8 @@ def generate_altas_bajas(mes: int, anio: int, empresa_id: Optional[UUID] = None)
                .gte("fecha_egreso", ini).lte("fecha_egreso", fin).order("fecha_egreso"))
     if eid:
         bajas_q = bajas_q.eq("empresa_id", eid)
+    if aid:
+        bajas_q = bajas_q.eq("area_id", aid)
     bajas: List[dict] = [
         {"empleado": _nombre(r), "area": _area(r), "fecha_egreso": str(r.get("fecha_egreso") or ""),
          "motivo": r.get("motivo_baja") or "Sin especificar"}

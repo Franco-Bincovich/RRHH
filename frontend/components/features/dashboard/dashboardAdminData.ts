@@ -1,4 +1,4 @@
-import { Briefcase, DollarSign, UserMinus, UserPlus, Users } from "lucide-react"
+import { Briefcase, CalendarOff, DollarSign, TrendingUp, UserMinus, UserPlus, Users } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 import type { AlertaDashboard, DashboardData } from "@/services/dashboard"
@@ -29,7 +29,13 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
+function formatVariacion(pct: number): string {
+  const signo = pct > 0 ? "+" : ""
+  return `${signo}${pct}% vs mes anterior`
+}
+
 export function buildKpis(data: DashboardData): KpiCardData[] {
+  const x = data.kpis_extra
   return [
     { title: "Empleados activos", value: String(data.kpis.empleados_activos), icon: Users, description: "Colaboradores vigentes" },
     { title: "Ingresos este mes", value: String(data.kpis.ingresos_mes), icon: UserPlus, description: "Nuevos ingresos del período" },
@@ -37,5 +43,8 @@ export function buildKpis(data: DashboardData): KpiCardData[] {
     { title: "Costo total nómina", value: formatCurrency(data.kpis.costo_nomina), icon: DollarSign, description: "Mensual bruto" },
     { title: "Onboardings activos", value: String(data.kpis.onboardings_activos), icon: UserPlus, description: "Procesos en curso" },
     { title: "Vacantes activas", value: String(data.kpis.vacantes_activas), icon: Briefcase, description: "Posiciones abiertas" },
+    { title: "Ausencias activas hoy", value: String(x.ausencias_activas_hoy), icon: CalendarOff, description: "Colaboradores ausentes hoy" },
+    { title: "Ausentismo del mes", value: `${x.ausentismo_mes_pct}%`, icon: CalendarOff, description: x.ausentismo_nota },
+    { title: "Masa salarial", value: formatCurrency(x.masa_salarial_actual), icon: TrendingUp, description: formatVariacion(x.masa_salarial_variacion_pct) },
   ]
 }

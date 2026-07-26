@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { fetchDashboard } from "@/services/dashboard"
 import type { DashboardData, HeadcountArea } from "@/services/dashboard"
 import { buildKpis, NIVEL_LABEL, NIVEL_VARIANT, type KpiCardData } from "./dashboardAdminData"
+import { DashboardExtras } from "./DashboardExtras"
 
 function KpiCard({ kpi }: { kpi: KpiCardData }) {
   const Icon = kpi.icon
@@ -126,6 +127,9 @@ export function DashboardAdmin() {
           </section>
         </div>
       )}
+
+      {/* KPIs Sesión 5 — distribución + cumpleaños/aniversarios */}
+      {data && <DashboardExtras data={data.kpis_extra} />}
     </div>
   )
 }

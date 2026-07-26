@@ -9,7 +9,8 @@ from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
-from schemas.dashboard import AlertaResponse, DashboardResponse, HeadcountAreaResponse, KPIResponse
+from schemas.dashboard import AlertaResponse, DashboardResponse, KPIResponse
+from services._dashboard_kpis import calcular_extras, calcular_headcount
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -29,15 +30,15 @@ class DashboardService:
         hoy = date.today()
         try:
             kpis = self._calcular_kpis(hoy, empresa_id)
-            headcount = self._calcular_headcount(empresa_id)
+            headcount = calcular_headcount(empresa_id)
             alertas = self._generar_alertas(kpis, empresa_id)
+            extra = calcular_extras(hoy, empresa_id)
         except AppError:
             raise
         except Exception as exc:
             logger.error("Error al calcular dashboard", extra={"error": str(exc)})
             raise AppError("Error al obtener el dashboard", "DASHBOARD_ERROR", 500) from exc
-        logger.info("Dashboard ejecutivo calculado", extra={"fecha": hoy.isoformat()})
-        return DashboardResponse(kpis=kpis, headcount_por_area=headcount, alertas=alertas)
+        return DashboardResponse(kpis=kpis, headcount_por_area=headcount, alertas=alertas, kpis_extra=extra)
 
     def _calcular_kpis(self, hoy: date, empresa_id: Optional[UUID] = None) -> KPIResponse:
         """Calcula los 6 KPIs principales filtrando por empresa_id."""
@@ -95,31 +96,6 @@ class DashboardService:
             costo_nomina=costo_nomina,
             onboardings_activos=onboardings_activos,
             vacantes_activas=vacantes_activas,
-        )
-
-    def _calcular_headcount(self, empresa_id: Optional[UUID] = None) -> List[HeadcountAreaResponse]:
-        """Calcula headcount de activos agrupado por área, filtrado por empresa."""
-        eid = str(empresa_id) if empresa_id else None
-
-        areas_q = supabase_admin.table("areas").select("id, nombre").eq("activo", True)
-        if eid:
-            areas_q = areas_q.eq("empresa_id", eid)
-        area_nombres: dict[str, str] = {a["id"]: a["nombre"] for a in areas_q.execute().data}
-
-        emp_q = supabase_admin.table("empleados").select("area_id").eq("estado", "activo")
-        if eid:
-            emp_q = emp_q.eq("empresa_id", eid)
-        emp_res = emp_q.execute()
-
-        conteo: dict[str, int] = {}
-        for emp in emp_res.data:
-            aid = emp.get("area_id")
-            if aid and aid in area_nombres:
-                conteo[aid] = conteo.get(aid, 0) + 1
-        return sorted(
-            [HeadcountAreaResponse(area_id=k, area=area_nombres[k], total=v) for k, v in conteo.items()],
-            key=lambda x: x.total,
-            reverse=True,
         )
 
     def _generar_alertas(self, kpis: KPIResponse, empresa_id: Optional[UUID] = None) -> List[AlertaResponse]:

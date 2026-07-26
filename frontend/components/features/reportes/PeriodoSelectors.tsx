@@ -55,6 +55,40 @@ export function PeriodoSelector({
   )
 }
 
+const VISTAS: { v: "total" | "injustificado" | "ambos"; label: string }[] = [
+  { v: "ambos", label: "Total e injustificado" },
+  { v: "total", label: "Solo total" },
+  { v: "injustificado", label: "Solo injustificado" },
+]
+
+export function VistaSelector({
+  id,
+  vista,
+  onVistaChange,
+}: {
+  id: string
+  vista: string
+  onVistaChange: (v: string) => void
+}) {
+  return (
+    <div>
+      <label htmlFor={`vista-${id}`} className="mb-1 block text-xs font-medium text-foreground">
+        Vista
+      </label>
+      <select
+        id={`vista-${id}`}
+        value={vista}
+        onChange={(e) => onVistaChange(e.target.value)}
+        className="flex min-h-[2.75rem] w-full rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        {VISTAS.map((x) => (
+          <option key={x.v} value={x.v}>{x.label}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 export function AnioSelector({
   id,
   anio,

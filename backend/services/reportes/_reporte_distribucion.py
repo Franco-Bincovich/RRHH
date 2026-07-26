@@ -27,13 +27,17 @@ def _agrupar(rows: List[dict], campo: str) -> List[dict]:
     )
 
 
-def generate_distribucion(empresa_id: Optional[UUID] = None) -> Dict[str, Any]:
+def generate_distribucion(empresa_id: Optional[UUID] = None,
+                          area_id: Optional[UUID] = None) -> Dict[str, Any]:
     """Distribución de la plantilla activa por seniority / modalidad_contratacion / turno.
-    Filtra por empresa_id si se provee."""
+    Filtra por empresa_id y/o area_id (empleados.area_id, directo)."""
     eid = _eid(empresa_id)
+    aid = _eid(area_id)
     q = supabase_admin.table("empleados").select("seniority, modalidad_contratacion, turno").eq("estado", "activo")
     if eid:
         q = q.eq("empresa_id", eid)
+    if aid:
+        q = q.eq("area_id", aid)
     rows = q.execute().data or []
 
     return {

@@ -7,7 +7,14 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-TipoReporte = Literal["headcount", "rotacion", "costos", "vacantes", "onboarding", "adhoc"]
+TipoReporte = Literal[
+    "headcount", "rotacion", "altas_bajas", "distribucion",
+    "costos", "vacantes", "onboarding", "adhoc", "anual_consolidado",
+    "saldos_vacaciones", "ausentismo", "listado_vac_aus",
+    "presupuesto", "capacitacion", "auditoria",
+]
+
+VistaAusentismo = Literal["total", "injustificado", "ambos"]
 
 
 class ReporteGenerarRequest(BaseModel):
@@ -15,6 +22,10 @@ class ReporteGenerarRequest(BaseModel):
     mes: Optional[int] = None
     anio: Optional[int] = None
     prompt: Optional[str] = None
+    # Armado manual: empresa y área salen del FORM (no del header X-Empresa-Id del sidebar).
+    empresa_id: Optional[UUID] = None  # None = consolidado (todas las empresas)
+    area_id: Optional[UUID] = None     # None = todas las áreas de la empresa
+    vista: Optional[VistaAusentismo] = None  # solo ausentismo: total | injustificado | ambos
 
 
 class ReporteResponse(BaseModel):
