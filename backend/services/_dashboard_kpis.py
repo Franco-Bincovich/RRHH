@@ -15,6 +15,7 @@ from schemas.dashboard import DistribItem, HeadcountAreaResponse, KPIsExtraRespo
 from services.reportes._reporte_ausentismo import _NOTA, _tasa
 from services.reportes._reporte_costos import generate_costos
 from services.reportes._reporte_distribucion import generate_distribucion
+from utils.logger import logger
 
 
 def calcular_headcount(empresa_id: Optional[UUID] = None) -> List[HeadcountAreaResponse]:
@@ -86,28 +87,51 @@ def _cumple_aniversario(hoy: date, eid: Optional[str]) -> Tuple[List[PersonaFech
     return sorted(cumples, key=lambda p: p.fecha), sorted(aniversarios, key=lambda p: p.fecha)
 
 
+def _masa_salarial(anio: int, mes: int, empresa_id: Optional[UUID]) -> Tuple[float, float, float]:
+    """Masa salarial del mes actual vs anterior + variación % (KPI 27). Reusa generate_costos (R5)."""
+    pa, pm = _mes_anterior(anio, mes)
+    actual = float(generate_costos(mes, anio, empresa_id)["total_nomina"])
+    anterior = float(generate_costos(pm, pa, empresa_id)["total_nomina"])
+    variacion = round((actual - anterior) / anterior * 100, 2) if anterior else 0.0
+    return round(actual, 2), round(anterior, 2), variacion
+
+
+def _distribucion(empresa_id: Optional[UUID]) -> Tuple[List[DistribItem], List[DistribItem]]:
+    """Distribución por seniority/modalidad (KPI 28). Reusa generate_distribucion (R4)."""
+    d = generate_distribucion(empresa_id)
+    return ([DistribItem(**x) for x in d["por_seniority"]],
+            [DistribItem(**x) for x in d["por_modalidad"]])
+
+
 def calcular_extras(hoy: date, empresa_id: Optional[UUID] = None) -> KPIsExtraResponse:
-    """Los 5 KPIs nuevos (23/26/27/28/30), filtrando por empresa_id (header, respeta el sidebar)."""
+    """Los 5 KPIs nuevos (23/26/27/28/30), filtrando por empresa_id (header, respeta el sidebar).
+    Fail-safe POR KPI: si uno falla, queda en vacío/0 y se anota en `errores`; los demás salen igual."""
     eid = str(empresa_id) if empresa_id else None
     anio, mes = hoy.year, hoy.month
-    pa, pm = _mes_anterior(anio, mes)
+    errores: List[str] = []
 
-    masa_actual = float(generate_costos(mes, anio, empresa_id)["total_nomina"])
-    masa_anterior = float(generate_costos(pm, pa, empresa_id)["total_nomina"])
-    variacion = round((masa_actual - masa_anterior) / masa_anterior * 100, 2) if masa_anterior else 0.0
+    def _safe(fn, default, nombre):
+        try:
+            return fn()
+        except Exception as exc:
+            logger.error("kpi_dashboard_fallo", extra={"kpi": nombre, "error": str(exc)})
+            errores.append(nombre)
+            return default
 
-    distrib = generate_distribucion(empresa_id)
-    cumples, aniversarios = _cumple_aniversario(hoy, eid)
+    masa = _safe(lambda: _masa_salarial(anio, mes, empresa_id), (0.0, 0.0, 0.0), "masa_salarial")
+    seniority, modalidad = _safe(lambda: _distribucion(empresa_id), ([], []), "distribucion")
+    cumples, aniversarios = _safe(lambda: _cumple_aniversario(hoy, eid), ([], []), "cumpleanos_aniversarios")
 
     return KPIsExtraResponse(
-        ausencias_activas_hoy=_ausencias_activas_hoy(hoy, eid),
-        ausentismo_mes_pct=_ausentismo_mes_pct(anio, mes, eid),
+        ausencias_activas_hoy=_safe(lambda: _ausencias_activas_hoy(hoy, eid), 0, "ausencias_activas_hoy"),
+        ausentismo_mes_pct=_safe(lambda: _ausentismo_mes_pct(anio, mes, eid), 0.0, "ausentismo_mes"),
         ausentismo_nota=_NOTA,
-        masa_salarial_actual=round(masa_actual, 2),
-        masa_salarial_anterior=round(masa_anterior, 2),
-        masa_salarial_variacion_pct=variacion,
-        distribucion_seniority=[DistribItem(**d) for d in distrib["por_seniority"]],
-        distribucion_modalidad=[DistribItem(**d) for d in distrib["por_modalidad"]],
+        masa_salarial_actual=masa[0],
+        masa_salarial_anterior=masa[1],
+        masa_salarial_variacion_pct=masa[2],
+        distribucion_seniority=seniority,
+        distribucion_modalidad=modalidad,
         cumpleanos_mes=cumples,
         aniversarios_mes=aniversarios,
+        errores=errores,
     )

@@ -52,7 +52,9 @@ def generate_onboarding(empresa_id: Optional[UUID] = None,
     """
     eid = _eid(empresa_id)
     aid = _eid(area_id)
-    emb = "empleados!inner(nombre, apellido)" if aid else "empleados(nombre, apellido)"
+    # onboarding_instancias tiene DOS FKs a empleados → nombrar la FK o PostgREST da PGRST201.
+    fk = "empleados!onboarding_instancias_empleado_id_fkey"
+    emb = f"{fk}!inner(nombre, apellido)" if aid else f"{fk}(nombre, apellido)"
     q = (supabase_admin.table("onboarding_instancias")
          .select(f"id, progreso, created_at, {emb}")
          .eq("estado", "en_progreso").order("created_at", desc=True))

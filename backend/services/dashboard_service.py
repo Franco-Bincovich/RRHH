@@ -11,33 +11,36 @@ from uuid import UUID
 from integrations.supabase_client import supabase_admin
 from schemas.dashboard import AlertaResponse, DashboardResponse, KPIResponse
 from services._dashboard_kpis import calcular_extras, calcular_headcount
-from utils.errors import AppError
 from utils.logger import logger
+
+_KPIS_VACIOS = KPIResponse(empleados_activos=0, ingresos_mes=0, bajas_mes=0,
+                           costo_nomina=0.0, onboardings_activos=0, vacantes_activas=0)
+
+
+def _safe(fn, default, seccion: str):
+    """Ejecuta fn; si falla, loguea y devuelve default (fail-safe por sección, no fail-closed global)."""
+    try:
+        return fn()
+    except Exception as exc:
+        logger.error("dashboard_seccion_fallo", extra={"seccion": seccion, "error": str(exc)})
+        return default
 
 
 class DashboardService:
     def get_dashboard(self, empresa_id: Optional[UUID] = None) -> DashboardResponse:
         """
-        Calcula el resumen ejecutivo del período actual: KPIs, headcount y alertas.
+        Calcula el resumen ejecutivo del período actual: KPIs, headcount, alertas y KPIs extra.
         Filtra por empresa_id si se provee; None retorna datos consolidados de todas.
 
-        Returns:
-            DashboardResponse con los datos del período filtrados por empresa.
-
-        Raises:
-            AppError: DASHBOARD_ERROR (500) si falla alguna consulta crítica.
+        Fail-safe por sección: si una sección falla, queda en vacío/0 y las demás se devuelven
+        igual (nunca un 500 global). Los KPIs extra además fallan de forma independiente entre sí
+        (ver KPIsExtraResponse.errores).
         """
         hoy = date.today()
-        try:
-            kpis = self._calcular_kpis(hoy, empresa_id)
-            headcount = calcular_headcount(empresa_id)
-            alertas = self._generar_alertas(kpis, empresa_id)
-            extra = calcular_extras(hoy, empresa_id)
-        except AppError:
-            raise
-        except Exception as exc:
-            logger.error("Error al calcular dashboard", extra={"error": str(exc)})
-            raise AppError("Error al obtener el dashboard", "DASHBOARD_ERROR", 500) from exc
+        kpis = _safe(lambda: self._calcular_kpis(hoy, empresa_id), _KPIS_VACIOS, "kpis")
+        headcount = _safe(lambda: calcular_headcount(empresa_id), [], "headcount")
+        alertas = _safe(lambda: self._generar_alertas(kpis, empresa_id), [], "alertas")
+        extra = calcular_extras(hoy, empresa_id)  # fail-safe por KPI internamente
         return DashboardResponse(kpis=kpis, headcount_por_area=headcount, alertas=alertas, kpis_extra=extra)
 
     def _calcular_kpis(self, hoy: date, empresa_id: Optional[UUID] = None) -> KPIResponse:

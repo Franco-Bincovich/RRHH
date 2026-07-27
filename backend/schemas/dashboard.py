@@ -50,6 +50,7 @@ class KPIsExtraResponse(BaseModel):
     distribucion_modalidad: List[DistribItem]
     cumpleanos_mes: List[PersonaFecha]
     aniversarios_mes: List[PersonaFecha]
+    errores: List[str] = []  # KPIs que fallaron (fail-safe por KPI): quedaron en vacío/0
 
 
 class DashboardResponse(BaseModel):

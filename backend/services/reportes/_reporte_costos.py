@@ -21,8 +21,10 @@ def generate_costos(mes: int, anio: int, empresa_id: Optional[UUID] = None,
     aid = _eid(area_id)
     db = supabase_admin
 
-    nom_sel = ("total, empleados!inner(area_id, areas!empleados_area_id_fkey(nombre))"
-               if aid else "total, empleados(areas!empleados_area_id_fkey(nombre))")
+    # costos_nomina tiene DOS FKs a empleados (empleado_id_fkey + empleado_emp_fkey compuesta) →
+    # hay que nombrar la FK explícita o PostgREST devuelve PGRST201 (embed ambiguo).
+    nom_sel = ("total, empleados!costos_nomina_empleado_id_fkey!inner(area_id, areas!empleados_area_id_fkey(nombre))"
+               if aid else "total, empleados!costos_nomina_empleado_id_fkey(areas!empleados_area_id_fkey(nombre))")
     nom_q = db.table("costos_nomina").select(nom_sel).eq("mes", mes).eq("anio", anio)
     if eid:
         nom_q = nom_q.eq("empresa_id", eid)
