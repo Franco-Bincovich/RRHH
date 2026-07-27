@@ -91,7 +91,7 @@ class CostoService:
         """
         return self._nomina.get_nomina_mes(mes, anio, empresa_id)
 
-    def cargar_nomina(self, data: NominaCreate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> NominaResponse:
+    def cargar_nomina(self, data: NominaCreate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> NominaResponse:
         """
         Registra o actualiza la nómina de un empleado para un período (upsert). empresa_id
         se hereda del empleado (lo resuelve el repo); auditado. Bloquea si el mes está cerrado.
@@ -99,8 +99,8 @@ class CostoService:
         Raises:
             AppError: NOMINA_SAVE_ERROR (500) si la DB falla; PERIODO_CERRADO (409) si el mes está cerrado.
         """
-        # Costos lo opera admin_rrhh (nunca mandos_medios), por lo que el bloqueo por período no aplica.
-        verificar_periodo_abierto(empresa_id, "costos", None, desde=date(data.anio, data.mes, 1), hasta=date(data.anio, data.mes, monthrange(data.anio, data.mes)[1]), repo=self._periodos)
+        # rol REAL, no None hardcodeado: con None el check era un no-op que dejaría de proteger en silencio.
+        verificar_periodo_abierto(empresa_id, "costos", rol, desde=date(data.anio, data.mes, 1), hasta=date(data.anio, data.mes, monthrange(data.anio, data.mes)[1]), repo=self._periodos)
         # Best-effort para el diff de auditoría: leé la nómina previa (mismo empleado/mes/anio)
         # ANTES del upsert. Sin previo → primera carga (alta). Falla de lectura → prior=None
         # (el audit es un extra, no debe romper la carga). No toca el repo ni el upsert.

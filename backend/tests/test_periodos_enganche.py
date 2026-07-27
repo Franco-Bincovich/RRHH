@@ -200,13 +200,33 @@ class _FakeNominaRepo:
         )
 
 
-def test_nomina_no_bloquea_con_periodo_cerrado():
-    # El mes 3/2026 expande a [01/03, 31/03] y solapa EXACTO el período cerrado; igual no bloquea
-    # porque el enganche pasa rol=None (costos lo opera admin) → early return por rol.
+def test_nomina_admin_no_bloquea_con_periodo_cerrado():
+    # El mes 3/2026 expande a [01/03, 31/03] y solapa EXACTO el período cerrado; igual no bloquea,
+    # porque el ROL DEL LLAMADOR es admin_rrhh → early return por rol. Antes el enganche pasaba
+    # rol=None hardcodeado, así que este test pasaba sin importar quién llamara: era un check que
+    # no chequeaba. Ahora el rol viaja de verdad desde el router.
     svc = CostoService(nomina_repo=_FakeNominaRepo(), audit=_FakeAudit(), periodo_repo=_FakePeriodos([_periodo()]))
     data = NominaCreate(empleado_id=str(_EMP), mes=3, anio=2026, monto_bruto=100.0, monto_neto=80.0)
-    out = svc.cargar_nomina(data, empresa_id="e1", usuario_id="u1")
+    out = svc.cargar_nomina(data, empresa_id="e1", usuario_id="u1", rol="admin_rrhh")
     assert out.mes == 3
+
+
+def test_nomina_mando_bloquea_con_periodo_cerrado():
+    # El caso que el hardcodeo volvía imposible de alcanzar: un mandos_medios sobre un período
+    # cerrado SÍ tiene que frenar. Hoy ese rol no llega a costos, pero el check ya no depende de eso.
+    svc = CostoService(nomina_repo=_FakeNominaRepo(), audit=_FakeAudit(), periodo_repo=_FakePeriodos([_periodo()]))
+    data = NominaCreate(empleado_id=str(_EMP), mes=3, anio=2026, monto_bruto=100.0, monto_neto=80.0)
+    with pytest.raises(AppError) as e:
+        svc.cargar_nomina(data, empresa_id="e1", usuario_id="u1", rol="mandos_medios")
+    assert e.value.code == "PERIODO_CERRADO"
+
+
+def test_nomina_mando_fuera_del_periodo_ok():
+    # mando + mes que no solapa el período cerrado → no bloquea
+    svc = CostoService(nomina_repo=_FakeNominaRepo(), audit=_FakeAudit(), periodo_repo=_FakePeriodos([_periodo()]))
+    data = NominaCreate(empleado_id=str(_EMP), mes=8, anio=2026, monto_bruto=100.0, monto_neto=80.0)
+    out = svc.cargar_nomina(data, empresa_id="e1", usuario_id="u1", rol="mandos_medios")
+    assert out.mes == 8
 
 
 def test_nomina_cargar_sin_periodo_ok():

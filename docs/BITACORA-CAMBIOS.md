@@ -41,6 +41,51 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-27 · Validación de X-Empresa-Id + rol real en costos · commits `<pendiente>` ×2
+
+**Qué cambió:** el middleware validaba solo el **formato** del header `X-Empresa-Id`, así que
+un UUID bien formado de una empresa inexistente entraba y viajaba aguas abajo. Ahora se verifica
+que la empresa exista, contra un **caché por proceso** (`utils/empresas_cache.py`) y no contra la
+base en cada request. Un id inexistente se descarta en silencio y queda `None` (vista
+consolidada), igual que un header ausente. Aparte, `costo_service` pasaba `rol=None` hardcodeado
+al check de período: ahora pasa el rol real del usuario.
+
+**Impacto en infraestructura:**
+- 🔴 **El backend pasa a depender de que la tabla `empresas` sea legible — pero PEREZOSAMENTE,
+  no al arranque.** El proceso levanta sin tocar la base; la primera lectura ocurre en el primer
+  request que traiga un `X-Empresa-Id` con UUID. **Importa si armás un healthcheck o un readiness
+  probe que corra antes de que la DB esté disponible:** `GET /health` **no** consulta `empresas`
+  ni ninguna otra tabla, así que sigue respondiendo 200 con la base caída. Eso es deliberado — no
+  lo cambies para "que valide la DB" sin decidir antes qué querés que haga el balanceador.
+- 🟡 **Fail-open declarado.** Si la consulta a `empresas` falla, el header **se acepta sin
+  validar** y se loguea a **ERROR** (`"No se pudo cargar el caché de empresas"`). Es intencional y
+  contraintuitivo: descartar el header **ensancha** la vista (`None` = todas las empresas), así
+  que ante un blip de base aceptar es la opción conservadora. **Ese ERROR es una alerta que vale
+  la pena cablear**: significa que el backend está sirviendo con la validación desactivada.
+- 🟡 **Carga sobre la base: despreciable, pero no cero.** En régimen, 1 query cada 300s por
+  proceso (`SELECT id FROM empresas`, sin joins ni orden). Un miss puede disparar un refresco
+  extra, acotado a 1 cada 10s por proceso — o sea que ni un atacante martillando UUIDs falsos
+  puede convertir esto en carga. Con N instancias serverless, multiplicá por N: sigue siendo
+  ruido. **Ojo con el escalado**: el caché es por proceso, así que una empresa nueva puede tardar
+  hasta 300s en ser visible en las instancias que no la vieron (el refresco-en-miss cubre el caso
+  normal). Aceptable dado que hoy hay **1 empresa en producción, creada el 14/7 y nunca
+  modificada**.
+- 🟡 **Nuevo WARNING que sirve como señal de seguridad**: `"X-Empresa-Id descartado: la empresa no
+  existe"`, con el path y el UUID. Un UUID sintácticamente válido que no existe **no sale del uso
+  normal del producto** — vale como indicador de manipulación. No se devuelve ningún status nuevo
+  a propósito: un 400 sería un oráculo de enumeración de empresas, justo lo que cerró la Fase 2.
+- **Se corrige una pérdida silenciosa de auditoría.** `auditoria.empresa_id` tiene FK a `empresas`
+  (verificado en el schema vivo). Tres paths escribían ahí el empresa del header sin validar
+  (`costo_service`, `candidato_service`, `offboarding_service`): con un id falso el INSERT violaba
+  la FK, `AuditService` se tragaba la excepción por diseño, y **la operación de negocio se
+  completaba perdiendo el registro de auditoría**. Verificado además que `auditoria.empresa_id` es
+  **NULLABLE**, así que el modo consolidado (`None`) nunca estuvo afectado — 133 eventos en
+  producción, 9 con `empresa_id` NULL, todos guardados bien.
+- Sin migraciones, sin variables de entorno nuevas, sin dependencias, sin buckets, sin endpoints
+  nuevos, sin cambios en el modelo de auth ni en los claims del token.
+
+---
+
 ## 2026-07-27 · Rate limiting por franjas · commit `<pendiente>`
 
 **Qué cambió:** el rate limiting pasó de cubrir un solo endpoint (`/api/auth/login`) a cubrir

@@ -41,6 +41,17 @@ class EmpresaRepo:
         )
         return [_to_response(r) for r in (res.data or [])]
 
+    def find_all_ids(self) -> List[str]:
+        """Retorna solo los IDs de todas las empresas, activas e inactivas.
+
+        Query deliberadamente mínima —una columna, sin orden ni joins— porque la consume el
+        caché que valida el header X-Empresa-Id, en el camino de autenticación de cada request.
+        Incluye las inactivas a propósito: responde "¿este UUID es una empresa real?", no
+        "¿está habilitada?". Ver utils/empresas_cache.py.
+        """
+        res = supabase_admin.table(_TABLE).select("id").execute()
+        return [str(r["id"]) for r in (res.data or [])]
+
     def find_by_id(self, id: str) -> Optional[EmpresaResponse]:
         """Retorna una empresa por ID. None si no existe.
 

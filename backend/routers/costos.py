@@ -50,7 +50,8 @@ async def post_nomina(
     body: NominaCreate,
     service: CostoService = Depends(_service),
 ) -> NominaResponse:
-    return service.cargar_nomina(body, get_empresa_id(request), request.state.user.get("id", "system"))
+    u = request.state.user
+    return service.cargar_nomina(body, get_empresa_id(request), u.get("id", "system"), u.get("rol"))
 
 
 @router.post("/presupuesto", response_model=PresupuestoResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])

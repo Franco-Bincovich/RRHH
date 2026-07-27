@@ -2,7 +2,8 @@
 Middleware de autenticación JWT.
 Verifica la firma del token de Supabase contra el JWKS público del proyecto (ES256)
 y expone el user_id, rol y empresa_id en request.state para los handlers.
-empresa_id proviene del header X-Empresa-Id (UUID) o queda None si viene "todas" o ausente.
+empresa_id proviene del header X-Empresa-Id: queda None si viene "todas", ausente, malformado
+o apuntando a una empresa que no existe (ver _resolver_empresa_id). None = vista consolidada.
 """
 import re
 from typing import Optional
@@ -16,6 +17,7 @@ from starlette.responses import Response
 
 from config.settings import settings
 from integrations.supabase_client import supabase_admin
+from utils.empresas_cache import empresa_existe
 from utils.logger import logger
 
 PUBLIC_ROUTES = frozenset([
@@ -60,6 +62,48 @@ def _is_public(path: str) -> bool:
     if path in PUBLIC_ROUTES:
         return True
     return settings.assessment_enabled and bool(_ASSESSMENT_API_RE.match(path))
+
+
+def _resolver_empresa_id(header: str, path: str) -> Optional[str]:
+    """Resuelve el empresa_id del request a partir del header X-Empresa-Id.
+
+    None significa "todas las empresas" (vista consolidada) y es el resultado de TRES casos que
+    a propósito se tratan igual: header ausente, header "todas", y header que no supera la
+    validación. Antes solo se validaba el FORMATO, así que un UUID sintácticamente correcto de
+    una empresa inexistente entraba igual y viajaba aguas abajo: los listados salían vacíos,
+    pero además ese id llegaba a columnas con FK a `empresas` —`auditoria.empresa_id` entre
+    ellas— y hacía fallar el INSERT del evento de auditoría, que AuditService se traga por
+    diseño. La operación de negocio se completaba y el registro desaparecía sin rastro.
+
+    Un id inexistente se DESCARTA en silencio, sin status propio: no hace falta uno. Un UUID
+    falso apunta a menos que None (que es la vista más amplia), así que no es escalación de
+    privilegios y un 400 no compraría seguridad — solo agregaría el oráculo de enumeración de
+    empresas que la Fase 2 se ocupó de cerrar. Sí se loguea a WARNING: un UUID bien formado que
+    no existe no sale del uso normal del producto.
+
+    La existencia se consulta contra un caché por proceso, no contra la base (ver
+    utils/empresas_cache.py, que además explica por qué es fail-open).
+
+    Args:
+        header: Valor crudo de X-Empresa-Id, ya sin espacios.
+        path: Ruta del request, solo para trazabilidad en el log.
+
+    Returns:
+        El UUID en texto si es una empresa real; None en cualquier otro caso.
+    """
+    if not header or header == "todas":
+        return None
+    try:
+        UUID(header)
+    except ValueError:
+        return None
+    if empresa_existe(header):
+        return header
+    logger.warning(
+        "X-Empresa-Id descartado: la empresa no existe",
+        extra={"path": path, "empresa_id": header},
+    )
+    return None
 
 
 def _extract_token(request: Request) -> Optional[str]:
@@ -142,14 +186,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         request.state.user = {"id": user_id, "rol": rol}
 
-        empresa_header = request.headers.get("X-Empresa-Id", "").strip()
-        if empresa_header and empresa_header != "todas":
-            try:
-                UUID(empresa_header)
-                request.state.empresa_id = empresa_header
-            except ValueError:
-                request.state.empresa_id = None
-        else:
-            request.state.empresa_id = None
+        request.state.empresa_id = _resolver_empresa_id(
+            request.headers.get("X-Empresa-Id", "").strip(), request.url.path
+        )
 
         return await call_next(request)
