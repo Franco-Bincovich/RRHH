@@ -37,7 +37,14 @@ export default function EmpleadosPage() {
     setLoading(true)
     setError(false)
     try {
-      const result = await fetchEmpleados(page, PAGE_SIZE, debouncedSearch || undefined, estadoFiltro || undefined, empresaOverride, areaFiltro || undefined)
+      const result = await fetchEmpleados({
+        page,
+        pageSize: PAGE_SIZE,
+        search: debouncedSearch || undefined,
+        estado: estadoFiltro || undefined,
+        empresaId: empresaOverride,
+        areaId: areaFiltro || undefined,
+      })
       setData(result)
     } catch {
       setError(true)
@@ -59,7 +66,13 @@ export default function EmpleadosPage() {
         action={
           <div className="flex items-center gap-2">
             {!loading && !error && items.length > 0 && (
-              <ExportMenu onExport={(f) => exportarEmpleados(f, empresaOverride, debouncedSearch || undefined, estadoFiltro || undefined, areaFiltro || undefined)} />
+              <ExportMenu onExport={(f) => exportarEmpleados({
+                formato: f,
+                search: debouncedSearch || undefined,
+                estado: estadoFiltro || undefined,
+                empresaId: empresaOverride,
+                areaId: areaFiltro || undefined,
+              })} />
             )}
             {canWrite && (
               <>

@@ -55,7 +55,7 @@ export function SeleccionEmpleado({
   useEffect(() => {
     if (isMando || !empresaId) { setEmpleados([]); return }
     setLoading(true)
-    fetchEmpleados(1, 100, undefined, "activo", empresaId)
+    fetchEmpleados({ page: 1, pageSize: 100, estado: "activo", empresaId })
       .then((r) => setEmpleados(r.items)).catch(() => setEmpleados([])).finally(() => setLoading(false))
   }, [isMando, empresaId])
 

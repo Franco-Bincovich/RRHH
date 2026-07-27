@@ -59,7 +59,7 @@ export function AreaModal({ open, onClose, onSuccess, area, empresaId }: AreaMod
 
   useEffect(() => {
     if (!open) return
-    fetchEmpleados(1, 100, undefined, "activo", empresaId)
+    fetchEmpleados({ page: 1, pageSize: 100, estado: "activo", empresaId })
       .then((res) => setEmpleados(res.items))
       .catch(() => setEmpleados([]))
   }, [open, empresaId])

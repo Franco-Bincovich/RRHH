@@ -3,33 +3,42 @@ import type {
 } from "@/types/empleado"
 import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
 
+/**
+ * Filtros del listado de empleados, compartidos por `fetchEmpleados` y `exportarEmpleados`
+ * con los MISMOS nombres a propósito: antes eran cuatro posicionales `string | undefined`
+ * en distinto orden entre las dos, así que copiar argumentos de una a la otra compilaba
+ * igual y mandaba el filtro equivocado al backend.
+ *
+ * `empresaId` viaja por header `X-Empresa-Id` (el valor "todas" el backend lo interpreta
+ * como consolidado); `search`, `estado` y `areaId` van como query params.
+ */
+export interface EmpleadosFiltros {
+  search?: string
+  estado?: string
+  empresaId?: string
+  areaId?: string
+}
+
 export async function fetchEmpleados(
-  page: number,
-  pageSize: number,
-  search?: string,
-  estado?: string,
-  empresaIdOverride?: string,
-  areaId?: string,
+  opts: EmpleadosFiltros & { page: number; pageSize: number },
 ): Promise<EmpleadoListResponse> {
+  const { page, pageSize, search, estado, empresaId, areaId } = opts
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
   if (search) params.set("search", search)
   if (estado) params.set("estado", estado)
   if (areaId) params.set("area_id", areaId)
   return apiFetch<EmpleadoListResponse>(
     `/api/empleados?${params}`,
-    empresaIdOverride ? { headers: { "X-Empresa-Id": empresaIdOverride } } : {},
+    empresaId ? { headers: { "X-Empresa-Id": empresaId } } : {},
   )
 }
 
 /** Exporta el listado de empleados (pdf/excel/csv/word) con los filtros activos aplicados. */
 export function exportarEmpleados(
-  formato: FormatoExport,
-  empresaIdOverride?: string,
-  search?: string,
-  estado?: string,
-  areaId?: string,
+  opts: EmpleadosFiltros & { formato: FormatoExport },
 ): Promise<void> {
-  const headers = empresaIdOverride ? { "X-Empresa-Id": empresaIdOverride } : undefined
+  const { formato, search, estado, empresaId, areaId } = opts
+  const headers = empresaId ? { "X-Empresa-Id": empresaId } : undefined
   return descargarArchivo("/api/empleados/exportar", formato, "empleados", headers, {
     search,
     estado,

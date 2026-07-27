@@ -44,7 +44,7 @@ function IniciarModal({ activos, onClose, onSuccess }: IniciarModalProps) {
   useEffect(() => {
     const ids = new Set(activos.map((o) => o.empleado_id))
     Promise.all([
-      fetchEmpleados(1, 100, undefined, "activo"),
+      fetchEmpleados({ page: 1, pageSize: 100, estado: "activo" }),
       fetchTemplates(),
     ])
       .then(([emps, tmpls]) => {

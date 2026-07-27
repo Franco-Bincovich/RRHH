@@ -80,7 +80,7 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
       .catch(() => setCapacitaciones([]))
       .finally(() => setLoadingCap(false))
     setLoadingEmp(true)
-    fetchEmpleados(1, 100, undefined, "activo", form.empresa_id)
+    fetchEmpleados({ page: 1, pageSize: 100, estado: "activo", empresaId: form.empresa_id })
       .then((r) => setEmpleados(r.items))
       .catch(() => setEmpleados([]))
       .finally(() => setLoadingEmp(false))

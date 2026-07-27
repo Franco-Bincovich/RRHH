@@ -56,7 +56,7 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
     fetchItems(form.empresa_id, "disponible")
       .then((r) => setItems(r.items)).catch(() => setItems([])).finally(() => setLoadingItems(false))
     setLoadingEmp(true)
-    fetchEmpleados(1, 100, undefined, "activo", form.empresa_id)
+    fetchEmpleados({ page: 1, pageSize: 100, estado: "activo", empresaId: form.empresa_id })
       .then((r) => setEmpleados(r.items)).catch(() => setEmpleados([])).finally(() => setLoadingEmp(false))
   }, [form.empresa_id])
 

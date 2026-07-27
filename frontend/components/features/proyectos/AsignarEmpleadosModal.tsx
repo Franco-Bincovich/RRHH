@@ -44,7 +44,7 @@ export function AsignarEmpleadosModal({ open, proyectoId, onClose, onSuccess }: 
   // Candidatos: activos de TODAS las empresas del grupo, acotados por área server-side (param areaId).
   useEffect(() => {
     if (!open) return
-    fetchEmpleados(1, 200, undefined, "activo", "todas", areaFiltro || undefined)
+    fetchEmpleados({ page: 1, pageSize: 200, estado: "activo", empresaId: "todas", areaId: areaFiltro || undefined })
       .then((r) => setEmpleados(r.items ?? [])).catch(() => setEmpleados([]))
   }, [open, areaFiltro])
 

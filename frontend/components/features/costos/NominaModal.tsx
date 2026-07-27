@@ -59,7 +59,7 @@ export function NominaModal({ open, onClose, onSuccess }: NominaModalProps) {
       let page = 1
       let totalPages = 1
       do {
-        const result = await fetchEmpleados(page, 100, undefined, "activo")
+        const result = await fetchEmpleados({ page, pageSize: 100, estado: "activo" })
         all.push(...result.items)
         totalPages = result.total_pages
         page++
