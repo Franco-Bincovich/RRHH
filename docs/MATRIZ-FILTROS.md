@@ -89,8 +89,13 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `inventario_asignaciones_repo.py:51` | `inventario_asignaciones_service.py:35` | header | `AsignacionesTab.tsx:65` | ✅ |
-| empleado | `inventario_asignaciones_repo.py:53` | ✅ | `inventario_asignaciones.py:30` | `inventario/AsignacionesTab.tsx` | ✅ |
+| empresa | `inventario_asignaciones_repo.py` | `inventario_asignaciones_service.py` | header | `useFiltrosAsignacionesInv.ts` | ✅ |
+| empleado | `inventario_asignaciones_repo.py` | ✅ | `inventario_asignaciones.py` | `useFiltrosAsignacionesInv.ts` | ✅ |
+| área | `_area_scope.py::empleados_de_area` | ✅ | `inventario_asignaciones.py` `area_id` | `useFiltrosAsignacionesInv.ts` | ✅ |
+
+> El área hereda la semántica de VIGENCIA del listado (`fecha_devolucion IS NULL`): son los
+> ítems que esa área tiene HOY en su poder. **No se agregó a ÍTEMS a propósito**: un ítem sin
+> asignar no tiene área, así que ese filtro excluiría en silencio todo el stock disponible.
 
 ### Objetivos
 
@@ -108,8 +113,16 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `proyectos_repo.py:45` | `proyectos_service.py:23` | header | ❌ **PARCIAL** | ❌ sin export |
-| estado | `proyectos_repo.py:47` | ✅ | `proyectos.py:29` | `proyectos/page.tsx:120` | — |
+| empresa | `proyectos_repo.py` | `proyectos_service.py` | header | `useFiltrosProyectos.ts` | ❌ sin export |
+| estado | `proyectos_repo.py` | ✅ | `proyectos.py` | `useFiltrosProyectos.ts` | — |
+| área † | `_area_scope.py::proyecto_ids_con_area` | ✅ | `proyectos.py` `area_id` | `useFiltrosProyectos.ts` | — |
+
+† **`proyectos` NO tiene columna de área.** El filtro significa *"proyectos con al menos un
+empleado asignado de esa área"*, contando asignaciones **activas e inactivas**. Dos
+consecuencias que parecen bugs y no lo son: un proyecto **sin nadie asignado no aparece bajo
+ninguna área**, y la resolución de empleados **no se acota por empresa** (un proyecto de A
+puede tener gente de B — acotar devolvería cero en silencio). La semántica completa está en
+`repositories/_area_scope.py`, que es donde hay que leerla antes de cambiarla.
 
 ### Horas de proyecto
 
@@ -572,6 +585,13 @@ así que esta tanda desbloquea también ese reporte.
 ## Correcciones al relevamiento original (27/7/2026, tanda de PARCIALES)
 
 Al verificar los PARCIALES contra el código aparecieron **dos errores de este documento**:
+
+0. **Tanda de área (proyectos + inventario), 27/7/2026.** Cerró el PARCIAL de empresa en
+   proyectos y sumó área en los dos módulos. Divisiones previas: `proyectos_repo.py` 104→74
+   (+ `_proyectos_enrich.py`), `proyectos/page.tsx` 156→70 (+ `ProyectosGrid` + hook),
+   `inventario/AsignacionesTab.tsx` 150→62 (+ tabla + hook). Se extrajo además `etiquetaArea`
+   a `components/features/shared/filtros.ts`: estaba **triplicada** en los hooks de vacaciones,
+   ausencias y empleados.
 
 1. **`solo_activos` NO era un PARCIAL.** `CatalogoTab.tsx:83` ya tenía el checkbox "Solo
    activos", cableado a `fetchCapacitaciones`. Falso positivo del relevamiento.

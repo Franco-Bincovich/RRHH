@@ -20,14 +20,14 @@ class ProyectosService:
     def __init__(self, repo: Optional[ProyectosRepo] = None) -> None:
         self._repo = repo or ProyectosRepo()
 
-    def get_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None) -> ProyectoListResponse:
+    def get_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None, area_id: Optional[UUID] = None) -> ProyectoListResponse:
         """
         Lista proyectos de la empresa dueña. None = todas. Costeo calculado en batch.
 
         Returns:
             ProyectoListResponse con cada proyecto incluyendo costo_acumulado, presupuesto_restante, pct_consumido.
         """
-        items = self._repo.find_all(empresa_id, estado)
+        items = self._repo.find_all(empresa_id, estado, area_id)
         return ProyectoListResponse(items=items, total=len(items))
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> ProyectoResponse:

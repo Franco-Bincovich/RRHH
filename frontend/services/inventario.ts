@@ -18,7 +18,7 @@ function override(empresaId?: string): RequestInit {
  * (invariante list ↔ export).
  */
 export interface ItemsFiltros { empresaIdOverride?: string; estado?: string }
-export interface AsignacionesInventarioFiltros { empresaIdOverride?: string; empleadoId?: string }
+export interface AsignacionesInventarioFiltros { empresaIdOverride?: string; empleadoId?: string; areaId?: string }
 
 /**
  * Traducción filtros → query params. Fuente ÚNICA compartida por listado y export: si se suma
@@ -29,7 +29,7 @@ function queryItems(f: ItemsFiltros): Record<string, string | undefined> {
 }
 
 function queryAsignaciones(f: AsignacionesInventarioFiltros): Record<string, string | undefined> {
-  return { empleado_id: f.empleadoId }
+  return { empleado_id: f.empleadoId, area_id: f.areaId }
 }
 
 function headersEmpresa(empresaIdOverride?: string): Record<string, string> | undefined {

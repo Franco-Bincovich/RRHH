@@ -4,6 +4,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._area_scope import empleados_de_area
 from schemas.inventario import AsignacionResponse
 from utils.errors import AppError
 from utils.logger import logger
@@ -43,14 +44,27 @@ def _build(rows: List[dict]) -> List[AsignacionResponse]:
 
 
 class InventarioAsignacionesRepo:
-    def find_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[str] = None) -> List[AsignacionResponse]:
-        """Asignaciones activas (fecha_devolucion IS NULL), filtradas por empresa y/o empleado."""
+    def find_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[str] = None,
+                 area_id: Optional[UUID] = None) -> List[AsignacionResponse]:
+        """Asignaciones activas (fecha_devolucion IS NULL), filtradas por empresa, empleado y/o área.
+
+        El área se resuelve a empleados en _area_scope (un lookup batch, no uno por fila). La
+        semántica de VIGENCIA la hereda del filtro de arriba: el listado ya muestra solo
+        asignaciones sin devolver, así que "ítems del área X" son los que esa área tiene HOY en
+        su poder — no hay que decidir nada sobre histórico.
+        """
+        if area_id:
+            emp_ids = empleados_de_area(area_id, empresa_id)
+            if not emp_ids:
+                return []
         q = (supabase_admin.table(_T).select("*").is_("fecha_devolucion", "null")
              .order("fecha_asignacion", desc=True))
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if empleado_id:
             q = q.eq("empleado_id", empleado_id)
+        if area_id:
+            q = q.in_("empleado_id", emp_ids)
         return _build(q.execute().data or [])
 
     def find_historial(self, item_id: str) -> List[AsignacionResponse]:

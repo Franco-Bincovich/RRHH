@@ -7,6 +7,7 @@
  */
 import { useEffect, useState } from "react"
 
+import { etiquetaArea } from "@/components/features/shared/filtros"
 import type { FiltroCampo } from "@/components/ui/FiltersBar"
 import { fetchAreas } from "@/services/areas"
 import { fetchEmpresas } from "@/services/empresas"
@@ -55,13 +56,6 @@ export function useFiltrosEmpleados(onFiltroChange: () => void) {
     return () => clearTimeout(t)
   }, [search])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  function areaLabel(area: Area): string {
-    if (!empresaActivaId && !empresaFiltro) {
-      const emp = empresas.find((e) => e.id === area.empresa_id)
-      return emp ? `${area.nombre} — ${emp.nombre}` : area.nombre
-    }
-    return area.nombre
-  }
 
   const campos: FiltroCampo[] = [
     { tipo: "search" as const, label: "Buscar", value: search, placeholder: "Buscar por nombre...", onChange: setSearch },
@@ -70,7 +64,7 @@ export function useFiltrosEmpleados(onFiltroChange: () => void) {
       opciones: empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
     ...(areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: areaFiltro, opcionTodos: "Todas las áreas",
       onChange: (v: string) => { setAreaFiltro(v); onFiltroChange() },
-      opciones: areas.map((a) => ({ value: a.id, label: areaLabel(a) })) }] : []),
+      opciones: areas.map((a) => ({ value: a.id, label: etiquetaArea(a, empresas, Boolean(empresaActivaId || empresaFiltro)) })) }] : []),
     { tipo: "select" as const, label: "Estado", value: estadoFiltro, opcionTodos: "Todos los estados",
       onChange: (v: string) => { setEstadoFiltro(v); onFiltroChange() }, opciones: ESTADO_OPCIONES },
     { tipo: "select" as const, label: "Liderazgo", value: liderFiltro, opcionTodos: "Todos",

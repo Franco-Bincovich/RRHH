@@ -27,9 +27,10 @@ def _svc() -> ProyectosService:
 async def list_proyectos(
     request: Request,
     estado: Optional[str] = Query(None),
+    area_id: Optional[UUID] = Query(None, description="Proyectos con al menos un empleado asignado de esa área"),
     service: ProyectosService = Depends(_svc),
 ) -> ProyectoListResponse:
-    return service.get_all(get_empresa_id(request), estado)
+    return service.get_all(get_empresa_id(request), estado, area_id)
 
 
 @router.get("/{id}", response_model=ProyectoResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])

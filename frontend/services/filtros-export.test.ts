@@ -25,6 +25,7 @@ import {
   exportarInventarioAsignaciones, exportarInventarioItems,
   fetchAsignaciones as fetchInventarioAsignaciones, fetchItems,
 } from "@/services/inventario"
+import { fetchProyectos } from "@/services/proyectos"
 import { exportarVacaciones, fetchVacaciones } from "@/services/vacaciones"
 
 /** Query params con los que se llamó a apiFetch (el listado). */
@@ -41,6 +42,11 @@ function queryExport(): Record<string, string> {
 
 function headersExport(): Record<string, string> | undefined {
   return descargarArchivo.mock.calls[0][3] as Record<string, string> | undefined
+}
+
+/** El segundo argumento de apiFetch (headers del listado). */
+function initListado(): { headers?: Record<string, string> } | undefined {
+  return apiFetch.mock.calls[0][1] as { headers?: Record<string, string> } | undefined
 }
 
 /** Los params del listado, como objeto plano, para comparar contra los del export. */
@@ -211,6 +217,46 @@ describe("empleados — es_lider es un booleano de tres estados", () => {
     expect(queryExport()).toEqual({
       es_lider: "true", estado: "activo", area_id: "area-1", search: "ana",
     })
+  })
+})
+
+describe("inventario — asignaciones con área", () => {
+  const filtros = { empresaIdOverride: "emp-2", empleadoId: "empleado-4", areaId: "area-7" }
+
+  it("el export manda empleado y área", async () => {
+    await exportarInventarioAsignaciones("csv", filtros)
+    expect(queryExport()).toEqual({ empleado_id: "empleado-4", area_id: "area-7" })
+  })
+
+  it("el listado y el export traducen el mismo objeto a los mismos params", async () => {
+    await fetchInventarioAsignaciones(filtros)
+    await exportarInventarioAsignaciones("csv", filtros)
+    expect(queryExport()).toEqual(listadoComoObjeto())
+  })
+
+  it("solo área también viaja", async () => {
+    await fetchInventarioAsignaciones({ areaId: "area-7" })
+    expect(queryListado().get("area_id")).toBe("area-7")
+  })
+})
+
+describe("proyectos — área y empresa", () => {
+  it("el área viaja como query param", async () => {
+    await fetchProyectos({ areaId: "area-7", estado: "activo" })
+    const q = queryListado()
+    expect(q.get("area_id")).toBe("area-7")
+    expect(q.get("estado")).toBe("activo")
+  })
+
+  it("la empresa viaja por header, no por query", async () => {
+    await fetchProyectos({ empresaIdOverride: "emp-9", areaId: "area-7" })
+    expect(queryListado().has("empresa_id")).toBe(false)
+    expect(initListado()?.headers).toEqual({ "X-Empresa-Id": "emp-9" })
+  })
+
+  it("sin filtros no manda params", async () => {
+    await fetchProyectos()
+    expect(queryListado().size).toBe(0)
   })
 })
 

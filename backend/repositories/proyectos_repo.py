@@ -1,54 +1,37 @@
 """Repositorio de proyectos. Acceso a Supabase con supabase_admin."""
-from typing import Dict, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
-from schemas.proyectos import CosteoResumen, ProyectoCreate, ProyectoResponse
+from repositories._area_scope import proyecto_ids_con_area
+from repositories._proyectos_enrich import batch_costos, enriquecer
+from schemas.proyectos import ProyectoCreate, ProyectoResponse
 from utils.errors import AppError
 
 _T = "proyectos"
 
 
-def _build(rows: List[dict], costo_map: Dict[str, float]) -> List[ProyectoResponse]:
-    """Enriquece filas con empresa_nombre y costeo calculado en batch."""
-    if not rows:
-        return []
-    emp_ids = list({r["empresa_id"] for r in rows})
-    empresa_map = {
-        e["id"]: e["nombre"]
-        for e in (supabase_admin.table("empresas").select("id, nombre")
-                  .in_("id", emp_ids).execute().data or [])
-    }
-    result = []
-    for r in rows:
-        costo = round(costo_map.get(r["id"], 0.0), 2)
-        ppto = float(r.get("presupuesto") or 0)
-        restante = round(ppto - costo, 2)
-        pct = round(costo / ppto * 100, 1) if ppto > 0 else None
-        result.append(ProyectoResponse.model_validate({
-            **r,
-            "empresa_nombre": empresa_map.get(r["empresa_id"]),
-            "costeo": CosteoResumen(
-                costo_acumulado=costo,
-                presupuesto_restante=restante,
-                pct_consumido=pct,
-            ),
-        }))
-    return result
-
-
 class ProyectosRepo:
-    def find_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None) -> List[ProyectoResponse]:
-        """Proyectos de la empresa dueña (None = todas), con costeo batch."""
+    def find_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None,
+                 area_id: Optional[UUID] = None) -> List[ProyectoResponse]:
+        """Proyectos de la empresa dueña (None = todas), con costeo batch.
+        `area_id` acota a los que tienen al menos un empleado asignado de esa área — la
+        semántica completa (y por qué no se acota por empresa) está en _area_scope."""
+        if area_id:
+            ids = proyecto_ids_con_area(area_id)
+            if not ids:
+                return []
         q = supabase_admin.table(_T).select("*").order("created_at", desc=True)
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if estado:
             q = q.eq("estado", estado)
+        if area_id:
+            q = q.in_("id", ids)
         rows = q.execute().data or []
         if not rows:
             return []
-        return _build(rows, self._batch_costos([r["id"] for r in rows]))
+        return enriquecer(rows, batch_costos([r["id"] for r in rows]))
 
     def find_by_id(self, id: str, empresa_id: Optional[UUID] = None) -> Optional[ProyectoResponse]:
         q = supabase_admin.table(_T).select("*").eq("id", id)
@@ -57,7 +40,7 @@ class ProyectosRepo:
         res = q.maybe_single().execute()
         if not res.data:
             return None
-        return _build([res.data], self._batch_costos([res.data["id"]]))[0]
+        return enriquecer([res.data], batch_costos([res.data["id"]]))[0]
 
     def find_empresa_for(self, proyecto_id: str) -> Optional[str]:
         """Retorna empresa_id (dueña) del proyecto."""
@@ -89,16 +72,3 @@ class ProyectosRepo:
     def has_horas(self, proyecto_id: str) -> bool:
         res = supabase_admin.table("horas_proyecto").select("id").eq("proyecto_id", proyecto_id).limit(1).execute()
         return bool(res.data)
-
-    def _batch_costos(self, proyecto_ids: List[str]) -> Dict[str, float]:
-        """SUM(horas × valor_hora_snapshot) por proyecto en una sola query."""
-        if not proyecto_ids:
-            return {}
-        rows = (supabase_admin.table("horas_proyecto")
-                .select("proyecto_id, horas, valor_hora_snapshot")
-                .in_("proyecto_id", proyecto_ids).execute().data or [])
-        costos: Dict[str, float] = {}
-        for r in rows:
-            pid = r["proyecto_id"]
-            costos[pid] = costos.get(pid, 0.0) + float(r["horas"]) * float(r["valor_hora_snapshot"])
-        return costos

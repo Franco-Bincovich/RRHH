@@ -59,6 +59,24 @@
  * ausencia de export.
  */
 
+/**
+ * Etiqueta de un área en el selector. En modo consolidado (sin empresa concreta) sufija con
+ * el nombre de la empresa, porque las áreas son POR EMPRESA y dos empresas pueden tener una
+ * "Sistemas" cada una: sin el sufijo el selector muestra dos opciones idénticas.
+ *
+ * Estaba duplicada en los hooks de vacaciones, ausencias y empleados; vive acá para que el
+ * cuarto módulo que filtre por área no escriba una quinta copia.
+ */
+export function etiquetaArea(
+  area: { nombre: string; empresa_id?: string | null },
+  empresas: { id: string; nombre: string }[],
+  empresaConcreta: boolean,
+): string {
+  if (empresaConcreta) return area.nombre
+  const emp = empresas.find((e) => e.id === area.empresa_id)
+  return emp ? `${area.nombre} — ${emp.nombre}` : area.nombre
+}
+
 /** Valores que un filtro puede tomar en el objeto de filtros de un módulo. */
 export type ValorFiltro = string | string[] | undefined
 

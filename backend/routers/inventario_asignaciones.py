@@ -28,9 +28,10 @@ def _svc() -> InventarioAsignacionesService:
 async def list_asignaciones(
     request: Request,
     empleado_id: Optional[str] = Query(None),
+    area_id: Optional[UUID] = Query(None),
     service: InventarioAsignacionesService = Depends(_svc),
 ) -> AsignacionListResponse:
-    return service.get_all(get_empresa_id(request), empleado_id)
+    return service.get_all(get_empresa_id(request), empleado_id, area_id)
 
 
 @router.post("", response_model=AsignacionResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -47,9 +48,10 @@ async def exportar_asignaciones(
     request: Request,
     formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"),
     empleado_id: Optional[str] = Query(None),
+    area_id: Optional[UUID] = Query(None),
     service: InventarioAsignacionesService = Depends(_svc),
 ) -> Response:
-    d = service.exportar(get_empresa_id(request), formato, empleado_id)
+    d = service.exportar(get_empresa_id(request), formato, empleado_id, area_id)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 

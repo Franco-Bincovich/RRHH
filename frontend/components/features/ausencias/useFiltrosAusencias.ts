@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react"
 
+import { etiquetaArea } from "@/components/features/shared/filtros"
 import type { FiltroCampo, RangoFechas } from "@/components/ui/FiltersBar"
 import { fetchAreas } from "@/services/areas"
 import type { AusenciasFiltros } from "@/services/ausencias"
@@ -48,13 +49,6 @@ export function useFiltrosAusencias(onFiltroChange: () => void) {
     fetchEmpleadosSeleccionables(empId).then(setEmpleadosSel).catch(() => setEmpleadosSel([]))
   }, [empresaActivaId, empresaFiltro])
 
-  function areaLabel(area: Area): string {
-    if (!empresaActivaId && !empresaFiltro) {
-      const emp = empresas.find((e) => e.id === area.empresa_id)
-      return emp ? `${area.nombre} — ${emp.nombre}` : area.nombre
-    }
-    return area.nombre
-  }
 
   const campos: FiltroCampo[] = [
     ...(!empresaActivaId && empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: empresaFiltro, opcionTodos: "Todas las empresas",
@@ -62,7 +56,7 @@ export function useFiltrosAusencias(onFiltroChange: () => void) {
       opciones: empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
     ...(areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: areaFiltro, opcionTodos: "Todas las áreas",
       onChange: (v: string) => { setAreaFiltro(v); onFiltroChange() },
-      opciones: areas.map((a) => ({ value: a.id, label: areaLabel(a) })) }] : []),
+      opciones: areas.map((a) => ({ value: a.id, label: etiquetaArea(a, empresas, Boolean(empresaActivaId || empresaFiltro)) })) }] : []),
     ...(empleadosSel.length > 0 ? [{ tipo: "select" as const, label: "Empleado", value: empleadoFiltro, opcionTodos: "Todos los empleados",
       onChange: (v: string) => { setEmpleadoFiltro(v); onFiltroChange() },
       opciones: empleadosSel.map((e) => ({ value: e.id, label: `${e.apellido}, ${e.nombre}` })) }] : []),

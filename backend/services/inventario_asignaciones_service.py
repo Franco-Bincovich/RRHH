@@ -32,15 +32,15 @@ class InventarioAsignacionesService:
         self._repo = repo or InventarioAsignacionesRepo()
         self._items = items_repo or InventarioItemsRepo()
 
-    def get_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[str] = None) -> AsignacionListResponse:
+    def get_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[str] = None, area_id: Optional[UUID] = None) -> AsignacionListResponse:
         """Retorna asignaciones activas (sin fecha_devolucion). None = todas las empresas."""
-        items = self._repo.find_all(empresa_id, empleado_id)
+        items = self._repo.find_all(empresa_id, empleado_id, area_id)
         return AsignacionListResponse(items=items, total=len(items))
 
-    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", empleado_id: Optional[str] = None) -> Descarga:
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", empleado_id: Optional[str] = None, area_id: Optional[UUID] = None) -> Descarga:
         """Exporta las asignaciones activas (columnas legibles, sin UUIDs) respetando el filtro
         de empleado. None = consolidado (todas las empresas). El motor genérico no se toca."""
-        datos = {"Asignaciones": construir_filas_export(self._repo.find_all(empresa_id, empleado_id))}
+        datos = {"Asignaciones": construir_filas_export(self._repo.find_all(empresa_id, empleado_id, area_id))}
         return build_export(nombre="Inventario asignado", datos=datos, filename_base="inventario_asignaciones", formato=formato)
 
     def get_historial(self, item_id: UUID, empresa_id: Optional[UUID] = None) -> AsignacionListResponse:

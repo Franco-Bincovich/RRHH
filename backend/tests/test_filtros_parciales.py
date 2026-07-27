@@ -151,8 +151,8 @@ class _InventarioRepoEspia:
     def __init__(self) -> None:
         self.args: dict = {}
 
-    def find_all(self, empresa_id=None, empleado_id=None):
-        self.args = {"empresa_id": empresa_id, "empleado_id": empleado_id}
+    def find_all(self, empresa_id=None, empleado_id=None, area_id=None):
+        self.args = {"empresa_id": empresa_id, "empleado_id": empleado_id, "area_id": area_id}
         return []
 
 

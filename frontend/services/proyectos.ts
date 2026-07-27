@@ -10,9 +10,33 @@ const BASE = "/api/proyectos"
 
 // ── Proyectos ──────────────────────────────────────────────────────────────────
 
-export function fetchProyectos(estado?: string): Promise<ProyectoListResponse> {
-  const qs = estado ? `?estado=${estado}` : ""
-  return apiFetch<ProyectoListResponse>(`${BASE}${qs}`)
+/**
+ * Filtros del listado de proyectos. Un solo tipo, para que el día que este módulo tenga
+ * export el filtro no pueda quedar en una sola de las dos puntas.
+ */
+export interface ProyectosFiltros {
+  /** Override del header X-Empresa-Id (la empresa no viaja como query param). */
+  empresaIdOverride?: string
+  estado?: string
+  /** Acota a proyectos con al menos un empleado asignado de esa área (semántica en el backend). */
+  areaId?: string
+}
+
+/** Traducción filtros → query params. Fuente única. */
+function queryProyectos(f: ProyectosFiltros): Record<string, string | undefined> {
+  return { estado: f.estado, area_id: f.areaId }
+}
+
+export function fetchProyectos(filtros: ProyectosFiltros = {}): Promise<ProyectoListResponse> {
+  const params = new URLSearchParams()
+  for (const [k, v] of Object.entries(queryProyectos(filtros))) {
+    if (v) params.set(k, v)
+  }
+  const qs = params.size ? `?${params}` : ""
+  return apiFetch<ProyectoListResponse>(
+    `${BASE}${qs}`,
+    filtros.empresaIdOverride ? { headers: { "X-Empresa-Id": filtros.empresaIdOverride } } : {},
+  )
 }
 
 export function fetchProyecto(id: string): Promise<Proyecto> {

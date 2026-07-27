@@ -41,6 +41,30 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-27 · Filtro por área en proyectos e inventario · commits `<pendiente>` ×3
+
+**Qué cambió:** los dos módulos pasaron a poder acotarse por área, y proyectos ganó además el
+filtro de empresa que le faltaba en la UI. En inventario el área se resuelve a empleados y
+acota las asignaciones vigentes. En proyectos la semántica es distinta y está documentada en
+`repositories/_area_scope.py`: un proyecto no tiene área, así que el filtro devuelve los que
+tienen **al menos un empleado asignado** de esa área. Antes se dividieron tres archivos que
+estaban en su límite o pasados.
+
+**Impacto en infraestructura:** Ninguno.
+
+*(Sin migraciones, sin variables de entorno, sin dependencias, sin buckets, sin endpoints
+nuevos ni removidos —`area_id` es un query param opcional más—, sin cambios en el modelo de
+auth ni en los claims del token. Un cliente que no mande el filtro recibe exactamente lo de
+antes.)*
+
+> **Nota de consultas, no acción:** el filtro de proyectos agrega **dos queries batch fijas**
+> (`empleados` por área, `proyecto_asignaciones` por esos empleados) que **no escalan con la
+> cantidad de proyectos** — hay un test que fija el conteo en 2 incluso con 200 asignaciones.
+> Cuando haya volumen, las columnas candidatas a índice son `empleados.area_id` y
+> `proyecto_asignaciones.empleado_id`. No hace falta anticiparlo.
+
+---
+
 ## 2026-07-27 · Exponer filtros que el backend ya aceptaba · commits `<pendiente>` ×2
 
 **Qué cambió:** tres filtros que el backend aplicaba desde antes pasaron a tener control en la
