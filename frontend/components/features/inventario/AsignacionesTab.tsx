@@ -11,7 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AsignarModal } from "@/components/features/inventario/AsignarModal"
 import { DevolverModal } from "@/components/features/inventario/DevolverModal"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { fetchEmpleadosSeleccionables } from "@/services/empleados"
+import type { AsignacionesInventarioFiltros } from "@/services/inventario"
 import { exportarInventarioAsignaciones, fetchAsignaciones } from "@/services/inventario"
+import type { EmpleadoSeleccionable } from "@/types/empleado"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Asignacion } from "@/types/inventario"
@@ -35,6 +38,8 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
   const [error, setError] = useState(false)
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [empresaFiltro, setEmpresaFiltro] = useState("")
+  const [empleadoFiltro, setEmpleadoFiltro] = useState("")
+  const [empleados, setEmpleados] = useState<EmpleadoSeleccionable[]>([])
   const [asignarModal, setAsignarModal] = useState(false)
   const [devolviendo, setDevolviendo] = useState<Asignacion | null>(null)
 
@@ -43,15 +48,28 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
       fetchEmpresas().then((r) => setEmpresas(r.items.filter((e) => e.activa))).catch(() => {})
   }, [empresaActivaId])
 
+  const empresaId = empresaActivaId || empresaFiltro
+
+  useEffect(() => {
+    // El selector de empleados exige empresa concreta (mismo criterio que el resto del repo).
+    if (!empresaId) { setEmpleados([]); setEmpleadoFiltro(""); return }
+    fetchEmpleadosSeleccionables(empresaId).then(setEmpleados).catch(() => setEmpleados([]))
+  }, [empresaId])
+
+  // Un solo objeto de filtros: lo consumen el listado y el export, no pueden divergir.
+  const filtros: AsignacionesInventarioFiltros = {
+    empresaIdOverride: !empresaActivaId && empresaFiltro ? empresaFiltro : undefined,
+    empleadoId: empleadoFiltro || undefined,
+  }
+
   const load = useCallback(async () => {
     setLoading(true); setError(false)
     try {
-      const override = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
-      const data = await fetchAsignaciones({ empresaIdOverride: override })
+      const data = await fetchAsignaciones(filtros)
       setAsignaciones(data.items)
     } catch { setError(true) }
     finally { setLoading(false) }
-  }, [empresaActivaId, empresaFiltro])
+  }, [JSON.stringify(filtros)])  // objeto nuevo por render → se serializa // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -62,14 +80,20 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           {mostrarEmpresa && empresas.length > 0 && (
-            <select className={SEL} value={empresaFiltro} onChange={(e) => setEmpresaFiltro(e.target.value)} aria-label="Filtrar por empresa">
+            <select className={SEL} value={empresaFiltro} onChange={(e) => { setEmpresaFiltro(e.target.value); setEmpleadoFiltro("") }} aria-label="Filtrar por empresa">
               <option value="">Todas las empresas</option>
               {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
             </select>
           )}
+          {empleados.length > 0 && (
+            <select className={SEL} value={empleadoFiltro} onChange={(e) => setEmpleadoFiltro(e.target.value)} aria-label="Filtrar por empleado">
+              <option value="">Todos los empleados</option>
+              {empleados.map((e) => <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>)}
+            </select>
+          )}
         </div>
         <div className="flex gap-2">
-          <ExportMenu onExport={(f) => exportarInventarioAsignaciones(f, { empresaIdOverride: !empresaActivaId && empresaFiltro ? empresaFiltro : undefined })} />
+          <ExportMenu onExport={(f) => exportarInventarioAsignaciones(f, filtros)} />
           {canWrite && (
             <Button className="min-h-11" onClick={() => setAsignarModal(true)}>
               <Plus className="size-4" /> Asignar ítem

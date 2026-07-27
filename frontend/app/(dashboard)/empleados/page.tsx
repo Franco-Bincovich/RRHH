@@ -30,7 +30,7 @@ export default function EmpleadosPage() {
   const [newOpen, setNewOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
-  const { empresaActivaId, empresaOverride, areaFiltro, estadoFiltro, debouncedSearch, campos } =
+  const { empresaActivaId, empresaOverride, areaFiltro, estadoFiltro, esLider, debouncedSearch, campos } =
     useFiltrosEmpleados(() => setPage(1))
 
   const load = useCallback(async () => {
@@ -44,6 +44,7 @@ export default function EmpleadosPage() {
         estado: estadoFiltro || undefined,
         empresaId: empresaOverride,
         areaId: areaFiltro || undefined,
+        esLider,
       })
       setData(result)
     } catch {
@@ -51,7 +52,7 @@ export default function EmpleadosPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, debouncedSearch, estadoFiltro, areaFiltro, empresaOverride])
+  }, [page, debouncedSearch, estadoFiltro, areaFiltro, empresaOverride, esLider])
 
   useEffect(() => { load() }, [load])
 
@@ -72,6 +73,7 @@ export default function EmpleadosPage() {
                 estado: estadoFiltro || undefined,
                 empresaId: empresaOverride,
                 areaId: areaFiltro || undefined,
+                esLider,
               })} />
             )}
             {canWrite && (

@@ -14,6 +14,11 @@ import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Area } from "@/types/area"
 import type { Empresa } from "@/types/empresa"
 
+const LIDER_OPCIONES = [
+  { value: "si", label: "Solo líderes" },
+  { value: "no", label: "Solo no líderes" },
+]
+
 const ESTADO_OPCIONES = [
   { value: "activo", label: "Activo" },
   { value: "baja", label: "Baja" },
@@ -27,6 +32,9 @@ export function useFiltrosEmpleados(onFiltroChange: () => void) {
   const [areaFiltro, setAreaFiltro] = useState("")
   const [areas, setAreas] = useState<Area[]>([])
   const [estadoFiltro, setEstadoFiltro] = useState("")
+  // "" = sin filtro · "si"/"no" → true/false. Se guarda como texto porque el control es un
+  // select; la traducción a booleano se hace una sola vez, abajo, al armar `esLider`.
+  const [liderFiltro, setLiderFiltro] = useState("")
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
 
@@ -65,8 +73,12 @@ export function useFiltrosEmpleados(onFiltroChange: () => void) {
       opciones: areas.map((a) => ({ value: a.id, label: areaLabel(a) })) }] : []),
     { tipo: "select" as const, label: "Estado", value: estadoFiltro, opcionTodos: "Todos los estados",
       onChange: (v: string) => { setEstadoFiltro(v); onFiltroChange() }, opciones: ESTADO_OPCIONES },
+    { tipo: "select" as const, label: "Liderazgo", value: liderFiltro, opcionTodos: "Todos",
+      onChange: (v: string) => { setLiderFiltro(v); onFiltroChange() }, opciones: LIDER_OPCIONES },
   ]
 
   const empresaOverride = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
-  return { empresaActivaId, empresaOverride, areaFiltro, estadoFiltro, debouncedSearch, campos }
+  // `false` es un filtro válido (solo no-líderes), así que no se puede colapsar con `|| undefined`.
+  const esLider = liderFiltro === "" ? undefined : liderFiltro === "si"
+  return { empresaActivaId, empresaOverride, areaFiltro, estadoFiltro, esLider, debouncedSearch, campos }
 }

@@ -31,9 +31,11 @@ siguiente se planifique sobre datos viejos.
 | área | `empleado_repo.py:71` | ✅ | `empleados.py:25` `area_id` | `useFiltrosEmpleados.ts:58` | ✅ `:32` |
 | estado | `empleado_repo.py:73` | ✅ | `empleados.py:25` `estado` | `useFiltrosEmpleados.ts:58` | ✅ |
 | búsqueda (nombre) | `empleado_repo.py:77` (`.or_`) | ✅ | `empleados.py:25` `search` | `useFiltrosEmpleados.ts:59` | ✅ |
-| es_lider | `empleado_repo.py:75` | ✅ | `empleados.py:25` `es_lider` | ❌ **PARCIAL** | ✅ |
+| es_lider | `empleado_repo.py:75` | ✅ | `empleados.py:25` `es_lider` | `useFiltrosEmpleados.ts` | ✅ |
 
-> **PARCIAL — `es_lider`**: existe en las 3 capas de backend y en el export, pero no hay control en la UI.
+> ✅ **`es_lider` cerrado** (tanda de PARCIALES): control "Liderazgo" en la barra de filtros.
+> ⚠️ Hoy los 19 empleados tienen `es_lider = false`, así que "Solo líderes" devuelve 0. El
+> filtro es correcto y el campo se setea desde la ficha; falta que RRHH marque a los líderes.
 
 ### Vacaciones
 
@@ -64,7 +66,7 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
 | empresa | `capacitacion_repo.py:29` | `capacitacion_service.py:24` | header | `CatalogoTab.tsx:77` | ❌ sin export |
-| solo_activos | `capacitacion_repo.py:29` | ✅ | `capacitaciones.py:27` | ❌ **PARCIAL** | — |
+| solo_activos | `capacitacion_repo.py:29` | ✅ | `capacitaciones.py:27` | `CatalogoTab.tsx:83` | — |
 
 ### Capacitaciones — asignaciones
 
@@ -73,8 +75,8 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 | empresa | `asignacion_repo.py:49` | `asignacion_service.py:31` | header | `AsignacionesTab.tsx:106` | ✅ |
 | área | `asignacion_repo.py:40-42` (subquery a empleados) | ✅ | `asignaciones_capacitacion.py:24` | `AsignacionesTab.tsx:112` | ✅ |
 | estado | `asignacion_repo.py:55` | ✅ | `:23` `estado` | `AsignacionesTab.tsx:117` | ✅ |
-| empleado | `asignacion_repo.py:51` | ✅ | `:21` `empleado_id` | ❌ **PARCIAL** | ✅ backend / ❌ front |
-| capacitación | `asignacion_repo.py:53` | ✅ | `:22` `capacitacion_id` | ❌ **PARCIAL** | ✅ backend / ❌ front |
+| empleado | `asignacion_repo.py:51` | ✅ | `:21` `empleado_id` | `useFiltrosAsignacionesCap.ts` | ✅ |
+| capacitación | `asignacion_repo.py:53` | ✅ | `:22` `capacitacion_id` | `useFiltrosAsignacionesCap.ts` | ✅ |
 
 ### Inventario — ítems
 
@@ -88,7 +90,7 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
 | empresa | `inventario_asignaciones_repo.py:51` | `inventario_asignaciones_service.py:35` | header | `AsignacionesTab.tsx:65` | ✅ |
-| empleado | `inventario_asignaciones_repo.py:53` | ✅ | `inventario_asignaciones.py:30` | ❌ **PARCIAL** | ✅ backend / ❌ front |
+| empleado | `inventario_asignaciones_repo.py:53` | ✅ | `inventario_asignaciones.py:30` | `inventario/AsignacionesTab.tsx` | ✅ |
 
 ### Objetivos
 
@@ -566,6 +568,23 @@ así que esta tanda desbloquea también ese reporte.
 > saneamiento previa.
 
 ---
+
+## Correcciones al relevamiento original (27/7/2026, tanda de PARCIALES)
+
+Al verificar los PARCIALES contra el código aparecieron **dos errores de este documento**:
+
+1. **`solo_activos` NO era un PARCIAL.** `CatalogoTab.tsx:83` ya tenía el checkbox "Solo
+   activos", cableado a `fetchCapacitaciones`. Falso positivo del relevamiento.
+2. **`ItemsTab.tsx` (152) no estaba involucrado.** El parcial de inventario era `empleado_id`,
+   que vive en `inventario/AsignacionesTab.tsx` (126, con margen). `ItemsTab` está over-limit
+   por deuda general, no por esta tanda.
+
+Y una decisión de alcance: **`registro_id` de auditoría se sacó de la tanda.** Es un UUID; como
+control de UI implicaría pedirle a alguien que lo pegue a mano. Ya está cableado punta a punta
+en el front (`services/auditoria.ts:25`) y **ninguna pantalla linkea a `/auditoria`**: lo que
+falta no es el control sino el punto de entrada. La feature real es un botón "ver auditoría de
+este registro" que navegue a `/auditoria?registro_id=<id>` + leer el query param al montar.
+**Agendada aparte.**
 
 ## Lo que NO pude determinar
 

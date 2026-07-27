@@ -10,23 +10,29 @@ import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
  * igual y mandaba el filtro equivocado al backend.
  *
  * `empresaId` viaja por header `X-Empresa-Id` (el valor "todas" el backend lo interpreta
- * como consolidado); `search`, `estado` y `areaId` van como query params.
+ * como consolidado); el resto van como query params.
+ *
+ * `esLider` es un booleano de tres estados: `undefined` = sin filtro, `true` = solo líderes,
+ * `false` = solo no-líderes. Por eso NO se puede normalizar con `|| undefined` como los
+ * strings: `false` es un filtro válido, no un vacío.
  */
 export interface EmpleadosFiltros {
   search?: string
   estado?: string
   empresaId?: string
   areaId?: string
+  esLider?: boolean
 }
 
 export async function fetchEmpleados(
   opts: EmpleadosFiltros & { page: number; pageSize: number },
 ): Promise<EmpleadoListResponse> {
-  const { page, pageSize, search, estado, empresaId, areaId } = opts
+  const { page, pageSize, search, estado, empresaId, areaId, esLider } = opts
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
   if (search) params.set("search", search)
   if (estado) params.set("estado", estado)
   if (areaId) params.set("area_id", areaId)
+  if (esLider !== undefined) params.set("es_lider", String(esLider))
   return apiFetch<EmpleadoListResponse>(
     `/api/empleados?${params}`,
     empresaId ? { headers: { "X-Empresa-Id": empresaId } } : {},
@@ -37,12 +43,13 @@ export async function fetchEmpleados(
 export function exportarEmpleados(
   opts: EmpleadosFiltros & { formato: FormatoExport },
 ): Promise<void> {
-  const { formato, search, estado, empresaId, areaId } = opts
+  const { formato, search, estado, empresaId, areaId, esLider } = opts
   const headers = empresaId ? { "X-Empresa-Id": empresaId } : undefined
   return descargarArchivo("/api/empleados/exportar", formato, "empleados", headers, {
     search,
     estado,
     area_id: areaId,
+    es_lider: esLider === undefined ? undefined : String(esLider),
   })
 }
 

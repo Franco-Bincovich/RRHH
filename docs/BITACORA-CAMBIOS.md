@@ -41,6 +41,30 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-27 · Exponer filtros que el backend ya aceptaba · commits `<pendiente>` ×2
+
+**Qué cambió:** tres filtros que el backend aplicaba desde antes pasaron a tener control en la
+pantalla: **liderazgo** en empleados, **empleado** y **capacitación** en asignaciones de
+capacitación, y **empleado** en asignaciones de inventario. No se tocó ni una línea de backend:
+lo único que faltaba era el punto de entrada y que el wrapper del front los mandara también al
+export. Antes, `capacitaciones/AsignacionesTab.tsx` se dividió (211 → 87 + una tabla
+presentacional de 122).
+
+**Impacto en infraestructura:** Ninguno.
+
+*(Cambios de frontend salvo por los tests. Sin migraciones, sin variables de entorno, sin
+dependencias, sin buckets, sin endpoints nuevos ni removidos —los tres filtros ya existían como
+query params—, sin cambios en el modelo de auth ni en los claims del token.)*
+
+> **Nota de expectativas, no de infraestructura:** los tres filtros funcionan pero hoy **no
+> tienen datos que cortar**. En producción: 0 capacitaciones, 0 asignaciones de capacitación,
+> 0 asignaciones de inventario, y los 19 empleados con `es_lider = false` (o sea que "Solo
+> líderes" devuelve 0). La capacidad quedó entregada; el valor aparece cuando RRHH cargue
+> datos. **Si alguien prueba estas pantallas y las ve vacías, no están rotas** — es el mismo
+> bloqueante de adopción que ya está documentado.
+
+---
+
 ## 2026-07-27 · Filtro por rango de fechas en vacaciones y ausencias · commits `<pendiente>` ×2
 
 **Qué cambió:** los dos módulos de uso diario pasaron a poder acotarse por período, que era la

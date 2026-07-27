@@ -18,6 +18,7 @@ const { apiFetch, descargarArchivo } = vi.hoisted(() => ({
 
 vi.mock("@/services/api", () => ({ apiFetch, descargarArchivo }))
 
+import { exportarEmpleados, fetchEmpleados } from "@/services/empleados"
 import { exportarCapacitaciones, fetchAsignaciones as fetchCapacitaciones } from "@/services/capacitaciones"
 import { exportarAusencias, fetchAusencias } from "@/services/ausencias"
 import {
@@ -173,6 +174,43 @@ describe("ausencias — con rango de fechas", () => {
   it("un rango abierto manda solo la cota que tiene", async () => {
     await exportarAusencias("csv", { fechaHasta: "2026-03-31" })
     expect(queryExport()).toEqual({ fecha_hasta: "2026-03-31" })
+  })
+})
+
+describe("empleados — es_lider es un booleano de tres estados", () => {
+  // `false` es un filtro válido (solo NO líderes), no un vacío. Si en algún momento se
+  // normalizara con `|| undefined` como los strings, "Solo no líderes" dejaría de filtrar
+  // y devolvería la lista completa — sin error y sin que se note.
+  it("true se manda como 'true'", async () => {
+    await fetchEmpleados({ page: 1, pageSize: 20, esLider: true })
+    expect(queryListado().get("es_lider")).toBe("true")
+  })
+
+  it("false se manda como 'false', no se descarta", async () => {
+    await fetchEmpleados({ page: 1, pageSize: 20, esLider: false })
+    expect(queryListado().get("es_lider")).toBe("false")
+  })
+
+  it("undefined no manda el param", async () => {
+    await fetchEmpleados({ page: 1, pageSize: 20 })
+    expect(queryListado().has("es_lider")).toBe(false)
+  })
+
+  it("el export manda los mismos tres estados", async () => {
+    await exportarEmpleados({ formato: "excel", esLider: false })
+    expect(queryExport()).toEqual({ es_lider: "false" })
+  })
+
+  it("el export sin el filtro no manda el param", async () => {
+    await exportarEmpleados({ formato: "excel", estado: "activo" })
+    expect(queryExport()).toEqual({ estado: "activo" })
+  })
+
+  it("se compone con los otros filtros, no los pisa", async () => {
+    await exportarEmpleados({ formato: "excel", esLider: true, estado: "activo", areaId: "area-1", search: "ana" })
+    expect(queryExport()).toEqual({
+      es_lider: "true", estado: "activo", area_id: "area-1", search: "ana",
+    })
   })
 })
 
