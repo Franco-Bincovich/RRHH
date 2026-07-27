@@ -67,17 +67,30 @@ Sofia es el repositorio interno de **HR Karstec**: plataforma de gestión del ci
 
 ## 🎯 FOCO ACTUAL
 
-**Deploy resuelto, evaluaciones en producción.** Lo que sigue en orden:
+**Fase 0 (blindaje pre-testing) y Fase 1 (reportes + KPIs) COMPLETAS y en producción. Listo para entregar usuarios a RRHH para testing sobre datos reales.**
 
-1. **Segunda usuaria de RRHH** — crear el auth user (dashboard Supabase → Add user → Auto Confirm) + INSERT en `public.users` (rol `admin_rrhh`). Ver "ABM de usuarios".
-2. **`manager_id` vacío (0/19)** — avisar a RRHH. Rompe el ownership de `mandos_medios`: hoy ningún mando ve a su gente en vacaciones/ausencias. No depende del deploy.
-3. **Reportes y KPIs** — catálogo definido por RRHH (18 reportes + 12 KPIs). Diagnóstico read-only pendiente de correr para mapear qué existe / qué falta. Candidatos a dato faltante ya detectados: rotación por motivo (falta motivo de egreso), saldos de vacaciones (falta días disponibles), cumpleaños/aniversarios (falta fecha nacimiento/ingreso).
-4. **Filtros + export en Vacaciones y Ausencias** — bloqueado por los Excel de RRHH. Ver playbook abajo.
-5. **Descarga de archivos originales de importaciones** (Entrega 2 de evaluaciones) — feature nueva con migración; ver sección evaluaciones.
+### 🔴 EL PROBLEMA #1 NO ES CÓDIGO: RRHH no cargó datos
+Verificado en producción (jul 2026): 1 empresa, 19 empleados, y casi todo lo demás vacío:
+- `manager_id` 0/19 · `modalidad_contratacion` 0/19 · `seniority` 4/19
+- `solicitudes_vacaciones` 0 · `solicitudes_ausencia` 0 · `costos_nomina` 0 · vacantes abiertas 0
+- Único campo poblado: `fecha_nacimiento` 19/19 (por eso el KPI de cumpleaños muestra datos).
+
+**Consecuencia:** los reportes y KPIs están correctos pero salen VACÍOS. Antes de entregar a RRHH hay que avisarles explícitamente, o van a abrir pantallas vacías y creer que están rotas. El sistema no muestra valor hasta que carguen datos. Esto NO es deuda técnica — es un bloqueante de adopción.
+
+### Al entregar a testing, decirle a RRHH:
+1. Los reportes/KPIs salen vacíos hasta que carguen dotación, vacaciones, ausencias, costos. No están rotos.
+2. `manager_id` sin cargar → un usuario `mandos_medios` no ve NADA (su ownership depende de ese campo). Todavía no probar ese rol.
+3. Qué se espera que "traten de romper".
+
+### Próximas fases (orden de prioridad)
+- **FASE 2 — Seguridad de endpoints** (~21 sin validación de empresa): NO testeable ni explotable con 1 sola empresa. Riesgo #1 cuando entre la 2ª. Se hace INCREMENTAL, por módulo, al tocar cada uno. El de reportes ya se cerró (sesión 1 de Fase 1). Falta el resto + los 5 de evaluaciones (en bloque, temprano, porque evaluaciones ya tiene datos reales).
+- **FASE 3 — Deuda estructural:** `fetchEmpleados` a objeto de opciones (4 posicionales rompen callers en silencio); `sucesion/page.tsx` (855) + N+1 de sucesión.
+- **FASE 4 — Bloqueada por RRHH:** import Excel de vacaciones/ausencias (esperando archivos); carga real de `manager_id`; import de objetivos (trabado por modelo).
 
 **Pendientes de RRHH (bloqueantes de datos):**
+- Cargar datos reales en los módulos (ver arriba).
 - Excel reales de vacaciones y ausencias (sin ellos no se define el parser de import).
-- Evaluaciones: ¿pueden exportar DNI o legajo? · los 2 líderes sin nota final · qué es "Kolektor" (empresa del grupo o error de carga).
+- Evaluaciones: ¿pueden exportar DNI o legajo? · los 2 líderes sin nota final · qué es "Kolektor".
 
 ---
 
@@ -150,7 +163,7 @@ Captura **app-level** (no triggers DB). Tabla `auditoria` (mig 024+058): `id, ta
 
 `AuditService.registrar(...)` keyword-only, síncrono, **traga todo error** (no tumba la operación de negocio). `audit_repo` (insert + listar con filtros/paginación). Payloads canónicos en `services/_audit_payloads*.py`.
 
-⚠️ **Bug conocido — auditoría de nómina silenciosa:** `_audit_payloads_rrhh.py` pasa el literal `"lote_nomina"` en `registro_id` (columna uuid) → el insert falla y `AuditService.registrar` traga la excepción → el evento se pierde en silencio. **Al copiar patrones de auditoría, copiar `_audit_payloads_ev.py` (correcto), NO el de nómina.** Pendiente de arreglar.
+✅ **Auditoría de nómina silenciosa — ARREGLADA (Fase 0.1).** Antes `_audit_payloads_rrhh.py` pasaba el literal `"lote_nomina"` en `registro_id` (uuid) → insert fallaba → `AuditService.registrar` tragaba la excepción → evento perdido. Ahora usa `str(uuid4())` por llamada (id de EVENTO, no de recurso — nómina no persiste un lote con id, a diferencia de evaluaciones). Deuda futura: darle a nómina un lote persistido si se quiere trazar un import puntual. **Seguir usando `_audit_payloads_ev.py` como patrón de referencia.**
 
 **UI:** `/auditoria` (admin/gerencia) + `components/ui/Pagination.tsx` (reutilizable). `auditoria.tabla` = `entidad` (espejo 1:1) — legacy, drop futuro sin traducción.
 
@@ -197,7 +210,7 @@ Apellido+nombre normalizado (sin acentos), desempatado por superior contra `mana
 ### Pipeline
 `preview` (parsea+resuelve, **no persiste**, avisa si pisa período) → revisión humana → `confirmar` (**no re-parsea**: persiste lo aprobado, pisa el período previo vía `delete_lote`+CASCADE, un evento de auditoría por lote).
 
-🚨 **Bug conocido de `confirmar()` — pérdida de datos, SIN arreglar (tarea aparte, requiere decisión):** el orden es `delete_lote(previo)` (línea :64) **antes** de `crear_lote(nuevo)` (:65), sin transacción (PostgREST = autocommit por request, no hay transacción multi-statement). Un reimport que falle en cualquier punto entre :64 y :74 deja **sin el lote viejo y sin el nuevo** — no es "lote a medias", es pérdida total del ciclo. Puntos de fallo verificados: `guardar_resultados` es insert-por-evaluado (no bulk); `crear_evaluados` devuelve `[]` en silencio si falla (a diferencia de `crear_lote` que levanta AppError) → `KeyError` crudo → 500 con lote ya creado y 0 evaluados. **Fix propuesto (no aplicado): invertir orden (crear nuevo antes de borrar viejo) + que `crear_evaluados` levante AppError como su hermano.** El botón de eliminar importación mitiga (permite borrar un lote incompleto y reimportar limpio).
+✅ **Bug de `confirmar()` — pérdida de datos, ARREGLADO (Fase 0.2).** Antes borraba el lote previo antes de crear el nuevo, sin transacción → un reimport fallido perdía ambos. Ahora el orden es: crear lote nuevo con período TEMPORAL (`"{periodo} ::importando::"`, no choca la UNIQUE) → persistir evaluados+resultados → **verificación POR CONTEO** (`len(guardados)==esperados`; un insert parcial silencioso se detecta acá, no basta "no hubo excepción") → borrar el viejo (único paso destructivo, al final) → renombrar el nuevo al período real. Si algo falla antes del borrado, el viejo queda intacto y el temporal se limpia best-effort. `crear_evaluados`/`crear_resultados` ahora levantan `AppError` si el insert no devuelve todas las filas (antes devolvían `[]` en silencio). La única ventana restante (fallo entre borrar-viejo y renombrar) deja el nuevo completo con nombre temporal → recuperable a mano, logueado a ERROR, no es pérdida.
 
 ### Métricas
 Agregados en Python puro (`_evaluacion_metricas.py`), no SQL (~300 filas por lote no justifica vistas/RPC). ⚠️ Competencias en DOS tablas separadas (líder/general), cada una con su `n` — **nunca en el mismo ranking** (son 2 evaluaciones distintas, mezclarlas da resultado falso). Excluyen autoevaluaciones. La métrica más valiosa: **brecha de autopercepción** (auto vs promedio de terceros).
@@ -222,6 +235,40 @@ Tab **"Importaciones"** en `/evaluaciones` con lista de todos los lotes, multi-s
 ### Entrega 2 — descarga de archivos originales (PENDIENTE, feature nueva)
 Poder **volver a descargar los CSV originales** de cada importación. Hoy **no se puede**: el import parsea y descarta los bytes (cero `storage.upload`, `evaluacion_lotes` sin columna de ruta). Requiere: (1) guardar los dos CSV en Storage al confirmar (reusar patrón `adjunto_service` / bucket existente), (2) migración con columna(s) de ruta, (3) endpoint de descarga con `create_signed_url`. La infra de Storage ya existe (usada por 5 módulos: adjuntos, cvs, candidatos, certificados, logos).
 🚩 **Solo hacia adelante.** El lote Julio 2026 ya existe sin archivos guardados — no se recupera. La descarga funciona solo para importaciones futuras. Confirmar con RRHH que el lote viejo se puede perder.
+
+---
+
+## Reportes y KPIs (COMPLETO — Fase 1, en producción)
+
+Catálogo de reportes descargables (PDF/Excel) + KPIs de dashboard. Construido en 6 sesiones.
+
+### 🔑 PRINCIPIO — Vista vs Acción (evita la confusión recurrente del selector de empresa)
+- **El selector de empresa del SIDEBAR es SOLO VISUAL.** Filtra lo que se MIRA (listados, dashboard). NO gobierna acciones.
+- **Las ACCIONES reciben la empresa como PARÁMETRO EXPLÍCITO** (del formulario/body), nunca del header `X-Empresa-Id`. Ejemplos: generar un reporte (empresa del form), borrar un lote de evaluaciones (empresa del lote).
+- Regla mental: **mirar = sidebar manda · hacer = el form/parámetro manda.**
+- Casos concretos: **Reportes = ACCIÓN** → empresa+área salen del form, ignora el sidebar (sin empresa elegida = todas las empresas, consolidado). **Dashboard = VISTA** → respeta el sidebar. Son opuestos a propósito; no contagiar un patrón al otro.
+
+### Reportes construidos (11)
+Dotación: headcount, altas/bajas (con listado nominal), distribución por seniority/modalidad/turno (nulos → "Sin especificar"), rotación por motivo.
+Vac/aus: listado combinado, ausentismo por área (total + injustificado, tasa sobre 22 días hábiles con nota visible), saldos de vacaciones (asignados − tomados con `cancelada=false`; solo `tipo="vacaciones"` resta saldo; saldo negativo → flag `excedido`, no se oculta).
+Costos/otros: masa salarial, presupuesto vs real (desvío + % ejecución), capacitación por área (desde `empleado_capacitacion`, filtra por `fecha_asignacion`), auditoría/trazabilidad (resumen legible, NO vuelca el JSONB crudo, usuario por nombre).
+
+Todos: filtro período + empresa + área (empresa/área del FORM). El área se filtra por join a empleados donde la tabla no tiene `area_id` (costos, rotación, onboarding). `anual_consolidado` no lleva área (transversal por diseño). El motor `build_export` es genérico — producir el dict `datos` y llamarlo.
+
+### KPIs de dashboard (9: 4 previos + 5 nuevos)
+Nuevos: ausencias activas hoy, % ausentismo del mes (base 22 días, nota visible), masa salarial + variación vs mes anterior, distribución por seniority/modalidad, cumpleaños/aniversarios del mes. El dashboard RESPETA el sidebar de empresa (es vista).
+
+### Estructura
+- `services/reportes/` — un submódulo por familia (`_reporte_dotacion`, `_reporte_costos`, `_reporte_movimientos`, `_reporte_seleccion`, `_reporte_vacaciones`, `_reporte_ausentismo`, `_reporte_capacitacion`, `_reporte_auditoria`) + `reporte_generators.py` como dispatcher/re-export (18 líneas). `_common.py` para lo compartido, evita el ciclo dispatcher↔submódulos.
+- `services/_kpi_helpers.py` / `_dashboard_kpis.py` — **cálculos compartidos entre KPIs y reportes** (base 22 días, distribución con "Sin especificar"). Un solo lugar, no duplicar.
+- Front: `components/features/reportes/` (catálogo + card + selectores empresa/área) y `components/features/dashboard/` (tarjetas divididas).
+- El reporte adhoc con IA (`reporte_adhoc.py`, modelo `claude-sonnet-4-6`) está OCULTO del catálogo (no borrado — patrón AIPanel). El endpoint existe; solo se sacó el punto de entrada del front. Reactivable en una línea.
+
+### 🚨 Dashboard resiliente (fail-safe por KPI)
+`dashboard_service` calcula cada KPI/sección con un `_safe`: si UNO falla, los demás se devuelven igual y el fallido queda vacío + marcado en `errores`. NUNCA propaga (antes un KPI roto tiraba 200→500 el dashboard entero). Al agregar un KPI nuevo, respetá este patrón.
+
+### 🔴 APRENDIZAJE CRÍTICO — los tests NO detectan errores de embed de PostgREST
+El fake de Supabase de los tests NO replica la resolución de FKs del PostgREST real. Un `select` con embed anidado (`empleados(areas(...))`) puede pasar los 313 tests y explotar en el primer request real con **PGRST201 (300 Multiple Choices)** si la tabla tiene MÁS DE UNA FK al target (ej: `costos_nomina` tiene 2 FKs a `empleados`). **Regla: toda query con embed es un punto ciego de los tests → verificar manualmente en producción después de cada deploy que toque queries con relaciones anidadas.** Fix: nombrar la FK explícita → `empleados!costos_nomina_empleado_id_fkey(...)`. (Hermano del aprendizaje ya conocido de self-join embedding.)
 
 ---
 
@@ -312,20 +359,21 @@ Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. C�
 ## Deuda técnica conocida
 
 ### Bugs / riesgos activos
-- 🔴 **Fuga entre empresas** en `/metricas`, `/evaluados`, `/export`, `/ficha` de evaluaciones (ver sección evaluaciones). Prioridad antes de la 2ª empresa.
-- 🚨 **`confirmar()` de evaluaciones** — pérdida total del lote si un reimport falla (ver sección evaluaciones). Fix propuesto, sin aplicar.
-- 🚨 **Auditoría de nómina silenciosa** — `"lote_nomina"` string donde va un UUID → evento perdido. Copiar `_audit_payloads_ev.py`, no el de nómina.
-- **`manager_id` 0/19** — rompe ownership de mandos_medios y desempate de matcheo. Avisar a RRHH.
-- **`fetchEmpleados` — 4 opcionales posicionales del mismo tipo** (`string|undefined`). Agregar uno rompe callers en silencio (`tsc` no lo detecta, intercambiar dos `string|undefined` no es error de tipos). Fix real: objeto de opciones (toca 9 call sites). Mientras: al tocar la firma, tabla manual de callers.
+- 🔴 **Fuga entre empresas** en `/metricas`, `/evaluados`, `/export`, `/ficha` de evaluaciones + ~21 endpoints más en otros módulos (ver sección evaluaciones). NO explotable con 1 empresa; prioridad #1 antes de la 2ª. Fase 2, incremental por módulo. El de reportes YA se cerró.
+- ✅ **`confirmar()` de evaluaciones — RESUELTO (Fase 0.2).** Período temporal + verificación por conteo. Ver sección evaluaciones.
+- ✅ **Auditoría de nómina silenciosa — RESUELTA (Fase 0.1).** uuid4 de evento. Ver sección audit log.
+- ✅ **`manager_id` — capacidad de edición RESUELTA (Fase 0.3):** se puede asignar/desasignar superior desde la ficha, con anti-ciclos server-side (auto-referencia, ciclo directo/indirecto, tope 50 saltos). ⚠️ PERO **sigue 0/19 poblado** — la capacidad existe, los datos no. Hasta que RRHH cargue jerarquía, `mandos_medios` no ve nada y el desempate de matcheo de evaluaciones no discrimina.
+- **`fetchEmpleados` — 4 opcionales posicionales del mismo tipo** (`string|undefined`). Agregar uno rompe callers en silencio (`tsc` no lo detecta). Fix real: objeto de opciones (toca 9+ call sites). Fase 3. Mientras: al tocar la firma, tabla manual de callers.
 - **Filtros duplicados front+back** (patrón recurrente): si un filtro afecta el export, va **server-side, una sola implementación**. Casos: `aplicar_filtro_estado` es espejo de `derive_estado` (merece test que las compare); listado de evaluaciones filtra client-side, exporta server-side (aceptable a ~30 filas, el endpoint ya acepta los filtros).
 - **`page_size=100000` en export** — corte silencioso si una empresa lo supera.
 - **`middleware/auth.py`** acepta cualquier UUID con formato válido como `X-Empresa-Id` sin verificar que exista. Baja prioridad.
 - **`permisos.ts` es espejo manual de `permisos.py`** — riesgo de divergencia.
 
 ### Líneas (archivos over-limit, límite front 150 / back según tipo)
-**Frontend:** `sucesion/page.tsx` 855 · `costos/page.tsx` 618 · `vacantes/[id]/page.tsx` 577 · `reportes/page.tsx` 539 · `onboarding/templates/[id]/page.tsx` 412 · `onboarding/page.tsx` 410 · `configuracion/page.tsx` 390 · `ImportarNominaCSVModal.tsx` 377 · `PlantillasTab.tsx` 336 · `CiclosTab.tsx` 297 · `offboarding/page.tsx` 292 · `NominaModal.tsx` 287 · `EvaluacionesTab.tsx` 286 · `areas/page.tsx` 261 · `AsignacionesTab.tsx` 211 · `assessment/[id]/page.tsx` 192 + ~26 más entre 152–268.
-**Backend:** `reporte_generators` 249 · `integracion_service` 201 · `_audit_payloads_rrhh` 186 · `empleado_repo.py` 174 · `reporte_anual` 154 · `ev_instancias_repo` 146 · `nomina_repo` 107 · `proyectos_repo` 104. (`costo_repo` 135 y `assessment_repo` 130 son **legacy sin callers** — candidatos a borrar, junto con `EliminarLoteButton.tsx`.)
-**Cerca del límite (el próximo cambio exige dividir primero):** `costo_service.py` 150 · `vacaciones_service.py` 142 · `empleado_service.py` 141 · routers `inventario_items.py`/`ausencias.py` 79 (margen 1) · `objetivos.py` 79 · `vacaciones.py` 75.
+> `reportes/page.tsx` (era 539) y `reporte_generators.py` (era 249) se DIVIDIERON en Fase 1 — ya no están over-limit.
+**Frontend:** `sucesion/page.tsx` 855 (el peor — Fase 3) · `costos/page.tsx` 618 · `vacantes/[id]/page.tsx` 577 · `onboarding/templates/[id]/page.tsx` 412 · `onboarding/page.tsx` 410 · `configuracion/page.tsx` 390 · `ImportarNominaCSVModal.tsx` 377 · `PlantillasTab.tsx` 336 · `CiclosTab.tsx` 297 · `offboarding/page.tsx` 292 · `NominaModal.tsx` 287 · `EvaluacionesTab.tsx` 286 · `areas/page.tsx` 261 · `AsignacionesTab.tsx` 211 · `assessment/[id]/page.tsx` 192 + ~26 más entre 152–268.
+**Backend:** `integracion_service` 201 · `_audit_payloads_rrhh` 189 · `empleado_repo.py` 174 · `reporte_anual` 154 · `ev_instancias_repo` 146 · `nomina_repo` 107 · `proyectos_repo` 104. (`costo_repo` 135 y `assessment_repo` 130 son **legacy sin callers** — candidatos a borrar, junto con `EliminarLoteButton.tsx`.)
+**En/al límite exacto (el próximo cambio EXIGE dividir primero):** `evaluacion_repo.py` **100/100** · `_dashboard_kpis.py` 137 · `costo_service.py` 150 · `vacaciones_service.py` 142 · `empleado_service.py` 143 · routers `inventario_items.py`/`ausencias.py` 79 · `objetivos.py` 79 · `vacaciones.py` 75.
 
 ### Al margen por decisión (NO tocar)
 - **S6 / DROP de `cargo` y `rol`** → no se borra nada (decisión de producto). Fallbacks `roles[0] ?? cargo` quedan.
@@ -337,7 +385,8 @@ Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. C�
 ### Tests
 - Front: **0 tests** en todo el repo. `tsc` es la única red.
 - Adjuntos: 11 tests unit con `_FakeRepo` + storage monkeypatcheado. **E2E real nunca se ejecutó** (no hay bucket no-productivo; `_BUCKET="documentos"` hardcodeado apunta a prod). Decisión: E2E automatizado en el cutover a AWS/S3.
-- Suite backend: **254 passed**.
+- Suite backend: **313 passed**.
+- ⚠️ **Los tests con el fake de Supabase NO detectan errores de embed de PostgREST** (resolución de FKs). Toda query con `select` anidado es punto ciego → verificar en producción tras deploy. Ver aprendizaje en sección Reportes.
 
 ### En pausa
 - **Link público de carga de horas** — mockup HTML aprobado, esperando RRHH.
