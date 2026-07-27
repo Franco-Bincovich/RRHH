@@ -20,22 +20,46 @@ export async function createTipoAusencia(nombre: string): Promise<TipoAusencia> 
   })
 }
 
+/**
+ * Filtros del listado de ausencias. Los consumen el listado Y el export: es el mismo tipo a
+ * propósito, para que un filtro nuevo no pueda quedar en uno solo de los dos.
+ *
+ * `fechaDesde`/`fechaHasta` acotan por SOLAPAMIENTO con el rango, no por contención: una
+ * ausencia que empieza antes del rango pero lo cruza ENTRA. La semántica vive en el backend
+ * (repositories/_rango_fechas.py) y acá no se reimplementa nada — el filtro es server-side.
+ */
+export interface AusenciasFiltros {
+  empresaIdOverride?: string
+  areaId?: string
+  tipoId?: string
+  empleadoId?: string
+  fechaDesde?: string
+  fechaHasta?: string
+}
+
+/** Traducción filtros → query params. Fuente ÚNICA compartida por listado y export. */
+function queryAusencias(f: AusenciasFiltros): Record<string, string | undefined> {
+  return {
+    area_id: f.areaId,
+    empleado_id: f.empleadoId,
+    tipo_id: f.tipoId,
+    fecha_desde: f.fechaDesde,
+    fecha_hasta: f.fechaHasta,
+  }
+}
+
 export async function fetchAusencias(
-  empresaIdOverride?: string,
-  areaId?: string,
-  tipoId?: string,
-  empleadoId?: string,
+  filtros: AusenciasFiltros = {},
   page = 1,
   pageSize = 20,
 ): Promise<AusenciaListResponse> {
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
-  if (areaId) params.set("area_id", areaId)
-  if (empleadoId) params.set("empleado_id", empleadoId)
-  if (tipoId) params.set("tipo_id", tipoId)
-  const query = `?${params}`
+  for (const [k, v] of Object.entries(queryAusencias(filtros))) {
+    if (v) params.set(k, v)
+  }
   return apiFetch<AusenciaListResponse>(
-    `/api/ausencias${query}`,
-    empresaIdOverride ? { headers: { "X-Empresa-Id": empresaIdOverride } } : {},
+    `/api/ausencias?${params}`,
+    filtros.empresaIdOverride ? { headers: { "X-Empresa-Id": filtros.empresaIdOverride } } : {},
   )
 }
 
@@ -78,18 +102,11 @@ export async function deleteAusencia(id: string): Promise<void> {
   await apiFetch<{ ok: boolean }>(`/api/ausencias/${id}`, { method: "DELETE" })
 }
 
-/** Exporta el listado de ausencias (pdf/excel/csv/word) con los filtros activos aplicados. */
+/** Exporta el listado de ausencias con los MISMOS filtros que el listado. */
 export function exportarAusencias(
   formato: FormatoExport,
-  empresaIdOverride?: string,
-  areaId?: string,
-  tipoId?: string,
-  empleadoId?: string,
+  filtros: AusenciasFiltros = {},
 ): Promise<void> {
-  const headers = empresaIdOverride ? { "X-Empresa-Id": empresaIdOverride } : undefined
-  return descargarArchivo("/api/ausencias/exportar", formato, "ausencias", headers, {
-    area_id: areaId,
-    empleado_id: empleadoId,
-    tipo_id: tipoId,
-  })
+  const headers = filtros.empresaIdOverride ? { "X-Empresa-Id": filtros.empresaIdOverride } : undefined
+  return descargarArchivo("/api/ausencias/exportar", formato, "ausencias", headers, queryAusencias(filtros))
 }

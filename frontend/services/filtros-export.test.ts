@@ -19,10 +19,12 @@ const { apiFetch, descargarArchivo } = vi.hoisted(() => ({
 vi.mock("@/services/api", () => ({ apiFetch, descargarArchivo }))
 
 import { exportarCapacitaciones, fetchAsignaciones as fetchCapacitaciones } from "@/services/capacitaciones"
+import { exportarAusencias, fetchAusencias } from "@/services/ausencias"
 import {
   exportarInventarioAsignaciones, exportarInventarioItems,
   fetchAsignaciones as fetchInventarioAsignaciones, fetchItems,
 } from "@/services/inventario"
+import { exportarVacaciones, fetchVacaciones } from "@/services/vacaciones"
 
 /** Query params con los que se llamó a apiFetch (el listado). */
 function queryListado(): URLSearchParams {
@@ -112,6 +114,65 @@ describe("inventario — ítems", () => {
     await fetchItems(filtros)
     await exportarInventarioItems("word", filtros)
     expect(queryExport()).toEqual(listadoComoObjeto())
+  })
+})
+
+describe("vacaciones — con rango de fechas", () => {
+  const filtros = {
+    empresaIdOverride: "emp-1", areaId: "area-1", empleadoId: "empleado-2",
+    estado: "tomada", fechaDesde: "2026-03-01", fechaHasta: "2026-03-31",
+  }
+
+  it("el export manda los seis filtros, incluido el rango", async () => {
+    await exportarVacaciones("excel", filtros)
+    expect(queryExport()).toEqual({
+      area_id: "area-1", empleado_id: "empleado-2", estado: "tomada",
+      fecha_desde: "2026-03-01", fecha_hasta: "2026-03-31",
+    })
+  })
+
+  it("el listado y el export traducen el mismo objeto a los mismos params", async () => {
+    await fetchVacaciones(filtros)
+    await exportarVacaciones("excel", filtros)
+    const { page, page_size, ...listado } = listadoComoObjeto()  // el export no pagina
+    expect(queryExport()).toEqual(listado)
+  })
+
+  it("un rango abierto manda solo la cota que tiene", async () => {
+    await exportarVacaciones("excel", { fechaDesde: "2026-03-01" })
+    expect(queryExport()).toEqual({ fecha_desde: "2026-03-01" })
+  })
+
+  it("sin rango no manda ninguna cota", async () => {
+    await exportarVacaciones("excel", { estado: "tomada" })
+    expect(queryExport()).toEqual({ estado: "tomada" })
+  })
+})
+
+describe("ausencias — con rango de fechas", () => {
+  const filtros = {
+    empresaIdOverride: "emp-1", areaId: "area-1", tipoId: "tipo-3",
+    empleadoId: "empleado-2", fechaDesde: "2026-03-01", fechaHasta: "2026-03-31",
+  }
+
+  it("el export manda los seis filtros, incluido el rango", async () => {
+    await exportarAusencias("csv", filtros)
+    expect(queryExport()).toEqual({
+      area_id: "area-1", tipo_id: "tipo-3", empleado_id: "empleado-2",
+      fecha_desde: "2026-03-01", fecha_hasta: "2026-03-31",
+    })
+  })
+
+  it("el listado y el export traducen el mismo objeto a los mismos params", async () => {
+    await fetchAusencias(filtros)
+    await exportarAusencias("csv", filtros)
+    const { page, page_size, ...listado } = listadoComoObjeto()
+    expect(queryExport()).toEqual(listado)
+  })
+
+  it("un rango abierto manda solo la cota que tiene", async () => {
+    await exportarAusencias("csv", { fechaHasta: "2026-03-31" })
+    expect(queryExport()).toEqual({ fecha_hasta: "2026-03-31" })
   })
 })
 

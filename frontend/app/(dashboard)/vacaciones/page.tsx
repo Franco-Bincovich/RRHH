@@ -47,14 +47,13 @@ export default function VacacionesPage() {
   const [cancelingId, setCancelingId] = useState<string | null>(null)
   const [docsFor, setDocsFor] = useState<SolicitudVacaciones | null>(null)
 
-  const { empresaActivaId, empresaOverride, areaFiltro, empleadoFiltro, estadoFiltro, campos } =
-    useFiltrosVacaciones(() => setPage(1))
+  const { empresaActivaId, filtros, campos } = useFiltrosVacaciones(() => setPage(1))
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(false)
     try {
-      const data = await fetchVacaciones(empresaOverride, areaFiltro || undefined, empleadoFiltro || undefined, estadoFiltro || undefined, page, PAGE_SIZE)
+      const data = await fetchVacaciones(filtros, page, PAGE_SIZE)
       setSolicitudes(data.items)
       setTotal(data.total)
     } catch {
@@ -62,7 +61,8 @@ export default function VacacionesPage() {
     } finally {
       setLoading(false)
     }
-  }, [empresaOverride, areaFiltro, empleadoFiltro, estadoFiltro, page])
+    // filtros es un objeto nuevo en cada render; se serializa para no re-fetchear de más.
+  }, [JSON.stringify(filtros), page])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -86,7 +86,7 @@ export default function VacacionesPage() {
         action={
           <div className="flex gap-2">
             {!loading && !error && solicitudes.length > 0 && (
-              <ExportMenu onExport={(f) => exportarVacaciones(f, empresaOverride, areaFiltro || undefined, empleadoFiltro || undefined, estadoFiltro || undefined)} />
+              <ExportMenu onExport={(f) => exportarVacaciones(f, filtros)} />
             )}
             {canWrite && (
               <Button className="min-h-11" onClick={() => setModalOpen(true)}>

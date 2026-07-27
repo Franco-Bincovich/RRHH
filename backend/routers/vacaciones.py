@@ -1,4 +1,7 @@
-"""Router de vacaciones. empresa_id: lecturas por X-Empresa-Id; escrituras heredadas del empleado en el service."""
+"""Router de vacaciones: listado, export y escrituras. empresa_id: lecturas por X-Empresa-Id;
+escrituras heredadas del empleado en el service. Las lecturas POR EMPLEADO (saldo e histórico)
+viven en routers/vacaciones_empleado.py, que se monta ANTES por la colisión de rutas."""
+from datetime import date
 from typing import Literal, Optional
 from uuid import UUID
 
@@ -6,7 +9,6 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
 from schemas.vacaciones import (
-    SaldoVacacionesResponse,
     SolicitudVacacionesCreate,
     SolicitudVacacionesListResponse,
     SolicitudVacacionesResponse,
@@ -31,33 +33,22 @@ async def list_vacaciones(
     area_id: Optional[UUID] = Query(None),
     empleado_id: Optional[UUID] = Query(None),
     estado: Optional[str] = Query(None),
+    fecha_desde: Optional[date] = Query(None, description="Inicio del rango; solapamiento, no contención"),
+    fecha_hasta: Optional[date] = Query(None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     service: VacacionesService = Depends(_svc),
 ) -> SolicitudVacacionesListResponse:
     u = request.state.user
-    return service.get_all(u.get("id"), u.get("rol"), get_empresa_id(request), area_id, empleado_id, estado, page, page_size)
+    return service.get_all(u.get("id"), u.get("rol"), get_empresa_id(request), area_id, empleado_id, estado, page, page_size, fecha_desde, fecha_hasta)
 
 
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 @limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
-async def exportar_vacaciones(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), area_id: Optional[UUID] = Query(None), empleado_id: Optional[UUID] = Query(None), estado: Optional[str] = Query(None), service: VacacionesService = Depends(_svc)) -> Response:
+async def exportar_vacaciones(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), area_id: Optional[UUID] = Query(None), empleado_id: Optional[UUID] = Query(None), estado: Optional[str] = Query(None), fecha_desde: Optional[date] = Query(None), fecha_hasta: Optional[date] = Query(None), service: VacacionesService = Depends(_svc)) -> Response:
     u = request.state.user
-    d = service.exportar(u.get("id"), u.get("rol"), get_empresa_id(request), formato, area_id, empleado_id, estado)
+    d = service.exportar(u.get("id"), u.get("rol"), get_empresa_id(request), formato, area_id, empleado_id, estado, fecha_desde, fecha_hasta)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
-
-
-# /saldo/{id} debe ir ANTES de /{id} para evitar colisión de rutas
-@router.get("/saldo/{empleado_id}", response_model=SaldoVacacionesResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-async def get_saldo(empleado_id: UUID, request: Request, service: VacacionesService = Depends(_svc)) -> SaldoVacacionesResponse:
-    u = request.state.user
-    return service.get_saldo(empleado_id, u.get("id"), u.get("rol"), get_empresa_id(request))
-
-
-@router.get("/empleado/{empleado_id}", response_model=SolicitudVacacionesListResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-async def list_vacaciones_empleado(empleado_id: UUID, request: Request, service: VacacionesService = Depends(_svc)) -> SolicitudVacacionesListResponse:
-    u = request.state.user
-    return service.get_by_empleado(empleado_id, u.get("id"), u.get("rol"), get_empresa_id(request))
 
 
 @router.get("/{id}", response_model=SolicitudVacacionesResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])

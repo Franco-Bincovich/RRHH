@@ -11,6 +11,7 @@ Reglas de negocio:
 El write path (crear/actualizar/eliminar) vive en services/_ausencias_write.py; el
 service lo delega. Ownership y bloqueo por período son idénticos allá.
 """
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -36,15 +37,17 @@ class AusenciasService:
         self._periodos = periodo_repo or PeriodoRepo()
         self._ownership = ownership_repo or EmpleadoOwnershipRepo()
 
-    def get_all(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, tipo_id: Optional[UUID] = None, page: int = 1, page_size: int = 20) -> AusenciaListResponse:
-        """Página de ausencias filtrada por empresa/área/empleado/tipo y por ownership (intersección). vacio → devuelve vacío sin consultar."""
+    def get_all(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, tipo_id: Optional[UUID] = None, page: int = 1, page_size: int = 20, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None) -> AusenciaListResponse:
+        """Página de ausencias filtrada por empresa/área/empleado/tipo y por ownership (intersección). vacio → devuelve vacío sin consultar.
+        fecha_desde/fecha_hasta acotan por SOLAPAMIENTO con el rango (ver repositories/_rango_fechas): una ausencia que
+        empieza antes del rango pero lo cruza ENTRA. Se compone por INTERSECCIÓN con el ownership, que ya viajó en empleado_ids."""
         empleado_ids, vacio = resolver_empleado_ids(user_id, rol, empresa_id, area_id, empleado_id, self._ownership)
-        rows, total = ([], 0) if vacio else self._repo.find_all(empresa_id, empleado_ids, tipo_id, page, page_size)
+        rows, total = ([], 0) if vacio else self._repo.find_all(empresa_id, empleado_ids, tipo_id, page, page_size, desde=fecha_desde, hasta=fecha_hasta)
         return AusenciaListResponse(items=rows, total=total)
 
-    def exportar(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, tipo_id: Optional[UUID] = None) -> Descarga:
+    def exportar(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, tipo_id: Optional[UUID] = None, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None) -> Descarga:
         """Exporta ausencias (columnas legibles, sin UUIDs) respetando ownership; acotable por área/empleado/tipo (mismos filtros que el listado)."""
-        filas = construir_filas_export(self.get_all(user_id, rol, empresa_id, area_id, empleado_id, tipo_id, 1, 100000).items)
+        filas = construir_filas_export(self.get_all(user_id, rol, empresa_id, area_id, empleado_id, tipo_id, 1, 100000, fecha_desde, fecha_hasta).items)
         return build_export(nombre="Ausencias", datos={"Ausencias": filas}, filename_base="ausencias", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> AusenciaResponse:

@@ -44,7 +44,9 @@ class _FakeVacRepo:
     def __init__(self) -> None:
         self.calls: list = []
 
-    def find_all(self, empresa_id, empleado_ids, page, page_size, estado=None, today=None):
+    def find_all(self, empresa_id, empleado_ids, page, page_size, estado=None, today=None, *, desde=None, hasta=None):
+        # desde/hasta se aceptan y se IGNORAN a propósito: este fake cubre el eje de OWNERSHIP.
+        # El eje de fechas lo cubre test_filtro_rango_fechas.py contra el repo real.
         self.calls.append(empleado_ids)
         return [], 0
 
@@ -53,7 +55,9 @@ class _FakeAusRepo:
     def __init__(self) -> None:
         self.calls: list = []
 
-    def find_all(self, empresa_id, empleado_ids, tipo_id, page, page_size):
+    def find_all(self, empresa_id, empleado_ids, tipo_id, page, page_size, *, desde=None, hasta=None):
+        # desde/hasta se aceptan y se IGNORAN a propósito: este fake cubre el eje de OWNERSHIP.
+        # El eje de fechas lo cubre test_filtro_rango_fechas.py contra el repo real.
         self.calls.append(empleado_ids)
         return [], 0
 

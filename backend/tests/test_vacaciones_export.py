@@ -120,7 +120,9 @@ class _FakeRepo:
         self.find_all_calls: list = []
         self.parcial_calls: list = []
 
-    def find_all(self, empresa_id, empleado_ids, page, page_size, estado=None, today=None):
+    def find_all(self, empresa_id, empleado_ids, page, page_size, estado=None, today=None, *, desde=None, hasta=None):
+        # desde/hasta se aceptan y se IGNORAN a propósito: este fake cubre el eje de OWNERSHIP.
+        # El eje de fechas lo cubre test_filtro_rango_fechas.py contra el repo real.
         self.find_all_calls.append(empleado_ids)
         return [], 0
 

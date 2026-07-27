@@ -6,8 +6,9 @@
  */
 import { useEffect, useState } from "react"
 
-import type { FiltroCampo } from "@/components/ui/FiltersBar"
+import type { FiltroCampo, RangoFechas } from "@/components/ui/FiltersBar"
 import { fetchAreas } from "@/services/areas"
+import type { AusenciasFiltros } from "@/services/ausencias"
 import { fetchEmpleadosSeleccionables } from "@/services/empleados"
 import { fetchEmpresas } from "@/services/empresas"
 import { fetchTiposAusencia } from "@/services/ausencias"
@@ -26,6 +27,7 @@ export function useFiltrosAusencias(onFiltroChange: () => void) {
   const [empleadoFiltro, setEmpleadoFiltro] = useState("")
   const [empleadosSel, setEmpleadosSel] = useState<EmpleadoSeleccionable[]>([])
   const [tipoFiltro, setTipoFiltro] = useState("")
+  const [rango, setRango] = useState<RangoFechas>({ desde: "", hasta: "" })
   const [tipos, setTipos] = useState<TipoAusencia[]>([])
 
   useEffect(() => {
@@ -67,8 +69,19 @@ export function useFiltrosAusencias(onFiltroChange: () => void) {
     ...(tipos.length > 0 ? [{ tipo: "select" as const, label: "Tipo", value: tipoFiltro, opcionTodos: "Todos los tipos",
       onChange: (v: string) => { setTipoFiltro(v); onFiltroChange() },
       opciones: tipos.map((t) => ({ value: t.id, label: t.nombre })) }] : []),
+    { tipo: "daterange" as const, label: "Período",
+      value: rango,
+      onChange: (v: RangoFechas) => { setRango(v); onFiltroChange() } },
   ]
 
-  const empresaOverride = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
-  return { empresaActivaId, empresaOverride, areaFiltro, empleadoFiltro, tipoFiltro, campos }
+  // Un solo objeto de filtros: lo consumen el listado y el export, así que no pueden divergir.
+  const filtros: AusenciasFiltros = {
+    empresaIdOverride: !empresaActivaId && empresaFiltro ? empresaFiltro : undefined,
+    areaId: areaFiltro || undefined,
+    tipoId: tipoFiltro || undefined,
+    empleadoId: empleadoFiltro || undefined,
+    fechaDesde: rango.desde || undefined,
+    fechaHasta: rango.hasta || undefined,
+  }
+  return { empresaActivaId, filtros, campos }
 }

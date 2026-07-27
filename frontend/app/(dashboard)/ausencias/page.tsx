@@ -32,14 +32,13 @@ export default function AusenciasPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [docsFor, setDocsFor] = useState<Ausencia | null>(null)
 
-  const { empresaActivaId, empresaOverride, areaFiltro, empleadoFiltro, tipoFiltro, campos } =
-    useFiltrosAusencias(() => setPage(1))
+  const { empresaActivaId, filtros, campos } = useFiltrosAusencias(() => setPage(1))
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(false)
     try {
-      const data = await fetchAusencias(empresaOverride, areaFiltro || undefined, tipoFiltro || undefined, empleadoFiltro || undefined, page, PAGE_SIZE)
+      const data = await fetchAusencias(filtros, page, PAGE_SIZE)
       setAusencias(data.items)
       setTotal(data.total)
     } catch {
@@ -47,7 +46,8 @@ export default function AusenciasPage() {
     } finally {
       setLoading(false)
     }
-  }, [empresaOverride, areaFiltro, tipoFiltro, empleadoFiltro, page])
+    // filtros es un objeto nuevo en cada render; se serializa para no re-fetchear de más.
+  }, [JSON.stringify(filtros), page])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -91,7 +91,7 @@ export default function AusenciasPage() {
         action={
           <div className="flex gap-2">
             {!loading && !error && ausencias.length > 0 && (
-              <ExportMenu onExport={(f) => exportarAusencias(f, empresaOverride, areaFiltro || undefined, tipoFiltro || undefined, empleadoFiltro || undefined)} />
+              <ExportMenu onExport={(f) => exportarAusencias(f, filtros)} />
             )}
             {canWrite && (
               <Button className="min-h-11" onClick={handleNew}>

@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._rango_fechas import aplicar_rango
 from schemas.ausencias import AusenciaResponse
 from utils.errors import AppError
 from utils.logger import logger
@@ -41,9 +42,10 @@ def _build(rows: List[dict]) -> List[AusenciaResponse]:
 
 
 class AusenciasRepo:
-    def find_all(self, empresa_id: Optional[UUID] = None, empleado_ids: Optional[List[str]] = None, tipo_id: Optional[UUID] = None, page: int = 1, page_size: int = 20) -> Tuple[List[AusenciaResponse], int]:
+    def find_all(self, empresa_id: Optional[UUID] = None, empleado_ids: Optional[List[str]] = None, tipo_id: Optional[UUID] = None, page: int = 1, page_size: int = 20, *, desde: Optional[date] = None, hasta: Optional[date] = None) -> Tuple[List[AusenciaResponse], int]:
         """Retorna (página filtrada por empresa/empleado_ids/tipo, total real del filtro).
-        empleado_ids=None → sin filtro por empleado; la intersección ownership∩área la arma el service."""
+        empleado_ids=None → sin filtro por empleado; la intersección ownership∩área la arma el service.
+        desde/hasta → SOLAPAMIENTO con el rango, keyword-only (semántica en _rango_fechas)."""
         q = supabase_admin.table(_T).select("*", count="exact").order("fecha_desde", desc=True)
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
@@ -51,6 +53,7 @@ class AusenciasRepo:
             q = q.in_("empleado_id", empleado_ids)
         if tipo_id:
             q = q.eq("tipo_id", str(tipo_id))
+        q = aplicar_rango(q, desde, hasta)
         res = q.range((page - 1) * page_size, page * page_size - 1).execute()
         return _build(res.data or []), res.count or 0
 

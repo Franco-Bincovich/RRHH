@@ -41,6 +41,36 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-27 · Filtro por rango de fechas en vacaciones y ausencias · commits `<pendiente>` ×2
+
+**Qué cambió:** los dos módulos de uso diario pasaron a poder acotarse por período, que era la
+ausencia más grande del inventario de filtros. Params `fecha_desde` y `fecha_hasta`, end-to-end
+repo → service → router → UI, en el listado y en el export. La semántica es **solapamiento**:
+una solicitud que empieza antes del rango pero lo cruza entra — la misma regla que ya usaba el
+bloqueo por período cerrado, ahora en un helper compartido (`repositories/_rango_fechas.py`).
+Antes, `routers/vacaciones.py` se dividió: las lecturas por empleado (saldo e histórico) se
+mudaron a `routers/vacaciones_empleado.py`.
+
+**Impacto en infraestructura:** Ninguno.
+
+*(Sin migraciones, sin variables de entorno, sin dependencias, sin buckets, sin cambios en el
+modelo de auth ni en los claims del token, sin dependencias de URL. Los filtros son query params
+opcionales: un cliente que no los mande recibe exactamente lo de antes.)*
+
+> **Dos notas para quien mire rutas o consultas, no acción:**
+> - **No hay endpoints nuevos.** `GET /api/vacaciones/saldo/{id}` y
+>   `GET /api/vacaciones/empleado/{id}` siguen en la misma ruta y con el mismo comportamiento:
+>   solo se movieron de archivo. Se montan **antes** que el router principal porque `/{id}`
+>   matchearía primero — si alguna vez se reordenan los `include_router` de `main.py`, esas dos
+>   rutas dejan de resolver.
+> - **El filtro es server-side y se traduce a dos comparaciones de fecha indexables**
+>   (`fecha_hasta >= desde`, `fecha_desde <= hasta`) sobre `solicitudes_vacaciones` y
+>   `solicitudes_ausencia`. Hoy esas tablas están vacías en producción, así que no hay nada que
+>   medir; **cuando se carguen datos, esas dos columnas son las candidatas a índice** si el
+>   listado se pone lento. No hace falta anticiparlo.
+
+---
+
 ## 2026-07-27 · B2 — fundación del sistema de filtros · commits `<pendiente>` ×3
 
 **Qué cambió:** la base de las tandas de filtros (B3–B6), sin entregar todavía ningún filtro

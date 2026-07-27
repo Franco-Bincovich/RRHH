@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._rango_fechas import aplicar_rango
 from repositories._vacaciones_utils import aplicar_filtro_estado, build_responses
 from schemas.vacaciones import SolicitudVacacionesResponse
 from utils.errors import AppError
@@ -13,16 +14,18 @@ _T = "solicitudes_vacaciones"
 
 
 class VacacionesRepo:
-    def find_all(self, empresa_id: Optional[UUID] = None, empleado_ids: Optional[List[str]] = None, page: int = 1, page_size: int = 20, estado: Optional[str] = None, today: Optional[date] = None) -> Tuple[List[SolicitudVacacionesResponse], int]:
+    def find_all(self, empresa_id: Optional[UUID] = None, empleado_ids: Optional[List[str]] = None, page: int = 1, page_size: int = 20, estado: Optional[str] = None, today: Optional[date] = None, *, desde: Optional[date] = None, hasta: Optional[date] = None) -> Tuple[List[SolicitudVacacionesResponse], int]:
         """Retorna (página filtrada por empresa/empleado_ids/estado si se proveen, total real del filtro).
         empleado_ids=None → sin filtro por empleado; la intersección ownership∩área la arma el service.
-        estado → filtro server-side (el total refleja el estado, para paginar y exportar bien)."""
+        estado → filtro server-side (el total refleja el estado, para paginar y exportar bien).
+        desde/hasta → SOLAPAMIENTO con el rango, keyword-only (semántica en _rango_fechas)."""
         q = supabase_admin.table(_T).select("*", count="exact").order("fecha_desde", desc=True)
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if empleado_ids is not None:
             q = q.in_("empleado_id", empleado_ids)
         q = aplicar_filtro_estado(q, estado, today)
+        q = aplicar_rango(q, desde, hasta)
         res = q.range((page - 1) * page_size, page * page_size - 1).execute()
         return build_responses(res.data or []), res.count or 0
 

@@ -7,8 +7,9 @@
  */
 import { useEffect, useState } from "react"
 
-import type { FiltroCampo } from "@/components/ui/FiltersBar"
+import type { FiltroCampo, RangoFechas } from "@/components/ui/FiltersBar"
 import { fetchAreas } from "@/services/areas"
+import type { VacacionesFiltros } from "@/services/vacaciones"
 import { fetchEmpleadosSeleccionables } from "@/services/empleados"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
@@ -31,6 +32,7 @@ export function useFiltrosVacaciones(onFiltroChange: () => void) {
   const [empleadoFiltro, setEmpleadoFiltro] = useState("")
   const [empleadosSel, setEmpleadosSel] = useState<EmpleadoSeleccionable[]>([])
   const [estadoFiltro, setEstadoFiltro] = useState("")
+  const [rango, setRango] = useState<RangoFechas>({ desde: "", hasta: "" })
 
   useEffect(() => {
     const id = getEmpresaActivaId()
@@ -69,8 +71,19 @@ export function useFiltrosVacaciones(onFiltroChange: () => void) {
       opciones: empleadosSel.map((e) => ({ value: e.id, label: `${e.apellido}, ${e.nombre}` })) }] : []),
     { tipo: "select" as const, label: "Estado", value: estadoFiltro, opcionTodos: "Todos los estados",
       onChange: (v: string) => { setEstadoFiltro(v); onFiltroChange() }, opciones: ESTADO_OPCIONES },
+    { tipo: "daterange" as const, label: "Período",
+      value: rango,
+      onChange: (v: RangoFechas) => { setRango(v); onFiltroChange() } },
   ]
 
-  const empresaOverride = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
-  return { empresaActivaId, empresaOverride, areaFiltro, empleadoFiltro, estadoFiltro, campos }
+  // Un solo objeto de filtros: lo consumen el listado y el export, así que no pueden divergir.
+  const filtros: VacacionesFiltros = {
+    empresaIdOverride: !empresaActivaId && empresaFiltro ? empresaFiltro : undefined,
+    areaId: areaFiltro || undefined,
+    empleadoId: empleadoFiltro || undefined,
+    estado: estadoFiltro || undefined,
+    fechaDesde: rango.desde || undefined,
+    fechaHasta: rango.hasta || undefined,
+  }
+  return { empresaActivaId, filtros, campos }
 }
