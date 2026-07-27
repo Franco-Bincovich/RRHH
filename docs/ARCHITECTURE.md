@@ -1,4 +1,4 @@
-# Arquitectura — HR Karstec (Sofia)
+# Arquitectura — HR Karstec (RRHH)
 
 ## Stack elegido y por qué
 

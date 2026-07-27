@@ -1,4 +1,4 @@
-# Changelog — HR Karstec (Sofia)
+# Changelog — HR Karstec (RRHH)
 
 Formato: [tipo] Descripción — Fecha
 

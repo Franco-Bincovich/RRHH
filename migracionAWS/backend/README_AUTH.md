@@ -73,7 +73,7 @@ Supabase hay que generarlo — en la base (`DEFAULT gen_random_uuid()`, SQL en 0
 Python. Sin esto, el INSERT falla por `null value in column "id"`.
 
 Lo que **no** cambia: la contraseña temporal (`secrets`, `usuario_service.py:23`),
-`must_change_password`, la validación de unicidad y el audit. Todo eso ya es de Sofia.
+`must_change_password`, la validación de unicidad y el audit. Todo eso ya es de RRHH.
 
 ## Migración de datos: no hay backfill de contraseñas
 
@@ -85,10 +85,10 @@ existentes. Son ~3 usuarios de RRHH, no es un problema de escala.
 
 ## Desvíos respecto del patrón del proyecto hermano
 
-Cinco, todos por convenciones reales de Sofia (verificadas, no supuestas):
+Cinco, todos por convenciones reales de RRHH (verificadas, no supuestas):
 
 1. **`settings` singleton, no `get_settings()`** — `settings.py:50` expone `settings = Settings()`;
-   `get_settings()` no existe en Sofia.
+   `get_settings()` no existe en RRHH.
 2. **`AppError(message, code, status_code)` con code como STRING**, no enum. Se reusan los
    códigos que el frontend ya conoce: `INVALID_CREDENTIALS`, `INVALID_REFRESH_TOKEN`,
    `UNAUTHORIZED`, `MISSING_TOKEN`, `INVALID_TOKEN`.
@@ -99,7 +99,7 @@ Cinco, todos por convenciones reales de Sofia (verificadas, no supuestas):
    está **roto** contra el bcrypt instalado (5.0.0): passlib lee `bcrypt.__about__`,
    atributo eliminado en bcrypt 4.1+. Verificado en este repo. No volver a passlib.
 5. **Truncado a 72 BYTES, no 72 caracteres** — `password[:72]` son 72 chars, que en UTF-8
-   pueden ser hasta 288 bytes; con acentos (esperables en Sofia) bcrypt seguiría
+   pueden ser hasta 288 bytes; con acentos (esperables en RRHH) bcrypt seguiría
    explotando. Se trunca `password.encode("utf-8")[:72]`.
 
 ## Lo que hay que decidir antes de portar
@@ -108,7 +108,7 @@ Cinco, todos por convenciones reales de Sofia (verificadas, no supuestas):
   hace `return service.login(...)` sin await. **Al portar, los routers necesitan `await`.**
   Sin el await FastAPI devuelve la corrutina sin ejecutar: el login responde 200 con basura
   en vez de fallar. Es el error más fácil de cometer en esta migración.
-- **Fallback a cookie en el middleware**: implementado porque estaba pedido, pero Sofia hoy
+- **Fallback a cookie en el middleware**: implementado porque estaba pedido, pero RRHH hoy
   es **header-only** (cero `set_cookie` en el backend, verificado). Aceptar cookies abre
   **CSRF**, del que Bearer estaba inmune. Mientras el frontend no setee la cookie es código
   muerto: o se borra, o se activa junto con SameSite=Strict + token CSRF.

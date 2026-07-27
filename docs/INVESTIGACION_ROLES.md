@@ -1,4 +1,4 @@
-# INVESTIGACIÓN DE ROLES — HR Karstec (Sofia)
+# INVESTIGACIÓN DE ROLES — HR Karstec (RRHH)
 > Generada el 2026-05-29. Solo lectura. Metodología: grep exhaustivo en todo el código, lectura de archivos clave.
 
 ---
@@ -59,7 +59,7 @@ Todos los endpoints autenticados funcionan exactamente igual sin importar el rol
 El Sidebar define los módulos como un array estático, sin ningún filtro por rol:
 
 ```typescript
-// Sofia/frontend/components/layout/Sidebar.tsx — líneas 40-53
+// RRHH/frontend/components/layout/Sidebar.tsx — líneas 40-53
 const NAV_ITEMS = [
   { label: "Dashboard",     href: "/dashboard",      icon: LayoutDashboard },
   { label: "Áreas",         href: "/areas",           icon: Layers },
@@ -79,7 +79,7 @@ const NAV_ITEMS = [
 Los 12 ítems se renderizan para todos los usuarios sin excepción. No hay lógica del tipo `NAV_ITEMS.filter(item => hasAccess(item, session.rol))`. El UserMenu tiene incluso el nombre y email **hardcodeados**: `"Admin RRHH"` y `"admin@karstec.com"` — no lee la sesión.
 
 ```typescript
-// Sofia/frontend/components/layout/Sidebar.tsx — líneas 108-111
+// RRHH/frontend/components/layout/Sidebar.tsx — líneas 108-111
 <span className="truncate text-sm font-medium">Admin RRHH</span>
 <span className="truncate text-xs text-muted-foreground">admin@karstec.com</span>
 ```
@@ -87,7 +87,7 @@ Los 12 ítems se renderizan para todos los usuarios sin excepción. No hay lógi
 ### AuthGuard — `components/layout/AuthGuard.tsx`
 
 ```typescript
-// Sofia/frontend/components/layout/AuthGuard.tsx (archivo completo)
+// RRHH/frontend/components/layout/AuthGuard.tsx (archivo completo)
 "use client"
 
 import { useEffect } from "react"
@@ -114,7 +114,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 La única lectura funcional del rol está en la página de configuración, y es **puramente cosmética**:
 
 ```typescript
-// Sofia/frontend/app/(dashboard)/configuracion/page.tsx — líneas 24-28, 350-352
+// RRHH/frontend/app/(dashboard)/configuracion/page.tsx — líneas 24-28, 350-352
 const ROL_LABEL: Record<string, string> = {
   admin_rrhh: "Administrador RRHH",
   management:  "Gerencia",
@@ -181,7 +181,7 @@ CREATE POLICY "tabla_write_admin"
 ### El asterisco fundamental: el backend bypasea toda la RLS
 
 ```python
-# Sofia/backend/integrations/supabase_client.py — líneas 17-24
+# RRHH/backend/integrations/supabase_client.py — líneas 17-24
 def _create_admin_client() -> Client:
     """Instancia el cliente admin con la service key. Bypasea RLS — usar con criterio."""
     return create_client(settings.supabase_url, settings.supabase_service_key)

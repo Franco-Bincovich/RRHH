@@ -1,5 +1,5 @@
 # Plan de desarrollo — AHORA (Fase actual)
-**Proyecto:** HR Karstec (Sofia) · **Para:** Claude Code · **Estado:** fuente de verdad de la fase actual
+**Proyecto:** HR Karstec (RRHH) · **Para:** Claude Code · **Estado:** fuente de verdad de la fase actual
 
 Este documento cubre lo que construimos **ahora**: el cimiento multiempresa + los módulos que se portan de Nexio. Lo nuevo de cero (proyectos, costeo, permisos, etc.) está en `PLAN_DESARROLLO_DESPUES.md` y **depende de que esta fase esté terminada**.
 

@@ -1,4 +1,4 @@
-# Plan de Trabajo — HR Karstec (Sofia)
+# Plan de Trabajo — HR Karstec (RRHH)
 
 > Instrumento de trabajo interno. NO es el documento del directorio (ese es el contrato de entrega).
 > Este archivo es el inventario vivo de lo que hay que **corregir**, **terminar** y lo que va **surgiendo**.
@@ -46,7 +46,7 @@ Ordenado por urgencia. Lo de arriba va antes que cualquier feature nueva.
 
 **Cuándo se vuelve necesario:** el día que exista la tabla `acceso_empresa` (planificada para "Después") y un usuario deba ver solo ciertas empresas. Ese día, el fix es en `utils/empresa.py` (`get_empresa_id`) — un solo lugar, gracias a que la resolución está centralizada. Validar que el `empresa_id` del header pertenece al usuario.
 
-**Nota:** `jwt_secret`, `jwt_expiration_minutes`, `refresh_token_expiration_days` en settings son config muerta (Sofia no emite tokens, los emite Supabase). Candidatos a limpieza.
+**Nota:** `jwt_secret`, `jwt_expiration_minutes`, `refresh_token_expiration_days` en settings son config muerta (RRHH no emite tokens, los emite Supabase). Candidatos a limpieza.
 
 ## 1.2 · `000_run_all.sql` stale — base no reproducible desde cero 🔴
 
@@ -150,4 +150,4 @@ Mi recomendación de secuencia, respetando "una tarea atómica por vez":
 
 ---
 
-*Documento de trabajo interno · HR Karstec (Sofia) · se actualiza continuamente*
+*Documento de trabajo interno · HR Karstec (RRHH) · se actualiza continuamente*

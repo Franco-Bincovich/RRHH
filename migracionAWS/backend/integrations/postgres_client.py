@@ -10,7 +10,7 @@ SDK y no tienen equivalente acá).
 Un pool de asyncpg mantiene conexiones TCP vivas entre requests. Eso no sobrevive al
 modelo de Vercel: cada lambda warm reutiliza el proceso con conexiones que pueden estar
 muertas, y cada lambda fría abre su propio pool — con min_size=2 y N lambdas concurrentes
-se agota `max_connections` de RDS sin que ninguna lo sepa. Por eso Sofia deja Vercel para
+se agota `max_connections` de RDS sin que ninguna lo sepa. Por eso RRHH deja Vercel para
 el backend al migrar; no es una preferencia de infraestructura, es un requisito de este
 archivo.
 

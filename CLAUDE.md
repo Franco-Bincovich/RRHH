@@ -1,6 +1,6 @@
-# CLAUDE.md — Sofia (HR Karstec)
+# CLAUDE.md — RRHH (HR Karstec)
 
-> **Ubicación:** raíz del repo Sofia (`RRHH/Sofia/`), desde donde se ejecuta `claude`. Sofia tiene su propio `.git` dentro del mono-repo RRHH — **todas las operaciones git corren desde `RRHH/Sofia/`, nunca desde `RRHH/`**.
+> **Ubicación:** raíz del repo RRHH (`RRHH/`), desde donde se ejecuta `claude`. `backend/`, `frontend/`, `docs/` y `migracionAWS/` cuelgan directo de la raíz — **`RRHH/` es el único repo git (no hay repos anidados), y todas las operaciones git corren desde ahí**.
 
 ## Documentos de planificación (leer al inicio)
 La dirección del producto y el schema están en estos documentos. **Tienen prioridad sobre la memoria.**
@@ -13,7 +13,7 @@ Documentos de la agencia (convenciones obligatorias): ORDEN-Y-LEGIBILIDAD.md · 
 ---
 
 ## Qué es este proyecto
-Sofia es el repositorio interno de **HR Karstec**: plataforma de gestión del ciclo de vida del empleado, **multiempresa** (2–5 empresas simultáneas), operada por un equipo de RRHH de 3 personas. Reporting con IA vía Claude Sonnet. **Live en https://www.hrkarstec.site**.
+RRHH es el repositorio interno de **HR Karstec**: plataforma de gestión del ciclo de vida del empleado, **multiempresa** (2–5 empresas simultáneas), operada por un equipo de RRHH de 3 personas. Reporting con IA vía Claude Sonnet. **Live en https://www.hrkarstec.site**.
 
 ## Stack
 - **Backend**: Python 3.11 + FastAPI. Arquitectura por capas **router → service → repository** (NO hay controllers).
@@ -337,7 +337,7 @@ Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. C�
 - `schema.sql` no trae los 36 triggers `updated_at`.
 - **Modelo Anthropic**: verificar que ningún string con fecha (`claude-sonnet-4-20250514`, retirado) sobreviva. Usar alias sin fecha (`claude-sonnet-4-6`). El front tenía este bug (chat caído en prod desde el 15/6); ya corregido.
 
-**Contraste con changelog de KarIA Reach (otro proyecto, mismo stack asyncpg/ECS/SSM) — verificado, aplica a Sofia:**
+**Contraste con changelog de KarIA Reach (otro proyecto, mismo stack asyncpg/ECS/SSM) — verificado, aplica a RRHH:**
 - Secretos en producción → **SSM Parameter Store / Secrets Manager, NUNCA hardcodeado**. URL-encodear caracteres especiales del password en la DSN (evita el bug de secreto truncado que a KarIA le costó días). Ya documentado en `MIGRACION_A_RDS.md` / `settings_ADD.md`. `migracionAWS/` está limpio: sin secretos ni placeholders pegados.
 - asyncpg contra RDS: `postgres_client.py` usa `ssl="require"` ✅ y `command_timeout=30` ✅, host desde `database_url` (env, no hardcodeado). **Faltan (decisión de infra, no bug):** timeout de conexión explícito (default 60s cuelga el arranque si RDS es inalcanzable); `verify-full` en vez de `require` (require no verifica CA, abierto a MITM dentro de la VPC); si el DNS de RDS falla, poner IP privada en `database_url`.
 
@@ -395,7 +395,7 @@ Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. C�
 ---
 
 ## Git
-- Operar siempre desde `RRHH/Sofia/`.
+- Operar siempre desde la raíz del repo, `RRHH/`.
 - **Commits los hace Franco manualmente** (nunca Claude Code). Commits y push desacoplados: no hay push hasta que Franco lo decida. Preferir commits por sub-sesión.
 - Formato convencional (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`, `test:`).
 - Solo `main` y `origin/main`. Sin ramas sueltas.

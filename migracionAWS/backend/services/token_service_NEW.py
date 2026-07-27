@@ -63,7 +63,7 @@ def _verify_token_hash(token: str, token_hash: str) -> bool:
 
 class TokenService:
     def __init__(self, repo: Optional[TokenRepo] = None, user_repo: Optional[UserAuthRepo] = None) -> None:
-        """Inyección por constructor, como el resto de los services de Sofia."""
+        """Inyección por constructor, como el resto de los services de RRHH."""
         self._repo = repo or TokenRepo()
         self._user_repo = user_repo or UserAuthRepo()
 

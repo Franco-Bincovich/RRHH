@@ -1,4 +1,4 @@
-# AUDITORÍA TÉCNICA: HR Karstec (Sofia)
+# AUDITORÍA TÉCNICA: HR Karstec (RRHH)
 **Fecha**: 2026-05-29 | **Auditor**: Claude Code | **Modo**: Lectura pura
 
 ---
@@ -275,7 +275,7 @@
 
 ## CONCLUSIÓN
 
-**Sofia (HR Karstec) está ~72% implementado**. Los módulos principales (empleados, áreas, organigrama, vacantes, onboarding, sucesión, assessment, reportes) están funcionales. Los gaps críticos son vacaciones/licencias, formaciones, y el marco formal de desempeño anual. Estos gaps pueden completarse en 3-4 semanas de trabajo enfocado.
+**RRHH (HR Karstec) está ~72% implementado**. Los módulos principales (empleados, áreas, organigrama, vacantes, onboarding, sucesión, assessment, reportes) están funcionales. Los gaps críticos son vacaciones/licencias, formaciones, y el marco formal de desempeño anual. Estos gaps pueden completarse en 3-4 semanas de trabajo enfocado.
 
 ---
 *Fin de auditoría. Modo lectura pura respetado — sin modificaciones al código.*

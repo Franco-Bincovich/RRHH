@@ -1,5 +1,5 @@
 # Plan de desarrollo — DESPUÉS (Fase nueva)
-**Proyecto:** HR Karstec (Sofia) · **Para:** Claude Code · **Estado:** fuente de verdad de lo nuevo de cero
+**Proyecto:** HR Karstec (RRHH) · **Para:** Claude Code · **Estado:** fuente de verdad de lo nuevo de cero
 
 Todo lo de este documento es **desarrollo nuevo** (no existe ni en Nexio ni en HR Karstec). **Depende de que `PLAN_DESARROLLO_AHORA.md` esté terminado** (cimiento multiempresa + módulos portados).
 

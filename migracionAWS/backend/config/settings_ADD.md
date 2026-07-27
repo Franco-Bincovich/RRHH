@@ -57,7 +57,7 @@ borra recién cuando auth deje de depender de Supabase.
 ```
 
 Declaradas hoy pero **inertes**: el middleware valida contra el JWKS ES256 (clave pública
-de Supabase), no contra `jwt_secret`. Cuando Sofia emita sus propios tokens, estas tres
+de Supabase), no contra `jwt_secret`. Cuando RRHH emita sus propios tokens, estas tres
 pasan a ser las de verdad. No hace falta agregarlas — ya están.
 
 ---

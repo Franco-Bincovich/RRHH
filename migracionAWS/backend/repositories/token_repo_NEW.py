@@ -7,7 +7,7 @@ manejaba gotrue, no había nada que persistir).
 Escrito en asyncpg sobre el postgres_client del staging, NO en el SDK de Supabase.
 Placeholders posicionales ($1, $2...): nunca interpolar valores en el SQL.
 
-⚠️ ASYNC, a diferencia de todos los repos actuales de Sofia (que son síncronos porque el
+⚠️ ASYNC, a diferencia de todos los repos actuales de RRHH (que son síncronos porque el
 SDK de Supabase lo es). Sus callers tienen que await. Ver README_AUTH.md.
 """
 from typing import Any, Optional

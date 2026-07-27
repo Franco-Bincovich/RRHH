@@ -1,4 +1,4 @@
-# HR Karstec — Sofia
+# HR Karstec — RRHH
 
 Plataforma interna de gestión del ciclo de vida del empleado, multiempresa, operada por
 el equipo de RRHH. Incluye reporting con IA. Este README cubre cómo levantar y entender
@@ -26,8 +26,8 @@ el repo; el estado de las features vive en [`CLAUDE.md`](../CLAUDE.md).
 ## Instalación
 
 ```bash
-git clone https://github.com/Franco-Bincovich/Sofia
-cd Sofia
+git clone https://github.com/Franco-Bincovich/RRHH
+cd RRHH
 ```
 
 ### Backend
@@ -109,7 +109,7 @@ psql "$DATABASE_URL" -f backend/db/schema.sql
 ## Estructura
 
 ```
-Sofia/
+RRHH/
 ├── backend/
 │   ├── main.py           ← entrada FastAPI, registro de routers y middleware
 │   ├── config/           ← única fuente de config y env (settings.py)

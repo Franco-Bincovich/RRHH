@@ -68,7 +68,7 @@ def _is_public(path: str) -> bool:
 def _extract_token(request: Request) -> Optional[str]:
     """Saca el token del header Authorization o, si no está, de la cookie access_token.
 
-    ⚠️ EL FALLBACK A COOKIE ES NUEVO Y NO ES GRATIS. Sofia hoy es header-only: el frontend
+    ⚠️ EL FALLBACK A COOKIE ES NUEVO Y NO ES GRATIS. RRHH hoy es header-only: el frontend
     manda `Authorization: Bearer` y NO hay una sola cookie en el backend (verificado: cero
     `set_cookie` en routers/ y middleware/). Aceptar la cookie abre CSRF, del que el
     esquema Bearer estaba inmune por construcción — el browser adjunta cookies solo, un
@@ -83,7 +83,7 @@ def _extract_token(request: Request) -> Optional[str]:
 
 
 def _401(code: str) -> JSONResponse:
-    """Respuesta 401 con el formato de error de Sofia ({error, message, code})."""
+    """Respuesta 401 con el formato de error de RRHH ({error, message, code})."""
     return JSONResponse(
         status_code=401,
         content={"error": True, "message": "No autorizado", "code": code},

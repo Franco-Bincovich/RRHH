@@ -1,4 +1,4 @@
-# Reconstrucción de la base — Sofia / HR Karstec
+# Reconstrucción de la base — RRHH / HR Karstec
 
 ## `schema.sql` es la fuente de verdad
 

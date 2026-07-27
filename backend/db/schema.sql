@@ -1,5 +1,5 @@
 -- ============================================================================
--- schema.sql — SNAPSHOT DE RECONSTRUCCION de la base de produccion (Sofia / HR Karstec)
+-- schema.sql — SNAPSHOT DE RECONSTRUCCION de la base de produccion (RRHH / HR Karstec)
 -- ============================================================================
 --
 -- ESTE ES EL ARTEFACTO DE RECONSTRUCCION AUTORITATIVO.

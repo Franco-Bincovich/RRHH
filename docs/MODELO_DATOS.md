@@ -1,4 +1,4 @@
-# Modelo de datos — HR Karstec (Sofia)
+# Modelo de datos — HR Karstec (RRHH)
 **Para:** Claude Code · **Estado:** fuente de verdad ÚNICA del schema
 
 > **Regla de precedencia:** si este documento contradice una tabla mencionada en `PLAN_DESARROLLO_AHORA.md` o `PLAN_DESARROLLO_DESPUES.md`, **manda este documento**. Los planes describen el *trabajo*; este describe el *schema*.

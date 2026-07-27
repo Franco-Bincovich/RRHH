@@ -1,16 +1,16 @@
-# Migración de Sofia a RDS + asyncpg + S3 + ECS
+# Migración de RRHH a RDS + asyncpg + S3 + ECS
 
 Mapa para completar la migración. Mismo patrón que Agent Admin: salir de Supabase
 (PostgREST + gotrue + Storage, todo sobre Vercel serverless) a Postgres directo por
 asyncpg sobre RDS, auth propio, S3 y ECS. Asumo que ya migraste Agent Admin — no explico
-asyncpg ni boto3 desde cero, marco lo que es específico de Sofia y las minas que ya pisé.
+asyncpg ni boto3 desde cero, marco lo que es específico de RRHH y las minas que ya pisé.
 
 ---
 
 ## 1. Qué es esto y estado
 
 Todo lo hecho vive en `migracionAWS/`, **aislado**: no lo importa nada de `backend/`, no
-tocó producción. Sofia sigue **100% en Supabase + Vercel** hasta que se ejecute la migración.
+tocó producción. RRHH sigue **100% en Supabase + Vercel** hasta que se ejecute la migración.
 
 ```
 migracionAWS/
@@ -81,7 +81,7 @@ propio, bcrypt local), `token_service_NEW` (refresh con rotación one-time-use),
 Ordenados por impacto. Esto te ahorra días.
 
 **1. UUID → str en el mapper.** El SDK devolvía JSON (todo string); asyncpg devuelve `uuid.UUID`
-nativo. Los `Response` de Sofia tipan los id como `str` (verificado en `EmpleadoResponse`:
+nativo. Los `Response` de RRHH tipan los id como `str` (verificado en `EmpleadoResponse`:
 `id`/`empresa_id`/`area_id`/`manager_id` son `str`). **Pydantic v2 no coacciona `UUID→str`** →
 revienta en `model_validate`. **Cada repo lo pega.** El molde lo resuelve en el mapper:
 ```python
@@ -178,7 +178,7 @@ con rutas relativas.
   2. **NO se implementa RLS en RDS — DECISIÓN EXPLÍCITA (no omisión).** `schema.sql` no trae RLS
      (38 tablas con RLS + ~205 policies en prod, omitidas) y **así queda**: en RDS la seguridad es
      **100% app-level** — ownership (`services/ownership.py`) + permisos por rol (`utils/permisos.py`),
-     que Sofia **ya tiene** y son la capa que gobierna. RLS en Supabase era **segunda línea** (el
+     que RRHH **ya tiene** y son la capa que gobierna. RLS en Supabase era **segunda línea** (el
      backend siempre usó service_key, que la bypassa), no la que decide. Además las policies dependen
      de `auth.uid()` de Supabase, que en RDS no existe. **No "restaurarla" pensando que falta.**
   3. **NO cargar `035_demo_data.sql` — DECIDIDO: se excluye del bootstrap.** Son datos de demo
@@ -190,9 +190,9 @@ con rutas relativas.
 
 ## 6. Checklist de los ~40 problemas de Agent Admin
 
-Qué ya viene resuelto de fábrica en Sofia vs. qué te queda a vos:
+Qué ya viene resuelto de fábrica en RRHH vs. qué te queda a vos:
 
-| Problema (Agent Admin) | Estado en Sofia |
+| Problema (Agent Admin) | Estado en RRHH |
 |---|---|
 | Placeholders `$n` (SQLi) | ✅ molde |
 | Serialización UUID → str en respuestas | ✅ molde (mapper) |

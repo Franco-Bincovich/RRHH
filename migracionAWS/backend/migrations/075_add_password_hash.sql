@@ -1,6 +1,6 @@
 -- 075 — password_hash en users: habilita el auth propio post-Supabase.
 --
--- Hoy la credencial NO existe en la base de Sofia: vive en auth.users de Supabase (gotrue),
+-- Hoy la credencial NO existe en la base de RRHH: vive en auth.users de Supabase (gotrue),
 -- un schema al que el backend solo llega por el SDK. Verificado: `password_hash` tiene CERO
 -- ocurrencias en las 74 migraciones y en db/schema.sql. Al salir de Supabase, sin esta
 -- columna no hay dónde guardar la contraseña y el login es imposible.

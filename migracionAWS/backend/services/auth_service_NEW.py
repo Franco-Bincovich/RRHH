@@ -85,7 +85,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 def create_access_token(user_id: str, rol: str) -> str:
     """Emite un access token JWT firmado con settings.jwt_secret.
 
-    Campo `rol` (español), NO `role`: es el nombre real en Sofia — columna users.rol, y
+    Campo `rol` (español), NO `role`: es el nombre real en RRHH — columna users.rol, y
     middleware/auth.py:131 arma `request.state.user = {"id":..., "rol":...}`, que leen
     utils/permisos.py y los 142 endpoints gateados. Renombrarlo acá obligaría a tocarlos
     todos.
@@ -134,7 +134,7 @@ def verify_token(token: str) -> dict:
 
 class AuthService:
     def __init__(self, repo: Optional[UserAuthRepo] = None) -> None:
-        """Inyección por constructor, como el resto de los services de Sofia."""
+        """Inyección por constructor, como el resto de los services de RRHH."""
         self._repo = repo or UserAuthRepo()
 
     async def authenticate_user(self, username: str, password: str) -> dict:

@@ -1,4 +1,4 @@
-# AUDITORÍA TÉCNICA — HR Karstec (Sofia)
+# AUDITORÍA TÉCNICA — HR Karstec (RRHH)
 > Generada el 2026-05-29. Solo lectura. Base para el traspaso de módulos desde otro proyecto Next.js + Supabase.
 
 ---
@@ -7,7 +7,7 @@
 
 ### 1.1 Tabla de empleados — `CREATE TABLE` completo
 
-`Sofia/backend/migrations/003_create_empleados.sql` líneas 5–27:
+`RRHH/backend/migrations/003_create_empleados.sql` líneas 5–27:
 
 ```sql
 CREATE TABLE public.empleados (
@@ -49,7 +49,7 @@ ALTER TABLE public.empleados ADD COLUMN IF NOT EXISTS rol VARCHAR(100);
 
 La tabla `public.users` es el puente:
 
-`Sofia/backend/migrations/001_create_users.sql` líneas 5–16:
+`RRHH/backend/migrations/001_create_users.sql` líneas 5–16:
 ```sql
 CREATE TABLE public.users (
     id            UUID         PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -100,7 +100,7 @@ Valores exactos (confirmados en `001_create_users.sql` línea 10 y `CLAUDE.md`):
 
 La función helper que se usa en todas las policies:
 
-`Sofia/backend/migrations/001_create_users.sql` líneas 22–30:
+`RRHH/backend/migrations/001_create_users.sql` líneas 22–30:
 ```sql
 CREATE OR REPLACE FUNCTION public.get_current_user_rol()
 RETURNS TEXT
@@ -158,7 +158,7 @@ Otras migraciones (025–035): `username` en users, adaptaciones de vacantes/can
 ### 2.1 Estructura de carpetas del backend
 
 ```
-Sofia/backend/
+RRHH/backend/
 ├── main.py                          ← punto de entrada, solo configuración
 ├── vercel_app.py                    ← wrapper para deploy serverless
 ├── config/
@@ -238,7 +238,7 @@ Sofia/backend/
 
 ### 2.2 Registro de routers en `main.py`
 
-`Sofia/backend/main.py` (completo):
+`RRHH/backend/main.py` (completo):
 
 ```python
 from fastapi import FastAPI
@@ -305,7 +305,7 @@ app.include_router(integraciones_router,        prefix="/api/integraciones",    
 
 **No hay un `Depends(get_current_user)`**. La auth se resuelve en `AuthMiddleware` (middleware global), no en cada endpoint. El usuario queda en `request.state.user`.
 
-`Sofia/backend/middleware/auth.py` (completo):
+`RRHH/backend/middleware/auth.py` (completo):
 
 ```python
 """
@@ -403,7 +403,7 @@ created_by = request.state.user.get("id", "system")
 
 ### 2.4 Cliente Supabase desde Python
 
-`Sofia/backend/integrations/supabase_client.py` (completo):
+`RRHH/backend/integrations/supabase_client.py` (completo):
 
 ```python
 """
@@ -458,7 +458,7 @@ La segunda línea de defensa son las políticas RLS en Supabase (pero como los r
 
 ### 2.6 Endpoint entero — request → validación → query → respuesta
 
-**Router** `Sofia/backend/routers/empleados.py` (completo):
+**Router** `RRHH/backend/routers/empleados.py` (completo):
 
 ```python
 """Router de empleados — CRUD con paginación y filtros."""
@@ -508,7 +508,7 @@ async def delete_empleado(id: UUID, service: EmpleadoService = Depends(_service)
     service.deactivate_empleado(id)
 ```
 
-**Service** `Sofia/backend/services/empleado_service.py` (función create):
+**Service** `RRHH/backend/services/empleado_service.py` (función create):
 
 ```python
 def create_empleado(self, data: EmpleadoCreate, created_by: str) -> EmpleadoResponse:
@@ -517,7 +517,7 @@ def create_empleado(self, data: EmpleadoCreate, created_by: str) -> EmpleadoResp
     return empleado
 ```
 
-**Repository** `Sofia/backend/repositories/empleado_repo.py` (función save):
+**Repository** `RRHH/backend/repositories/empleado_repo.py` (función save):
 
 ```python
 def save(self, data: EmpleadoCreate) -> EmpleadoResponse:
@@ -559,7 +559,7 @@ raise AppError("No autorizado", "FORBIDDEN", 403)
 
 ### 2.7 Schemas Pydantic — estilo completo
 
-`Sofia/backend/schemas/empleado.py` (completo):
+`RRHH/backend/schemas/empleado.py` (completo):
 
 ```python
 from datetime import date, datetime
@@ -655,7 +655,7 @@ class EmpleadoListResponse(BaseModel):
 ### 3.1 Estructura de rutas — árbol de `app/`
 
 ```
-Sofia/frontend/app/
+RRHH/frontend/app/
 ├── layout.tsx                        ← root layout (ThemeProvider, fuentes)
 ├── page.tsx                          ← "/" → redirect a /dashboard
 ├── login/
@@ -694,7 +694,7 @@ Sofia/frontend/app/
 
 ### 3.2 Cliente HTTP — cómo el front le pega al backend
 
-`Sofia/frontend/services/api.ts` (completo):
+`RRHH/frontend/services/api.ts` (completo):
 
 ```typescript
 import type { Session } from "@/types/auth"
@@ -769,7 +769,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 - **No usa axios** — `fetch` nativo con wrapper tipado
 - **Sin interceptors de refresh automático** — el refresh se maneja manualmente
 
-**Ejemplo de service de módulo** `Sofia/frontend/services/empleados.ts`:
+**Ejemplo de service de módulo** `RRHH/frontend/services/empleados.ts`:
 
 ```typescript
 import type { Empleado, EmpleadoCreate, EmpleadoListResponse, EmpleadoUpdate } from "@/types/empleado"
@@ -826,7 +826,7 @@ export async function updateEmpleado(id: string, data: EmpleadoUpdate): Promise<
 
 ### 3.4 Patrón de formulario — modal completa real
 
-`Sofia/frontend/components/features/empleados/EmpleadoModal.tsx` líneas 97–302 (forma condensada):
+`RRHH/frontend/components/features/empleados/EmpleadoModal.tsx` líneas 97–302 (forma condensada):
 
 ```typescript
 "use client"
@@ -913,7 +913,7 @@ export function EmpleadoModal({ open, onClose, onSuccess, empleado }: EmpleadoMo
 
 ### 3.5 Patrón de tabla/listado — página de empleados real
 
-`Sofia/frontend/app/(dashboard)/empleados/page.tsx` (estructura):
+`RRHH/frontend/app/(dashboard)/empleados/page.tsx` (estructura):
 
 ```typescript
 "use client"
@@ -1009,7 +1009,7 @@ function TableSkeleton() {
 
 ### 3.7 Tema visual — tokens de diseño
 
-`Sofia/frontend/styles/design-system.ts` (completo):
+`RRHH/frontend/styles/design-system.ts` (completo):
 
 ```typescript
 export const COLORS = {
@@ -1037,7 +1037,7 @@ export const BREAKPOINTS = { mobile: 768, tablet: 1024, desktop: 1280 } as const
 
 ### 4.1 Versionado del schema
 
-**SÍ existe carpeta de migraciones**: `Sofia/backend/migrations/` con 35 archivos SQL numerados (`001_` a `035_`).
+**SÍ existe carpeta de migraciones**: `RRHH/backend/migrations/` con 35 archivos SQL numerados (`001_` a `035_`).
 
 El consolidado `000_run_all.sql` está **DEPRECADO** y tiene un guard que aborta su ejecución: quedó desactualizado y se conserva solo como historial. La reconstrucción desde cero se hace corriendo `backend/db/schema.sql` contra una base vacía (ver `backend/db/README.md`).
 
@@ -1280,4 +1280,4 @@ Los siguientes puntos quedaron sin confirmación directa en el código. Deben re
 
 ---
 
-*Auditoría generada el 2026-05-29. Todos los fragmentos de código fueron leídos directamente de los archivos fuente del proyecto `Sofia/backend/` y `Sofia/frontend/`. Ningún fragmento fue inferido ni inventado.*
+*Auditoría generada el 2026-05-29. Todos los fragmentos de código fueron leídos directamente de los archivos fuente del proyecto `RRHH/backend/` y `RRHH/frontend/`. Ningún fragmento fue inferido ni inventado.*

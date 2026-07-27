@@ -118,7 +118,7 @@ def _to_http1(old: HttpxClient) -> HttpxClient:
 
     Preserva base_url, headers (incluidas las auth), timeout (los 30s de _opts) y
     follow_redirects. verify=True: coincide con el default de supabase (que no lo
-    expone para leer) y Sofia nunca desactiva TLS. **No** cierra la vieja: el caller
+    expone para leer) y RRHH nunca desactiva TLS. **No** cierra la vieja: el caller
     la cierra recién tras reasignar TODAS las referencias que la comparten.
     """
     return type(old)(

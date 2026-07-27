@@ -1,7 +1,7 @@
 """
 Repo satélite de empleados (molde) — lookups por identidad de negocio + las dos bajas.
 Separado de empleado_repo_NEW para que el principal quede bajo el límite de 100 líneas,
-mismo patrón que Sofia ya usa (empleado_ownership_repo / empleado_roles_repo). Rebalanceo:
+mismo patrón que RRHH ya usa (empleado_ownership_repo / empleado_roles_repo). Rebalanceo:
 soft_delete y dar_de_baja viven acá (ambas son "baja") para no pasar el límite en el
 principal. DESTINO al migrar: repositories/empleado_lookup_repo.py.
 

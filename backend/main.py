@@ -1,5 +1,5 @@
 """
-HR Karstec — Sofia
+HR Karstec — RRHH
 Punto de entrada de la aplicación FastAPI.
 Solo configuración de la app — sin lógica de negocio.
 """
