@@ -19,6 +19,22 @@ from utils.errors import AppError
 from utils.logger import logger
 
 
+def verificar_empresa_lote(repo: EvaluacionRepo, lote_id: UUID,
+                           empresa_id: Optional[UUID] = None) -> LoteResponse:
+    """Carga el lote y valida que sea de la empresa activa. ÚNICA barrera contra la fuga entre
+    empresas en las lecturas por lote_id: como las tablas hijas no llevan empresa_id (se alcanzan
+    por lote_id), validar el lote cubre toda la cadena lote → evaluados → resultados.
+
+    `empresa_id` None = vista consolidada ("Todas las empresas", semántica de get_empresa_id):
+    no restringe. Un lote de OTRA empresa lanza el MISMO 404 que "no existe" —nunca un 403— para
+    no confirmar la existencia de recursos ajenos.
+    """
+    lote = repo.find_lote_by_id(str(lote_id))
+    if not lote or (empresa_id and str(lote.empresa_id) != str(empresa_id)):
+        raise AppError("Lote de evaluación no encontrado", "LOTE_NOT_FOUND", 404)
+    return lote
+
+
 class EvaluacionService:
     def __init__(self, repo: Optional[EvaluacionRepo] = None,
                  audit: Optional[AuditService] = None) -> None:
@@ -96,13 +112,13 @@ class EvaluacionService:
         items = self._repo.find_lotes(str(empresa_id) if empresa_id else None)
         return LoteListResponse(items=items, total=len(items))
 
-    def get_lote(self, id: UUID) -> LoteResponse:
-        """Lote por id. 404 si no existe."""
-        return self._lote_or_404(id)
+    def get_lote(self, id: UUID, empresa_id: Optional[UUID] = None) -> LoteResponse:
+        """Lote por id, acotado a la empresa activa. 404 si no existe o es de otra empresa."""
+        return self._lote_or_404(id, empresa_id)
 
-    def listar_evaluados(self, lote_id: UUID) -> EvaluadoListResponse:
-        """Evaluados de un lote. Valida que el lote exista (404 si no)."""
-        self._lote_or_404(lote_id)
+    def listar_evaluados(self, lote_id: UUID, empresa_id: Optional[UUID] = None) -> EvaluadoListResponse:
+        """Evaluados de un lote, acotado a la empresa activa (404 si no existe o es ajeno)."""
+        self._lote_or_404(lote_id, empresa_id)
         items = self._repo.find_evaluados(str(lote_id))
         return EvaluadoListResponse(items=items, total=len(items))
 
@@ -112,12 +128,9 @@ class EvaluacionService:
         return ResultadoListResponse(items=items, total=len(items))
 
     # ── Helpers ──
-    def _lote_or_404(self, id: UUID) -> LoteResponse:
-        """Carga el lote o lanza 404."""
-        lote = self._repo.find_lote_by_id(str(id))
-        if not lote:
-            raise AppError("Lote de evaluación no encontrado", "LOTE_NOT_FOUND", 404)
-        return lote
+    def _lote_or_404(self, id: UUID, empresa_id: Optional[UUID] = None) -> LoteResponse:
+        """Carga el lote o lanza 404 (indistinguible del 404 por lote de otra empresa)."""
+        return verificar_empresa_lote(self._repo, id, empresa_id)
 
     @staticmethod
     def _evaluado_dict(lote_id: UUID, f: EvaluadoCreate) -> dict:

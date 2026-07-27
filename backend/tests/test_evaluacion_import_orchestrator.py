@@ -257,6 +257,20 @@ def test_confirmar_guarda_solo_equivalencias_marcadas():
     assert matcheo.equivalencias[0]["apellido_csv"] == "godoy"  # normalizado
 
 
+def test_confirmar_ata_la_equivalencia_a_la_empresa_del_lote():
+    """La equivalencia (único write con empresa propia) cuelga de la empresa del LOTE, no de una
+    del header: se persiste con el mismo empresa_id con el que se creó el lote. Como no cascadea
+    (sobrevive al borrado del lote), quedar bajo otra empresa la haría irrecuperable."""
+    e1 = uuid4()
+    svc, matcheo = _FakeSvc(), _FakeMatcheo([e1])
+    orch = EvaluacionImportOrchestrator(persistencia=svc, repo=_FakeRepo(),
+                                        matcheo_repo=matcheo, audit=_FakeAudit())
+    req = ConfirmarRequest(empresa_id=EMPRESA, periodo="C",
+                           evaluados=[_confirm(e1, guardar_equiv=True)])
+    orch.confirmar(req)
+    assert matcheo.equivalencias[0]["empresa_id"] == str(svc.lote_creado.empresa_id) == str(EMPRESA)
+
+
 def test_confirmar_sin_candidato_persiste_con_null():
     orch = EvaluacionImportOrchestrator(persistencia=_FakeSvc(), repo=_FakeRepo(),
                                         matcheo_repo=_FakeMatcheo(), audit=_FakeAudit())

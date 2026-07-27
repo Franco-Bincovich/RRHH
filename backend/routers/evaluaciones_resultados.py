@@ -1,5 +1,6 @@
 """Router de reportes de resultados de evaluaciones (lectura + export). Gate EVALUACIONES + READ
-(admin + gerencia leen; mandos sin acceso). Todo cuelga de un lote; la empresa sale del header."""
+(admin + gerencia leen; mandos sin acceso). Todo cuelga de un lote: la empresa sale del header
+(VISTA) y el service la valida contra la del lote —ajeno da 404, igual que inexistente; None = todas."""
 from typing import Literal, Optional
 from uuid import UUID
 
@@ -45,31 +46,35 @@ async def eliminar_lotes_bulk(body: LotesBulkDelete, request: Request) -> LotesB
 
 
 @router.get("/lotes/{lote_id}/metricas", response_model=MetricasResponse, dependencies=_GATE)
-async def metricas(lote_id: UUID, svc: EvaluacionReportesService = Depends(_svc)) -> MetricasResponse:
+async def metricas(lote_id: UUID, empresa: Optional[UUID] = Depends(get_empresa_id),
+                   svc: EvaluacionReportesService = Depends(_svc)) -> MetricasResponse:
     """Resumen + brecha + sectores + competencias del ciclo, en una pasada."""
-    return svc.metricas(lote_id)
+    return svc.metricas(lote_id, empresa)
 
 
 @router.get("/lotes/{lote_id}/evaluados", response_model=EvaluadoListadoResponse, dependencies=_GATE)
-async def evaluados(lote_id: UUID, svc: EvaluacionReportesService = Depends(_svc),
+async def evaluados(lote_id: UUID, empresa: Optional[UUID] = Depends(get_empresa_id),
+                    svc: EvaluacionReportesService = Depends(_svc),
                     sector: Optional[str] = Query(None), perfil: Optional[str] = Query(None),
                     con_nota: Optional[str] = Query(None)) -> EvaluadoListadoResponse:
     """Listado filtrable de evaluados del lote."""
-    return svc.listado(lote_id, sector, perfil, con_nota)
+    return svc.listado(lote_id, empresa, sector, perfil, con_nota)
 
 
 @router.get("/lotes/{lote_id}/evaluados/export", dependencies=_GATE)
-async def exportar(lote_id: UUID, svc: EvaluacionReportesService = Depends(_svc),
+async def exportar(lote_id: UUID, empresa: Optional[UUID] = Depends(get_empresa_id),
+                   svc: EvaluacionReportesService = Depends(_svc),
                    formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"),
                    sector: Optional[str] = Query(None), perfil: Optional[str] = Query(None),
                    con_nota: Optional[str] = Query(None)) -> Response:
     """Export del listado — mismos Query que /evaluados."""
-    d = svc.exportar(lote_id, formato, sector, perfil, con_nota)
+    d = svc.exportar(lote_id, empresa, formato, sector, perfil, con_nota)
     return Response(content=d.content, media_type=d.media_type,
                     headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 
 @router.get("/lotes/{lote_id}/evaluados/{evaluado_id}/ficha", response_model=FichaResponse, dependencies=_GATE)
-async def ficha(lote_id: UUID, evaluado_id: UUID, svc: EvaluacionReportesService = Depends(_svc)) -> FichaResponse:
+async def ficha(lote_id: UUID, evaluado_id: UUID, empresa: Optional[UUID] = Depends(get_empresa_id),
+                svc: EvaluacionReportesService = Depends(_svc)) -> FichaResponse:
     """Ficha individual: matriz competencia × tipo de evaluador + promedio de terceros."""
-    return svc.ficha(lote_id, evaluado_id)
+    return svc.ficha(lote_id, evaluado_id, empresa)
