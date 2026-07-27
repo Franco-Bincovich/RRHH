@@ -41,6 +41,32 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-27 · B2 — fundación del sistema de filtros · commits `<pendiente>` ×3
+
+**Qué cambió:** la base de las tandas de filtros (B3–B6), sin entregar todavía ningún filtro
+nuevo al usuario. (1) Los wrappers de export de capacitaciones e inventario pasaron a un objeto
+de filtros compartido con su listado, y ahora los dos construyen los query params con la misma
+función: descargar y ver en pantalla no pueden divergir. (2) `FiltersBar` ganó dos controles
+—rango de fechas y multi-selección— y el patrón de hook quedó documentado en
+`components/features/shared/filtros.ts`. (3) `vacaciones_service.py` bajó de 150 a 109 líneas
+extrayendo `create` a `_vacaciones_write.py`, simétrico con `_ausencias_write.py`.
+
+**Impacto en infraestructura:** Ninguno.
+
+*(Sin migraciones, sin variables de entorno, sin dependencias nuevas —los tests de render usan
+`react-dom/server`, que ya estaba—, sin buckets, sin endpoints nuevos ni removidos, sin cambios
+en el modelo de auth ni en los claims del token, sin dependencias de URL. El contrato HTTP no
+se movió: los cambios del frontend son de firma de TypeScript, y el del backend es movimiento
+de código dentro de la capa de services.)*
+
+> **Nota para quien revise deploys, no acción:** se sumó `tests/test_paridad_list_export.py`,
+> que recorre `app.routes` y compara los query params de cada endpoint de export contra los de
+> su listado. Es un test de estructura, corre sin base de datos y sin red. Si alguna vez falla
+> en CI tras agregar un módulo, no es un problema de entorno: es un export que quedó
+> desalineado con su listado.
+
+---
+
 ## 2026-07-27 · Nonce de un solo uso en el callback OAuth · commit `<pendiente>`
 
 **Qué cambió:** el callback de Google ahora valida un **nonce de un solo uso persistido**. Al

@@ -47,7 +47,7 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
     setLoading(true); setError(false)
     try {
       const override = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
-      const data = await fetchAsignaciones(override)
+      const data = await fetchAsignaciones({ empresaIdOverride: override })
       setAsignaciones(data.items)
     } catch { setError(true) }
     finally { setLoading(false) }
@@ -69,7 +69,7 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
           )}
         </div>
         <div className="flex gap-2">
-          <ExportMenu onExport={(f) => exportarInventarioAsignaciones(f, !empresaActivaId && empresaFiltro ? empresaFiltro : undefined)} />
+          <ExportMenu onExport={(f) => exportarInventarioAsignaciones(f, { empresaIdOverride: !empresaActivaId && empresaFiltro ? empresaFiltro : undefined })} />
           {canWrite && (
             <Button className="min-h-11" onClick={() => setAsignarModal(true)}>
               <Plus className="size-4" /> Asignar ítem

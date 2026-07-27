@@ -40,18 +40,44 @@ export async function deleteCapacitacion(id: string): Promise<void> {
 
 // ── Asignaciones ──────────────────────────────────────────────────────────────
 
-export async function fetchAsignaciones(params: {
+/**
+ * Filtros del listado de asignaciones de capacitación.
+ * Los consumen el listado Y el export: es el mismo tipo a propósito, para que un filtro
+ * nuevo no pueda quedar en uno solo de los dos (invariante list ↔ export).
+ */
+export interface AsignacionesCapacitacionFiltros {
   empresaIdOverride?: string
   empleadoId?: string
   capacitacionId?: string
   estado?: string
   areaId?: string
-}): Promise<AsignacionListResponse> {
+}
+
+/**
+ * Traduce los filtros a query params del backend. Fuente ÚNICA de esa traducción: el listado
+ * y el export la comparten, así que no pueden mandar cosas distintas. Si se suma un filtro,
+ * se suma acá una sola vez y le llega a los dos.
+ */
+function queryAsignaciones(f: AsignacionesCapacitacionFiltros): Record<string, string | undefined> {
+  return {
+    empleado_id: f.empleadoId,
+    capacitacion_id: f.capacitacionId,
+    estado: f.estado,
+    area_id: f.areaId,
+  }
+}
+
+function headersEmpresa(empresaIdOverride?: string): Record<string, string> | undefined {
+  return empresaIdOverride ? { "X-Empresa-Id": empresaIdOverride } : undefined
+}
+
+export async function fetchAsignaciones(
+  params: AsignacionesCapacitacionFiltros,
+): Promise<AsignacionListResponse> {
   const q = new URLSearchParams()
-  if (params.empleadoId) q.set("empleado_id", params.empleadoId)
-  if (params.capacitacionId) q.set("capacitacion_id", params.capacitacionId)
-  if (params.estado) q.set("estado", params.estado)
-  if (params.areaId) q.set("area_id", params.areaId)
+  for (const [k, v] of Object.entries(queryAsignaciones(params))) {
+    if (v) q.set(k, v)
+  }
   const query = q.size ? `?${q}` : ""
   return apiFetch<AsignacionListResponse>(
     `${BASE_AS}${query}`,
@@ -95,8 +121,17 @@ export async function getCertificadoUrl(id: string): Promise<string> {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
-/** Exporta el listado de asignaciones de capacitación (pdf/excel/csv/word) vía el motor central. */
-export function exportarCapacitaciones(formato: FormatoExport, empresaIdOverride?: string, estado?: string, areaId?: string): Promise<void> {
-  const headers = empresaIdOverride ? { "X-Empresa-Id": empresaIdOverride } : undefined
-  return descargarArchivo("/api/capacitaciones/asignaciones/exportar", formato, "capacitaciones", headers, { estado, area_id: areaId })
+/**
+ * Exporta el listado de asignaciones de capacitación (pdf/excel/csv/word) vía el motor central.
+ * Toma los MISMOS filtros que `fetchAsignaciones` y los traduce con la misma función, así que
+ * lo que se descarga es exactamente lo que se está viendo.
+ */
+export function exportarCapacitaciones(
+  formato: FormatoExport,
+  filtros: AsignacionesCapacitacionFiltros = {},
+): Promise<void> {
+  return descargarArchivo(
+    "/api/capacitaciones/asignaciones/exportar", formato, "capacitaciones",
+    headersEmpresa(filtros.empresaIdOverride), queryAsignaciones(filtros),
+  )
 }

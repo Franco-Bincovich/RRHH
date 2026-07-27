@@ -38,7 +38,7 @@ export function InventarioSection({ empleadoId }: { empleadoId: string }) {
     let cancelled = false
     setLoading(true)
     setError(false)
-    fetchAsignaciones(undefined, empleadoId)
+    fetchAsignaciones({ empleadoId })
       .then((res) => { if (!cancelled) setAsignaciones(res.items) })
       .catch(() => { if (!cancelled) setError(true) })
       .finally(() => { if (!cancelled) setLoading(false) })

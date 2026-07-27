@@ -57,7 +57,7 @@ export function ItemsTab({ canWrite }: { canWrite: boolean }) {
     setLoading(true); setError(false)
     try {
       const override = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
-      const data = await fetchItems(override, estadoFiltro || undefined)
+      const data = await fetchItems({ empresaIdOverride: override, estado: estadoFiltro || undefined })
       setItems(data.items)
     } catch { setError(true) }
     finally { setLoading(false) }
@@ -91,7 +91,7 @@ export function ItemsTab({ canWrite }: { canWrite: boolean }) {
           </select>
         </div>
         <div className="flex gap-2">
-          <ExportMenu onExport={(f) => exportarInventarioItems(f, !empresaActivaId && empresaFiltro ? empresaFiltro : undefined, estadoFiltro || undefined)} />
+          <ExportMenu onExport={(f) => exportarInventarioItems(f, { empresaIdOverride: !empresaActivaId && empresaFiltro ? empresaFiltro : undefined, estado: estadoFiltro || undefined })} />
           {canWrite && <Button className="min-h-11" onClick={() => { setEditing(null); setModalOpen(true) }}><Plus className="size-4" /> Nuevo ítem</Button>}
         </div>
       </div>

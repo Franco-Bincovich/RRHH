@@ -29,6 +29,7 @@ from services._periodo_utils import verificar_periodo_abierto
 from services._vacaciones_export import construir_filas_export
 from services._vacaciones_saldo import calcular_saldo
 from services._vacaciones_utils import derive_estado
+from services._vacaciones_write import crear
 from services.audit_service import AuditService
 from services.export import Descarga, build_export
 from services.ownership import puede_gestionar_empleado
@@ -74,51 +75,9 @@ class VacacionesService:
         return derive_estado(row, date.today())
 
     def create(self, data: SolicitudVacacionesCreate, created_by: str, rol: Optional[str] = None) -> SolicitudVacacionesResponse:
-        """
-        Registra un período de vacaciones para un empleado.
-        empresa_id se resuelve del empleado — no lo provee el usuario.
-
-        Ownership: se valida ANTES de resolver la empresa (403 uniforme para un mando que
-        intenta crear a nombre de un empleado que no es su subordinado — exista o no).
-
-        Args:
-            data: Campos del formulario (empleado_id, fecha_desde, fecha_hasta, tipo, comentario).
-            created_by: ID del operador que registra (trazabilidad y sujeto del ownership).
-            rol: Rol del operador (para el chequeo de ownership).
-
-        Raises:
-            AppError: OWNERSHIP_DENIED (403) si el rol no puede gestionar a ese empleado.
-            AppError: EMPLEADO_NOT_FOUND (404) si el empleado no existe.
-            AppError: VACACIONES_SOLAPAMIENTO (422) si hay fechas solapadas del mismo tipo para el mismo empleado.
-        """
-        if not puede_gestionar_empleado(created_by, rol, data.empleado_id, self._ownership):
-            raise AppError("No autorizado para gestionar este empleado", "OWNERSHIP_DENIED", 403)
-        empresa_id = self._repo.find_empresa_for_empleado(str(data.empleado_id))
-        if not empresa_id:
-            raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
-        verificar_periodo_abierto(empresa_id, "vacaciones", rol, desde=data.fecha_desde, hasta=data.fecha_hasta, repo=self._periodos)
-
-        overlapping = self._repo.find_overlapping(
-            str(data.empleado_id), data.fecha_desde, data.fecha_hasta, data.tipo
-        )
-        if overlapping:
-            raise AppError(
-                "El empleado ya tiene una solicitud del mismo tipo en ese período",
-                "VACACIONES_SOLAPAMIENTO",
-                422,
-            )
-
-        dias = (data.fecha_hasta - data.fecha_desde).days + 1
-        row = self._repo.save(
-            str(data.empleado_id), empresa_id,
-            data.fecha_desde, data.fecha_hasta,
-            dias, data.tipo, data.comentario,
-        )
-        logger.info(
-            "Vacaciones registradas",
-            extra={"solicitud_id": row.id, "empleado_id": str(data.empleado_id), "tipo": data.tipo, "created_by": created_by},
-        )
-        return derive_estado(row, date.today())
+        """Registra un período de vacaciones. Delegado a _vacaciones_write.crear
+        (ownership + empresa del empleado + período + solapamiento)."""
+        return crear(self._repo, self._periodos, self._ownership, data, created_by, rol)
 
     def cancel(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> SolicitudVacacionesResponse:
         """

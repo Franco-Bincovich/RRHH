@@ -53,7 +53,7 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
   useEffect(() => {
     if (!form.empresa_id) { setItems([]); setEmpleados([]); return }
     setLoadingItems(true)
-    fetchItems(form.empresa_id, "disponible")
+    fetchItems({ empresaIdOverride: form.empresa_id, estado: "disponible" })
       .then((r) => setItems(r.items)).catch(() => setItems([])).finally(() => setLoadingItems(false))
     setLoadingEmp(true)
     fetchEmpleados({ page: 1, pageSize: 100, estado: "activo", empresaId: form.empresa_id })

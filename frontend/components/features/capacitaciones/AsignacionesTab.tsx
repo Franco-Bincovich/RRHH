@@ -123,7 +123,7 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
         </div>
         <div className="flex gap-2">
           {!loading && !error && asignaciones.length > 0 && (
-            <ExportMenu onExport={(f) => exportarCapacitaciones(f, !empresaActivaId && empresaFiltro ? empresaFiltro : undefined, estadoFiltro || undefined, areaFiltro || undefined)} />
+            <ExportMenu onExport={(f) => exportarCapacitaciones(f, { empresaIdOverride: !empresaActivaId && empresaFiltro ? empresaFiltro : undefined, estado: estadoFiltro || undefined, areaId: areaFiltro || undefined })} />
           )}
           {canWrite && (
             <Button className="min-h-11" onClick={() => setAsignacionModal(true)}>
