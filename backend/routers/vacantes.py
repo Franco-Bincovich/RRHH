@@ -67,14 +67,14 @@ async def add_candidato(
 
 @router.post("/{id}/publicar-linkedin", response_model=PublicarLinkedinResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def publicar_linkedin(id: UUID, body: PublicarLinkedinRequest, request: Request) -> PublicarLinkedinResponse:
-    return ZernioService().publicar_en_vacante(str(id), body.email_contacto, request.state.user["id"])
+    return ZernioService().publicar_en_vacante(str(id), body.email_contacto, request.state.user["id"], get_empresa_id(request))
 
 
 @router.get("/{id}/emails-candidatos", response_model=List[EmailCandidatoResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def get_emails_candidatos(id: UUID, request: Request) -> List[EmailCandidatoResponse]:
-    return GmailService().get_emails_candidatos(str(id), request.state.user["id"])
+    return GmailService().get_emails_candidatos(str(id), request.state.user["id"], get_empresa_id(request))
 
 
 @router.post("/{id}/candidatos-desde-email", response_model=CandidatoResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def candidato_desde_email(id: UUID, body: CandidatoDesdeEmailRequest, request: Request) -> CandidatoResponse:
-    return GmailService().crear_candidato_desde_email(str(id), body.email_id, request.state.user["id"])
+    return GmailService().crear_candidato_desde_email(str(id), body.email_id, request.state.user["id"], get_empresa_id(request))

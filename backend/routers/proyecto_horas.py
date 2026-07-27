@@ -22,11 +22,12 @@ def _svc() -> HorasService:
 @router.get("/{proyecto_id}/horas", response_model=HoraListResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def list_horas(
     proyecto_id: UUID,
+    request: Request,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     service: HorasService = Depends(_svc),
 ) -> HoraListResponse:
-    return service.get_by_proyecto(proyecto_id, page, page_size)
+    return service.get_by_proyecto(proyecto_id, page, page_size, get_empresa_id(request))
 
 
 @router.post("/{proyecto_id}/horas", response_model=HoraResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])

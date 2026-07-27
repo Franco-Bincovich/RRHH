@@ -17,6 +17,7 @@ from uuid import UUID
 from integrations.supabase_client import supabase_admin
 from repositories.adjunto_repo import AdjuntoRepo
 from schemas.adjunto import Adjunto
+from services._adjunto_padres import ensure_padre_de_empresa
 from services._audit_payloads_rrhh import payload_alta_adjunto, payload_baja_adjunto
 from services.audit_service import AuditService
 from utils.errors import AppError
@@ -38,9 +39,10 @@ _ENTIDAD_SECCION = {
 
 
 class AdjuntoService:
-    def __init__(self, repo: Optional[AdjuntoRepo] = None, audit: Optional[AuditService] = None) -> None:
+    def __init__(self, repo: Optional[AdjuntoRepo] = None, audit: Optional[AuditService] = None, padre_resolvers: Optional[dict] = None) -> None:
         self._repo = repo or AdjuntoRepo()
         self._audit = audit or AuditService()
+        self._padres = padre_resolvers  # None = RESOLVERS reales; dobles en test
 
     def _seccion(self, entidad: str) -> Seccion:
         """Resuelve la sección de una entidad. Raises ENTIDAD_INVALIDA (400) si no está mapeada."""
@@ -57,7 +59,9 @@ class AdjuntoService:
     def _get_owned(self, id: str, empresa_id: Optional[UUID]) -> Adjunto:
         """Carga el adjunto validando pertenencia a la empresa. Raises ADJUNTO_NOT_FOUND (404)."""
         adj = self._repo.find_by_id(id)
-        if not adj or (empresa_id and str(adj.empresa_id) != str(empresa_id)):
+        # empresa_id NULL = fila legacy sin empresa asignada (las nuevas la heredan del padre):
+        # se bloquea SIEMPRE, no solo en modo empresa. Antes era visible en consolidado.
+        if not adj or not adj.empresa_id or (empresa_id and str(adj.empresa_id) != str(empresa_id)):
             raise AppError("Adjunto no encontrado", "ADJUNTO_NOT_FOUND", 404)
         return adj
 
@@ -66,9 +70,13 @@ class AdjuntoService:
         filename: str, content_type: str, categoria: Optional[str], descripcion: Optional[str],
         rol: Optional[str], usuario_id: Optional[str],
     ) -> Adjunto:
-        """Valida, sube al bucket privado y persiste el adjunto. Audita alta_adjunto.
-        Raises: ENTIDAD_INVALIDA (400), FORBIDDEN (403), INVALID_FILE_TYPE/FILE_TOO_LARGE (400)."""
+        """Valida (permiso → PADRE → archivo), sube al bucket privado y persiste. Audita alta.
+        La empresa del adjunto sale del PADRE, no del header: así no depende del selector del
+        sidebar y no se generan filas con empresa_id NULL (ver _adjunto_padres).
+        Raises: ENTIDAD_INVALIDA (400), FORBIDDEN (403), PADRE_NOT_FOUND (404),
+        INVALID_FILE_TYPE/FILE_TOO_LARGE (400)."""
         self._gate(rol, entidad, Accion.WRITE)
+        empresa_padre = ensure_padre_de_empresa(entidad, entidad_id, empresa_id, self._padres)
         validate_upload(content, content_type, ALLOWED_TYPES_ADJUNTO, MAX_SIZE_ADJUNTO, "archivo")
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
         path = f"adjuntos/{entidad}/{entidad_id}/{_uuid.uuid4()}.{ext}"
@@ -77,7 +85,7 @@ class AdjuntoService:
         )
         adj = self._repo.crear({
             "entidad": entidad, "entidad_id": str(entidad_id),
-            "empresa_id": str(empresa_id) if empresa_id else None,
+            "empresa_id": empresa_padre,
             "bucket": _BUCKET, "storage_path": path, "nombre_archivo": filename,
             "mime_type": content_type, "tamano_bytes": len(content),
             "categoria": categoria, "descripcion": descripcion, "subido_por": usuario_id,

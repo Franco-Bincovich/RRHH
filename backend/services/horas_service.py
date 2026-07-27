@@ -29,8 +29,16 @@ class HorasService:
         self._asig = asig_repo or AsignacionesRepo()
         self._proyectos = proyectos_repo or ProyectosRepo()
 
-    def get_by_proyecto(self, proyecto_id: UUID, page: int = 1, page_size: int = 20) -> HoraListResponse:
-        """Una página de horas del proyecto, más reciente primero. total = count real."""
+    def get_by_proyecto(self, proyecto_id: UUID, page: int = 1, page_size: int = 20,
+                        empresa_id: Optional[UUID] = None) -> HoraListResponse:
+        """Una página de horas del proyecto, más reciente primero. total = count real.
+
+        Valida el proyecto contra la empresa activa antes de leer (mismo patrón que cargar/delete
+        de este service): las horas se alcanzan por proyecto_id, así que gatear el proyecto cubre
+        la cadena. 404 idéntico al de proyecto inexistente.
+        """
+        if not self._proyectos.find_by_id(str(proyecto_id), empresa_id):
+            raise AppError("Proyecto no encontrado", "PROYECTO_NOT_FOUND", 404)
         rows, total = self._repo.find_by_proyecto(str(proyecto_id), page, page_size)
         return HoraListResponse(items=rows, total=total)
 

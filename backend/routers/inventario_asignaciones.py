@@ -53,7 +53,7 @@ async def exportar_asignaciones(
 
 @router.post("/{id}/devolver", response_model=AsignacionResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def devolver_item(
-    id: UUID, body: DevolucionRequest,
+    id: UUID, body: DevolucionRequest, request: Request,
     service: InventarioAsignacionesService = Depends(_svc),
 ) -> AsignacionResponse:
-    return service.devolver(id, body)
+    return service.devolver(id, body, get_empresa_id(request))

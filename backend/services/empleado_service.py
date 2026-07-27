@@ -6,91 +6,37 @@ import math
 from typing import Optional
 from uuid import UUID
 
+from repositories.area_repo import AreaRepo
 from repositories.empleado_repo import EmpleadoRepo
 from schemas.empleado import EmpleadoCreate, EmpleadoListResponse, EmpleadoResponse, EmpleadoUpdate
-from services._audit_payloads_rrhh import (
-    payload_alta_empleado, payload_baja_empleado, payload_update_empleado,
-)
 from services._empleados_export import construir_filas_export
-from services._empleados_utils import empleado_or_404, ensure_legajo_unico, ensure_no_ciclo_manager
+from services._empleados_utils import empleado_or_404
+from services._empleados_write import actualizar, crear, desactivar
 from services.audit_service import AuditService
 from services.export import Descarga, build_export
-from utils.errors import AppError
-from utils.logger import logger
 
 
 class EmpleadoService:
-    def __init__(self, repo: Optional[EmpleadoRepo] = None, audit: Optional[AuditService] = None) -> None:
+    def __init__(self, repo: Optional[EmpleadoRepo] = None, audit: Optional[AuditService] = None,
+                 area_repo: Optional[AreaRepo] = None) -> None:
         self._repo = repo or EmpleadoRepo()
         self._audit = audit or AuditService()
+        self._areas = area_repo or AreaRepo()
 
     def create_empleado(self, data: EmpleadoCreate, created_by: str, empresa_id: UUID) -> EmpleadoResponse:
-        """
-        Crea un nuevo empleado en el sistema y registra el evento de auditoría.
-
-        Args:
-            data: Datos del empleado a crear (validados por Pydantic).
-            created_by: ID del usuario que realiza la operación (para trazabilidad y audit).
-            empresa_id: UUID de la empresa a la que pertenecerá el empleado (obligatorio).
-
-        Returns:
-            EmpleadoResponse con los datos del empleado creado, incluyendo su ID generado.
-        """
-        ensure_legajo_unico(self._repo, data.legajo, empresa_id)
-        empleado = self._repo.save(data, empresa_id)
-        self._audit.registrar(**payload_alta_empleado(empleado, created_by, empleado.empresa_id))
-        logger.info("Empleado creado", extra={"empleado_id": empleado.id, "created_by": created_by, "empresa_id": str(empresa_id)})
-        return empleado
+        """Alta de empleado + audit. Delegado a _empleados_write.crear.
+        Raises: LEGAJO_DUPLICADO (409), AREA_NOT_FOUND (404), MANAGER_NOT_FOUND (404)."""
+        return crear(self._repo, self._audit, self._areas, data, created_by, empresa_id)
 
     def update_empleado(self, id: UUID, data: EmpleadoUpdate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> EmpleadoResponse:
-        """
-        Actualiza los datos de un empleado existente (actualización parcial).
-        Lee el estado anterior (read-before) para registrar el diff de auditoría.
-
-        Args:
-            id: UUID del empleado a actualizar.
-            data: Campos a actualizar — solo los no-None se aplican.
-            empresa_id: Si se provee, el UPDATE solo afecta empleados de esa empresa.
-            usuario_id: ID del operador (trazabilidad de audit).
-
-        Returns:
-            EmpleadoResponse con los datos actualizados.
-
-        Raises:
-            AppError: EMPLEADO_NOT_FOUND (404) si el ID no existe o no pertenece a la empresa.
-        """
-        ensure_legajo_unico(self._repo, data.legajo, empresa_id, str(id))
-        if data.manager_id is not None:  # solo al ASIGNAR un superior (limpiar a null no puede ciclar)
-            ensure_no_ciclo_manager(self._repo, id, data.manager_id)
-        prior = self._repo.find_by_id(str(id), empresa_id)
-        empleado = empleado_or_404(self._repo.update(str(id), data, empresa_id))
-        self._audit.registrar(**payload_update_empleado(prior, empleado, usuario_id, empleado.empresa_id))
-        logger.info("Empleado actualizado", extra={"empleado_id": str(id)})
-        return empleado
+        """Actualización parcial + audit del diff. Delegado a _empleados_write.actualizar.
+        Raises: EMPLEADO_NOT_FOUND (404), AREA_NOT_FOUND (404), MANAGER_NOT_FOUND (404), MANAGER_CICLO (400)."""
+        return actualizar(self._repo, self._audit, self._areas, id, data, empresa_id, usuario_id)
 
     def deactivate_empleado(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> bool:
-        """
-        Da de baja lógica al empleado (soft delete). No elimina el registro.
-        Lee el estado anterior antes del soft-delete para registrar el evento de auditoría.
-
-        Args:
-            id: UUID del empleado a desactivar.
-            empresa_id: Si se provee, el soft-delete solo afecta empleados de esa empresa.
-            usuario_id: ID del operador (trazabilidad de audit).
-
-        Returns:
-            True si la operación fue exitosa.
-
-        Raises:
-            AppError: EMPLEADO_NOT_FOUND (404) si el ID no existe o no pertenece a la empresa.
-        """
-        prior = self._repo.find_by_id(str(id), empresa_id)
-        if not self._repo.soft_delete(str(id), empresa_id):
-            raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
-        if prior:
-            self._audit.registrar(**payload_baja_empleado(prior, usuario_id, prior.empresa_id))
-        logger.info("Empleado dado de baja", extra={"empleado_id": str(id)})
-        return True
+        """Baja lógica (soft delete) + audit. Delegado a _empleados_write.desactivar.
+        Raises: EMPLEADO_NOT_FOUND (404)."""
+        return desactivar(self._repo, self._audit, id, empresa_id, usuario_id)
 
     def get_empleados(
         self,

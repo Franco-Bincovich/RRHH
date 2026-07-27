@@ -39,35 +39,35 @@ async def get_planes_carrera(request: Request, svc: SucesionService = Depends(_s
 
 @router.post("/planes", response_model=PlanCarreraResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def create_plan_carrera(
-    data: PlanCarreraCreate, svc: SucesionService = Depends(_svc),
+    data: PlanCarreraCreate, request: Request, svc: SucesionService = Depends(_svc),
 ) -> PlanCarreraResponse:
-    return svc.create_plan_carrera(data)
+    return svc.create_plan_carrera(data, get_empresa_id(request))
 
 
 @router.get("/planes/{plan_id}/hitos", response_model=list[HitoResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def get_hitos(
-    plan_id: UUID, svc: SucesionService = Depends(_svc),
+    plan_id: UUID, request: Request, svc: SucesionService = Depends(_svc),
 ) -> list[HitoResponse]:
-    return svc.get_hitos(plan_id)
+    return svc.get_hitos(plan_id, get_empresa_id(request))
 
 
 @router.post("/planes/{plan_id}/hitos", response_model=HitoResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def create_hito(
-    plan_id: UUID, data: HitoBodyCreate, svc: SucesionService = Depends(_svc),
+    plan_id: UUID, data: HitoBodyCreate, request: Request, svc: SucesionService = Depends(_svc),
 ) -> HitoResponse:
-    return svc.create_hito(plan_id, data)
+    return svc.create_hito(plan_id, data, get_empresa_id(request))
 
 
 @router.put("/planes/{plan_id}/readiness", response_model=PlanCarreraResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def update_readiness(
-    plan_id: UUID, data: ReadinessUpdate, svc: SucesionService = Depends(_svc),
+    plan_id: UUID, data: ReadinessUpdate, request: Request, svc: SucesionService = Depends(_svc),
 ) -> PlanCarreraResponse:
-    return svc.update_readiness(plan_id, data.readiness)
+    return svc.update_readiness(plan_id, data.readiness, get_empresa_id(request))
 
 
 @router.put("/hitos/{hito_id}/completar", response_model=dict, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def completar_hito(
-    hito_id: UUID, svc: SucesionService = Depends(_svc),
+    hito_id: UUID, request: Request, svc: SucesionService = Depends(_svc),
 ) -> dict:
-    svc.completar_hito(hito_id)
+    svc.completar_hito(hito_id, get_empresa_id(request))
     return {"ok": True}

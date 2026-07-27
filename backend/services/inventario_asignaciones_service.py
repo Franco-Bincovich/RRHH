@@ -82,18 +82,22 @@ class InventarioAsignacionesService:
         })
         return row
 
-    def devolver(self, asignacion_id: UUID, data: DevolucionRequest) -> AsignacionResponse:
+    def devolver(self, asignacion_id: UUID, data: DevolucionRequest,
+                 empresa_id: Optional[UUID] = None) -> AsignacionResponse:
         """
         Registra la devolución de un ítem.
         Estado resultante del ítem: 'disponible' (ok) | 'en_reparacion' (con_daño).
 
+        `empresa_id` acota la asignación a la empresa activa (None = consolidado); una ajena da
+        el MISMO 404 que una inexistente.
+
         Raises:
             AppError: ESTADO_DEVOLUCION_INVALIDO (422).
-            AppError: ASIGNACION_NOT_FOUND (404) si no existe o ya fue devuelta.
+            AppError: ASIGNACION_NOT_FOUND (404) si no existe, es de otra empresa o ya fue devuelta.
         """
         if data.estado_devolucion not in ("ok", "con_daño"):
             raise AppError("Usá 'ok' o 'con_daño'", "ESTADO_DEVOLUCION_INVALIDO", 422)
-        asig = self._repo.find_by_id(str(asignacion_id))
+        asig = self._repo.find_by_id(str(asignacion_id), empresa_id)
         if not asig or asig.fecha_devolucion is not None:
             raise AppError("Asignación no encontrada o ya devuelta", "ASIGNACION_NOT_FOUND", 404)
         updated = self._repo.devolver(str(asignacion_id), data.estado_devolucion, data.notas)

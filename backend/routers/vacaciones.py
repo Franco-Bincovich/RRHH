@@ -47,18 +47,21 @@ async def exportar_vacaciones(request: Request, formato: Literal["pdf", "excel",
 
 # /saldo/{id} debe ir ANTES de /{id} para evitar colisión de rutas
 @router.get("/saldo/{empleado_id}", response_model=SaldoVacacionesResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-async def get_saldo(empleado_id: UUID, service: VacacionesService = Depends(_svc)) -> SaldoVacacionesResponse:
-    return service.get_saldo(empleado_id)
+async def get_saldo(empleado_id: UUID, request: Request, service: VacacionesService = Depends(_svc)) -> SaldoVacacionesResponse:
+    u = request.state.user
+    return service.get_saldo(empleado_id, u.get("id"), u.get("rol"), get_empresa_id(request))
 
 
 @router.get("/empleado/{empleado_id}", response_model=SolicitudVacacionesListResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-async def list_vacaciones_empleado(empleado_id: UUID, service: VacacionesService = Depends(_svc)) -> SolicitudVacacionesListResponse:
-    return service.get_by_empleado(empleado_id)
+async def list_vacaciones_empleado(empleado_id: UUID, request: Request, service: VacacionesService = Depends(_svc)) -> SolicitudVacacionesListResponse:
+    u = request.state.user
+    return service.get_by_empleado(empleado_id, u.get("id"), u.get("rol"), get_empresa_id(request))
 
 
 @router.get("/{id}", response_model=SolicitudVacacionesResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def get_vacacion(id: UUID, request: Request, service: VacacionesService = Depends(_svc)) -> SolicitudVacacionesResponse:
-    return service.get_by_id(id, get_empresa_id(request))
+    u = request.state.user
+    return service.get_by_id(id, get_empresa_id(request), u.get("id"), u.get("rol"))
 
 
 @router.post("", response_model=SolicitudVacacionesResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])

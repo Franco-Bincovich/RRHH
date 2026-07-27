@@ -36,10 +36,11 @@ async def create_campana(
 async def create_link(
     campana_id: UUID,
     data: LinkCreate,
+    request: Request,
     svc: AssessmentService = Depends(_svc),
 ) -> LinkResponse:
     data.campana_id = campana_id
-    return svc.create_link(data)
+    return svc.create_link(data, get_empresa_id(request))
 
 
 # ── Rutas públicas — sin AuthMiddleware, sin X-Empresa-Id ────────────────────
@@ -69,6 +70,7 @@ async def get_resultados(request: Request, svc: AssessmentService = Depends(_svc
 @router.get("/resultados/{resultado_id}", response_model=ResultadoResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def get_resultado(
     resultado_id: UUID,
+    request: Request,
     svc: AssessmentService = Depends(_svc),
 ) -> ResultadoResponse:
-    return svc.get_resultado(resultado_id)
+    return svc.get_resultado(resultado_id, get_empresa_id(request))

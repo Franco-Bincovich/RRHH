@@ -43,11 +43,12 @@ async def get_onboarding_empleado(
 @router.post("/{empleado_id}/iniciar", response_model=InstanciaResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def iniciar_onboarding(
     empleado_id: UUID,
+    request: Request,
     body: Optional[IniciarOnboardingRequest] = None,
     service: OnboardingService = Depends(_service),
 ) -> InstanciaResponse:
     template_id = body.template_id if body else None
-    return service.iniciar_onboarding(empleado_id, template_id)
+    return service.iniciar_onboarding(empleado_id, template_id, get_empresa_id(request))
 
 
 @router.put(

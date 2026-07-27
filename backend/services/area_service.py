@@ -28,7 +28,7 @@ class AreaService:
         """
         return self._repo.find_all(empresa_id)
 
-    def get_area(self, id: UUID) -> AreaResponse:
+    def get_area(self, id: UUID, empresa_id: Optional[str] = None) -> AreaResponse:
         """
         Retorna el detalle de un área por ID.
 
@@ -39,9 +39,10 @@ class AreaService:
             AreaResponse con todos los campos del área.
 
         Raises:
-            AppError: AREA_NOT_FOUND (404) si el ID no existe o está inactiva.
+            AppError: AREA_NOT_FOUND (404) si no existe, está inactiva o es de otra empresa
+                (mismo code y mensaje: no confirma la existencia de áreas ajenas).
         """
-        area = self._repo.find_by_id(str(id))
+        area = self._repo.find_by_id(str(id), empresa_id)
         if not area:
             raise AppError("Área no encontrada", "AREA_NOT_FOUND", 404)
         return area
@@ -61,7 +62,7 @@ class AreaService:
         logger.info("Área creada", extra={"area_id": area.id, "created_by": created_by})
         return area
 
-    def update_area(self, id: UUID, data: AreaUpdate) -> AreaResponse:
+    def update_area(self, id: UUID, data: AreaUpdate, empresa_id: Optional[str] = None) -> AreaResponse:
         """
         Actualiza los datos de un área existente (actualización parcial).
 
@@ -73,15 +74,15 @@ class AreaService:
             AreaResponse con los datos actualizados.
 
         Raises:
-            AppError: AREA_NOT_FOUND (404) si el ID no existe.
+            AppError: AREA_NOT_FOUND (404) si no existe o es de otra empresa.
         """
-        area = self._repo.update(str(id), data)
+        area = self._repo.update(str(id), data, empresa_id)
         if not area:
             raise AppError("Área no encontrada", "AREA_NOT_FOUND", 404)
         logger.info("Área actualizada", extra={"area_id": str(id)})
         return area
 
-    def delete_area(self, id: UUID) -> bool:
+    def delete_area(self, id: UUID, empresa_id: Optional[str] = None) -> bool:
         """
         Elimina lógicamente un área (soft delete — pone activo=False).
 
@@ -92,9 +93,9 @@ class AreaService:
             True si la operación fue exitosa.
 
         Raises:
-            AppError: AREA_NOT_FOUND (404) si el ID no existe.
+            AppError: AREA_NOT_FOUND (404) si no existe o es de otra empresa.
         """
-        if not self._repo.delete(str(id)):
+        if not self._repo.delete(str(id), empresa_id):
             raise AppError("Área no encontrada", "AREA_NOT_FOUND", 404)
         logger.info("Área eliminada", extra={"area_id": str(id)})
         return True

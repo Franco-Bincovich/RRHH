@@ -59,8 +59,12 @@ class InventarioAsignacionesRepo:
                 .order("fecha_asignacion", desc=True).execute().data or [])
         return _build(rows)
 
-    def find_by_id(self, id: str) -> Optional[AsignacionResponse]:
-        res = supabase_admin.table(_T).select("*").eq("id", id).maybe_single().execute()
+    def find_by_id(self, id: str, empresa_id: Optional[UUID] = None) -> Optional[AsignacionResponse]:
+        """Asignación por id. Si empresa_id se provee, valida pertenencia (None = consolidado)."""
+        q = supabase_admin.table(_T).select("*").eq("id", id)
+        if empresa_id:
+            q = q.eq("empresa_id", str(empresa_id))
+        res = q.maybe_single().execute()
         return _build([res.data])[0] if res.data else None
 
     def save(self, item_id: str, empresa_id: str, empleado_id: str) -> AsignacionResponse:

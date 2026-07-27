@@ -81,6 +81,14 @@ class OffboardingRepo:
         ]).execute()
         return _inst_row(ins.data[0], self._get_activos(inst_id))
 
+    def find_instancia_min(self, instancia_id: str, empresa_id: Optional[UUID] = None) -> Optional[dict]:
+        """{id, empresa_id} de la instancia, o None si no existe / es de otra empresa. Los activos
+        no llevan empresa_id (se alcanzan por instancia_id), así que la barrera va sobre la
+        instancia. Devuelve la fila —no un bool— para que el caller reuse su empresa_id."""
+        q = supabase_admin.table(_OI).select("id,empresa_id").eq("id", instancia_id)
+        res = _with_empresa(q, empresa_id).maybe_single().execute()
+        return res.data if res and res.data else None
+
     def update_activo(self, instancia_id: str, activo_id: str, devuelto: bool) -> bool:
         patch: dict = {"estado": "devuelto" if devuelto else "pendiente"}
         if devuelto:

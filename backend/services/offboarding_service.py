@@ -10,6 +10,7 @@ from repositories.empleado_repo import EmpleadoRepo
 from repositories.offboarding_repo import OffboardingRepo
 from schemas.offboarding import OffboardingCreate, OffboardingResponse
 from services._audit_payloads import payload_devolucion_activo, payload_inicio_offboarding
+from services._empleado_scope import ensure_empleado_de_empresa
 from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
@@ -39,25 +40,25 @@ class OffboardingService:
     def iniciar_offboarding(self, data: OffboardingCreate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> OffboardingResponse:
         """
         Inicia el proceso de offboarding para un empleado.
-        La empresa se hereda del empleado; empresa_id del header es ignorado (la empresa
-        es un dato del empleado, no del contexto de sesión).
+        La empresa en la que se escribe se hereda del empleado (es un dato del empleado, no del
+        contexto de sesión) — eso NO cambia. empresa_id del header se usa solo como barrera de
+        a qué empleado se puede apuntar; validado eso, ambas coinciden por construcción.
         Crea la instancia y los activos corporativos por defecto a devolver.
         Registra el evento de auditoría tras crear la instancia (usuario_id = operador).
 
         Args:
             data: Datos del offboarding — empleado_id, motivo y fecha_ultimo_dia opcional.
-            empresa_id: empresa del contexto (no usada directamente; la empresa se deriva del empleado).
+            empresa_id: empresa activa del request. Acota A QUÉ EMPLEADO se puede apuntar (no la
+                empresa en la que se escribe, que se deriva del empleado). None = todas.
 
         Returns:
             OffboardingResponse con la instancia creada y activos por defecto.
 
         Raises:
-            AppError: EMPLEADO_NOT_FOUND (404) si el empleado no existe.
+            AppError: EMPLEADO_NOT_FOUND (404) si el empleado no existe o es de otra empresa.
             AppError: OFFBOARDING_ALREADY_ACTIVE (409) si el empleado ya tiene un offboarding activo.
         """
-        empleado = self._empleado_repo.find_by_id(str(data.empleado_id))
-        if not empleado:
-            raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
+        empleado = ensure_empleado_de_empresa(self._empleado_repo, data.empleado_id, empresa_id)
 
         existente = self._repo.find_by_empleado(str(data.empleado_id))
         if existente:
@@ -105,14 +106,19 @@ class OffboardingService:
             activo_id: UUID del activo a actualizar.
             devuelto: True para marcar como devuelto, False para revertir a pendiente.
             usuario_id: ID del operador que realiza el cambio (trazabilidad de audit).
-            empresa_id: empresa del contexto (header), para el filtro de audit. Puede ser None.
+            empresa_id: empresa activa del request. Acota la INSTANCIA a esa empresa antes de
+                escribir (None = consolidado) y además viaja al payload de audit. Antes solo
+                alimentaba la auditoría, así que un activo de otra empresa se actualizaba igual.
 
         Returns:
             True si la actualización fue exitosa.
 
         Raises:
-            AppError: ACTIVO_NOT_FOUND (404) si el activo no pertenece a la instancia.
+            AppError: ACTIVO_NOT_FOUND (404) si el activo no pertenece a la instancia, o si la
+                instancia no existe / es de otra empresa (mismo 404: no delata existencia ajena).
         """
+        if not self._repo.find_instancia_min(str(instancia_id), empresa_id):
+            raise AppError("Activo no encontrado en esta instancia", "ACTIVO_NOT_FOUND", 404)
         ok = self._repo.update_activo(str(instancia_id), str(activo_id), devuelto)
         if not ok:
             raise AppError(

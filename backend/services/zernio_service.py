@@ -39,7 +39,7 @@ class ZernioService:
         self._vacante_repo = VacanteRepo()
 
     def publicar_en_vacante(
-        self, vacante_id: str, email_contacto: str, user_id: str
+        self, vacante_id: str, email_contacto: str, user_id: str, empresa_id=None
     ) -> PublicarLinkedinResponse:
         """
         Publica la vacante en LinkedIn via Zernio y guarda el resultado en la DB.
@@ -54,7 +54,8 @@ class ZernioService:
 
         Raises:
             AppError: ZERNIO_NOT_CONFIGURED (400) si no hay API key configurada.
-            AppError: VACANTE_NOT_FOUND (404) si la vacante no existe.
+            AppError: VACANTE_NOT_FOUND (404) si la vacante no existe o es de otra empresa
+                (`empresa_id` acota a qué vacante se puede apuntar; None = consolidado).
             AppError: ZERNIO_ERROR (502) si Zernio devuelve un error HTTP.
             AppError: ZERNIO_CONNECTION_ERROR (502) si falla la conexión con Zernio.
         """
@@ -62,7 +63,7 @@ class ZernioService:
         if not integracion or not integracion.get("api_key"):
             raise AppError("Zernio no configurado", "ZERNIO_NOT_CONFIGURED", 400)
 
-        vacante = self._vacante_repo.find_by_id(vacante_id)
+        vacante = self._vacante_repo.find_by_id(vacante_id, empresa_id)
         if not vacante:
             raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
 

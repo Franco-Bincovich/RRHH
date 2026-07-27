@@ -54,9 +54,18 @@ class AreaRepo:
         counts = _counts_by_area()
         return [_to_response(r, counts) for r in (res.data or [])]
 
-    def find_by_id(self, id: str) -> Optional[AreaResponse]:
-        res = supabase_admin.table(_TABLE).select(_SELECT).eq("id", id).eq("activo", True).single().execute()
-        if not res.data:
+    def find_by_id(self, id: str, empresa_id: Optional[str] = None) -> Optional[AreaResponse]:
+        """Área activa por id. Si empresa_id se provee, valida pertenencia (None = consolidado).
+
+        maybe_single (no single): con .single() Supabase LANZA cuando no hay filas, así que el
+        `return None` de abajo era inalcanzable y un id inexistente daba 500 en vez de 404. Con
+        el filtro de empresa eso se volvía la respuesta normal para toda área ajena.
+        """
+        q = supabase_admin.table(_TABLE).select(_SELECT).eq("id", id).eq("activo", True)
+        if empresa_id:
+            q = q.eq("empresa_id", empresa_id)
+        res = q.maybe_single().execute()
+        if not res or not res.data:
             return None
         return _to_response(res.data, _counts_by_area())
 
@@ -66,26 +75,23 @@ class AreaRepo:
         counts = _counts_by_area()
         return _to_response(res.data[0], counts)
 
-    def update(self, id: str, data: AreaUpdate) -> Optional[AreaResponse]:
+    def update(self, id: str, data: AreaUpdate, empresa_id: Optional[str] = None) -> Optional[AreaResponse]:
+        """Actualización parcial. empresa_id restringe el WHERE (None = consolidado)."""
         patch = data.model_dump(exclude_none=True)
         if not patch:
-            return self.find_by_id(id)
-        res = (
-            supabase_admin.table(_TABLE)
-            .update(patch)
-            .eq("id", id)
-            .execute()
-        )
+            return self.find_by_id(id, empresa_id)
+        q = supabase_admin.table(_TABLE).update(patch).eq("id", id)
+        if empresa_id:
+            q = q.eq("empresa_id", empresa_id)
+        res = q.execute()
         if not res.data:
             return None
         counts = _counts_by_area()
         return _to_response(res.data[0], counts)
 
-    def delete(self, id: str) -> bool:
-        res = (
-            supabase_admin.table(_TABLE)
-            .update({"activo": False})
-            .eq("id", id)
-            .execute()
-        )
-        return bool(res.data)
+    def delete(self, id: str, empresa_id: Optional[str] = None) -> bool:
+        """Soft delete (activo=False). empresa_id restringe el WHERE (None = consolidado)."""
+        q = supabase_admin.table(_TABLE).update({"activo": False}).eq("id", id)
+        if empresa_id:
+            q = q.eq("empresa_id", empresa_id)
+        return bool(q.execute().data)

@@ -44,8 +44,8 @@ async def update_template(
 
 
 @router.delete("/{template_id}", response_model=dict, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def delete_template(template_id: UUID, svc: OnboardingTemplatesService = _Svc) -> dict:
-    svc.delete_template(template_id)
+async def delete_template(template_id: UUID, request: Request, svc: OnboardingTemplatesService = _Svc) -> dict:
+    svc.delete_template(template_id, get_empresa_id(request))
     return {"ok": True}
 
 
@@ -65,7 +65,7 @@ async def update_tarea(
 
 @router.delete("/{template_id}/tareas/{tarea_id}", response_model=dict, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def delete_tarea(
-    template_id: UUID, tarea_id: UUID, svc: OnboardingTemplatesService = _Svc,
+    template_id: UUID, tarea_id: UUID, request: Request, svc: OnboardingTemplatesService = _Svc,
 ) -> dict:
-    svc.delete_tarea(template_id, tarea_id)
+    svc.delete_tarea(template_id, tarea_id, get_empresa_id(request))
     return {"ok": True}

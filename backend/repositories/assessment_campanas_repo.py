@@ -54,8 +54,9 @@ class AssessmentCampanasRepo:
         q = supabase_admin.table(_CAMP).select(_CAMP_Q).order("created_at", desc=True)
         return [_camp_row(r, *self._counts(r["id"])) for r in (_with_empresa(q, empresa_id).execute().data or [])]
 
-    def get_campana(self, campana_id: str) -> CampanaResponse:
-        res = supabase_admin.table(_CAMP).select(_CAMP_Q).eq("id", campana_id).maybe_single().execute()
+    def get_campana(self, campana_id: str, empresa_id: Optional[UUID] = None) -> CampanaResponse:
+        q = supabase_admin.table(_CAMP).select(_CAMP_Q).eq("id", campana_id)
+        res = _with_empresa(q, empresa_id).maybe_single().execute()
         if not (res and res.data):
             raise AppError("Campaña no encontrada", "CAMPANA_NOT_FOUND", 404)
         return _camp_row(res.data, *self._counts(campana_id))

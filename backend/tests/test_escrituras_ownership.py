@@ -96,6 +96,11 @@ class _VacRepo:
         return _vac_row(empleado_id)
 
     def find_by_id(self, id, empresa_id=None):
+        # HONRA empresa_id (antes devolvía la fila siempre, tapando el eje de empresa). Los tests
+        # de este archivo llaman con empresa_id=None (consolidado), así que el resultado no cambia
+        # —lo que cambia es que el fake ya no puede dar verde si el filtro real se rompe.
+        if not self._row or (empresa_id and str(self._row.empresa_id) != str(empresa_id)):
+            return None
         return self._row
 
     def cancel(self, id, empresa_id=None):
@@ -118,6 +123,11 @@ class _AusRepo:
         return _aus_row(empleado_id)
 
     def find_by_id(self, id, empresa_id=None):
+        # HONRA empresa_id (antes devolvía la fila siempre, tapando el eje de empresa). Los tests
+        # de este archivo llaman con empresa_id=None (consolidado), así que el resultado no cambia
+        # —lo que cambia es que el fake ya no puede dar verde si el filtro real se rompe.
+        if not self._row or (empresa_id and str(self._row.empresa_id) != str(empresa_id)):
+            return None
         return self._row
 
     def update(self, id, empresa_id, payload):

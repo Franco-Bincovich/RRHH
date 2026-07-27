@@ -42,15 +42,20 @@ class EmpresaRepo:
         return [_to_response(r) for r in (res.data or [])]
 
     def find_by_id(self, id: str) -> Optional[EmpresaResponse]:
-        """Retorna una empresa por ID. None si no existe."""
+        """Retorna una empresa por ID. None si no existe.
+
+        maybe_single (no single): con .single() Supabase LANZA cuando no hay filas, así que el
+        `else None` era inalcanzable y un id inexistente daba 500 en vez del 404 EMPRESA_NOT_FOUND
+        que el service pretende devolver. Mismo defecto que tenía area_repo (sesión C).
+        """
         res = (
             supabase_admin.table(_TABLE)
             .select(_SELECT)
             .eq("id", id)
-            .single()
+            .maybe_single()
             .execute()
         )
-        return _to_response(res.data) if res.data else None
+        return _to_response(res.data) if res and res.data else None
 
     def save(self, data: EmpresaCreate) -> EmpresaResponse:
         """Inserta una nueva empresa y retorna el registro creado."""

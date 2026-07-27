@@ -25,6 +25,7 @@ from services._ausencias_write import actualizar, crear, eliminar
 from services._ownership_filter import resolver_empleado_ids
 from services.audit_service import AuditService
 from services.export import Descarga, build_export
+from services.ownership import puede_gestionar_empleado
 from utils.errors import AppError
 
 
@@ -46,15 +47,17 @@ class AusenciasService:
         filas = construir_filas_export(self.get_all(user_id, rol, empresa_id, area_id, empleado_id, tipo_id, 1, 100000).items)
         return build_export(nombre="Ausencias", datos={"Ausencias": filas}, filename_base="ausencias", formato=formato)
 
-    def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> AusenciaResponse:
+    def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> AusenciaResponse:
         """
-        Retorna el detalle de una ausencia.
+        Retorna el detalle de una ausencia. Gate empresa ∩ ownership (empresa en el WHERE del
+        repo, luego el rol) — el mismo par que ya aplican actualizar/eliminar en _ausencias_write.
 
         Raises:
-            AppError: AUSENCIA_NOT_FOUND (404) si no existe o no pertenece a la empresa.
+            AppError: AUSENCIA_NOT_FOUND (404) si no existe, no pertenece a la empresa, o el rol
+                no gestiona a ese empleado (mismo 404: no delata la existencia de la solicitud).
         """
         row = self._repo.find_by_id(str(id), empresa_id)
-        if not row:
+        if not row or not puede_gestionar_empleado(usuario_id, rol, row.empleado_id, self._ownership):
             raise AppError("Ausencia no encontrada", "AUSENCIA_NOT_FOUND", 404)
         return row
 

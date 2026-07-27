@@ -74,18 +74,20 @@ class AssessmentService:
                     extra={"campana_id": str(campana.id), "tipo": campana.tipo})
         return campana
 
-    def create_link(self, data: LinkCreate) -> LinkResponse:
+    def create_link(self, data: LinkCreate, empresa_id: Optional[UUID] = None) -> LinkResponse:
         """
-        Crea un link de evaluación con token UUID. Valida que la campaña exista.
-        El link hereda la empresa de la campaña en la DB (FK compuesta).
+        Crea un link de evaluación con token UUID. Valida que la campaña exista Y sea de la
+        empresa activa (None = consolidado): una campaña ajena da el MISMO CAMPANA_NOT_FOUND.
+        El link hereda la empresa de la campaña en la DB (FK compuesta) — eso no cambia.
 
         Args:
             data: LinkCreate con campana_id, evaluado_nombre y evaluado_email.
+            empresa_id: empresa activa del request; acota a qué campaña se puede apuntar.
 
         Returns:
             LinkResponse con el token generado.
         """
-        self._campanas_repo.get_campana(str(data.campana_id))
+        self._campanas_repo.get_campana(str(data.campana_id), empresa_id)
         link = self._campanas_repo.create_link(data)
         logger.info("Link de assessment creado",
                     extra={"link_id": str(link.id), "email": link.evaluado_email})
@@ -140,8 +142,9 @@ class AssessmentService:
         """Retorna todos los resultados de assessments completados, filtrados por empresa."""
         return self._resultados_repo.get_resultados(empresa_id)
 
-    def get_resultado(self, resultado_id: UUID) -> ResultadoResponse:
+    def get_resultado(self, resultado_id: UUID, empresa_id: Optional[UUID] = None) -> ResultadoResponse:
         """
-        Retorna el detalle de un resultado. Lanza RESULTADO_NOT_FOUND (404) si no existe.
+        Retorna el detalle de un resultado, acotado a la empresa activa (None = consolidado).
+        Lanza RESULTADO_NOT_FOUND (404) si no existe o es de otra empresa (mismo 404).
         """
-        return self._resultados_repo.get_resultado(str(resultado_id))
+        return self._resultados_repo.get_resultado(str(resultado_id), empresa_id)

@@ -52,8 +52,9 @@ class AssessmentResultadosRepo:
         q = supabase_admin.table(_RES).select(_RES_Q).order("created_at", desc=True)
         return [_res_row(r) for r in (_with_empresa(q, empresa_id).execute().data or [])]
 
-    def get_resultado(self, resultado_id: str) -> ResultadoResponse:
-        res = supabase_admin.table(_RES).select(_RES_Q).eq("id", resultado_id).maybe_single().execute()
+    def get_resultado(self, resultado_id: str, empresa_id: Optional[UUID] = None) -> ResultadoResponse:
+        q = supabase_admin.table(_RES).select(_RES_Q).eq("id", resultado_id)
+        res = _with_empresa(q, empresa_id).maybe_single().execute()
         if not (res and res.data):
             raise AppError("Resultado no encontrado", "RESULTADO_NOT_FOUND", 404)
         return _res_row(res.data)

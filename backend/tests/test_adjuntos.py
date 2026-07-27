@@ -95,8 +95,15 @@ def storage(monkeypatch):
     return fake
 
 
-def _svc(repo=None, audit=None) -> AdjuntoService:
-    return AdjuntoService(repo=repo or _FakeRepo(), audit=audit or _FakeAudit())
+# Resolvers de padre permisivos: estos tests cubren gating/upload/soft-delete, no la barrera de
+# empresa del padre (esa vive en test_adjuntos_padre_empresa.py, con dobles que sí la honran).
+_PADRES_OK = {e: (lambda _eid, _emp: {"empresa_id": "e1"})
+              for e in ("empleado", "vacacion", "ausencia", "vacante", "offboarding")}
+
+
+def _svc(repo=None, audit=None, padres=None) -> AdjuntoService:
+    return AdjuntoService(repo=repo or _FakeRepo(), audit=audit or _FakeAudit(),
+                          padre_resolvers=padres or _PADRES_OK)
 
 
 def test_subir_persiste_y_audita_alta(storage):

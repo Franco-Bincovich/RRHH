@@ -124,7 +124,10 @@ class _FakeRepo:
         self.find_all_calls.append(empleado_ids)
         return [], 0
 
-    def find_vacaciones_empleado(self, empleado_id):
+    def find_vacaciones_empleado(self, empleado_id, empresa_id=None):
+        # Firma alineada con el repo real (Tanda 1b.2 le sumó empresa_id): si el service llamara
+        # a este atajo con 2 args, el fake tiene que fallar por la ASERCIÓN de abajo, no por un
+        # TypeError que enmascare qué se rompió.
         self.parcial_calls.append(empleado_id)          # NO debería llamarse en el export
         return []
 

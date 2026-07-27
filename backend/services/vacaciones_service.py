@@ -15,6 +15,7 @@ from typing import Optional
 from uuid import UUID
 
 from repositories.empleado_ownership_repo import EmpleadoOwnershipRepo
+from repositories.empleado_repo import EmpleadoRepo
 from repositories.periodo_repo import PeriodoRepo
 from repositories.vacaciones_repo import VacacionesRepo
 from schemas.vacaciones import (
@@ -22,6 +23,7 @@ from schemas.vacaciones import (
     SolicitudVacacionesListResponse, SolicitudVacacionesResponse,
 )
 from services._audit_payloads import payload_cancelacion_vacacion
+from services._empleado_scope import ensure_empleado_visible
 from services._ownership_filter import resolver_empleado_ids
 from services._periodo_utils import verificar_periodo_abierto
 from services._vacaciones_export import construir_filas_export
@@ -35,11 +37,12 @@ from utils.logger import logger
 
 
 class VacacionesService:
-    def __init__(self, repo: Optional[VacacionesRepo] = None, audit: Optional[AuditService] = None, periodo_repo: Optional[PeriodoRepo] = None, ownership_repo: Optional[EmpleadoOwnershipRepo] = None) -> None:
+    def __init__(self, repo: Optional[VacacionesRepo] = None, audit: Optional[AuditService] = None, periodo_repo: Optional[PeriodoRepo] = None, ownership_repo: Optional[EmpleadoOwnershipRepo] = None, empleado_repo: Optional[EmpleadoRepo] = None) -> None:
         self._repo = repo or VacacionesRepo()
         self._audit = audit or AuditService()
         self._periodos = periodo_repo or PeriodoRepo()
         self._ownership = ownership_repo or EmpleadoOwnershipRepo()
+        self._empleados = empleado_repo or EmpleadoRepo()
 
     def get_all(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, estado: Optional[str] = None, page: int = 1, page_size: int = 20) -> SolicitudVacacionesListResponse:
         """Página de solicitudes (estado derivado) filtrada por empresa/área/empleado/estado y ownership. vacio → devuelve vacío sin consultar.
@@ -54,16 +57,19 @@ class VacacionesService:
         filas = construir_filas_export(self.get_all(user_id, rol, empresa_id, area_id, empleado_id, estado, 1, 100000).items)
         return build_export(nombre="Vacaciones", datos={"Vacaciones": filas}, filename_base="vacaciones", formato=formato)
 
-    def get_by_empleado(self, empleado_id: UUID) -> SolicitudVacacionesListResponse:
-        """Retorna las vacaciones (no canceladas) de un empleado, con estado derivado."""
+    def get_by_empleado(self, empleado_id: UUID, user_id: Optional[str] = None, rol: Optional[str] = None, empresa_id: Optional[UUID] = None) -> SolicitudVacacionesListResponse:
+        """Vacaciones (no canceladas) de un empleado, con estado derivado. Gate empresa ∩ ownership:
+        un empleado ajeno (otra empresa, o fuera del alcance de un mando) da el MISMO 404 que uno inexistente."""
+        ensure_empleado_visible(self._empleados, self._ownership, empleado_id, empresa_id, user_id, rol)
         today = date.today()
-        items = [derive_estado(r, today) for r in self._repo.find_vacaciones_empleado(str(empleado_id))]
+        items = [derive_estado(r, today) for r in self._repo.find_vacaciones_empleado(str(empleado_id), empresa_id)]
         return SolicitudVacacionesListResponse(items=items, total=len(items))
 
-    def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> SolicitudVacacionesResponse:
-        """Retorna el detalle de una solicitud. Raises VACACION_NOT_FOUND (404) si no existe."""
+    def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> SolicitudVacacionesResponse:
+        """Detalle de una solicitud. Gate empresa ∩ ownership (empresa en el WHERE del repo, luego
+        el rol): una ajena a un mando da el MISMO 404 que una inexistente, igual que cancel."""
         row = self._repo.find_by_id(str(id), empresa_id)
-        if not row:
+        if not row or not puede_gestionar_empleado(usuario_id, rol, row.empleado_id, self._ownership):
             raise AppError("Solicitud de vacaciones no encontrada", "VACACION_NOT_FOUND", 404)
         return derive_estado(row, date.today())
 
@@ -137,6 +143,8 @@ class VacacionesService:
         logger.info("Vacaciones canceladas", extra={"solicitud_id": str(id)})
         return derive_estado(updated, date.today())  # type: ignore[arg-type]
 
-    def get_saldo(self, empleado_id: UUID) -> SaldoVacacionesResponse:
-        """Saldo anual de vacaciones pagas. Delegado a calcular_saldo (helper). Raises EMPLEADO_NOT_FOUND (404)."""
-        return calcular_saldo(self._repo, empleado_id)
+    def get_saldo(self, empleado_id: UUID, user_id: Optional[str] = None, rol: Optional[str] = None, empresa_id: Optional[UUID] = None) -> SaldoVacacionesResponse:
+        """Saldo anual de vacaciones pagas. Gate empresa ∩ ownership antes de calcular; delegado a
+        calcular_saldo (helper). Raises EMPLEADO_NOT_FOUND (404) —mismo 404 para ajeno e inexistente—."""
+        ensure_empleado_visible(self._empleados, self._ownership, empleado_id, empresa_id, user_id, rol)
+        return calcular_saldo(self._repo, empleado_id, empresa_id)

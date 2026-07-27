@@ -54,19 +54,23 @@ class VacacionesRepo:
         res = supabase_admin.table("empleados").select("empresa_id").eq("id", empleado_id).maybe_single().execute()
         return str(res.data["empresa_id"]) if res.data else None
 
-    def find_dias_asignados(self, empleado_id: str) -> Optional[int]:
-        """Retorna dias_vacaciones_asignados del empleado, o None si no existe."""
-        res = supabase_admin.table("empleados").select("dias_vacaciones_asignados").eq("id", empleado_id).maybe_single().execute()
+    def find_dias_asignados(self, empleado_id: str, empresa_id: Optional[UUID] = None) -> Optional[int]:
+        """dias_vacaciones_asignados del empleado, o None si no existe o es de otra empresa
+        (empresa_id None = consolidado, no restringe)."""
+        q = supabase_admin.table("empleados").select("dias_vacaciones_asignados").eq("id", empleado_id)
+        if empresa_id:
+            q = q.eq("empresa_id", str(empresa_id))
+        res = q.maybe_single().execute()
         return res.data["dias_vacaciones_asignados"] if res.data else None
 
-    def find_vacaciones_empleado(self, empleado_id: str) -> List[SolicitudVacacionesResponse]:
-        """Solicitudes tipo='vacaciones' no canceladas del empleado (para cálculo de saldo)."""
-        rows = (
-            supabase_admin.table(_T).select("*")
-            .eq("empleado_id", empleado_id).eq("tipo", "vacaciones").eq("cancelada", False)
-            .execute().data or []
-        )
-        return build_responses(rows)
+    def find_vacaciones_empleado(self, empleado_id: str, empresa_id: Optional[UUID] = None) -> List[SolicitudVacacionesResponse]:
+        """Solicitudes tipo='vacaciones' no canceladas del empleado (para cálculo de saldo).
+        Si empresa_id se provee, restringe a esa empresa (None = consolidado)."""
+        q = (supabase_admin.table(_T).select("*")
+             .eq("empleado_id", empleado_id).eq("tipo", "vacaciones").eq("cancelada", False))
+        if empresa_id:
+            q = q.eq("empresa_id", str(empresa_id))
+        return build_responses(q.execute().data or [])
 
     def save(
         self, empleado_id: str, empresa_id: str, fecha_desde: date, fecha_hasta: date,

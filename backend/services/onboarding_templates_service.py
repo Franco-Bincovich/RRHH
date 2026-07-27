@@ -52,6 +52,7 @@ class OnboardingTemplatesService:
         Raises:
             AppError: TEMPLATE_NOT_FOUND (404) si no existe.
         """
+        self.get_template(template_id, empresa_id)  # gate de empresa (404 uniforme) antes de escribir
         payload = {k: v for k, v in data.model_dump().items() if v is not None}
         if not payload:
             return self.get_template(template_id, empresa_id)
@@ -61,13 +62,17 @@ class OnboardingTemplatesService:
         logger.info("Template actualizado", extra={"template_id": str(template_id)})
         return tmpl
 
-    def delete_template(self, template_id: UUID) -> bool:
+    def delete_template(self, template_id: UUID, empresa_id: Optional[UUID] = None) -> bool:
         """
         Elimina el template. Soft delete si tiene instancias asociadas.
 
+        Raises:
+            AppError: TEMPLATE_NOT_FOUND (404) si no existe o es de otra empresa.
+
         Returns:
-            True siempre (la operación se considera exitosa).
+            True si se eliminó.
         """
+        self.get_template(template_id, empresa_id)  # gate de empresa antes del borrado
         self._repo.delete_template(str(template_id))
         logger.info("Template eliminado", extra={"template_id": str(template_id)})
         return True
@@ -90,21 +95,28 @@ class OnboardingTemplatesService:
         """
         Actualiza campos de una tarea del template.
 
+        La tarea se alcanza por su template: gatear el template cubre la cadena tarea → template
+        → empresa (las tareas no se resuelven sueltas).
+
         Raises:
+            AppError: TEMPLATE_NOT_FOUND (404) si el template no existe o es de otra empresa.
             AppError: TAREA_NOT_FOUND (404) si la tarea no existe.
         """
+        self.get_template(template_id, empresa_id)  # gate de empresa antes de escribir
         tarea = self._repo.update_tarea(str(tarea_id), data.model_dump(exclude_none=True))
         if not tarea:
             raise AppError("Tarea no encontrada", "TAREA_NOT_FOUND", 404)
         return tarea
 
-    def delete_tarea(self, template_id: UUID, tarea_id: UUID) -> bool:
+    def delete_tarea(self, template_id: UUID, tarea_id: UUID,
+                     empresa_id: Optional[UUID] = None) -> bool:
         """
-        Elimina una tarea del template.
+        Elimina una tarea del template, previa validación de empresa sobre el template padre.
 
-        Returns:
-            True siempre.
+        Raises:
+            AppError: TEMPLATE_NOT_FOUND (404) si el template no existe o es de otra empresa.
         """
+        self.get_template(template_id, empresa_id)  # gate de empresa antes del borrado
         self._repo.delete_tarea(str(tarea_id))
         logger.info("Tarea eliminada", extra={"template_id": str(template_id), "tarea_id": str(tarea_id)})
         return True

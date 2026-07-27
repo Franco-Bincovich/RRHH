@@ -20,6 +20,7 @@ for _k, _v in _TEST_ENV.items():
     os.environ.setdefault(_k, _v)
 
 from datetime import date, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 from schemas.ausencias import AusenciaResponse
@@ -42,6 +43,34 @@ class _SinPeriodos:
     """periodo_repo fake sin cierres: el check de B3.2 no bloquea nada."""
 
     def find_cerrados(self, _empresa, _modulo):
+        return []
+
+
+EMPRESA_TEST = uuid4()
+
+
+class _EmpleadoRepoDeEmpresa:
+    """empleado_repo fake que HONRA empresa_id (no lo acepta y lo ignora): devuelve None si el
+    empleado no es de esa empresa, como el _with_empresa real. Necesario desde el gate de
+    empresa ∩ ownership en get_by_empleado/get_saldo."""
+
+    def __init__(self, empleado_id, empresa_id) -> None:
+        self._id, self._empresa = str(empleado_id), empresa_id
+
+    def find_by_id(self, id, empresa_id=None):
+        if str(id) != self._id or (empresa_id and str(empresa_id) != str(self._empresa)):
+            return None
+        return SimpleNamespace(id=self._id, empresa_id=str(self._empresa))
+
+
+class _SinOwnership:
+    """ownership_repo fake: con rol admin_rrhh nunca se consulta (ids_empleados_visibles corta
+    antes), pero se inyecta para no instanciar el repo real contra Supabase."""
+
+    def find_by_user_id(self, _uid):
+        return None
+
+    def ids_subordinados(self, _emp_id):
         return []
 
 
@@ -69,6 +98,9 @@ class _FakeVacRepo:
         self.updated = _vacacion(cancelada=True)
 
     def find_by_id(self, _id, _empresa=None):
+        # HONRA _empresa (ver nota en test_escrituras_ownership): los tests llaman con None.
+        if _empresa and str(self.prior.empresa_id) != str(_empresa):
+            return None
         return self.prior
 
     def cancel(self, _id, _empresa=None):
@@ -84,6 +116,9 @@ class _FakeAusRepo:
         return "e1"
 
     def find_by_id(self, _id, _empresa=None):
+        # HONRA _empresa (ver nota en test_escrituras_ownership): los tests llaman con None.
+        if _empresa and str(self.row.empresa_id) != str(_empresa):
+            return None
         return self.row
 
     def save(self, *a, **k):
@@ -143,12 +178,18 @@ class TestAusenciasAudit:
 
 class TestVacacionesPorEmpleado:
     def test_get_by_empleado_devuelve_lista_con_total(self) -> None:
+        # get_by_empleado ahora exige el gate empresa ∩ ownership (Tanda 1b.2): hay que inyectar
+        # el repo de empleados y el de ownership, y find_vacaciones_empleado recibe empresa_id.
+        emp_id = uuid4()
+
         class _Repo:
-            def find_vacaciones_empleado(self, _emp):
+            def find_vacaciones_empleado(self, _emp, empresa_id=None):
                 return [_vacacion(cancelada=False), _vacacion(cancelada=False)]
 
-        svc = VacacionesService(repo=_Repo(), audit=_FakeAudit())
-        res = svc.get_by_empleado(uuid4())
+        svc = VacacionesService(repo=_Repo(), audit=_FakeAudit(),
+                                empleado_repo=_EmpleadoRepoDeEmpresa(emp_id, EMPRESA_TEST),
+                                ownership_repo=_SinOwnership())
+        res = svc.get_by_empleado(emp_id, "u1", "admin_rrhh", EMPRESA_TEST)
         assert res.total == 2
         assert len(res.items) == 2
         assert res.items[0].empleado_id == "emp1"

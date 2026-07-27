@@ -20,6 +20,7 @@ for _k, _v in _TEST_ENV.items():
     os.environ.setdefault(_k, _v)
 
 from datetime import date, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 from schemas.costo import NominaResponse, PresupuestoResponse
@@ -72,10 +73,18 @@ class _FakeEmpRepo:
         return True
 
 
+class _AreaRepoPermisivo:
+    """area_repo fake permisivo: este test es de AUDITORÍA, no del gate de área (ese vive en
+    test_empleado_area_empresa.py, con un fake que sí honra empresa_id)."""
+
+    def find_by_id(self, id, empresa_id=None):
+        return SimpleNamespace(id=str(id), empresa_id=empresa_id)
+
+
 class TestEmpleadoAudit:
     def test_create_registra_alta(self) -> None:
         audit = _FakeAudit()
-        svc = EmpleadoService(repo=_FakeEmpRepo(), audit=audit)
+        svc = EmpleadoService(repo=_FakeEmpRepo(), audit=audit, area_repo=_AreaRepoPermisivo())
         from schemas.empleado import EmpleadoCreate
         svc.create_empleado(
             EmpleadoCreate(nombre="Ana", apellido="Lopez", email_corporativo="a@x.com",

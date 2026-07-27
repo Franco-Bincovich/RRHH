@@ -41,7 +41,8 @@ async def exportar_ausencias(request: Request, formato: Literal["pdf", "excel", 
 
 @router.get("/{id}", response_model=AusenciaResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def get_ausencia(id: UUID, request: Request, service: AusenciasService = Depends(_svc)) -> AusenciaResponse:
-    return service.get_by_id(id, get_empresa_id(request))
+    u = request.state.user
+    return service.get_by_id(id, get_empresa_id(request), u.get("id"), u.get("rol"))
 
 
 @router.post("", response_model=AusenciaResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])

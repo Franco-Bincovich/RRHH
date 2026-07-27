@@ -54,8 +54,9 @@ class PlanesCarreraRepo:
         ).eq("estado", "activo").limit(1).maybe_single().execute()
         return _plan_row(res.data) if (res and res.data) else None
 
-    def get_plan_by_id(self, plan_id: str) -> Optional[PlanCarreraResponse]:
-        res = supabase_admin.table(_PC).select(_PC_SELECT).eq("id", plan_id).maybe_single().execute()
+    def get_plan_by_id(self, plan_id: str, empresa_id: Optional[UUID] = None) -> Optional[PlanCarreraResponse]:
+        q = supabase_admin.table(_PC).select(_PC_SELECT).eq("id", plan_id)
+        res = _with_empresa(q, empresa_id).maybe_single().execute()
         return _plan_row(res.data) if (res and res.data) else None
 
     def create_plan(self, data: PlanCarreraCreate, empresa_id: str) -> PlanCarreraResponse:
@@ -93,6 +94,6 @@ class PlanesCarreraRepo:
             raise AppError("Error al crear hito", "DB_ERROR", 500)
         return _hito_row(ins.data[0])
 
-    def completar_hito(self, hito_id: str) -> bool:
-        res = supabase_admin.table(_HIT).update({"estado": "completado", "fecha_completada": date.today().isoformat()}).eq("id", hito_id).execute()
-        return bool(res.data)
+    def completar_hito(self, hito_id: str, empresa_id: Optional[UUID] = None) -> bool:
+        q = supabase_admin.table(_HIT).update({"estado": "completado", "fecha_completada": date.today().isoformat()}).eq("id", hito_id)
+        return bool(_with_empresa(q, empresa_id).execute().data)

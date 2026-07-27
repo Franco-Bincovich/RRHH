@@ -9,6 +9,10 @@ Nota sobre "DNI duplicado": la unicidad de DNI es una constraint de DB (no un ch
 service), así que no es alcanzable con un fake sin simular el error de Postgres. El
 duplicado que el service SÍ valida app-level es el legajo (LEGAJO_DUPLICADO) — es el que
 se testea acá.
+
+⚠️ _FakeRepo.find_by_id acepta empresa_id y NO lo aplica: es a propósito — este archivo cubre
+el CRUD y la auditoría, no el eje de empresa (ese vive en test_empleado_manager_empresa.py y
+test_empleado_area_empresa.py, con fakes que sí lo honran). No lo calques para probar empresa.
 """
 import os
 
@@ -24,6 +28,7 @@ for _k, _v in _TEST_ENV.items():
     os.environ.setdefault(_k, _v)
 
 from datetime import date
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -114,8 +119,17 @@ class _FakeRepo:
         return self.find_all_returns
 
 
+class _AreaRepoPermisivo:
+    """area_repo fake que acepta cualquier área: estos tests son del CRUD, no del gate de área
+    (ese vive en test_empleado_area_empresa.py, con un fake que sí honra empresa_id)."""
+
+    def find_by_id(self, id, empresa_id=None):
+        return SimpleNamespace(id=str(id), empresa_id=empresa_id)
+
+
 def _svc(repo=None, audit=None) -> EmpleadoService:
-    return EmpleadoService(repo=repo or _FakeRepo(), audit=audit or _FakeAudit())
+    return EmpleadoService(repo=repo or _FakeRepo(), audit=audit or _FakeAudit(),
+                           area_repo=_AreaRepoPermisivo())
 
 
 # ─── Alta ───────────────────────────────────────────────────────────────────────

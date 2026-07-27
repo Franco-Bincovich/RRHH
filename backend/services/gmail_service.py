@@ -69,13 +69,16 @@ class GmailService:
                 pass
         return integracion["access_token"]
 
-    def get_emails_candidatos(self, vacante_id: str, user_id: str) -> list[EmailCandidatoResponse]:
+    def get_emails_candidatos(self, vacante_id: str, user_id: str, empresa_id=None) -> list[EmailCandidatoResponse]:
         """
         Obtiene emails de Gmail filtrados por palabras clave de postulación.
+        `empresa_id` acota a qué vacante se puede apuntar (None = consolidado).
 
         Raises:
-            AppError: GMAIL_NOT_CONFIGURED (400) | GMAIL_ERROR (502).
+            AppError: GMAIL_NOT_CONFIGURED (400) | VACANTE_NOT_FOUND (404) | GMAIL_ERROR (502).
         """
+        if not self._vacante_repo.find_by_id(vacante_id, empresa_id):
+            raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
         access_token = self._get_access_token(user_id)
         headers = {"Authorization": f"Bearer {access_token}"}
         try:
@@ -113,15 +116,16 @@ class GmailService:
         logger.info("Emails candidatos obtenidos", extra={"vacante_id": vacante_id, "count": len(result)})
         return result
 
-    def crear_candidato_desde_email(self, vacante_id: str, email_id: str, user_id: str) -> CandidatoResponse:
+    def crear_candidato_desde_email(self, vacante_id: str, email_id: str, user_id: str, empresa_id=None) -> CandidatoResponse:
         """
         Extrae datos de un email de Gmail y crea un candidato en la vacante.
+        `empresa_id` acota a qué vacante se puede apuntar (None = consolidado).
 
         Raises:
             AppError: GMAIL_NOT_CONFIGURED (400) | VACANTE_NOT_FOUND (404) | GMAIL_ERROR (502).
         """
         access_token = self._get_access_token(user_id)
-        if not self._vacante_repo.find_by_id(vacante_id):
+        if not self._vacante_repo.find_by_id(vacante_id, empresa_id):
             raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
         try:
             with httpx.Client(timeout=10.0) as client:
