@@ -41,6 +41,24 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-27 · Dividir integracion_service.py · commit `<pendiente>`
+
+**Qué cambió:** refactor puro. `integracion_service.py` estaba en 201 líneas contra un límite de
+150 — el peor over-limit del backend. El flujo OAuth de Google se movió **verbatim** a
+`services/_google_oauth.py` como dos funciones libres que reciben los colaboradores
+(`construir_url_autorizacion` y `procesar_callback(repo, ...)`), y el service las delega en una
+línea cada una. Quedan 110 y 123 líneas. Cero cambios de comportamiento, cero cambios de firma
+pública: la suite pasó de 608 a 608 sin tocar un solo test.
+
+**Impacto en infraestructura:** Ninguno.
+
+*(Movimiento de código dentro de la capa de services. Sin migraciones, sin variables de entorno,
+sin dependencias, sin buckets, sin endpoints nuevos ni removidos, sin cambios en el modelo de
+auth ni en los claims del token, sin dependencias de URL nuevas. `routers/integraciones.py` no
+se tocó y el callback OAuth sigue en la misma ruta pública, con el mismo comportamiento.)*
+
+---
+
 ## 2026-07-27 · Validación de X-Empresa-Id + rol real en costos · commits `<pendiente>` ×2
 
 **Qué cambió:** el middleware validaba solo el **formato** del header `X-Empresa-Id`, así que
