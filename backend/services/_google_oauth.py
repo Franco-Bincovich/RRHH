@@ -17,9 +17,13 @@ import httpx
 from google_auth_oauthlib.flow import Flow
 
 from config.settings import settings
+from repositories.oauth_state_repo import OAuthStateRepo
 from schemas.integracion import IntegracionResponse
+from services._oauth_state import consumir, generar
 from utils.errors import AppError
 from utils.logger import logger
+
+_PROVEEDOR = "google"
 
 if settings.app_env == "development":
     os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
@@ -44,12 +48,14 @@ def _google_client_config() -> dict:
     }
 
 
-def construir_url_autorizacion(user_id: str) -> str:
+def construir_url_autorizacion(user_id: str, state_repo=None) -> str:
     """
     Genera la URL de autorización de Google OAuth 2.0.
 
     Args:
-        user_id: UUID del usuario — se codifica en state para recuperarlo en el callback.
+        user_id: UUID del usuario que inicia el flujo. Queda persistido junto al state, y de
+            ahí lo recupera el callback.
+        state_repo: OAuthStateRepo; se instancia solo si no viene (inyectable para tests).
 
     Returns:
         URL de autorización de Google a la que redirigir al usuario.
@@ -60,37 +66,44 @@ def construir_url_autorizacion(user_id: str) -> str:
     if not settings.google_client_id or not settings.google_client_secret:
         raise AppError("Google OAuth no está configurado", "GOOGLE_NOT_CONFIGURED", 503)
 
+    state = generar(state_repo or OAuthStateRepo(), user_id, _PROVEEDOR)
     flow = Flow.from_client_config(_google_client_config(), scopes=_GOOGLE_SCOPES)
     flow.redirect_uri = settings.google_redirect_uri
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        state=user_id,
+        state=state,
         prompt="consent",
     )
     logger.info("Google OAuth iniciado", extra={"user_id": user_id})
     return auth_url
 
 
-def procesar_callback(repo, user_id: str, code: str) -> IntegracionResponse:
+def procesar_callback(repo, state, code: str, state_repo=None) -> IntegracionResponse:
     """
-    Procesa el callback de Google: intercambia el código por tokens y guarda en DB.
+    Procesa el callback de Google: verifica el state, intercambia el código por tokens y guarda.
+
+    El `user_id` sale de la fila persistida al emitir el state, NO del query param: la cuenta
+    de Google se conecta al usuario que inició este flujo y a ningún otro.
 
     Args:
         repo: IntegracionRepo donde persistir los tokens.
-        user_id: UUID del usuario (extraído del state param del callback).
+        state: Nonce recibido en el callback; se consume acá y no vuelve a servir.
         code: Código de autorización recibido de Google.
+        state_repo: OAuthStateRepo; se instancia solo si no viene (inyectable para tests).
 
     Returns:
         IntegracionResponse con la cuenta conectada.
 
     Raises:
+        AppError: OAUTH_STATE_INVALIDO (400) si el state no verifica.
         AppError: GOOGLE_CALLBACK_ERROR (400) si falla el intercambio de tokens.
         AppError: GOOGLE_USERINFO_ERROR (400) si no se puede obtener el email.
     """
+    user_id = consumir(state_repo or OAuthStateRepo(), state, _PROVEEDOR)
     try:
         flow = Flow.from_client_config(
-            _google_client_config(), scopes=_GOOGLE_SCOPES, state=user_id
+            _google_client_config(), scopes=_GOOGLE_SCOPES, state=state
         )
         flow.redirect_uri = settings.google_redirect_uri
         flow.fetch_token(code=code)

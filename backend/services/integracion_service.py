@@ -54,10 +54,10 @@ class IntegracionService:
         """URL de autorización de Google. Delegado a _google_oauth.construir_url_autorizacion."""
         return construir_url_autorizacion(user_id)
 
-    def handle_google_callback(self, user_id: str, code: str) -> IntegracionResponse:
-        """Callback de Google: tokens + userinfo + persistencia. Delegado a
+    def handle_google_callback(self, state: str, code: str) -> IntegracionResponse:
+        """Callback de Google: state + tokens + userinfo + persistencia. Delegado a
         _google_oauth.procesar_callback."""
-        return procesar_callback(self._repo, user_id, code)
+        return procesar_callback(self._repo, state, code)
 
     def save_anthropic_key(self, user_id: str, api_key: str) -> IntegracionResponse:
         """

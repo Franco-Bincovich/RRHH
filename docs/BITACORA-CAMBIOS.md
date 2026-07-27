@@ -41,6 +41,41 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-27 · Nonce de un solo uso en el callback OAuth · commit `<pendiente>`
+
+**Qué cambió:** el callback de Google ahora valida un **nonce de un solo uso persistido**. Al
+generar la URL de consentimiento se emite un valor aleatorio de 256 bits, se guarda su SHA-256
+en la tabla nueva `oauth_states` con vencimiento a 10 minutos, y se manda como parámetro
+`state`. Cuando el proveedor redirige el navegador de vuelta, el callback busca esa fila, la
+borra y toma de ahí el usuario al que corresponde el flujo. **La identidad sale siempre de la
+fila persistida.** Piezas nuevas: `services/_oauth_state.py` (provider-agnóstico),
+`repositories/oauth_state_repo.py` y la migración 080.
+
+**Impacto en infraestructura:**
+- 🔴 **Migración nueva: `080_create_oauth_states.sql`. NO destructiva** — solo `CREATE TABLE` +
+  PK + UNIQUE + FK a `users` (ON DELETE CASCADE) + un índice. No toca ninguna tabla existente,
+  no borra ni transforma datos.
+- 🔴 **ORDEN DE DEPLOY: la migración va ANTES que el código.** Si el código sale primero, la
+  tabla no existe y **el flujo de conexión con Google no funciona** hasta que se corra la
+  migración — ni la generación de la URL ni el callback. El resto de la aplicación no se ve
+  afectada: es un flujo aislado que hoy usa el equipo de RRHH para conectar su cuenta de Gmail.
+  Nada más depende de esta tabla.
+- **`backend/db/schema.sql` actualizado** con la tabla, sus constraints y su índice. Sigue
+  siendo la fuente de verdad de reconstrucción; pasa de 51 a 52 tablas.
+- **La tabla se autolimpia: no necesita cron ni job periódico.** Cada vez que se emite un
+  nonce, el mismo request borra los vencidos (`DELETE ... WHERE expires_at < now()`). La
+  limpieza corre en el camino que crea las filas, así que se autobalancea. Vercel no tiene
+  cron y esto no lo necesita. En AWS tampoco hay que programar nada.
+- **Volumen despreciable**: una fila por cada vez que alguien aprieta "Conectar Google", con
+  vida máxima de 10 minutos. La tabla se mantiene prácticamente vacía en régimen.
+- **`/api/integraciones/google/callback` sigue siendo pública** (`PUBLIC_ROUTES`), y tiene que
+  seguir siéndolo: a esa ruta el proveedor redirige el **navegador** del usuario, y ese salto
+  no lleva el JWT. Lo que autentica ese request es el nonce. Mantiene el límite de 10/minuto.
+- Sin variables de entorno nuevas, sin dependencias nuevas, sin buckets, sin endpoints nuevos
+  ni removidos, sin cambios en el modelo de auth de la aplicación ni en los claims del token.
+
+---
+
 ## 2026-07-27 · Dividir integracion_service.py · commit `<pendiente>`
 
 **Qué cambió:** refactor puro. `integracion_service.py` estaba en 201 líneas contra un límite de

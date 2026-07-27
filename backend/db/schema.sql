@@ -474,6 +474,14 @@ CREATE TABLE public.notificaciones_config (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
+CREATE TABLE public.oauth_states (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    state_hash text NOT NULL,
+    user_id uuid NOT NULL,
+    proveedor text NOT NULL DEFAULT 'google'::text,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now()
+);
 CREATE TABLE public.objetivos (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     empresa_id uuid NOT NULL,
@@ -802,6 +810,7 @@ ALTER TABLE public.inventario_asignaciones ADD CONSTRAINT inventario_asignacione
 ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_pkey PRIMARY KEY (id);
 ALTER TABLE public.notificaciones ADD CONSTRAINT notificaciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.notificaciones_config ADD CONSTRAINT notificaciones_config_pkey PRIMARY KEY (id);
+ALTER TABLE public.oauth_states ADD CONSTRAINT oauth_states_pkey PRIMARY KEY (id);
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_pkey PRIMARY KEY (id);
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offboarding_activos_pkey PRIMARY KEY (id);
 ALTER TABLE public.offboarding_instancias ADD CONSTRAINT offboarding_instancias_pkey PRIMARY KEY (id);
@@ -855,6 +864,7 @@ ALTER TABLE public.evaluacion_lotes ADD CONSTRAINT evaluacion_lotes_empresa_peri
 ALTER TABLE public.evaluacion_resultados ADD CONSTRAINT evaluacion_resultados_eval_tipo_comp_key UNIQUE (evaluado_id, tipo_evaluador, competencia);
 ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_id_empresa_id_key UNIQUE (id, empresa_id);
 ALTER TABLE public.notificaciones_config ADD CONSTRAINT notificaciones_config_user_id_tipo_evento_key UNIQUE (user_id, tipo_evento);
+ALTER TABLE public.oauth_states ADD CONSTRAINT oauth_states_state_hash_key UNIQUE (state_hash);
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offboarding_activos_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.offboarding_instancias ADD CONSTRAINT offboarding_instancias_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.onboarding_instancias ADD CONSTRAINT onboarding_instancias_id_empresa_uq UNIQUE (id, empresa_id);
@@ -1038,6 +1048,7 @@ ALTER TABLE public.inventario_asignaciones ADD CONSTRAINT inv_asig_item_empresa_
 ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.notificaciones ADD CONSTRAINT notificaciones_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE public.notificaciones_config ADD CONSTRAINT notificaciones_config_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE public.oauth_states ADD CONSTRAINT oauth_states_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_responsable_id_fkey FOREIGN KEY (responsable_id) REFERENCES users(id);
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offb_act_instancia_emp_fkey FOREIGN KEY (instancia_id, empresa_id) REFERENCES offboarding_instancias(id, empresa_id) ON DELETE CASCADE;
@@ -1187,6 +1198,7 @@ CREATE INDEX idx_notif_config_user ON public.notificaciones_config USING btree (
 CREATE INDEX idx_obj_empresa ON public.objetivos USING btree (empresa_id);
 CREATE INDEX idx_obj_estado ON public.objetivos USING btree (estado);
 CREATE INDEX idx_obj_responsable ON public.objetivos USING btree (responsable_id);
+CREATE INDEX idx_oauth_states_expires_at ON public.oauth_states USING btree (expires_at);
 CREATE INDEX idx_offboarding_activos_empresa ON public.offboarding_activos USING btree (empresa_id);
 CREATE INDEX idx_offboarding_activos_estado ON public.offboarding_activos USING btree (estado);
 CREATE INDEX idx_offboarding_activos_instancia ON public.offboarding_activos USING btree (instancia_id);
