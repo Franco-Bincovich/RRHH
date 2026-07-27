@@ -11,6 +11,7 @@ from integrations.supabase_client import supabase_admin
 from schemas.sucesion import EmpleadoAnalisisResponse, EmpleadoMapaResponse
 
 _EMP = "empleados"
+_ASSESS = "assessment_resultados"
 _AREA = "areas!empleados_area_id_fkey(nombre)"
 
 
@@ -41,6 +42,39 @@ def _parse_json_field(value):
     return value
 
 
+def _score_de(puntuacion) -> Optional[int]:
+    """Score general del assessment. None si no hay puntuación usable (mismo criterio de siempre)."""
+    p = _parse_json_field(puntuacion) or {}
+    sg = p.get("general") or p.get("total")
+    try:
+        return int(sg) if sg is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _recencia(r: dict) -> tuple:
+    """Clave de 'más reciente': los sin completado_en pierden. No se asume orden dentro del in_."""
+    c = r.get("completado_en")
+    return (c is not None, c or "")
+
+
+def _scores_por_empleado(ids: list) -> dict:
+    """empleado_id → score del assessment más reciente, en UNA sola query (evita el N+1). {} si no
+    hay ids: nunca dispara la query con lista vacía. El empleado sin resultado no entra al dict →
+    score None, igual que cuando la query por empleado volvía vacía."""
+    if not ids:
+        return {}
+    data = supabase_admin.table(_ASSESS).select(
+        "empleado_id, puntuacion, completado_en"
+    ).in_("empleado_id", ids).execute().data or []
+    ultimos: dict = {}
+    for r in data:
+        emp, prev = r.get("empleado_id"), ultimos.get(r.get("empleado_id"))
+        if emp and (prev is None or _recencia(r) > _recencia(prev)):
+            ultimos[emp] = r
+    return {emp: _score_de(r.get("puntuacion")) for emp, r in ultimos.items()}
+
+
 class SucesionRepo:
     def get_mapa_talento(self, empresa_id: Optional[UUID] = None) -> list[EmpleadoMapaResponse]:
         q = supabase_admin.table(_EMP).select(
@@ -52,26 +86,12 @@ class SucesionRepo:
         q = supabase_admin.table(_EMP).select(
             "id, nombre, apellido, roles, potencial, desempeno"
         ).eq("area_id", area_id).neq("estado", "baja")
-        emps_res = _with_empresa(q, empresa_id).execute()
-
-        rows: list[EmpleadoAnalisisResponse] = []
-        for r in (emps_res.data or []):
-            score: Optional[int] = None
-            ar = supabase_admin.table("assessment_resultados").select(
-                "empleado_id, puntuacion"
-            ).eq("empleado_id", r["id"]).order("completado_en", desc=True).limit(1).execute()
-            if ar.data:
-                puntuacion = _parse_json_field(ar.data[0].get("puntuacion")) or {}
-                sg = puntuacion.get("general") or puntuacion.get("total")
-                if sg is not None:
-                    try:
-                        score = int(sg)
-                    except (ValueError, TypeError):
-                        score = None
-            rows.append(EmpleadoAnalisisResponse(
-                id=r["id"], nombre=r["nombre"], apellido=r["apellido"],
-                cargo=(r.get("roles") or [r.get("cargo")])[0], score=score,
-                potencial=r.get("potencial"), desempeno=r.get("desempeno"),
-            ))
+        emps = _with_empresa(q, empresa_id).execute().data or []
+        scores = _scores_por_empleado([r["id"] for r in emps])
+        rows = [EmpleadoAnalisisResponse(
+            id=r["id"], nombre=r["nombre"], apellido=r["apellido"],
+            cargo=(r.get("roles") or [r.get("cargo")])[0], score=scores.get(r["id"]),
+            potencial=r.get("potencial"), desempeno=r.get("desempeno"),
+        ) for r in emps]
         rows.sort(key=lambda x: (x.score is None, -(x.score or 0)))
         return rows
