@@ -1,0 +1,282 @@
+# Plan de trabajo — HR Karstec (RRHH)
+
+**Versión 2** · 27 de julio de 2026
+**Estado del repo:** Fases 0, 1, 2 y 3 cerradas y pusheadas · 510 tests backend · 18 frontend
+**Cambio respecto de v1:** 13 decisiones resueltas · filtros elevados a bloque propio · evaluaciones re-priorizado
+
+---
+
+## Cómo se lee
+
+| Sección | Contenido |
+|---|---|
+| **§1** | Cómo se ejecuta — principios y deuda de líneas que condiciona el orden |
+| **§2** | Decisiones ya tomadas — lo que sale de discusión y por qué |
+| **§3** | Plan de trabajo — 7 bloques ordenados por prioridad |
+| **§4** | Lo que sigue abierto |
+| **§5** | Pedidos a RRHH |
+| **§6** | Secuencia recomendada y números |
+
+Unidad de estimación: **la sesión de Claude Code**. Las horas de los documentos de junio no se pueden mapear.
+Estado verificado del código: `docs/ESTADO-VS-COMPROMISO.md`.
+
+---
+
+## 1. Cómo se ejecuta
+
+### 1.1 Metodología
+
+1. Diagnóstico read-only → reporte → implementación. Nunca asumir el estado del código sin leerlo.
+2. Una tarea atómica por sesión.
+3. Refactor y fix **nunca** en el mismo commit.
+4. Commits manuales por unidad lógica. Push cuando Franco lo decide.
+5. `git status` limpio antes de pushear.
+
+### 1.2 Los cuatro principios, en concreto
+
+**SEGURO.** Todo endpoint nuevo con id de recurso aplica la barrera de empresa: filtro en el `WHERE` donde el repo lo soporte, 404 idéntico entre "no existe" y "es de otra empresa", barrera antes de cualquier chequeo de estado que responda otro código. Ownership solo en `VACACIONES` y `AUSENCIAS`, compuesto por intersección. Todo fake de test modela dos empresas; si es permisivo a propósito, va declarado en el docstring.
+
+**ORDENADO.** Límites estrictos (router 80 · service 150 · repo 100 · componente 150 · hook 80 · otros 200). Si un ítem toca un archivo en su techo, la división es **sesión previa con commit propio**, y la suite queda verde sin tests nuevos.
+
+**LEGIBLE.** Docstrings explicando el *por qué*. Evidencia como `archivo:línea`. Toda decisión no obvia escrita en el código, no solo en el chat.
+
+**ESCALABLE.** Ningún lookup por fila: batch con `in_` y resolución en Python. Todo filtro que afecte al export va **server-side**, una sola implementación. Ningún corte silencioso por límite de filas.
+
+### 1.3 Deuda de líneas que gobierna el orden
+
+No es cosmético: define qué ítem necesita una sesión previa de refactor.
+
+| Archivo | Estado | Bloquea | Corte identificado |
+|---|---|---|---|
+| `integracion_service.py` | **201/150** | A4 (OAuth) | separar el wrapper OAuth del resto |
+| `_audit_payloads_rrhh.py` | **189/150** | C1 (sueldo en historial) | por entidad |
+| `empleado_repo.py` | **174/100** | cualquier cosa que lo toque | lectura / escritura |
+| `vacaciones_service.py` | 150/150 | B4 (filtro proyecto) | extraer `create` → `_vacaciones_write.py` |
+| `gmail_service.py` | 150/150 | E1 (CV screening) | extraer parseo → `_gmail_parseo.py` |
+| `costo_service.py` | 150/150 | A3, C2 | — |
+| `assessment_service.py` | 150/150 | solo si se reactiva | — |
+| `evaluacion_repo.py` | 100/100 | D1 (estadísticas) | — |
+| `routers/evaluaciones_resultados.py` | 80/80 | D1 | — |
+| `routers/vacantes.py` | 80/80 | E1–E3 | — |
+| `routers/adjuntos.py` | 80/80 | D2 (descarga de originales) | — |
+
+**Regla:** antes de planificar cada ítem, mirar esta tabla. La división va primero.
+
+---
+
+## 2. Decisiones tomadas
+
+Salen de discusión. Quedan registradas acá para no reabrirlas.
+
+| # | Decisión | Consecuencia en el plan |
+|---|---|---|
+| 1 | **Assessment queda oculto**, no se elimina. Se reactiva cuando se le dé uso | El código queda intacto. **Se cierra igual la exposición pública del backend** (A1) — no borra nada ni dificulta reactivar |
+| 2 | **Sucesión queda oculta**, mismo criterio | Cerrado. Reactivar son 2 líneas |
+| 3 | **Reportes con IA quedan ocultos.** Cuando se pidan, se arma según el uso real | Cerrado. El endpoint sigue vivo |
+| 4 | **Las dos vistas del organigrama quedan ocultas**, no se borran | Cerrado. El endpoint huérfano queda documentado como intencional |
+| 5 | **Evaluaciones cambió de propósito:** no evalúa, importa resultados y muestra evolución, promedios por área y métricas derivadas | **Sube de prioridad.** Las estadísticas cross-lote dejan de ser extra de E3 y pasan a ser el módulo (bloque D) |
+| 6 | **Mandos medios sigue por `manager_id`**, no por área | Confirmado. Más de un mando medio por área con gente distinta debajo es exactamente el caso que `manager_id` modela y área rompería |
+| 7 | **El cierre de novedades frena solo a mandos medios**, por diseño | Confirmado. El `rol=None` de costos baja de bug a limpieza: mandos medios no toca costos, así que hoy es inofensivo |
+| 8 | **Todos los usuarios ven todas las empresas** | Sin `acceso_empresa`. **Nuevo:** plantillas con visibilidad pública/privada entre usuarios de RRHH (C6) |
+| 9 | **`es_lider` reemplaza a `liderazgo`** | La columna `liderazgo` queda como dato crudo del import. Candidata a limpieza |
+| 10 | **Presencialidad = `modalidad_trabajo`** | Cerrado. Se comunica, no es trabajo |
+| 11 | **Producción va a AWS. Supabase, Vercel y GitHub quedan como desarrollo y test** | Cerrado. Incluye el proyecto Vercel `sofia`, que se mantiene para pruebas |
+| 12 | **Sin RLS en el destino** — seguridad app-level | Cerrado por el dev de infraestructura. Es lo que cerró la Fase 2 |
+| 13 | **Costos/nómina y auditoría tienen que exportarse** | Confirma C2 |
+
+---
+
+## 3. Plan de trabajo
+
+### BLOQUE A — Seguridad · antes del testing de RRHH
+
+Bugs y superficie expuesta. Hay que hacerlo en cualquier escenario.
+
+| # | Trabajo | Prioridad | Dificultad | Ses. | Nota |
+|---|---|---|---|---|---|
+| **A1** | **Assessment: cerrar la exposición pública** | 🔴 Crítica | Baja | 1 | El backend está entero y expuesto con **2 rutas públicas sin auth** y sin rate limiting. Se cierra la exposición **sin tocar el código del módulo** — sigue reactivable con un flag, igual que hoy |
+| **A2** | **Rate limiting fuera de login** | 🔴 Crítica | Baja | 1 | Hoy: 1 endpoint de ~200 (`POST /auth/login`, 5/min). Sin límite: formulario público de candidatos, `/auth/refresh`, imports y exports |
+| **A3** | **`X-Empresa-Id`: verificar existencia** (+ limpieza del `rol=None` de costos) | 🟠 Alta | Muy baja | 1 | El middleware acepta cualquier UUID sintáctico sin verificar que la empresa exista. El fix de costos va de acompañante: hoy es inofensivo, pero es un check que no chequea |
+| **A4** | **Google OAuth: `state` real** | 🟠 Alta | Media | 2 | El `state` es el `user_id`: estable, adivinable, no validado server-side, y el callback está en `PUBLIC_ROUTES`. No cumple función anti-CSRF. **Sesión 1: dividir `integracion_service.py` (201/150). Sesión 2: el fix** |
+
+**Total: 5 sesiones.**
+
+---
+
+### BLOQUE B — Filtros, estadísticas y reportes
+
+El requisito de fondo: **llegar a cualquier corte de información sin pedirle nada a desarrollo**. Es lo que hace que el sistema valga para RRHH y lo primero que van a notar ausente en el testing.
+
+**Por qué va con base compartida y no módulo por módulo:** hacerlo suelto termina en doce implementaciones distintas, filtros que no llegan al export, y ownership reimplementado mal. La fundación primero cuesta una sesión y evita esa deriva.
+
+**Invariantes que aplican a todo el bloque:**
+- Todo filtro que afecte al export va **server-side**, una sola implementación
+- El endpoint de export acepta **los mismos Query que el list**
+- Todo filtro se compone con ownership **por intersección**, nunca lo reemplaza
+- `page` se resetea a 1 al cambiar cualquier filtro
+
+| # | Trabajo | Prioridad | Dificultad | Ses. | Nota |
+|---|---|---|---|---|---|
+| **B1** | **Diagnóstico: matriz de filtros por módulo** | 🔴 Crítica | Baja | 1 | Qué filtro existe hoy en cada módulo y en qué capa, contra qué filtro se quiere. Sin esto el resto es a ciegas |
+| **B2** | **Fundación: patrón único de filtros** | 🔴 Crítica | Media | 1 | Extender `FiltersBar.tsx` (52 líneas, ya existe), estandarizar el hook `useFiltros<Modulo>`, y fijar el contrato list↔export. Molde de referencia: auditoría (5 controles → 8 params → 7 Query) |
+| **B3** | **Filtro por área: inventario y proyectos** | 🟠 Alta | Media | 1 | Capacitaciones ya lo tiene end-to-end y es el molde. Objetivos queda afuera hasta §4.1 |
+| **B4** | **Filtro por proyecto: empleados, vacaciones, ausencias, evaluaciones** | 🟠 Alta | Media | 2 | El dato existe (`proyecto_asignaciones`, 19 filas). Requiere dividir `vacaciones_service.py` primero |
+| **B5** | **Filtros restantes — tanda 1** (personas y novedades) | 🟠 Alta | Media | 2 | Según lo que devuelva B1 |
+| **B6** | **Filtros restantes — tanda 2** (operación y análisis) | 🟡 Media | Media | 2 | Según B1 |
+| **B7** | **Export: informar el límite en vez de truncar** | 🟠 Alta | Baja | 1 | Hoy `page_size=100000` corta en silencio. Debe avisar que el histórico supera el máximo y pedir un rango de fechas — nunca devolver un archivo incompleto sin decirlo |
+
+**Total: 10 sesiones.**
+
+---
+
+### BLOQUE C — Compromisos del directorio
+
+| # | Trabajo | Prioridad | Dificultad | Ses. | Nota |
+|---|---|---|---|---|---|
+| **C1** | **Sueldo en el historial del legajo** | 🟠 Alta | Media | 2 | El historial existe y muestra rol/área/seniority. El sueldo no: vive en `costos_nomina`, se audita bajo `entidad="nomina"` y el filtro de la ficha no lo alcanza. Requiere dividir `_audit_payloads_rrhh.py` (189/150) |
+| **C2** | **Exports de costos/nómina y auditoría** | 🟠 Alta | Baja | 1 | Motor genérico ya existe; es proyección de columnas |
+| **C3** | **Offboarding: entrevista de salida + reporte de motivos** | 🟠 Alta | Baja | 2 | Las columnas `entrevista_salida` y `notas_entrevista` existen en DB y están **muertas**. El reporte: cantidad de egresos y motivos por período y por empresa (o todas). **Sin IA por ahora.** ⚠️ Verificar primero si el reporte "rotación por motivo" de la Fase 1 ya lo cubre parcialmente |
+| **C4** | **Domicilio desglosado** | 🟡 Media | Media | 2 | Hoy es un campo de texto libre. Con 19 filas la migración es barata; con datos cargados, cara. ⚠️ El import de nómina trae el domicilio como texto: se conservan los campos estructurados **y** el crudo, y la UI permite completar |
+| **C5** | **Áreas al sidebar** | 🟡 Media | Trivial | — | La página existe y responde, sin entrada en `NAV_GROUPS`. Va de acompañante |
+| **C6** | **Plantillas públicas y privadas** | 🟡 Media | Media | 1 | Visibilidad por usuario de RRHH. ⚠️ Falta definir el alcance: ¿templates de onboarding solamente, o también otras? |
+
+**Total: 8 sesiones.**
+
+---
+
+### BLOQUE D — Evaluaciones como módulo de evolución
+
+Re-priorizado por la decisión 5: esto **es** el módulo, no un extra.
+
+| # | Trabajo | Prioridad | Dificultad | Ses. | Nota |
+|---|---|---|---|---|---|
+| **D1** | **Estadísticas cross-lote** | 🟠 Alta | Alta | 3 | Evolución por empleado, promedios y comparativas por área, avance/retroceso entre períodos. Hoy los 7 endpoints de reporting cuelgan de **un único `lote_id`**. Requiere dividir `evaluacion_repo.py` (100/100) y `routers/evaluaciones_resultados.py` (80/80). ⚠️ **Invariante:** las competencias de perfil líder y general no se pueden mezclar en un mismo ranking. 🔒 **Bloqueado:** hay 1 solo lote; sin un segundo, nada es verificable |
+| **D2** | **Descarga del archivo original y de la versión procesada** | 🟡 Media | Media | 2 | Hoy el import parsea y **descarta los bytes**. Requiere guardar en Storage al confirmar + columna de ruta + endpoint con URL firmada, más la generación del archivo con estadísticas. 🚩 **Solo hacia adelante:** el lote de Julio 2026 ya existe sin archivos y no se recupera. ⚠️ Conviene definir antes si Storage queda en Supabase o pasa a S3, o se hace dos veces |
+
+**Total: 5 sesiones**, ambas condicionadas.
+
+---
+
+### BLOQUE E — Producto nuevo
+
+No figura en los documentos del directorio. Es lo único que agrega producto en vez de blindaje.
+
+| # | Trabajo | Prioridad | Dificultad | Ses. | Nota |
+|---|---|---|---|---|---|
+| **E1** | **CV screening: Gmail OAuth + lectura de inbox** | 🟠 Alta | Media | 2 | Incluye dividir `gmail_service.py` (150/150). No toca ningún módulo que RRHH vaya a testear |
+| **E2** | **CV screening: matcher por código de vacante** | 🟠 Alta | Baja | 1 | `[ECO-2026]` en el asunto. Carpeta "sin asignar" para lo que no matchea |
+| **E3** | **CV screening: agente de clasificación** | 🟡 Media | Media | 2 | `relevante` / `dudoso` / `no_relevante`. Filtro de descarte, **no** ranking ni decisión de contratación. Flag `screening_warning` para CVs no procesables |
+| **E4** | **Link público de carga de horas** | 🟡 Media | Alta | 3 | Mockup HTML aprobado. 🔒 **Bloqueado:** requiere la reunión de definición. Arrastra la decisión de asignar equipos completos a proyectos (§4.2) |
+
+**Total: 8 sesiones**, 3 bloqueadas.
+
+---
+
+### BLOQUE F — Post-AWS
+
+| # | Trabajo | Prioridad | Dificultad | Ses. | Nota |
+|---|---|---|---|---|---|
+| **F1** | **Resend + envío real de mails** | 🟠 Alta | Alta | 3 | **Hoy el sistema no envía un solo mail:** existe la env var y ningún service la importa. Es la dependencia más cara del plan y la que menos se nota en la lista |
+| **F2** | **Alertas configurables** | 🟡 Media | Alta | 4 | 🔒 Necesita F1 **y AWS** (el motor periódico requiere proceso persistente; Vercel no lo soporta). ⚠️ El plan de junio dice "activar infraestructura existente": esa infraestructura son **2 tablas vacías** sin una línea de código, sin catálogo de eventos ni canales, sin `empresa_id`. Es construcción desde cero |
+
+**Total: 7 sesiones**, todas bloqueadas por AWS.
+
+---
+
+### BLOQUE G — Limpieza y consistencia
+
+| # | Trabajo | Prioridad | Dificultad | Ses. | Nota |
+|---|---|---|---|---|---|
+| **G1** | **Divergencia `permisos.ts` ↔ `permisos.py`** | 🟠 Alta | Baja | 1 | Espejo manual: si alguien toca uno y no el otro, el front muestra botones que el back rechaza. **Recomendación: test comparativo ahora** (avisa el mismo día), **generación automática cuando exista CI** (hace imposible la divergencia) |
+| **G2** | **Verificación de código muerto** | 🟡 Media | Baja | 1 | Confirmar antes de borrar: `assessment_repo.py` (130, sin callers), `costo_repo.py` (135, sin callers), `EliminarLoteButton.tsx`, y las tablas huérfanas. **Estar oculto no es estar muerto** — la verificación es por callers, no por visibilidad |
+| **G3** | **Divisiones pendientes de archivos over-limit** | 🟡 Media | Media | 2 | Los que no arrastre ningún ítem del plan: `empleado_repo.py` 174/100, `reporte_anual` 154/150, `ev_instancias_repo` 146/100 |
+| **G4** | **`objetivos.responsable_id` → FK a `empleados`** | 🟠 Alta | Baja | 1 | ⚠️ **Ventana que se cierra:** con 0 filas es una migración trivial; con datos cargados es migración + backfill + resolver los que no tengan usuario. Destraba el filtro por área y el import de objetivos. **No incluye subobjetivos** |
+
+**Total: 5 sesiones.**
+
+---
+
+## 4. Lo que sigue abierto
+
+### 4.1 · Objetivos: alcance del rediseño
+**Recomendación:** hacer solo el cambio de FK (G4, 1 sesión, ventana que se cierra) y **no** los subobjetivos ni los múltiples responsables — 4 sesiones para 3 usuarios y 0 filas no rinde. Si se acepta, el ítem "subobjetivos" se marca DESCARTADO en `ESTADO-VS-COMPROMISO.md` con fecha y motivo.
+
+### 4.2 · Proyectos: asignar áreas o equipos completos
+Atado a la definición del link de carga de horas (E4). Hoy está descartado en el repo ("el área filtra candidatos, no asigna"). Se retoma en esa reunión.
+
+### 4.3 · Alcance de C6 (plantillas públicas/privadas)
+¿Solo templates de onboarding, o también otras plantillas? Cambia el alcance de 1 a 2 sesiones.
+
+### 4.4 · Diseño del análisis de offboarding
+La IA queda oculta por ahora (C3 entrega el reporte simple). El diseño a fondo se hace con RRHH cuando haya datos de egresos.
+
+### 4.5 · `proyecto_asignaciones` sin `empresa_id`
+Todas las tablas de negocio llevan `empresa_id`; esta lleva `empleado_empresa_id` — la empresa **del empleado**, no la de la asignación. Es coherente si un proyecto cruza empresas. Falta confirmar que fue a propósito y no un retrofit a medias. Baja prioridad, se resuelve leyendo el modelo.
+
+### 4.6 · `cargo` y `rol`: el DROP diferido
+Conviven tres columnas (`cargo`, `rol`, `roles TEXT[]`) más 2 fallbacks en el front, por cómo venía la información del import. Sin urgencia; se decide cuando el import se estabilice.
+
+---
+
+## 5. Pedidos a RRHH
+
+| # | Pedido | Urgencia | Qué destraba |
+|---|---|---|---|
+| **5.1** | **Cargar datos reales** en todos los módulos | 🔴 | Todo. Hoy: 19 empleados, 6 proyectos, 1 lote de evaluaciones; el resto en **0**. Los reportes y KPIs son correctos y salen vacíos — **avisarlo antes del testing o se lee como "está roto"** |
+| **5.2** | **Cargar `manager_id`** — 0 de 19 | 🔴 | Sin jerarquía, **mandos medios no ve absolutamente nada** (su ownership depende de ese campo) y el cierre de novedades no tiene a quién frenar. **No probar ese rol hasta que esté cargado** |
+| **5.3** | **Excel reales de vacaciones y ausencias** | 🟠 | Sin los archivos no se define el parser. No son dos features chicas: es una base de import compartida (reader XLSX + flujo preview/confirmar) más dos consumidores |
+| **5.4** | **Un segundo lote de evaluaciones** | 🟠 | Sin él, D1 no tiene nada que comparar — y D1 es el propósito del módulo |
+| **5.5** | **Confirmar que el lote de Julio 2026 puede quedar sin archivo original** | 🟠 | D2 solo funciona hacia adelante; ese lote no se recupera |
+| **5.6** | **Evaluaciones: tres preguntas abiertas** | 🟡 | ¿Pueden exportar DNI o legajo? (hoy el matcheo es por apellido+nombre) · los 2 líderes sin nota final · qué es "Kolektor" |
+| **5.7** | **Reunión: link de carga de horas** | 🟡 | E4 completo, y con él la decisión de asignar equipos a proyectos |
+| **5.8** | **Formato del import de objetivos** | 🟡 | Además de G4 |
+| **5.9** | **Mínimo estructurado para una descripción de vacante** | 🟢 | E3: hoy los requisitos son texto libre; sin un mínimo, la clasificación es ruidosa |
+
+---
+
+## 6. Secuencia y números
+
+### Orden recomendado
+
+**Ahora — semana 1**
+Bloque A completo (5 sesiones). Son bugs y RRHH está por entrar.
+**En paralelo, sin depender de desarrollo:** mandar §5 a RRHH y comunicar al directorio los puntos de §2 que cambian lo comprometido (decisiones 5, 6, 7, 10, 11, 12).
+
+**Semanas 2-4 — mientras RRHH testea**
+- B1 y B2 primero: sin la fundación, el resto de los filtros deriva.
+- G4 cuanto antes: es la única ventana que se cierra sola.
+- B3, B4, B7 y C1, C2, C3.
+- Reservar capacidad para bugs del testing: son prioritarios sobre todo este bloque.
+
+**En paralelo, desde ya**
+E1–E3 (CV screening). No toca ningún módulo bajo testing, así que no se pisa con los bugs.
+
+**Cuando lleguen los datos**
+D1 (con el segundo lote), 5.3 → import XLSX.
+
+**Cuando AWS esté andando**
+F1 primero — conviene hacer el mail una sola vez contra la infraestructura definitiva. Después F2.
+
+### Números
+
+| Bloque | Sesiones | Ejecutable hoy |
+|---|---|---|
+| A — Seguridad | 5 | ✅ 5 |
+| B — Filtros y reportes | 10 | ✅ 10 |
+| C — Compromisos | 8 | ✅ 8 |
+| D — Evaluaciones | 5 | ⏸ 0 (datos) |
+| E — Producto nuevo | 8 | ✅ 5 · ⏸ 3 (reunión) |
+| F — Post-AWS | 7 | ⏸ 0 (AWS) |
+| G — Limpieza | 5 | ✅ 5 |
+| **Total** | **48** | **33 ejecutables** |
+
+**Cobertura de lo comprometido:** con los bloques A, B, C y G quedan cerrados todos los ítems de Entrega 2 y Entrega 3 que dependen únicamente de desarrollo. Lo que resta son tres cosas: bloqueado por datos (D, import XLSX), bloqueado por infraestructura (F), y lo que cambió de alcance por decisión (§2), que se comunica en vez de construirse.
+
+---
+
+## 7. Cómo mantener este documento
+
+- Al cerrar un ítem: actualizar `docs/ESTADO-VS-COMPROMISO.md` con la evidencia (`archivo:línea`) y marcar la fila acá.
+- Al resolverse un punto de §4: convertirlo en ítem estimado del bloque que corresponda, o marcarlo DESCARTADO con fecha y motivo.
+- Al llegar datos de RRHH: mover el ítem de §5 al bloque que destraba.
+- **La tabla §1.3 se remide cada vez que se divide un archivo.** Es la que gobierna el orden real de ejecución.
