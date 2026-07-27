@@ -8,13 +8,19 @@ from schemas.evaluacion_import_api import ConfirmarRequest, ConfirmarResponse, P
 from services.evaluacion_import_orchestrator import EvaluacionImportOrchestrator
 from utils.files import ALLOWED_TYPES_CSV, MAX_SIZE_CSV, validate_upload
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 _GATE = [Depends(require_permission(Seccion.EVALUACIONES, Accion.WRITE))]
+# Franja "import": 10/hora compartida con los imports de nómina (ver utils/rate_limit.py).
+# `request` no lo usan los handlers; lo exige slowapi para poder decorar.
+_LIMITE_IMPORT = limiter.shared_limit("10/hour", scope="import")
 
 
 @router.post("/preview", response_model=PreviewResponse, dependencies=_GATE)
+@_LIMITE_IMPORT
 async def preview(
+    request: Request,
     empresa_id: str = Form(...),
     periodo: str = Form(...),
     notas: UploadFile = File(...),
@@ -29,6 +35,7 @@ async def preview(
 
 
 @router.post("/confirmar", response_model=ConfirmarResponse, dependencies=_GATE)
+@_LIMITE_IMPORT
 async def confirmar(body: ConfirmarRequest, request: Request) -> ConfirmarResponse:
     """Persiste el payload aprobado por el humano (no re-parsea ni re-resuelve)."""
     usuario_id = request.state.user.get("id")

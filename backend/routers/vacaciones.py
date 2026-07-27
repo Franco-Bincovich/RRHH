@@ -14,6 +14,7 @@ from schemas.vacaciones import (
 from services.vacaciones_service import VacacionesService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 
@@ -39,6 +40,7 @@ async def list_vacaciones(
 
 
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
 async def exportar_vacaciones(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), area_id: Optional[UUID] = Query(None), empleado_id: Optional[UUID] = Query(None), estado: Optional[str] = Query(None), service: VacacionesService = Depends(_svc)) -> Response:
     u = request.state.user
     d = service.exportar(u.get("id"), u.get("rol"), get_empresa_id(request), formato, area_id, empleado_id, estado)

@@ -6,6 +6,7 @@ from schemas.importacion_nomina_empleados import ImportacionNominaEmpleadosResul
 from services.nomina_empleados_service import NominaEmpleadosImportService
 from utils.files import ALLOWED_TYPES_CSV, MAX_SIZE_CSV, validate_upload
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 
@@ -15,6 +16,7 @@ router = APIRouter()
     response_model=ImportacionNominaEmpleadosResult,
     dependencies=[Depends(require_permission(Seccion.IMPORTACION, Accion.WRITE))],
 )
+@limiter.shared_limit("10/hour", scope="import")  # franja "import", ver utils/rate_limit.py
 async def importar_nomina_empleados(
     request: Request,
     file: UploadFile = File(...),

@@ -1,0 +1,205 @@
+# Bitácora de cambios — impacto en infraestructura
+
+**Qué es:** un log corrido de cada sesión de trabajo, ordenado de más reciente a más antiguo,
+que declara **qué cambió y qué tiene que hacer infraestructura al respecto**. No es un
+historial de features ni un resumen de commits: es la lista de cosas que rompen, condicionan
+o requieren acción del lado del deploy.
+
+**Para quién:** el dev que está montando la infraestructura en AWS en paralelo. La idea es
+que se entere de todo lo que le afecta **sin tener que leer los commits ni el código**.
+
+**No reemplaza a [`CHANGELOG.md`](CHANGELOG.md)**, que es por versión y orientado al producto.
+Este documento es por sesión y orientado al impacto operativo. Los dos conviven.
+
+## Regla de actualización
+
+> **La entrada se escribe en la MISMA sesión que el cambio, nunca después.**
+
+Una bitácora que se completa "cuando haya tiempo" es una bitácora que miente: el otro dev la
+lee creyendo que está al día y deploya contra información vieja. Si una sesión termina sin su
+entrada, la sesión no terminó.
+
+## Formato
+
+```
+## AAAA-MM-DD · <título corto> · commit <hash>
+**Qué cambió:** 2-4 líneas en prosa.
+**Impacto en infraestructura:** "Ninguno." o la lista de los puntos afectados.
+```
+
+**Puntos que SIEMPRE hay que revisar y declarar si aplican** (si ninguno aplica, va "Ninguno."):
+
+- **Migraciones** nuevas — número, qué hacen, si son destructivas, si requieren orden
+- **Variables de entorno** nuevas, renombradas, o con valor distinto en producción
+- **Dependencias** nuevas o versiones fijadas (`requirements.txt` / `package.json`)
+- **Buckets de Storage** nuevos, o cambio de uso de uno existente
+- **Endpoints nuevos**, marcando en especial los **PÚBLICOS** (sin auth)
+- **Procesos que NO corren en serverless** — jobs periódicos, tareas de fondo, operaciones
+  que superen 60s
+- **Cambios en el modelo de autenticación** o en los claims del token
+- **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
+
+---
+
+## 2026-07-27 · Rate limiting por franjas · commit `<pendiente>`
+
+**Qué cambió:** el rate limiting pasó de cubrir un solo endpoint (`/api/auth/login`) a cubrir
+toda la API. Se agregó `backend/utils/rate_limit.py` con el limiter único, un `key_func`
+propio y el handler del 429; el baseline global lo aplica `SlowAPIMiddleware` y las franjas
+sensibles llevan decorador por endpoint. El 429 ahora sale con el formato de error del repo
+(`{error, message, code}` + `Retry-After`), no con el de slowapi.
+
+**Impacto en infraestructura:**
+- 🔴 **Variable de entorno nueva: `TRUSTED_PROXY_HOPS`** (int, default `1`). Cuántas capas de
+  proxy confiables hay delante del app. Define de qué entrada de `X-Forwarded-For` se saca la
+  IP del cliente, que es la **clave del contador**. `1` = Vercel (su edge agrega la IP real).
+  En AWS: **`1` con ALB solo, `2` si además hay CloudFront adelante**. `0` desactiva la lectura
+  del header y usa la IP de la conexión (local, sin proxy).
+  ⚠️ **Un valor de más no "afloja" el límite: colapsa todo el tráfico en un único contador y
+  deja al equipo entero afuera.** Es la variable a revisar primero si aparecen 429 masivos.
+- 🔴 **Variable de entorno nueva: `RATE_LIMIT_STORAGE_URI`** (default `memory://`).
+- 🔴 **Dependencia de infraestructura PENDIENTE — sin esto los límites son parciales.** Con
+  `memory://` los contadores viven en la memoria del proceso: en serverless cada cold start
+  arranca en cero, y con N instancias vivas el límite efectivo es **N×** el configurado. Para
+  que sean un control real hace falta un **store compartido (Redis / ElastiCache)** y apuntar
+  ahí `RATE_LIMIT_STORAGE_URI`. El enchufe está puesto y probado; **falta la instancia**.
+- 🟡 **Afecta cualquier regla de WAF, ALB o CDN que se escriba.** El app ya devuelve 429 por su
+  cuenta en las franjas de abajo. Si además se pone throttling en el borde, los dos se suman y
+  el efectivo es el más restrictivo — conviene que el borde sea más laxo que estos números:
+
+  | Franja | Endpoints | Límite |
+  |---|---|---|
+  | público sin auth | assessment `evaluacion` GET · `/submit` POST · `integraciones/google/callback` | 10/min · 5/min · 10/min |
+  | credenciales | `auth/login` · `auth/refresh` · `usuarios/cambiar-password` | 5/min · 20/min · 10/hora |
+  | import | los 5 endpoints de import | 10/hora **compartido entre los 5** |
+  | export | 7 endpoints de export | 30/hora **compartido entre los 7** |
+  | costo externo | `reportes/generar` (con `tipo=adhoc` llama a Claude) | 20/hora |
+  | todo lo demás | ~170 endpoints | 300/min |
+
+- 🟡 **`GET /health` quedó EXENTO a propósito.** No lo limites en el borde tampoco: lo consultan
+  los health checks de la plataforma, desde una sola IP y con alta frecuencia. Limitarlo hace
+  que el balanceador marque la instancia como caída y la saque de rotación.
+- **El 429 depende de CORS.** El middleware de rate limiting se montó **dentro** de CORS para
+  que la respuesta salga con headers CORS; si no, el front la ve como error de red y no puede
+  leer el código. Si se mueve el orden de middlewares, se rompe esto.
+- Sin migraciones, sin dependencias nuevas (`slowapi==0.1.9` ya estaba), sin buckets, sin
+  endpoints nuevos.
+- **Nota para quien sume endpoints:** tres exports (`objetivos`, `inventario_items`,
+  `evaluaciones_resultados`) quedaron bajo el baseline en vez de la franja de export, porque el
+  decorador los pasaba del límite de 80 líneas del router. **Se les agrega cuando esos routers
+  se dividan** — hay un test que falla y lo recuerda.
+
+---
+
+## 2026-07-27 · Cerrar la exposición pública de assessment · commit `<pendiente>`
+
+**Qué cambió:** el módulo de assessment quedó apagado en el backend detrás de un flag. Estaba
+oculto en el front pero el backend seguía entero y expuesto, con **2 rutas públicas sin auth**.
+Con el flag apagado el router no se monta y esas rutas dejan de ser públicas, así que responden
+igual que cualquier path inexistente. **No se borró código**: services, repos, schemas,
+migraciones y tests quedan intactos. Se eliminó además un regex del middleware de auth
+(`^/assessment/[^/]+$`) que salteaba la autenticación y no matcheaba ninguna ruta real.
+
+**Impacto en infraestructura:**
+- 🔴 **Variable de entorno nueva: `ASSESSMENT_ENABLED`** (bool, default `false`). Es la única
+  palanca: prenderla y redeployar reactiva el módulo entero, sin tocar código. **Hoy no hay que
+  cargarla en ningún entorno** — el default apagado es el estado deseado.
+- 🔴 **Cambió la superficie PÚBLICA de la API, y eso afecta las reglas de WAF/ALB.** Estas dos
+  rutas dejaron de ser alcanzables sin token:
+  - `GET  /api/assessment/evaluacion/{token}`
+  - `POST /api/assessment/evaluacion/{token}/submit`
+
+  **La lista completa de rutas públicas (sin auth) es ahora exactamente:** `/health`,
+  `/api/auth/login`, `/api/auth/refresh` y `/api/integraciones/google/callback`. Cualquier regla
+  que asuma que `/api/assessment/*` puede llegar sin `Authorization` ya no aplica. Si en algún
+  momento se pone `ASSESSMENT_ENABLED=true`, las dos rutas de arriba vuelven a la lista.
+- **Con el módulo apagado la respuesta es deliberadamente indistinguible** de una ruta que nunca
+  existió: mismo status y mismo body, nunca un 403 ni un mensaje que confirme que el módulo está
+  ahí. No sirve como señal de detección: un scanner apuntando a `/api/assessment/*` produce
+  exactamente el mismo tráfico de error que uno apuntando a cualquier path inventado.
+- Sin migraciones, sin dependencias, sin buckets, sin cambios en el modelo de auth ni en los
+  claims del token (cambió **qué rutas** saltean el middleware, no **cómo** se valida el token).
+
+---
+
+## 2026-07-27 · Ocultar el módulo de sucesión · commit `e00edcf`
+
+**Qué cambió:** se apagó el módulo de Sucesión en el frontend por decisión de producto, sin
+borrar nada. Dos flags, uno por archivo: `SUCESION_ACTIVA: boolean = false` en
+`nav-config.ts` (saca el ítem del sidebar) y `useState(false)` en `sucesion/page.tsx` (la
+página redirige a `/dashboard`). El backend queda **entero y expuesto**: endpoints,
+permisos y tests intactos. La ruta `/sucesion` sigue existiendo y sigue gateada por
+`AuthGuard`. Se revierte con dos líneas.
+
+**Impacto en infraestructura:** Ninguno.
+
+---
+
+## 2026-07-27 · Renombrar las referencias de Sofia a RRHH · commit `e9df215`
+
+**Qué cambió:** rename de nomenclatura interna, de "Sofia" a "RRHH", en 25 archivos: docs,
+comentarios y docstrings (`backend/main.py`, `backend/integrations/supabase_client.py`,
+`backend/db/schema.sql` y varios `*_NEW.py` de `migracionAWS/`). **Solo texto** — cero
+cambios de comportamiento, de firmas o de configuración. En paralelo, **el repositorio de
+GitHub pasó a llamarse `RRHH`**.
+
+**Impacto en infraestructura:**
+- **Dependencia de URL — el remote de git cambió.** `origin` es ahora
+  `https://github.com/Franco-Bincovich/RRHH.git`. Cualquier clon viejo, script de CI,
+  webhook o deploy key que apunte al nombre anterior tiene que actualizarse. GitHub redirige
+  el nombre viejo, pero es una red de seguridad temporal — no dependas de ella.
+- 🔴 **Los proyectos de Vercel NO se renombraron.** Siguen llamándose **`sofia-front`** y
+  **`sofia-backend`**, y el dominio del backend sigue siendo
+  `sofia-backend-pi.vercel.app`. El nombre del repo y el de los proyectos de deploy ahora
+  **divergen a propósito**: renombrarlos cambiaría las URLs `*.vercel.app` y rompería
+  `NEXT_PUBLIC_API_URL`. Al buscar el proyecto en el dashboard, buscá "sofia", no "RRHH".
+- Sin migraciones, sin env vars, sin dependencias, sin buckets, sin endpoints nuevos.
+
+---
+
+## 2026-07-27 · Fase 3 — deuda estructural · commits `51832e2` + `a6acaed`
+
+**Qué cambió:** tres refactors sin cambio funcional. (1) Se resolvió un **N+1** en el
+análisis por área de sucesión: `sucesion_repo` hacía una query de `assessment_resultados`
+por empleado y ahora trae todo en una sola con `.in_()` — con 200 empleados, de 201
+requests a 2. (2) `sucesion/page.tsx` pasó de 855 a 85 líneas, repartido en 8 componentes y
+2 hooks. (3) `fetchEmpleados`/`exportarEmpleados` pasaron de parámetros posicionales a un
+objeto de opciones, con 10 call sites migrados.
+
+**Impacto en infraestructura:**
+- **Ninguno en configuración.** Sin migraciones, sin env vars, sin dependencias nuevas, sin
+  buckets, sin endpoints nuevos ni removidos. El contrato HTTP quedó intacto: el cambio de
+  `fetchEmpleados` es de firma de TypeScript, no de query params.
+- **Nota de capacidad, no de acción:** el fix del N+1 baja de forma marcada la cantidad de
+  conexiones concurrentes a la base en el endpoint de análisis por área. Si vas a dimensionar
+  el pool de RDS a partir de mediciones, tomalas después de este commit — las anteriores
+  sobreestiman.
+
+---
+
+## 2026-07-26 / 27 · Fase 2 — barrera de empresa en todo el backend · commits `bd95e98` + `9d7baa7`
+
+**Qué cambió:** todo endpoint que recibe un id de recurso de afuera ahora valida que ese
+recurso pertenezca a la empresa del request. Quedaron **92/92 endpoints aplicables** con la
+barrera y **13/13 superficies de Vacaciones y Ausencias** componiendo además el eje de
+ownership; 8 endpoints están marcados NO APLICA con su razón. El filtro va preferentemente en
+el `WHERE` de la query, no en un chequeo posterior en el service.
+
+**Impacto en infraestructura:**
+- **Sin migraciones, sin env vars, sin dependencias, sin buckets.**
+- **Sin endpoints nuevos ni removidos** — verificado: cero líneas `@router.*` agregadas o
+  borradas en los dos commits.
+- 🔴 **Cambió el comportamiento de ~92 endpoints ante un id de otra empresa, y eso afecta
+  los tests de humo post-deploy.** Antes, pasar el UUID de un recurso ajeno devolvía **200 con
+  el recurso** (la fuga que se cerró). Ahora devuelve **404**. Si armás smoke tests o pruebas
+  de carga que reutilizan UUIDs fijos entre entornos o entre empresas, van a fallar con 404 —
+  **eso es la barrera funcionando, no una regresión.** Los datos de prueba tienen que ser
+  coherentes con la empresa del header `X-Empresa-Id`.
+- **El 404 es deliberadamente indistinguible.** "No existe" y "es de otra empresa" devuelven el
+  mismo status, el mismo `code` y el mismo mensaje. Nunca un 403. Si escribís una regla de WAF
+  o una alerta que trate el 403 como señal de intento de acceso indebido, acá no va a haber
+  403 que capturar — el evento a monitorear es el 404, que también aparece en tráfico legítimo.
+- **`X-Empresa-Id` ausente o con valor `todas` significa "vista consolidada", no "sin
+  permiso".** En ese modo la barrera no restringe. Cualquier proxy, CDN o capa de caché que
+  toque este tráfico **tiene que incluir `X-Empresa-Id` en la clave de caché**: si no, una
+  respuesta consolidada puede servirse a un request scopeado a una empresa, y viceversa.

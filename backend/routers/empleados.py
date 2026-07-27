@@ -11,6 +11,7 @@ from schemas.empleado import (
 from services.empleado_service import EmpleadoService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.EMPLEADOS
@@ -27,6 +28,7 @@ async def list_empleados(request: Request, page: int = Query(1, ge=1), page_size
 
 
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
 async def exportar_empleados(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), area_id: Optional[str] = Query(None), estado: Optional[str] = Query(None), search: Optional[str] = Query(None), es_lider: Optional[bool] = Query(None), service: EmpleadoService = Depends(_service)) -> Response:
     d = service.exportar(get_empresa_id(request), formato, area_id, estado, search, es_lider)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})

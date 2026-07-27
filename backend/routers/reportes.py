@@ -10,6 +10,7 @@ from services.reporte_export_service import ReporteExportService
 from services.reporte_service import ReporteService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.REPORTES
@@ -24,6 +25,7 @@ def _export_service() -> ReporteExportService:
 
 
 @router.post("/generar", response_model=ReporteResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
+@limiter.limit("20/hour")  # con tipo="adhoc" llama a Claude: cada request cuesta plata
 async def generar_reporte(
     request: Request,
     body: ReporteGenerarRequest,
@@ -53,6 +55,7 @@ async def get_historial(
 
 
 @router.get("/{reporte_id}/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
 async def exportar_reporte(
     reporte_id: UUID,
     request: Request,

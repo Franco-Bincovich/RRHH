@@ -1,5 +1,8 @@
-"""Router de importación masiva de nómina via CSV. Rutas protegidas por AuthMiddleware."""
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+"""Router de importación masiva de nómina via CSV. Rutas protegidas por AuthMiddleware.
+Rate limit: franja "import", 10/hora compartida con el resto de los imports (ver
+utils/rate_limit.py). Son operaciones humanas y deliberadas; nadie importa nómina 11 veces
+por hora. `request: Request` no lo usan los handlers, lo exige slowapi para poder decorar."""
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 
 from repositories.nomina_import_repo import NominaImportRepo
 from schemas.importacion import (
@@ -11,6 +14,7 @@ from services.nomina_csv_service import parse_nomina_csv
 from utils.files import ALLOWED_TYPES_CSV, MAX_SIZE_CSV, validate_upload
 from utils.logger import logger
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.IMPORTACION
@@ -21,7 +25,9 @@ def _repo() -> NominaImportRepo:
 
 
 @router.post("/nomina/preview", response_model=ImportacionNominaPreviewResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
+@limiter.shared_limit("10/hour", scope="import")
 async def preview_nomina(
+    request: Request,
     empresa_id: str = Form(...),
     file: UploadFile = File(...),
 ) -> ImportacionNominaPreviewResponse:
@@ -37,7 +43,9 @@ async def preview_nomina(
 
 
 @router.post("/nomina/confirmar", response_model=ImportacionNominaConfirmarResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
+@limiter.shared_limit("10/hour", scope="import")
 async def confirmar_nomina(
+    request: Request,
     body: ImportacionNominaConfirmarRequest,
     repo: NominaImportRepo = Depends(_repo),
 ) -> ImportacionNominaConfirmarResponse:

@@ -10,6 +10,7 @@ from schemas.assessment import (
 from services.assessment_service import AssessmentService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.ASSESSMENT
@@ -44,19 +45,20 @@ async def create_link(
 
 
 # ── Rutas públicas — sin AuthMiddleware, sin X-Empresa-Id ────────────────────
-# La empresa se resuelve internamente desde la campaña asociada al token.
+# La empresa se resuelve internamente desde la campaña asociada al token. Los límites quedan
+# puestos aunque ASSESSMENT_ENABLED=false, para que encenderlo no reabra el agujero. `request`
+# no lo usan los handlers: lo exige slowapi (ver utils/rate_limit.py).
 
 @router.get("/evaluacion/{token}", response_model=LinkResponse)
-async def get_evaluacion(token: str, svc: AssessmentService = Depends(_svc)) -> LinkResponse:
+@limiter.limit("10/minute")
+async def get_evaluacion(request: Request, token: str, svc: AssessmentService = Depends(_svc)) -> LinkResponse:
     return svc.get_evaluacion(token)
 
 
 @router.post("/evaluacion/{token}/submit", response_model=ResultadoResponse, status_code=201)
-async def submit_evaluacion(
-    token: str,
-    data: RespuestaCreate,
-    svc: AssessmentService = Depends(_svc),
-) -> ResultadoResponse:
+@limiter.limit("5/minute")
+async def submit_evaluacion(request: Request, token: str, data: RespuestaCreate,
+                            svc: AssessmentService = Depends(_svc)) -> ResultadoResponse:
     return svc.submit_evaluacion(token, data)
 
 

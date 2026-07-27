@@ -15,6 +15,7 @@ from schemas.usuario import (
 )
 from services.usuario_service import UsuarioService
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.USUARIOS
@@ -49,7 +50,10 @@ async def crear_usuario(
     return service.crear_usuario(body, creado_por)
 
 
+# Autenticado, pero es superficie de credenciales: verifica `password_actual`, así que sin
+# límite es un oráculo para adivinar la clave vigente desde una sesión secuestrada.
 @router.post("/cambiar-password", response_model=CambiarPasswordResponse)
+@limiter.limit("10/hour")
 async def cambiar_password(
     request: Request,
     body: CambiarPasswordRequest,

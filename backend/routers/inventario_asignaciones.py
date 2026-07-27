@@ -14,6 +14,7 @@ from schemas.inventario import (
 from services.inventario_asignaciones_service import InventarioAsignacionesService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.INVENTARIO
@@ -41,6 +42,7 @@ async def asignar_item(
 
 
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
 async def exportar_asignaciones(
     request: Request,
     formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"),

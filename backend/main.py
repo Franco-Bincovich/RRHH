@@ -5,16 +5,17 @@ Solo configuración de la app — sin lógica de negocio.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from config.settings import settings
 from middleware.auth import AuthMiddleware
 from middleware.error_handler import global_error_handler
 from middleware.security_headers import SecurityHeadersMiddleware
 from utils.errors import AppError
+from utils.rate_limit import limiter, rate_limit_handler
 from routers.areas import router as areas_router
-from routers.auth import limiter, router as auth_router
+from routers.auth import router as auth_router
 from routers.cesiones import router as cesiones_router
 from routers.costos import router as costos_router
 from routers.empleados import router as empleados_router
@@ -66,12 +67,20 @@ app = FastAPI(
 )
 
 # ── Rate limiting ──────────────────────────────────────────────────────────────
+# SlowAPIMiddleware aplica el baseline (default_limits del limiter) a todo endpoint SIN
+# decorador propio; los decorados los saltea y los resuelve su decorador. Las franjas
+# específicas viven en cada router. Ver utils/rate_limit.py.
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
-# Middlewares — orden de ejecución al recibir un request: CORS (más externo) → SecurityHeaders → Auth (más interno).
+# Middlewares — orden de ejecución al recibir un request:
+#   CORS (más externo) → SecurityHeaders → SlowAPI → Auth (más interno).
 # add_middleware hace prepend, así que el último agregado es el más externo.
+# SlowAPI va DENTRO de CORS para que el 429 salga con headers CORS (si no, el front lo ve como
+# error de red y no puede leer el código), y FUERA de Auth para que el límite proteja también
+# la verificación del JWT: el fetch del JWKS y el lookup en `users` corren ahí adentro.
 app.add_middleware(AuthMiddleware)             # se ejecuta ÚLTIMO (más interno)
+app.add_middleware(SlowAPIMiddleware)          # 3°
 app.add_middleware(SecurityHeadersMiddleware)  # 2°
 app.add_middleware(
     CORSMiddleware,
@@ -87,7 +96,11 @@ app.add_exception_handler(AppError, global_error_handler)
 app.add_exception_handler(Exception, global_error_handler)
 
 # ── Health check (ruta pública) ────────────────────────────────────────────────
+# EXENTO del rate limiting a propósito: lo consultan los health checks de la plataforma (hoy
+# Vercel, mañana el target group del ALB), todos desde la misma IP y con alta frecuencia.
+# Limitarlo haría que el balanceador marque la instancia como caída y la saque de rotación.
 @app.get("/health")
+@limiter.exempt
 async def health_check():
     return {"status": "ok", "env": settings.app_env}
 
@@ -109,7 +122,13 @@ app.include_router(onboarding_router, prefix="/api/onboarding", tags=["onboardin
 app.include_router(offboarding_router, prefix="/api/offboarding", tags=["offboarding"])
 app.include_router(costos_router, prefix="/api/costos", tags=["costos"])
 app.include_router(sucesion_router, prefix="/api/sucesion", tags=["sucesion"])
-app.include_router(assessment_router, prefix="/api/assessment", tags=["assessment"])
+# Assessment se monta solo si el módulo está activo. Apagado, /api/assessment/* no existe
+# para el router y devuelve el 404 de plataforma, idéntico a cualquier ruta inexistente —
+# nunca un 403 ni un mensaje que confirme que el módulo está ahí. Sus 2 rutas públicas se
+# apagan en el mismo movimiento (middleware/auth.py::_is_public lee el mismo flag).
+# PARA REACTIVARLO: ASSESSMENT_ENABLED=true en el entorno.
+if settings.assessment_enabled:
+    app.include_router(assessment_router, prefix="/api/assessment", tags=["assessment"])
 app.include_router(organigrama_router, prefix="/api/organigrama", tags=["organigrama"])
 app.include_router(dashboard_router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(empresa_router, prefix="/api/empresas", tags=["empresa"])

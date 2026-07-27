@@ -11,6 +11,7 @@ from config.settings import settings
 from schemas.integracion import ApiKeyUpdate, IntegracionResponse
 from services.integracion_service import IntegracionService
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.INTEGRACIONES
@@ -33,8 +34,13 @@ async def google_auth_url(request: Request) -> dict[str, str]:
     return {"auth_url": auth_url}
 
 
+# Público (sin auth, ver middleware/auth.py::PUBLIC_ROUTES): lo invoca Google, no el front.
+# Cada llamada dispara un intercambio de token contra Google con `state` = user_id crudo.
+# `request` no lo usa el handler; lo exige slowapi para poder decorar.
 @router.get("/google/callback")
+@limiter.limit("10/minute")
 async def google_callback(
+    request: Request,
     state: str,
     code: Optional[str] = None,
     error: Optional[str] = None,

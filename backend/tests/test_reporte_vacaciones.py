@@ -23,6 +23,8 @@ for _k, _v in _TEST_ENV.items():
 
 from types import SimpleNamespace
 
+from starlette.requests import Request
+
 import services.reportes._reporte_ausentismo as aus
 import services.reportes._reporte_vacaciones as vac
 from routers.reportes import generar_reporte
@@ -193,7 +195,12 @@ async def test_router_pasa_vista_y_empresa_del_body():
             captured.update(kw)
             return SimpleNamespace(id="r1")
 
-    req = SimpleNamespace(state=SimpleNamespace(user={"email": "u@x.com"}, empresa_id="HEADER-EMP"))
+    # Request real y no SimpleNamespace: generar_reporte está decorado con el rate
+    # limiter, que exige un starlette Request de verdad para poder leer la IP.
+    req = Request({"type": "http", "path": "/api/reportes/generar", "headers": [],
+                   "client": ("9.0.0.3", 1)})
+    req.state.user = {"email": "u@x.com"}
+    req.state.empresa_id = "HEADER-EMP"
     body = ReporteGenerarRequest(tipo="ausentismo", mes=3, anio=2026,
                                  empresa_id="11111111-1111-1111-1111-111111111111",
                                  area_id="22222222-2222-2222-2222-222222222222", vista="injustificado")

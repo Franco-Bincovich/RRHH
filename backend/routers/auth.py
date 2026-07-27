@@ -1,17 +1,16 @@
 """
 Router de autenticación — login, logout, refresh.
-Rate limiting: login está limitado a 5 requests/minuto por IP (slowapi).
+Rate limiting: login 5/minuto y refresh 20/minuto por IP. Las dos son públicas (sin token),
+así que son la superficie de fuerza bruta del sistema. El limiter vive en utils/rate_limit.py.
 """
 from fastapi import APIRouter, Depends, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 from schemas.auth import LoginRequest, LoginResponse, RefreshRequest, RefreshResponse
 from services.auth_service import AuthService
 from utils.errors import AppError
+from utils.rate_limit import limiter
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 def _get_token(request: Request) -> str:
@@ -40,7 +39,10 @@ async def logout(
     service.logout(request.state.user["id"], token)
 
 
+# Pública igual que login: permitía reintentar refresh tokens sin costo. 20/min tolera varias
+# pestañas refrescando a la vez (el front solo refresca al expirar el access token).
 @router.post("/refresh", response_model=RefreshResponse)
+@limiter.limit("20/minute")
 async def refresh(
     request: Request,
     body: RefreshRequest,

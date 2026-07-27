@@ -10,6 +10,7 @@ from schemas.ausencias import (
 from services.ausencias_service import AusenciasService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.AUSENCIAS
@@ -34,6 +35,7 @@ async def list_ausencias(
 
 
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
 async def exportar_ausencias(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), area_id: Optional[UUID] = Query(None), empleado_id: Optional[UUID] = Query(None), tipo_id: Optional[UUID] = Query(None), service: AusenciasService = Depends(_svc)) -> Response:
     d = service.exportar(request.state.user.get("id"), request.state.user.get("rol"), get_empresa_id(request), formato, area_id, empleado_id, tipo_id)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
