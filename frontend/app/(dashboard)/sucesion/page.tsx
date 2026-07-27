@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Tabs } from "@base-ui/react/tabs"
 
 import { PageHeader } from "@/components/layout/PageHeader"
@@ -16,6 +17,27 @@ import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
 
 export default function SucesionPage() {
+  const router = useRouter()
+  // Módulo desactivado a propósito (no es un bug): redirige a /dashboard y no renderiza.
+  // Es useState y NO const a propósito: un const colapsa a literal `false` por control-flow,
+  // TS re-marca el cuerpo inalcanzable, se pierde el narrowing y `next build` falla.
+  // Para reactivar: useState(true) acá + SUCESION_ACTIVA = true en components/layout/nav-config.ts.
+  const [moduloActivo] = useState(false)
+
+  useEffect(() => {
+    if (!moduloActivo) router.replace("/dashboard")
+  }, [router, moduloActivo])
+
+  if (!moduloActivo) return null
+
+  return <SucesionContenido />
+}
+
+// El contenido vive en un componente aparte —y no en el cuerpo de arriba, como en assessment—
+// porque acá la carga de datos está en hooks (useSucesionData / usePlanDetalle) y no en un
+// useEffect que se pueda gatear. Si estuviera todo junto, los hooks correrían igual y la
+// pantalla desactivada dispararía llamadas al backend antes de redirigir. Así no se monta nada.
+function SucesionContenido() {
   const canWrite = useCanWrite()
   const [empresaActivaId] = useState<string | null>(() => getEmpresaActivaId())
   const [planOpen, setPlanOpen] = useState(false)

@@ -86,7 +86,7 @@ Verificado en producción (jul 2026): 1 empresa, 19 empleados, y casi todo lo de
 
 ### Fases cerradas (no reabrir)
 - ✅ **FASE 2 — Barrera de empresa (commits `bd95e98` + `9d7baa7`).** **92/92 endpoints con id de recurso donde aplica** validan empresa, y **13/13 superficies de VACACIONES y AUSENCIAS** componen además el eje de ownership. Quedan **8 endpoints marcados NO APLICA, con razón**: `usuarios` (`DELETE /{user_id}` — los usuarios no cuelgan de una empresa, por decisión de producto), `empresa` (`GET`/`PUT`/`PATCH /{id}/activa`/`POST /{id}/logo` — la empresa *es* el recurso), `assessment` público (`GET`/`POST /evaluacion/{token}` — sin auth, la autorización es el token) e `integraciones` (`DELETE /{tipo}` — scopeado por `user_id`, no por empresa). **La regla permanente está en "Patrón de barrera de empresa" — leerla antes de escribir un endpoint nuevo.**
-- ✅ **FASE 3 — Deuda estructural (commits `51832e2` + `a6acaed`).** `fetchEmpleados`/`exportarEmpleados` a objeto de opciones (10 call sites) · `sucesion/page.tsx` 855 → **85** (8 componentes + 2 hooks en `components/features/sucesion/`) · N+1 de sucesión resuelto por batch.
+- ✅ **FASE 3 — Deuda estructural (commits `51832e2` + `a6acaed`).** `fetchEmpleados`/`exportarEmpleados` a objeto de opciones (10 call sites) · `sucesion/page.tsx` 855 → **85** (8 componentes + 2 hooks en `components/features/sucesion/`) · N+1 de sucesión resuelto por batch. (La página quedó después en **107** al sumarle el gate de módulo desactivado.)
 - **FASE 4 — Bloqueada por RRHH:** import Excel de vacaciones/ausencias (esperando archivos); carga real de `manager_id`; import de objetivos (trabado por modelo).
 
 **Pendientes de RRHH (bloqueantes de datos):**
@@ -356,7 +356,7 @@ components/features/<modulo>/useFiltros<Modulo>.ts ← estado de filtros + opcio
 ```
 El hook recibe `onFiltroChange` que la página cablea a `() => setPage(1)` (reset de paginación sin acoplar `page` al hook).
 
-**Precedente de división grande — `components/features/sucesion/` (Fase 3):** `sucesion/page.tsx` pasó de **855 a 85** calcando el corte de `reportes/page.tsx`. Quedó en 8 componentes (`MapaTalentoTab`, `PlanesTab`, `NineBox`, `AnalisisAreaModal`, `NuevoPlanModal`, `PlanDetallePanel`, `NuevoHitoForm`, `HitosList`) + 2 hooks (`useSucesionData`, `usePlanDetalle`) + `_sucesion_ui.ts` para los helpers de presentación. **Copiar este corte para las páginas de 400+ que quedan** (`costos/page.tsx` 618, `vacantes/[id]/page.tsx` 577).
+**Precedente de división grande — `components/features/sucesion/` (Fase 3):** `sucesion/page.tsx` pasó de **855 a 85** calcando el corte de `reportes/page.tsx` (hoy mide **107**: se le sumó el gate de módulo desactivado, ver más abajo). Quedó en 8 componentes (`MapaTalentoTab`, `PlanesTab`, `NineBox`, `AnalisisAreaModal`, `NuevoPlanModal`, `PlanDetallePanel`, `NuevoHitoForm`, `HitosList`) + 2 hooks (`useSucesionData`, `usePlanDetalle`) + `_sucesion_ui.ts` para los helpers de presentación. **Copiar este corte para las páginas de 400+ que quedan** (`costos/page.tsx` 618, `vacantes/[id]/page.tsx` 577).
 
 **Paginación:** front manda `page`/`page_size` · usar `Pagination.tsx` (no escribir paginación nueva) · el pager aparece solo si `total > pageSize` · **`page` se resetea a 1 al cambiar cualquier filtro** · **el export NO se pagina.**
 
@@ -407,8 +407,26 @@ Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. C�
 ### `tsc` en 0 y `next build` verde
 `next dev` con Turbopack transpila sin type-check → errores de tipo pasan desapercibidos pero **`next build` falla**. `vitest` ya existe (18 tests) pero cubre solo permisos y query params de empleados, así que para casi todo el front **`tsc` sigue siendo la única red**. **Regla: `node_modules/.bin/tsc --noEmit` tiene que dar 0. Si aparece un error, es tuyo.**
 
-### 🚨 Módulo assessment desactivado — NO convertir el `useState` en `const`
-`app/(dashboard)/assessment/[id]/page.tsx` está desactivado a propósito (redirige a `/dashboard`). El gate es `const [moduloActivo] = useState(false)` con el setter descartado. **Tiene que ser `useState`, NO `const`:** TS colapsa un `const` a literal `false`, marca el cuerpo inalcanzable, pierde el narrowing y **`next build` falla**. Hay un comentario explicándolo. No borrarlo, no "simplificar".
+### 🚨 Módulos desactivados (assessment y sucesión) — NO convertir los flags en `const`
+
+Hay **dos módulos apagados a propósito**. En los dos el código está **entero**: se sacó el punto de entrada, no se borró nada.
+
+**La regla que los une — el flag NUNCA es un `const` con literal:**
+> TS colapsa `const x = false` al tipo literal `false`. En un componente eso marca el cuerpo inalcanzable, pierde el narrowing y **`next build` falla**. En un módulo de datos, la rama `true` del ternario deja de type-checkear, así que **reactivar el módulo rompería el build en vez de funcionar**. Por eso el flag es `useState(false)` en las páginas y `: boolean` anotado explícito en la config. **No "simplificar" ninguno de los dos.** Hay comentarios en cada archivo explicándolo.
+
+**1. Assessment** — `app/(dashboard)/assessment/[id]/page.tsx`. Gate: `const [moduloActivo] = useState(false)` con el setter descartado; redirige a `/dashboard`.
+
+**2. Sucesión** — apagado por decisión de producto (no se va a usar por ahora). **Dos flags, uno por archivo:**
+- `components/layout/nav-config.ts` → `const SUCESION_ACTIVA: boolean = false`. La **anotación `: boolean` es obligatoria** (mismo motivo que el `useState`). El ítem del sidebar **no se borró**: quedó como `SUCESION_ITEM` y el grupo "Incorporación" lo incluye con `...(SUCESION_ACTIVA ? [SUCESION_ITEM] : [])`.
+- `app/(dashboard)/sucesion/page.tsx` → `const [moduloActivo] = useState(false)` + `router.replace("/dashboard")`.
+
+**Cómo revertir: dos líneas, una por archivo** (`SUCESION_ACTIVA = true` + `useState(true)`). Están indicadas en el comentario de cada uno. **Hacen falta las dos:** solo la primera devuelve el ítem al sidebar pero la página sigue redirigiendo.
+
+⚠️ **Por qué el contenido de sucesión vive en un `SucesionContenido` aparte** y no en el mismo cuerpo del componente, como sí hace assessment: acá la carga de datos está en **hooks** (`useSucesionData`), no en un `useEffect` que se pueda gatear. Los hooks corren aunque el módulo esté apagado, así que sin esa separación la pantalla desactivada **dispara 3 llamadas al backend antes de redirigir** (`fetchMapaTalento` + `fetchPlanesCarrera` + `fetchAreas`, las tres al montar). Con el componente aparte no se monta nada. (`usePlanDetalle` no fetchea al montar — `fetchHitos` sale recién al abrir un plan.) **Si apagás otro módulo, fijate primero dónde vive su fetch**: en un `useEffect` alcanza un componente; en hooks, hace falta separar.
+
+**Lo que queda vivo a propósito en los dos:** la ruta sigue siendo **navegable a mano** y redirige (no está borrada del router — `next build` sigue listando `/sucesion`). Por eso **`services/permisos.ts:96` conserva el mapeo `{ ruta: "/sucesion", seccion: "sucesion" }`: la ruta existe, así que el AuthGuard tiene que seguir protegiéndola.** Sacarlo dejaría una ruta viva sin gate de permisos.
+
+**Intactos en sucesión (no tocar al revertir, no hay nada que restaurar):** todo el backend (endpoints, `Seccion.SUCESION` de `utils/permisos.py`, tests), los 11 archivos de `components/features/sucesion/`, `services/sucesion.ts` y `types/sucesion`.
 
 ---
 
@@ -431,7 +449,7 @@ Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. C�
 - **`permisos.ts` es espejo manual de `permisos.py`** — riesgo de divergencia.
 
 ### Líneas (archivos over-limit, límite front 150 / back según tipo)
-> **Remedido contra el código el 27/7/2026.** Ya NO están over-limit: `sucesion/page.tsx` (855 → **85**, Fase 3), `reportes/page.tsx` (era 539) y `reporte_generators.py` (era 249, ambos Fase 1), `empleado_service.py` (143 → **89**) y `ausencias_service.py` (149 → **74**, ambos Fase 2 por extracción).
+> **Remedido contra el código el 27/7/2026.** Ya NO están over-limit: `sucesion/page.tsx` (855 → 85 en Fase 3, **107** hoy con el gate de desactivación), `reportes/page.tsx` (era 539) y `reporte_generators.py` (era 249, ambos Fase 1), `empleado_service.py` (143 → **89**) y `ausencias_service.py` (149 → **74**, ambos Fase 2 por extracción).
 > ⚠️ `PlantillasTab.tsx` (336), `CiclosTab.tsx` (297) y `EvaluacionesTab.tsx` (286) **ya no existen en el repo** — se fueron con la UI de `ev_*`. Estaban listados acá por arrastre.
 
 **Frontend (38 archivos > 150):** `costos/page.tsx` 618 · `vacantes/[id]/page.tsx` 577 · `onboarding/templates/[id]/page.tsx` 412 · `onboarding/page.tsx` 410 · `configuracion/page.tsx` 390 · `ImportarNominaCSVModal.tsx` 377 · `offboarding/page.tsx` 292 · `onboarding/templates/page.tsx` 290 · `NominaModal.tsx` 287 · `areas/page.tsx` 261 · `evaluacion/[token]/page.tsx` 258 · `VacanteModal.tsx` 251 · `AIPanel.tsx` 249 · `assessment/page.tsx` 233 · `empresas/[id]/page.tsx` 230 + **23 más entre 152 y 226**.

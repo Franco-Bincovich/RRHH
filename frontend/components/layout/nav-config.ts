@@ -32,6 +32,25 @@ export const DASHBOARD_ITEM: NavLink = {
   label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, seccion: null,
 }
 
+// ─── Módulos ocultos ──────────────────────────────────────────────────────────
+// Sucesión está OCULTA por decisión de producto, no borrada: la página, sus 11 archivos de
+// components/features/sucesion/, services/sucesion.ts y todo el backend (endpoints, permisos,
+// tests) siguen enteros.
+//
+// PARA REACTIVARLA (dos líneas, una por archivo):
+//   1. acá:                                  SUCESION_ACTIVA = true
+//   2. app/(dashboard)/sucesion/page.tsx:    useState(true) en el gate `moduloActivo`
+// Sin el paso 2 el ítem vuelve al sidebar pero la página redirige igual a /dashboard.
+//
+// El tipo es `boolean` explícito y NO el literal inferido: con `= false` a secas TS colapsa la
+// constante a `false`, la rama true del ternario queda inalcanzable y volver a `true` deja de
+// type-checkear solo. Mismo motivo por el que el gate de la página es useState y no const.
+const SUCESION_ACTIVA: boolean = false
+
+const SUCESION_ITEM: NavLink = {
+  label: "Sucesión", href: "/sucesion", icon: TrendingUp, seccion: "sucesion",
+}
+
 // Grupos colapsables, en orden de aparición. Assessment sigue oculto (módulo no habilitado).
 export const NAV_GROUPS: ReadonlyArray<NavGroupDef> = [
   { label: "Personas", items: [
@@ -48,7 +67,7 @@ export const NAV_GROUPS: ReadonlyArray<NavGroupDef> = [
     { label: "Candidatos", href: "/candidatos", icon: UserSearch, seccion: "candidatos" },
     { label: "Onboarding", href: "/onboarding", icon: UserPlus, seccion: "onboarding" },
     { label: "Offboarding", href: "/offboarding", icon: UserMinus, seccion: "offboarding" },
-    { label: "Sucesión", href: "/sucesion", icon: TrendingUp, seccion: "sucesion" },
+    ...(SUCESION_ACTIVA ? [SUCESION_ITEM] : []),
   ] },
   { label: "Operación", items: [
     { label: "Procesos", href: "/procesos", icon: Activity, seccion: "procesos" },
