@@ -36,10 +36,14 @@ FRANJAS (de más restrictiva a menos):
   /health            EXENTO (lo consultan los health checks de la plataforma)
   todo lo demás      BASELINE, abajo
 
-⚠️ Tres exports quedaron FUERA de la franja y corren bajo el baseline: `objetivos.py`,
-`inventario_items.py` (79 líneas cada uno) y `evaluaciones_resultados.py` (80/80). Sumarles
-el decorador los pasaba del límite de 80 del router, y dividir esos archivos no era el alcance
-de esta sesión. **Cuando se dividan, agregarles `shared_limit("30/hour", scope="export")`.**
+⚠️ DOS exports quedan FUERA de la franja y corren bajo el baseline: `objetivos.py` e
+`inventario_items.py` (79 líneas cada uno). Sumarles el decorador los pasaba del límite de 80
+del router. **Cuando se dividan, agregarles `shared_limit("30/hour", scope="export")`.**
+Eran TRES: `evaluaciones_resultados.py` se cerró al dividir su router — el export se mudó a
+`routers/evaluaciones_resultados_export.py`, que sí lleva la franja. La lista de pendientes
+la fija `tests/test_rate_limit.py::TestFranjaExport` / `test_los_dos_pendientes_siguen_sin_decorador`;
+si movés uno de acá, movelo también allá (el test lo explica: borrarlo en vez de moverlo deja
+la aserción vacua).
 
 ⚠️ DOS LÍMITES REALES DE ESTA IMPLEMENTACIÓN — leerlos antes de confiar en los números:
 
