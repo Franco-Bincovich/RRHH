@@ -13,7 +13,7 @@ from typing import Optional
 from uuid import UUID
 
 from schemas.costo import NominaCreate, NominaResponse, PresupuestoCreate, PresupuestoResponse
-from services._audit_payloads_rrhh import payload_carga_nomina, payload_set_presupuesto
+from services._audit_payloads_costos import payload_carga_nomina, payload_set_presupuesto
 from services._periodo_utils import verificar_periodo_abierto
 from utils.errors import AppError
 from utils.logger import logger

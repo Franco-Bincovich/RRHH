@@ -1,25 +1,29 @@
 """
-Armado de payloads de auditoría para empleados, costos, empresa (T18.4c), adjuntos (B4.1)
+Armado de payloads de auditoría para empleados y empresa (T18.4c), adjuntos (B4.1)
 y períodos cerrados (B3.1).
 
 Continuación de services/_audit_payloads.py (18.4b): se separó en un módulo propio
-porque sumar estos 7 eventos cruzaba el límite de 150 líneas del helper original.
+porque sumar estos eventos cruzaba el límite de 150 líneas del helper original. Costos y
+usuarios volvieron a salir de acá por el mismo motivo, a _audit_payloads_costos.py y
+_audit_payloads_usuarios.py.
 Mismo contrato: cada función pura devuelve el dict para `AuditService.registrar(**payload)`.
 
-Decisión sobre `_subset`: se DUPLICA acá (3 líneas triviales) en vez de importarlo
-sibling-a-sibling desde _audit_payloads.py — evita un import helper→helper y respeta
-que aquel archivo no se modifique. El diff se reusa de `AuditService._diff` (no se
-reimplementa).
+Decisión sobre los helpers: `_subset` se DUPLICA acá (3 líneas triviales). `sin_derivados`
+en cambio SÍ se importa del hermano, a propósito: define qué entra en un diff de auditoría, y
+dos copias que se separen darían dos criterios distintos sobre lo mismo — exactamente la clase
+de divergencia silenciosa que la regla de ese módulo existe para evitar. El diff se reusa de
+`AuditService._diff` (no se reimplementa).
 """
 from typing import Optional
 from uuid import uuid4
 
+from services._audit_payloads import sin_derivados
 from services.audit_service import AuditService, _jsonable
 
 _CAMPOS_EMPLEADO = ("nombre", "apellido", "legajo", "roles", "area_id", "estado", "seniority")
-_CAMPOS_NOMINA = ("empleado_id", "mes", "anio", "monto_bruto", "monto_neto")
-_CAMPOS_PRESUPUESTO = ("area_id", "mes", "anio", "presupuesto")
 _CAMPOS_EMPRESA = ("nombre", "cuit", "activa")
+# Lo que NO es columna de `empleados`: los tres nombres los resuelve el SELECT con joins.
+_DERIVADOS_EMPLEADO = frozenset({"area_nombre", "empresa_nombre", "manager_nombre"})
 
 
 def _subset(obj: object, campos: tuple) -> dict:
@@ -38,8 +42,19 @@ def payload_alta_empleado(row, usuario_id: Optional[str], empresa_id: Optional[s
 
 
 def payload_update_empleado(prior, nuevo, usuario_id: Optional[str], empresa_id: Optional[str]) -> dict:
-    """Evento UPDATE de edición de empleado (diff antes/después)."""
-    antes, despues = AuditService._diff(prior.model_dump(), nuevo.model_dump())
+    """Evento UPDATE de edición de empleado (diff antes/después) sobre columnas reales.
+
+    El subset NO es una optimización: `prior` viene de un SELECT con joins y `nuevo` de un
+    `UPDATE ... RETURNING` que no los trae, así que difear los responses completos registraba
+    `area_nombre`/`empresa_nombre` pasando a null en CADA edición — un cambio inexistente.
+    Excluye los derivados en vez de enumerar columnas: `_CAMPOS_EMPLEADO` (que usan el alta y
+    la baja para fotografiar un estado) cubre 7 campos, y `empleados` tiene 29 columnas más que
+    se pueden editar —`manager_id`, `dni`, `email_corporativo`, `fecha_ingreso`…—. Enumerar
+    dejaría de registrar esas ediciones EN SILENCIO, que en un log de auditoría es peor que el
+    fantasma que este cambio vino a sacar. Ver la regla en el docstring de _audit_payloads.py."""
+    antes, despues = AuditService._diff(
+        sin_derivados(prior, _DERIVADOS_EMPLEADO), sin_derivados(nuevo, _DERIVADOS_EMPLEADO),
+    )
     return {
         "usuario_id": usuario_id, "entidad": "empleado", "registro_id": prior.id,
         "accion": "UPDATE", "evento": "update_empleado", "empresa_id": empresa_id,
@@ -53,30 +68,6 @@ def payload_baja_empleado(prior, usuario_id: Optional[str], empresa_id: Optional
         "usuario_id": usuario_id, "entidad": "empleado", "registro_id": prior.id,
         "accion": "DELETE", "evento": "baja_empleado", "empresa_id": empresa_id,
         "datos_anteriores": _subset(prior, _CAMPOS_EMPLEADO), "datos_nuevos": None,
-    }
-
-
-def payload_carga_nomina(nomina, usuario_id: Optional[str], empresa_id: Optional[str], prior=None) -> dict:
-    """Evento de carga de nómina (upsert). Con `prior` (la nómina previa del mismo
-    empleado/mes/anio) arma el diff antes/después → accion UPDATE. Sin `prior` es la
-    primera carga → accion INSERT sin diff. Mismo patrón que payload_update_empleado."""
-    base = {
-        "usuario_id": usuario_id, "entidad": "nomina", "registro_id": nomina.id,
-        "evento": "carga_nomina", "empresa_id": empresa_id,
-    }
-    if prior is None:
-        return {**base, "accion": "INSERT",
-                "datos_anteriores": None, "datos_nuevos": _subset(nomina, _CAMPOS_NOMINA)}
-    antes, despues = AuditService._diff(_subset(prior, _CAMPOS_NOMINA), _subset(nomina, _CAMPOS_NOMINA))
-    return {**base, "accion": "UPDATE", "datos_anteriores": antes, "datos_nuevos": despues}
-
-
-def payload_set_presupuesto(presupuesto, usuario_id: Optional[str], empresa_id: Optional[str]) -> dict:
-    """Evento UPDATE de configuración de presupuesto de área (upsert, sin diff)."""
-    return {
-        "usuario_id": usuario_id, "entidad": "presupuesto", "registro_id": presupuesto.id,
-        "accion": "UPDATE", "evento": "set_presupuesto", "empresa_id": empresa_id,
-        "datos_anteriores": None, "datos_nuevos": _subset(presupuesto, _CAMPOS_PRESUPUESTO),
     }
 
 
@@ -116,37 +107,6 @@ def payload_baja_adjunto(adj, usuario_id: Optional[str]) -> dict:
         "accion": "DELETE", "evento": "baja_adjunto", "empresa_id": adj.empresa_id,
         "datos_anteriores": {"adjunto_id": adj.id, "nombre_archivo": adj.nombre_archivo},
         "datos_nuevos": None,
-    }
-
-
-def payload_alta_usuario(user_id: str, username: str, rol: str, usuario_id: Optional[str]) -> dict:
-    """Evento INSERT de alta de un usuario del sistema. NUNCA incluye la contraseña temporal.
-    empresa_id = None: los usuarios son globales, no pertenecen a una empresa."""
-    return {
-        "usuario_id": usuario_id, "entidad": "usuario", "registro_id": user_id,
-        "accion": "INSERT", "evento": "alta_usuario", "empresa_id": None,
-        "datos_anteriores": None, "datos_nuevos": {"username": username, "rol": rol},
-    }
-
-
-def payload_baja_usuario(user_id: str, username: Optional[str], usuario_id: Optional[str]) -> dict:
-    """Evento DELETE de baja de un usuario del sistema. NUNCA incluye contraseñas.
-    empresa_id = None: los usuarios son globales, no pertenecen a una empresa."""
-    return {
-        "usuario_id": usuario_id, "entidad": "usuario", "registro_id": user_id,
-        "accion": "DELETE", "evento": "baja_usuario", "empresa_id": None,
-        "datos_anteriores": {"username": username}, "datos_nuevos": None,
-    }
-
-
-def payload_cambio_password(user_id: str) -> dict:
-    """Evento UPDATE de cambio de contraseña propia (self-service). NUNCA incluye
-    contraseñas: registra solo que el usuario cambió su clave. usuario_id = registro_id
-    (el usuario se audita a sí mismo). empresa_id = None (los usuarios son globales)."""
-    return {
-        "usuario_id": user_id, "entidad": "usuario", "registro_id": user_id,
-        "accion": "UPDATE", "evento": "cambio_password", "empresa_id": None,
-        "datos_anteriores": None, "datos_nuevos": None,
     }
 
 

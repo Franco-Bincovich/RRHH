@@ -4,7 +4,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import {
-  ENTIDAD_LABEL, EVENTO_LABEL, campoLabel, formatFechaHora, formatValor,
+  ENTIDAD_LABEL, EVENTO_LABEL, SIN_CAMBIOS_AUDITADOS, campoLabel, clavesVisibles,
+  formatFechaHora, formatValor, soloTraiaDerivados,
 } from "@/components/features/auditoria/auditLabels"
 import type { AuditLog } from "@/types/auditoria"
 
@@ -20,7 +21,9 @@ interface AuditDetailModalProps {
 export function AuditDetailModal({ log, onClose }: AuditDetailModalProps) {
   const antes = log?.datos_anteriores ?? {}
   const nuevos = log?.datos_nuevos ?? {}
-  const keys = Array.from(new Set([...Object.keys(antes), ...Object.keys(nuevos)]))
+  // Las claves derivadas de joins quedan afuera: ver CAMPOS_DERIVADOS en auditLabels.
+  const keys = clavesVisibles(antes, nuevos)
+  const sinCambiosReales = soloTraiaDerivados(antes, nuevos)
   const esUpdate = Object.keys(antes).length > 0 && Object.keys(nuevos).length > 0
   const titulo = log ? (EVENTO_LABEL[log.evento] ?? log.evento) : ""
 
@@ -51,7 +54,9 @@ export function AuditDetailModal({ log, onClose }: AuditDetailModalProps) {
             <div>
               <h4 className="mb-2 text-sm font-semibold text-foreground">{encabezadoCambios}</h4>
               {keys.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sin datos de detalle.</p>
+                <p className="text-sm text-muted-foreground">
+                  {sinCambiosReales ? SIN_CAMBIOS_AUDITADOS : "Sin datos de detalle."}
+                </p>
               ) : (
                 <ul className="space-y-1.5 text-sm" role="list">
                   {keys.map((k) => (

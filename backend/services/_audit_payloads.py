@@ -16,6 +16,33 @@ Si este archivo supera ~150 líneas al crecer en 18.4c, partirlo por módulo
 
 Nota de diseño: el diff se reusa de `AuditService._diff` (no se reimplementa) para no
 duplicar la lógica de comparación campo-a-campo.
+
+🔴 REGLA — UN DIFF SE ARMA SOBRE COLUMNAS REALES, NUNCA SOBRE EL RESPONSE COMPLETO.
+Todo payload de UPDATE difea `_subset(prior, _CAMPOS_X)` contra `_subset(nuevo, _CAMPOS_X)`,
+donde `_CAMPOS_X` lista columnas de la tabla. Jamás `prior.model_dump()` contra
+`nuevo.model_dump()`.
+
+El motivo: los `*Response` traen campos DERIVADOS DE JOINS —`area_nombre`, `empresa_nombre`,
+`empleado_nombre`, `tipo_nombre`, `manager_nombre`— que no son datos del registro sino
+resultado de CÓMO se lo leyó. Si los dos lados se leen distinto (uno con joins resueltos y
+otro desde un `UPDATE ... RETURNING`, que no los trae), el diff registra un cambio que NUNCA
+OCURRIÓ, y la pantalla se lo afirma al usuario sobre un empleado real.
+
+No es hipotético: así se generaron 93 eventos que decían que el área y la empresa de un
+empleado se habían vaciado. Ninguno de los dos había cambiado. El campo tampoco puede
+confiarse a que hoy los dos lados se lean igual — alcanza con que alguien "optimice" un repo
+para dejar de releer después de escribir.
+
+Tampoco van los campos CALCULADOS (p. ej. `estado` de una vacación, que sale de las fechas y
+de `cancelada`): son función de campos que el diff ya registra, y algunos cambian solos con
+el paso del tiempo, lo que se leería como una edición que nadie hizo.
+
+CÓMO SE APLICA, y por qué un UPDATE no usa la misma lista que un alta. Un alta o una baja
+FOTOGRAFÍAN un estado, y ahí una lista curada (`_CAMPOS_X`) alcanza: se elige qué vale la pena
+guardar. Un UPDATE responde otra pregunta —¿qué cambió?— y ahí una lista curada MIENTE POR
+OMISIÓN: si alguien edita un campo que no está en la lista, el log dice que no pasó nada.
+Por eso los diffs excluyen (`sin_derivados`) en vez de enumerar: una columna nueva queda
+auditada sola, y lo único que hay que declarar es lo que NO es una columna.
 """
 from typing import Optional
 from uuid import UUID
@@ -27,6 +54,26 @@ _CAMPOS_AUSENCIA = (
     "empleado_id", "tipo_id", "fecha_desde", "fecha_hasta", "dias", "justificada", "motivo",
 )
 _CAMPOS_OFFBOARDING = ("empleado_id", "motivo", "estado", "fecha_inicio")
+# Lo que NO es columna en cada *Response. Ni solicitudes_vacaciones ni solicitudes_ausencia
+# tienen `area_id`: llega resuelto desde el empleado, igual que los nombres. `estado` se
+# calcula contra la fecha de hoy — planificada→tomada ocurre sola, sin que nadie edite nada.
+_DERIVADOS_VACACION = frozenset({
+    "empresa_nombre", "empleado_nombre", "area_id", "area_nombre", "estado",
+})
+_DERIVADOS_AUSENCIA = frozenset({
+    "empresa_nombre", "empleado_nombre", "area_id", "area_nombre", "tipo_nombre",
+})
+
+
+def sin_derivados(obj: object, derivados: frozenset) -> dict:
+    """Proyecta el registro a sus columnas reales, sacando lo que no lo es.
+
+    `derivados` lista los campos del *Response que NO son columnas de la tabla: nombres
+    resueltos por join y valores calculados. Todo lo demás entra, así que agregar una columna
+    no exige tocar esta lista — solo agregar un campo derivado sí.
+    """
+    data = obj.model_dump() if hasattr(obj, "model_dump") else dict(obj)  # type: ignore[arg-type]
+    return {k: _jsonable(v) for k, v in data.items() if k not in derivados}
 
 
 def _subset(obj: object, campos: tuple) -> dict:
@@ -37,7 +84,7 @@ def _subset(obj: object, campos: tuple) -> dict:
 
 def payload_cancelacion_vacacion(prior, nuevo, usuario_id: Optional[str], empresa_id: Optional[str]) -> dict:
     """Evento UPDATE de cancelación de una solicitud de vacaciones (diff antes/después)."""
-    antes, despues = AuditService._diff(prior.model_dump(), nuevo.model_dump())
+    antes, despues = AuditService._diff(sin_derivados(prior, _DERIVADOS_VACACION), sin_derivados(nuevo, _DERIVADOS_VACACION))
     return {
         "usuario_id": usuario_id, "entidad": "vacacion", "registro_id": prior.id,
         "accion": "UPDATE", "evento": "cancelacion_vacacion", "empresa_id": empresa_id,
@@ -56,7 +103,7 @@ def payload_alta_ausencia(row, usuario_id: Optional[str], empresa_id: Optional[s
 
 def payload_update_ausencia(prior, nuevo, usuario_id: Optional[str], empresa_id: Optional[str]) -> dict:
     """Evento UPDATE de edición de ausencia (diff antes/después)."""
-    antes, despues = AuditService._diff(prior.model_dump(), nuevo.model_dump())
+    antes, despues = AuditService._diff(sin_derivados(prior, _DERIVADOS_AUSENCIA), sin_derivados(nuevo, _DERIVADOS_AUSENCIA))
     return {
         "usuario_id": usuario_id, "entidad": "ausencia", "registro_id": prior.id,
         "accion": "UPDATE", "evento": "update_ausencia", "empresa_id": empresa_id,

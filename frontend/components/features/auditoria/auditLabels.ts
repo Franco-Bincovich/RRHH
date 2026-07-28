@@ -29,6 +29,44 @@ export const EVENTO_LABEL: Record<string, string> = {
   toggle_empresa_activa: "Activación/desactivación de empresa",
 }
 
+/**
+ * Campos que un *Response trae resueltos por join o calculados, y que NO son datos del
+ * registro. El backend dejó de escribirlos en los diffs, pero los eventos YA GUARDADOS los
+ * tienen: 93 eventos de modificación de empleado dicen que el área y la empresa pasaron a
+ * vacío, y ninguna de las dos cambió — era el resultado de leer el "antes" con joins y el
+ * "después" sin ellos.
+ *
+ * Esos eventos NO se borran: un log del que se sacan las filas incómodas deja de ser
+ * auditoría. Se filtran al renderizar, en un solo lugar, para que la pantalla no le afirme al
+ * usuario un cambio que no ocurrió.
+ *
+ * ⚠️ Aplica SOLO a eventos anteriores al fix. Los nuevos ya no traen estas claves, así que el
+ * filtro no les saca nada. El día que no queden eventos viejos, esto se puede borrar entero.
+ */
+const CAMPOS_DERIVADOS = new Set([
+  "area_nombre", "empresa_nombre", "empleado_nombre", "manager_nombre", "tipo_nombre",
+])
+
+/** Claves con contenido real de un diff: las derivadas quedan afuera. */
+export function clavesVisibles(
+  antes: Record<string, unknown> | null,
+  nuevos: Record<string, unknown> | null,
+): string[] {
+  const todas = new Set([...Object.keys(antes ?? {}), ...Object.keys(nuevos ?? {})])
+  return Array.from(todas).filter((k) => !CAMPOS_DERIVADOS.has(k))
+}
+
+/** True si el evento traía datos pero TODOS eran derivados: se editó sin tocar nada auditado. */
+export function soloTraiaDerivados(
+  antes: Record<string, unknown> | null,
+  nuevos: Record<string, unknown> | null,
+): boolean {
+  const habia = Object.keys(antes ?? {}).length + Object.keys(nuevos ?? {}).length > 0
+  return habia && clavesVisibles(antes, nuevos).length === 0
+}
+
+export const SIN_CAMBIOS_AUDITADOS = "Se editó el registro, sin cambios en campos auditados."
+
 const CAMPO_LABEL: Record<string, string> = {
   nombre: "Nombre",
   apellido: "Apellido",
@@ -36,7 +74,26 @@ const CAMPO_LABEL: Record<string, string> = {
   roles: "Roles",
   cargo: "Cargo", // histórico: registros previos a la unificación de roles (S4)
   area_id: "Área",
+  seniority: "Seniority",
   estado: "Estado",
+  // Columnas reales que el diff volvió a registrar al dejar de enumerar una lista curada.
+  manager_id: "Superior",
+  dni: "DNI",
+  cuil: "CUIL",
+  email_corporativo: "Email corporativo",
+  email_personal: "Email personal",
+  telefono: "Teléfono",
+  fecha_ingreso: "Fecha de ingreso",
+  fecha_egreso: "Fecha de egreso",
+  fecha_nacimiento: "Fecha de nacimiento",
+  tipo_contrato: "Tipo de contrato",
+  modalidad_contratacion: "Modalidad de contratación",
+  modalidad_trabajo: "Modalidad de trabajo",
+  turno: "Turno",
+  dias_vacaciones_asignados: "Días de vacaciones asignados",
+  comentario: "Comentario",
+  cancelada: "Cancelada",
+  tipo: "Tipo",
   activa: "Activa",
   fecha_desde: "Desde",
   fecha_hasta: "Hasta",
@@ -90,8 +147,10 @@ export function resumenDiff(
   antes: Record<string, unknown> | null,
   nuevos: Record<string, unknown> | null,
 ): string {
-  const aKeys = antes ? Object.keys(antes) : []
-  const nKeys = nuevos ? Object.keys(nuevos) : []
+  if (soloTraiaDerivados(antes, nuevos)) return SIN_CAMBIOS_AUDITADOS
+  const visibles = new Set(clavesVisibles(antes, nuevos))
+  const aKeys = antes ? Object.keys(antes).filter((k) => visibles.has(k)) : []
+  const nKeys = nuevos ? Object.keys(nuevos).filter((k) => visibles.has(k)) : []
   if (aKeys.length && nKeys.length) {
     const keys = Array.from(new Set([...aKeys, ...nKeys]))
     if (keys.length === 1) {

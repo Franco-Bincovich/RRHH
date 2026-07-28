@@ -41,6 +41,63 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-28 · El historial de cambios del legajo mostraba cambios que nunca ocurrieron · commit pendiente
+
+**Qué cambió:** el diff de auditoría de empleados dejó de compararse sobre el objeto de
+respuesta completo y pasa a compararse sobre columnas reales. Lo mismo en ausencias y
+vacaciones, que tenían la misma forma sin haber llegado a manifestarla. Los payloads de costos
+y de usuarios salieron a módulos propios para que el archivo volviera a entrar en su límite.
+
+**Impacto en infraestructura:** Ninguno.
+
+*(Sin migraciones, sin variables de entorno, sin dependencias, sin buckets, sin endpoints
+nuevos ni removidos, sin cambios en el modelo de auth. No se borró ni se modificó ninguna fila
+de `auditoria`.)*
+
+> **🔴 QUÉ SE MOSTRABA MAL, Y DESDE CUÁNDO.**
+>
+> La ficha de cada empleado tiene una sección "Historial de cambios". Sobre 113 eventos de
+> `entidad='empleado'` en producción, **93 tenían un diff que decía, textualmente, que el área
+> y la empresa del empleado habían pasado a vacío**:
+>
+> ```
+> antes:   {"area_nombre": "SALUD", "empresa_nombre": "SERVICIOS Y CONSULTORIA ... DOSUBA"}
+> después: {"area_nombre": null,    "empresa_nombre": null}
+> ```
+>
+> Ninguna de las dos cosas había cambiado nunca. La pantalla se lo afirmaba al usuario sobre
+> empleados reales, con nombre y apellido. **Desde el primer día que existe el módulo:** los
+> 94 eventos de modificación que hay en la base están todos afectados, el más viejo del
+> 14/7/2026, que es cuando se cargaron los empleados.
+>
+> **La causa** es una asimetría de lectura, no un error de lógica. El "antes" se leía con un
+> SELECT que resuelve los nombres de área y empresa por join; el "después" venía del
+> `UPDATE ... RETURNING`, que no los trae. Comparar los dos objetos completos convertía esa
+> diferencia de LECTURA en un cambio de DATOS. Los nombres nunca fueron columnas de
+> `empleados`: son producto de cómo se consultó la fila.
+>
+> **Por qué la suite no lo veía:** el fake del repositorio construía el "antes" y el "después"
+> con la misma factory, así que los dos lados tenían los nombres iguales y el fantasma no podía
+> reproducirse. 899 tests en verde sobre un bug visible en la primera query a producción — el
+> mismo modo de falla que los reportes de Fase 1.
+>
+> **Los eventos viejos NO se borran.** Un log del que se sacan las filas incómodas deja de ser
+> auditoría, y además esos eventos sí registran algo cierto: que alguien editó el registro ese
+> día. Lo que cambia es cómo se renderizan: las claves derivadas se filtran en pantalla y un
+> evento que se queda sin campos visibles se muestra como *"Se editó el registro, sin cambios
+> en campos auditados"*, que es exactamente lo que pasó. El filtro está declarado en un solo
+> lugar y **solo aplica a eventos anteriores al fix**; cuando no queden, se borra entero.
+
+> ⚠️ **UN EFECTO SECUNDARIO QUE CONVIENE CONOCER, porque agranda lo que se audita.** El diff
+> ahora EXCLUYE los campos derivados en vez de ENUMERAR una lista de columnas. La lista curada
+> que usan el alta y la baja tiene 7 campos, y `empleados` tiene 29 columnas editables más
+> —`manager_id`, `dni`, `email_corporativo`, `fecha_ingreso`, `dias_vacaciones_asignados`…—.
+> Enumerar habría dejado de registrar esas ediciones **en silencio**, que en un log de
+> auditoría es peor que el fantasma que se vino a sacar. Consecuencia operativa: los eventos de
+> modificación de empleado pueden traer más claves que antes, y la tabla `auditoria` va a
+> crecer algo más rápido por evento. Nada que dimensionar hoy (133 filas en total), pero vale
+> saberlo antes de estimar el volumen en RDS.
+
 ## 2026-07-28 · Seis reportes de Fase 1 estaban rotos en producción · exports de nómina y auditoría · entrevista de salida · commit pendiente
 
 **Qué cambió:** cinco tandas. (1) Dos repos y un service se dividieron para volver a entrar en

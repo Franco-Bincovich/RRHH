@@ -9,7 +9,7 @@ from typing import Optional
 from integrations.supabase_client import supabase_admin, supabase_client
 from repositories.usuario_repo import UsuarioRepo
 from schemas.usuario import CrearUsuarioRequest, CrearUsuarioResponse
-from services._audit_payloads_rrhh import (
+from services._audit_payloads_usuarios import (
     payload_alta_usuario, payload_baja_usuario, payload_cambio_password,
 )
 from services.audit_service import AuditService
