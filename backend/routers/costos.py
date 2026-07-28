@@ -1,18 +1,17 @@
 """
-Router de costos de personal.
+Router de costos de personal — LECTURAS.
 Rutas protegidas por AuthMiddleware (requieren JWT válido).
-empresa_id para lecturas: header X-Empresa-Id (get_empresa_id).
-empresa_id para escrituras: heredado del empleado/área — NO se pide explícito.
+empresa_id: header X-Empresa-Id (get_empresa_id). None = consolidado.
+Las escrituras (POST de nómina y presupuesto) viven en costos_escrituras.py, separadas por
+límite de líneas; el porqué de ese corte y no otro está en el docstring de aquel módulo.
 """
 from typing import List, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
-from schemas.costo import (
-    DashboardCostosResponse, NominaCreate, NominaResponse,
-    PresupuestoCreate, PresupuestoResponse,
-)
+from schemas.costo import DashboardCostosResponse, HistorialSalarialItem, NominaResponse
 from services.costo_service import CostoService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
@@ -61,20 +60,17 @@ async def exportar_nomina(
                     headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 
-@router.post("/nomina", response_model=NominaResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def post_nomina(
+@router.get("/nomina/empleado/{empleado_id}", response_model=List[HistorialSalarialItem], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+async def get_historial_salarial(
     request: Request,
-    body: NominaCreate,
+    empleado_id: UUID,
     service: CostoService = Depends(_service),
-) -> NominaResponse:
-    u = request.state.user
-    return service.cargar_nomina(body, get_empresa_id(request), u.get("id", "system"), u.get("rol"))
+) -> List[HistorialSalarialItem]:
+    """Serie salarial del empleado para su legajo, del período más reciente al más viejo.
 
-
-@router.post("/presupuesto", response_model=PresupuestoResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def post_presupuesto(
-    request: Request,
-    body: PresupuestoCreate,
-    service: CostoService = Depends(_service),
-) -> PresupuestoResponse:
-    return service.set_presupuesto_area(body, get_empresa_id(request), request.state.user.get("id", "system"))
+    Gateado por Seccion.COSTOS aunque se consuma desde la ficha (que está bajo EMPLEADOS): el
+    sueldo es un dato de costos, y hoy no existe un rol con acceso a una sección y no a la
+    otra, pero los roles cambian y este endpoint no se va a volver a mirar. La barrera de
+    empresa sobre el empleado la aplica el service.
+    """
+    return service.get_historial_salarial(empleado_id, get_empresa_id(request))

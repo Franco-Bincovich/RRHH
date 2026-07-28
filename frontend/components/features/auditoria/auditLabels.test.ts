@@ -4,6 +4,7 @@ import {
   SIN_CAMBIOS_AUDITADOS,
   campoLabel,
   clavesVisibles,
+  formatCampoValor,
   resumenDiff,
   soloTraiaDerivados,
 } from "@/components/features/auditoria/auditLabels"
@@ -87,5 +88,41 @@ describe("altas y bajas", () => {
 
   it("un alta con derivados tampoco los cuenta", () => {
     expect(resumenDiff(null, { legajo: "A-12", area_nombre: "SALUD" })).toBe("Legajo: A-12")
+  })
+})
+
+describe("area_id legible", () => {
+  const AREAS = { "09ae1f7b-923f-42a0-9d22-939f7414c6d9": "FACTURACION" }
+
+  it("resuelve el id al nombre del área", () => {
+    expect(formatCampoValor("area_id", "09ae1f7b-923f-42a0-9d22-939f7414c6d9", AREAS))
+      .toBe("FACTURACION")
+  })
+
+  it("nunca muestra el UUID crudo entero", () => {
+    const uuid = "11111111-2222-3333-4444-555555555555"
+    expect(formatCampoValor("area_id", uuid, AREAS)).not.toBe(uuid)
+  })
+
+  it("un área borrada se dice, no se deja en blanco", () => {
+    // Un guion haría parecer que el campo estaba vacío, que es justo lo que no pasó.
+    const out = formatCampoValor("area_id", "11111111-2222-3333-4444-555555555555", AREAS)
+    expect(out).toMatch(/eliminada/i)
+    expect(out).not.toBe("—")
+  })
+
+  it("mientras no cargaron las áreas no afirma que se borró", () => {
+    expect(formatCampoValor("area_id", "09ae1f7b-923f-42a0-9d22-939f7414c6d9", null))
+      .toBe("Cargando…")
+  })
+
+  it("un area_id nulo sigue siendo vacío, no 'eliminada'", () => {
+    expect(formatCampoValor("area_id", null, AREAS)).toBe("—")
+  })
+
+  it("los otros campos no se tocan", () => {
+    expect(formatCampoValor("seniority", "Sr", AREAS)).toBe("Sr")
+    expect(formatCampoValor("dias", 5, AREAS)).toBe("5")
+    expect(formatCampoValor("es_lider", true, AREAS)).toBe("Sí")
   })
 })

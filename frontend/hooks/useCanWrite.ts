@@ -15,3 +15,17 @@ export function useCanWrite(seccion?: Seccion): boolean {
   const sec = seccion ?? seccionDeRuta(pathname)
   return sec ? puede(getRol(), sec, "write") : true
 }
+
+/**
+ * UX: ¿el rol actual puede LEER esta sección? Para ocultar bloques cuyo contenido pertenece a
+ * otra sección que la de la página — p. ej. el historial salarial dentro de la ficha del
+ * empleado, que es un dato de costos.
+ *
+ * Igual que useCanWrite, NO es control de seguridad: el backend gatea igual y responde 403.
+ * Lo que evita es una sección que aparece y falla, que es peor que una que no aparece.
+ * La sección va siempre explícita: si un bloque necesita este hook es justamente porque su
+ * contenido no es el de la ruta en la que está.
+ */
+export function useCanRead(seccion: Seccion): boolean {
+  return puede(getRol(), seccion, "read")
+}

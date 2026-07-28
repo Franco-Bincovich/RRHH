@@ -1,4 +1,6 @@
-import type { DashboardCostos, Nomina, NominaCreate, Presupuesto, PresupuestoCreate } from "@/types/costo"
+import type {
+  DashboardCostos, HistorialSalarialItem, Nomina, NominaCreate, Presupuesto, PresupuestoCreate,
+} from "@/types/costo"
 import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
 
 export async function fetchDashboardCostos(mes: number, anio: number): Promise<DashboardCostos> {
@@ -38,4 +40,13 @@ export async function setPresupuesto(data: PresupuestoCreate): Promise<Presupues
     method: "POST",
     body: JSON.stringify(data),
   })
+}
+
+/**
+ * Serie salarial de un empleado, del período más reciente al más viejo.
+ * empresa_id NO va como parámetro: apiFetch inyecta X-Empresa-Id y el backend acota el
+ * EMPLEADO a esa empresa antes de devolver nada.
+ */
+export async function fetchHistorialSalarial(empleadoId: string): Promise<HistorialSalarialItem[]> {
+  return apiFetch<HistorialSalarialItem[]>(`/api/costos/nomina/empleado/${empleadoId}`)
 }

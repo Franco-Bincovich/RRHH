@@ -130,6 +130,37 @@ export function formatValor(v: unknown): string {
   return String(v)
 }
 
+/**
+ * Formatea el valor de un campo resolviendo los ids que no le dicen nada a nadie.
+ *
+ * Hoy solo `area_id`, que el diff guarda como UUID porque es la columna real (el nombre lo
+ * resuelve un join, y los nombres de join NO van en un diff — ver CAMPOS_DERIVADOS). La
+ * traducción va acá, al renderizar, y no en lo que se guarda: así también quedan legibles los
+ * eventos YA GUARDADOS, que tienen el UUID adentro y no se van a reescribir.
+ *
+ * ⚠️ MUESTRA EL NOMBRE ACTUAL DEL ÁREA, NO EL QUE TENÍA CUANDO SE HIZO EL CAMBIO. Si un área
+ * se renombra, los eventos viejos pasan a mostrar el nombre nuevo. Es una consecuencia
+ * deliberada de resolver al leer: la alternativa —congelar el nombre al escribir— solo
+ * serviría hacia adelante y reintroduciría un campo derivado en el diff. No es un bug.
+ *
+ * @param areas mapa id→nombre, o `null` si todavía no se cargó (se distingue de "cargado y no
+ *   está", que significa que el área se borró).
+ */
+export function formatCampoValor(
+  campo: string,
+  valor: unknown,
+  areas: Record<string, string> | null,
+): string {
+  if (campo !== "area_id" || valor === null || valor === undefined || valor === "") {
+    return formatValor(valor)
+  }
+  const id = String(valor)
+  if (areas === null) return "Cargando…"
+  // Área borrada: el id acortado es lo único cierto que queda. Ni el UUID entero (ilegible)
+  // ni un guion (haría parecer que el campo estaba vacío, que es justo lo que no pasó).
+  return areas[id] ?? `Área eliminada (${id.slice(0, 8)}…)`
+}
+
 /** Formatea un ISO datetime a "dd/mm/yyyy hh:mm". Si no parsea, devuelve el crudo. */
 export function formatFechaHora(iso: string): string {
   const d = new Date(iso)

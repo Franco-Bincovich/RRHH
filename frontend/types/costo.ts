@@ -20,6 +20,18 @@ export interface Nomina {
   total: number
 }
 
+/**
+ * Un período de la serie salarial de un empleado.
+ * Sin `total`: esa columna es bruto+cargas (el costo para la empresa), no lo que cobra la
+ * persona, y en un legajo se leería como sueldo. El backend tampoco lo devuelve.
+ */
+export interface HistorialSalarialItem {
+  anio: number
+  mes: number
+  monto_bruto: number
+  monto_neto: number
+}
+
 export interface PresupuestoCreate {
   area_id: string
   mes: number

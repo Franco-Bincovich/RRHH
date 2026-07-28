@@ -41,6 +41,55 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-28 · Historial salarial en el legajo · area_id legible en auditoría · commit pendiente
+
+**Qué cambió:** la ficha del empleado suma una sección de historial salarial que sale de la
+serie de `costos_nomina` (una fila por empleado por mes), no del log de cambios. Endpoint nuevo
+`GET /api/costos/nomina/empleado/{empleado_id}`. Además, el modal de auditoría dejó de mostrar
+`area_id` como UUID: lo resuelve a nombre al renderizar.
+
+**Impacto en infraestructura:** Un endpoint nuevo, ninguna migración.
+
+- **`GET /api/costos/nomina/empleado/{empleado_id}`** — autenticado, **no** público. Gateado por
+  `Seccion.COSTOS + READ` (no por EMPLEADOS, aunque se consuma desde la ficha) y con barrera de
+  empresa sobre el empleado objetivo. Sin rate limiting propio: cae en el baseline general, como
+  el resto de las lecturas.
+- **Sin export**, a propósito. Si más adelante hace falta, hereda el chequeo de tope de filas.
+- `routers/costos.py` estaba en 80/80: las dos escrituras salieron a `routers/costos_escrituras.py`.
+  **Las rutas NO cambian** — el router nuevo se monta en el mismo prefijo `/api/costos`.
+- Sin migraciones, sin variables de entorno, sin dependencias, sin buckets, sin cambios en el
+  modelo de auth.
+
+> **🔴 ESTA TANDA ENTREGA CAPACIDAD, NO VALOR VERIFICABLE. `costos_nomina` tiene 0 filas en
+> producción.**
+>
+> No hay un solo sueldo cargado, para ninguno de los 19 empleados. Consecuencias concretas:
+>
+> · **La sección se ve, y dice "Todavía no hay sueldos cargados para este empleado".** Eso es lo
+>   que va a ver RRHH el día que abran un legajo. No está rota.
+> · **No se pudo verificar contra datos reales.** A diferencia de las tandas anteriores, donde
+>   una query a producción confirmaba o desmentía el comportamiento, acá no hay nada contra qué
+>   contrastar. **Los tests son la única red** — están escritos con eso en mente y cubren el
+>   orden de la serie, las dos barreras, el vacío y la derivación del neto.
+> · Lo mismo vale para el orden cruzando el cambio de año (diciembre 2025 después de enero 2026):
+>   está testeado, no observado.
+>
+> Cuando RRHH cargue nómina, **esto hay que mirarlo en producción antes de darlo por bueno.**
+
+> ⚠️ **QUÉ MONTOS MUESTRA, porque la tabla tiene cuatro y solo uno se carga.** `salario_bruto` es
+> el sueldo (lo escriben los dos caminos). `cargas_sociales` también, y de ahí sale el neto
+> (bruto − cargas), que **no es una columna**. `bonos` y `otros_costos` no los escribe nadie:
+> columnas muertas, siempre 0. Y `total` es una columna GENERADA (bruto+cargas+bonos+otros), o
+> sea el costo para la empresa, no lo que cobra la persona — por eso el endpoint **no** lo
+> devuelve: en un legajo se leería como sueldo.
+
+> **Sobre `area_id` en el modal de auditoría:** se resuelve al RENDERIZAR, no se guarda el nombre
+> al escribir. Así quedan legibles también los 19 eventos ya guardados, que tienen el UUID
+> adentro. **Efecto conocido: muestra el nombre ACTUAL del área, no el que tenía cuando se hizo
+> el cambio.** Si un área se renombra, los eventos viejos pasan a mostrar el nombre nuevo. Es
+> deliberado — la alternativa (congelar el nombre en el diff) solo serviría hacia adelante y
+> reintroduciría un campo derivado, que es justo el bug que se acaba de cerrar.
+
 ## 2026-07-28 · El historial de cambios del legajo mostraba cambios que nunca ocurrieron · commit pendiente
 
 **Qué cambió:** el diff de auditoría de empleados dejó de compararse sobre el objeto de

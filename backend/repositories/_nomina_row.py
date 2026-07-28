@@ -11,7 +11,7 @@ Las dos FKs nombradas del SELECT no son decoración: `costos_nomina` tiene DOS c
 (area_id, y responsable_id en sentido inverso). Sin nombrar la constraint, PostgREST no elige
 y devuelve PGRST201 en vez de datos.
 """
-from schemas.costo import NominaResponse
+from schemas.costo import HistorialSalarialItem, NominaResponse
 
 TABLE = "costos_nomina"
 
@@ -45,4 +45,18 @@ def row(r: dict) -> NominaResponse:
         monto_bruto=bruto,
         monto_neto=bruto - cargas,
         total=float(r.get("total") or 0),
+    )
+
+
+def item(r: dict) -> HistorialSalarialItem:
+    """Fila de costos_nomina → un período de la serie salarial de un empleado.
+
+    Proyección mucho más chica que `row`: la serie no necesita nombres resueltos (ya se sabe
+    de qué empleado es) ni el `total` generado. El neto se DERIVA acá porque no existe como
+    columna: la tabla guarda bruto y cargas.
+    """
+    bruto = float(r.get("salario_bruto") or 0)
+    return HistorialSalarialItem(
+        anio=int(r["anio"]), mes=int(r["mes"]),
+        monto_bruto=bruto, monto_neto=bruto - float(r.get("cargas_sociales") or 0),
     )

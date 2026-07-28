@@ -14,6 +14,7 @@ import { DatosEmpleadoSection } from "@/components/features/empleados/ficha/Dato
 import { AdjuntosSection } from "@/components/features/adjuntos/AdjuntosSection"
 import { InventarioSection } from "@/components/features/empleados/ficha/InventarioSection"
 import { HistorialCambiosSection } from "@/components/features/empleados/ficha/HistorialCambiosSection"
+import { HistorialSalarialSection } from "@/components/features/empleados/ficha/HistorialSalarialSection"
 import { VacacionesSection } from "@/components/features/empleados/ficha/VacacionesSection"
 import { CesionesSection } from "@/components/features/empleados/ficha/CesionesSection"
 import { fetchEmpleado } from "@/services/empleados"
@@ -99,6 +100,7 @@ export default function EmpleadoDetailPage() {
         <DatosEmpleadoSection empleado={empleado} />
         <AdjuntosSection entidad="empleado" entidadId={id} />
         <InventarioSection empleadoId={id} />
+        <HistorialSalarialSection empleadoId={id} />
         <HistorialCambiosSection empleadoId={id} />
         <VacacionesSection empleadoId={id} />
         <CesionesSection empleadoId={id} />

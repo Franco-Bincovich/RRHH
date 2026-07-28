@@ -11,8 +11,9 @@ from uuid import UUID
 from integrations.supabase_client import supabase_admin
 from repositories._nomina_row import SELECT as _NOM_SEL
 from repositories._nomina_row import TABLE as _NOM
+from repositories._nomina_row import item as _a_item
 from repositories._nomina_row import row as _to_nomina
-from schemas.costo import EvolucionMes, NominaCreate, NominaResponse
+from schemas.costo import EvolucionMes, HistorialSalarialItem, NominaCreate, NominaResponse
 from utils.errors import AppError
 
 
@@ -27,6 +28,20 @@ class NominaRepo:
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         return [_to_nomina(r) for r in (q.execute().data or [])]
+
+    def find_by_empleado(self, empleado_id: str, empresa_id: Optional[UUID] = None) -> List[HistorialSalarialItem]:
+        """Serie salarial del empleado, del período más reciente al más viejo.
+
+        Ordena por (anio, mes) en la query y no en Python: la serie es el producto, y un orden
+        que dependa del orden de llegada de las filas se rompe en silencio.
+        `UNIQUE (empleado_id, anio, mes)` garantiza que no haya dos filas del mismo período.
+        """
+        q = (supabase_admin.table(_NOM).select("anio,mes,salario_bruto,cargas_sociales")
+             .eq("empleado_id", empleado_id)
+             .order("anio", desc=True).order("mes", desc=True))
+        if empresa_id:
+            q = q.eq("empresa_id", str(empresa_id))
+        return [_a_item(r) for r in (q.execute().data or [])]
 
     def save_nomina(self, data: NominaCreate) -> NominaResponse:
         """Upsert de nómina. empresa_id se hereda del empleado (FK compuesta garantiza coherencia)."""

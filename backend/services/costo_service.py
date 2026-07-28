@@ -6,14 +6,16 @@ CRÍTICO: todo cálculo de totales y agregaciones filtra por empresa_id cuando s
 from typing import List, Optional
 from uuid import UUID
 
+from repositories.empleado_repo import EmpleadoRepo
 from repositories.nomina_repo import NominaRepo
 from repositories.periodo_repo import PeriodoRepo
 from repositories.presupuesto_repo import PresupuestoRepo
 from schemas.costo import (
-    CostoArea, DashboardCostosResponse, NominaCreate, NominaResponse,
+    CostoArea, DashboardCostosResponse, HistorialSalarialItem, NominaCreate, NominaResponse,
     PresupuestoCreate, PresupuestoResponse,
 )
 from services._costos_write import cargar_nomina, set_presupuesto_area
+from services._empleado_scope import ensure_empleado_de_empresa
 from services._limite_export import verificar_limite_export
 from services._nomina_export import construir_filas_export
 from services.audit_service import AuditService
@@ -27,11 +29,13 @@ class CostoService:
         presupuesto_repo: Optional[PresupuestoRepo] = None,
         audit: Optional[AuditService] = None,
         periodo_repo: Optional[PeriodoRepo] = None,
+        empleado_repo: Optional[EmpleadoRepo] = None,
     ) -> None:
         self._nomina = nomina_repo or NominaRepo()
         self._presupuesto = presupuesto_repo or PresupuestoRepo()
         self._audit = audit or AuditService()
         self._periodos = periodo_repo or PeriodoRepo()
+        self._empleados = empleado_repo or EmpleadoRepo()
 
     def get_dashboard_costos(self, mes: int, anio: int, empresa_id: Optional[UUID] = None) -> DashboardCostosResponse:
         """
@@ -88,6 +92,35 @@ class CostoService:
             empresa_id: Filtra por empresa. None = todas.
         """
         return self._nomina.get_nomina_mes(mes, anio, empresa_id)
+
+    def get_historial_salarial(self, empleado_id: UUID, empresa_id: Optional[UUID] = None) -> List[HistorialSalarialItem]:
+        """Serie salarial de un empleado, del período más reciente al más viejo.
+
+        LA SERIE **ES** EL HISTORIAL, no hace falta el log de cambios: `costos_nomina` tiene
+        UNIQUE (empleado_id, anio, mes), o sea una fila por mes. Con auditoría, el caso más
+        común —sueldos importados por CSV y nunca editados a mano— daría historial vacío
+        teniendo los sueldos cargados.
+
+        DOS BARRERAS, las dos necesarias y distintas:
+          · la de SECCIÓN (Seccion.COSTOS + READ) la aplica el router: quién puede ver sueldos;
+          · la de EMPRESA se aplica acá, sobre el EMPLEADO objetivo. El `empresa_id` que el
+            repo usa sale del header y no valida a qué empleado apuntás: sin este chequeo, un
+            id de otra empresa devolvería su serie salarial igual.
+        El 404 es el mismo que el de "el empleado no existe" — nunca un 403.
+
+        Args:
+            empleado_id: empleado del que se pide la serie.
+            empresa_id: empresa activa del request. None = consolidado (no restringe).
+
+        Returns:
+            Lista de HistorialSalarialItem; vacía si el empleado no tiene nómina cargada, que
+            NO es un error — hoy es el caso de los 19 empleados de producción.
+
+        Raises:
+            AppError: EMPLEADO_NOT_FOUND (404) si no existe o es de otra empresa.
+        """
+        ensure_empleado_de_empresa(self._empleados, empleado_id, empresa_id)
+        return self._nomina.find_by_empleado(str(empleado_id), empresa_id)
 
     def exportar(self, mes: int, anio: int, empresa_id: Optional[UUID] = None, formato: str = "excel") -> Descarga:
         """Exporta la nómina del período con los MISMOS filtros que `get_nomina_mes` — lo que

@@ -1,12 +1,15 @@
 "use client"
 
+import { useEffect, useState } from "react"
+
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import {
   ENTIDAD_LABEL, EVENTO_LABEL, SIN_CAMBIOS_AUDITADOS, campoLabel, clavesVisibles,
-  formatFechaHora, formatValor, soloTraiaDerivados,
+  formatCampoValor, formatFechaHora, soloTraiaDerivados,
 } from "@/components/features/auditoria/auditLabels"
+import { fetchAreas } from "@/services/areas"
 import type { AuditLog } from "@/types/auditoria"
 
 interface AuditDetailModalProps {
@@ -26,6 +29,24 @@ export function AuditDetailModal({ log, onClose }: AuditDetailModalProps) {
   const sinCambiosReales = soloTraiaDerivados(antes, nuevos)
   const esUpdate = Object.keys(antes).length > 0 && Object.keys(nuevos).length > 0
   const titulo = log ? (EVENTO_LABEL[log.evento] ?? log.evento) : ""
+
+  // Las áreas se piden SOLO si el evento abierto tiene un area_id que traducir: la mayoría
+  // no lo tiene, y el modal está montado (cerrado) en toda la ficha de empleado.
+  const [areas, setAreas] = useState<Record<string, string> | null>(null)
+  const necesitaAreas = keys.includes("area_id")
+
+  useEffect(() => {
+    if (!necesitaAreas || areas !== null) return
+    let cancelado = false
+    fetchAreas()
+      .then((as) => {
+        if (!cancelado) setAreas(Object.fromEntries(as.map((a) => [a.id, a.nombre])))
+      })
+      // Sin áreas el detalle igual se muestra: un mapa vacío degrada a "Área eliminada (id…)",
+      // que es preferible a no poder abrir el evento.
+      .catch(() => { if (!cancelado) setAreas({}) })
+    return () => { cancelado = true }
+  }, [necesitaAreas, areas])
 
   let encabezadoCambios = "Cambios"
   if (!esUpdate && Object.keys(nuevos).length > 0) encabezadoCambios = "Datos registrados"
@@ -64,12 +85,18 @@ export function AuditDetailModal({ log, onClose }: AuditDetailModalProps) {
                       <span className="font-medium">{campoLabel(k)}:</span>
                       {esUpdate ? (
                         <span>
-                          <span className="text-muted-foreground line-through">{formatValor(antes[k])}</span>
+                          <span className="text-muted-foreground line-through">
+                            {formatCampoValor(k, antes[k], areas)}
+                          </span>
                           {" → "}
-                          <span>{formatValor(nuevos[k])}</span>
+                          <span>{formatCampoValor(k, nuevos[k], areas)}</span>
                         </span>
                       ) : (
-                        <span>{formatValor(Object.keys(nuevos).length > 0 ? nuevos[k] : antes[k])}</span>
+                        <span>
+                          {formatCampoValor(
+                            k, Object.keys(nuevos).length > 0 ? nuevos[k] : antes[k], areas,
+                          )}
+                        </span>
                       )}
                     </li>
                   ))}

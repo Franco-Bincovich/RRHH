@@ -29,6 +29,26 @@ class NominaResponse(BaseModel):
     total: float
 
 
+class HistorialSalarialItem(BaseModel):
+    """Un período de la serie salarial de un empleado.
+
+    QUÉ MONTOS LLEVA, Y POR QUÉ NO `total`. `costos_nomina` guarda cuatro montos, pero solo
+    uno se carga de verdad:
+      · `salario_bruto`  → lo escriben los dos caminos (carga manual e import). Es el sueldo.
+      · `cargas_sociales`→ también, y de ahí sale el neto (bruto − cargas): NO es una columna.
+      · `bonos` / `otros_costos` → ninguno de los dos caminos los escribe nunca. Columnas
+        muertas, siempre 0.
+      · `total` → columna GENERADA (bruto + cargas + bonos + otros). Como bonos y otros son 0,
+        hoy es bruto + cargas, o sea el costo para la empresa, NO lo que cobra la persona.
+    En un legajo la pregunta es "cuánto gana", así que la serie muestra bruto y neto. Poner
+    `total` al lado invitaría a leerlo como sueldo, que es lo que no es.
+    """
+    anio: int
+    mes: int
+    monto_bruto: float
+    monto_neto: float
+
+
 class PresupuestoCreate(BaseModel):
     area_id: str
     mes: int = Field(..., ge=1, le=12)
