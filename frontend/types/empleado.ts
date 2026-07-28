@@ -27,6 +27,12 @@ export interface Empleado {
   sexo: string | null
   telefono_alternativo: string | null
   domicilio: string | null
+  domicilio_calle: string | null
+  domicilio_numero: string | null
+  domicilio_piso_depto: string | null
+  domicilio_localidad: string | null
+  domicilio_provincia: string | null
+  domicilio_cp: string | null
   estudios: string | null
   ubicacion: string | null
   turno: string | null
@@ -76,6 +82,12 @@ export interface EmpleadoCreate {
   sexo?: string
   telefono_alternativo?: string
   domicilio?: string
+  domicilio_calle?: string
+  domicilio_numero?: string
+  domicilio_piso_depto?: string
+  domicilio_localidad?: string
+  domicilio_provincia?: string
+  domicilio_cp?: string
   estudios?: string
   ubicacion?: string
   turno?: string

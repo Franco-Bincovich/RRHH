@@ -1,12 +1,29 @@
 """
-Schemas Pydantic para el módulo de empleados.
-EmpleadoBase → EmpleadoCreate → EmpleadoUpdate → EmpleadoResponse → EmpleadoListResponse
+Schemas Pydantic de ENTRADA del módulo de empleados: EmpleadoBase → EmpleadoCreate →
+EmpleadoUpdate.
+
+Los de salida (EmpleadoResponse, EmpleadoListResponse, EmpleadoSeleccionable) viven en
+schemas/empleado_out.py y se RE-EXPORTAN acá: `from schemas.empleado import EmpleadoResponse`
+sigue andando en todos los call sites que ya existen.
 """
 from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, field_validator
+
+from schemas._provincias import Provincia
+from schemas.empleado_out import (
+    EmpleadoListResponse,
+    EmpleadoResponse,
+    EmpleadoSeleccionable,
+)
+
+# Re-export: el corte de este módulo NO debe obligar a tocar los imports de nadie.
+__all__ = [
+    "EmpleadoBase", "EmpleadoCreate", "EmpleadoUpdate",
+    "EmpleadoListResponse", "EmpleadoResponse", "EmpleadoSeleccionable",
+]
 
 
 def _normalizar_roles(v: object) -> object:
@@ -59,6 +76,14 @@ class EmpleadoBase(BaseModel):
     modalidad_contratacion: Optional[str] = None
     referido: Optional[str] = None
     es_lider: bool = False
+    # Domicilio desglosado (C4, migración 081). `domicilio` de arriba se conserva como texto
+    # libre: es el destino de lo que no encaje acá y la referencia para completar estos.
+    domicilio_calle: Optional[str] = None
+    domicilio_numero: Optional[str] = None       # texto: existen "S/N", "1234 bis", "KM 4"
+    domicilio_piso_depto: Optional[str] = None
+    domicilio_localidad: Optional[str] = None
+    domicilio_provincia: Optional[Provincia] = None  # lista cerrada → fuera de la lista = 422
+    domicilio_cp: Optional[str] = None
 
     @field_validator("roles")
     @classmethod
@@ -118,6 +143,14 @@ class EmpleadoUpdate(BaseModel):
     modalidad_contratacion: Optional[str] = None
     referido: Optional[str] = None
     es_lider: Optional[bool] = None
+    # Domicilio desglosado (C4, migración 081). `domicilio` de arriba se conserva como texto
+    # libre: es el destino de lo que no encaje acá y la referencia para completar estos.
+    domicilio_calle: Optional[str] = None
+    domicilio_numero: Optional[str] = None       # texto: existen "S/N", "1234 bis", "KM 4"
+    domicilio_piso_depto: Optional[str] = None
+    domicilio_localidad: Optional[str] = None
+    domicilio_provincia: Optional[Provincia] = None  # lista cerrada → fuera de la lista = 422
+    domicilio_cp: Optional[str] = None
 
     @field_validator("roles")
     @classmethod
@@ -136,64 +169,3 @@ class EmpleadoUpdate(BaseModel):
         if isinstance(v, str):
             return int(v) if v.strip() else None
         return v
-
-
-class EmpleadoResponse(BaseModel):
-    id: str
-    nombre: str
-    apellido: str
-    email_corporativo: Optional[str] = None  # nullable: import de nómina permite crear sin email
-    empresa_id: Optional[str] = None
-    empresa_nombre: Optional[str] = None
-    area_id: str
-    area_nombre: Optional[str] = None
-    roles: List[str]                  # multi-valor; roles[0] es el principal
-    modalidad_trabajo: str
-    tipo_contrato: str
-    fecha_ingreso: date
-    telefono: Optional[str] = None
-    fecha_nacimiento: Optional[date] = None
-    dni: Optional[str] = None
-    cuil: Optional[str] = None
-    legajo: Optional[str] = None
-    manager_id: Optional[str] = None      # superior inmediato (id)
-    manager_nombre: Optional[str] = None  # "Apellido, Nombre" resuelto por join
-    cargo: Optional[str] = None       # DEPRECADO (se dropea en S6)
-    rol: Optional[str] = None         # DEPRECADO (se dropea en S6)
-    estado: str
-    dias_vacaciones_asignados: int = 14
-    # Legajo ampliado (A1.1, migración 060) — todos opcionales.
-    email_personal: Optional[str] = None
-    tipo_documento: Optional[str] = None
-    sexo: Optional[str] = None
-    telefono_alternativo: Optional[str] = None
-    domicilio: Optional[str] = None
-    estudios: Optional[str] = None
-    ubicacion: Optional[str] = None
-    turno: Optional[str] = None
-    horas_contrato: Optional[int] = None
-    organismo: Optional[str] = None
-    gerencia: Optional[str] = None
-    sector: Optional[str] = None
-    seniority: Optional[str] = None
-    perfil: Optional[str] = None
-    categoria: Optional[str] = None
-    modalidad_contratacion: Optional[str] = None
-    referido: Optional[str] = None
-    es_lider: bool = False
-    created_at: datetime
-
-
-class EmpleadoListResponse(BaseModel):
-    items: List[EmpleadoResponse]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
-
-
-class EmpleadoSeleccionable(BaseModel):
-    """Proyección liviana de un empleado para poblar selects (ej. superior inmediato)."""
-    id: str
-    nombre: str
-    apellido: str

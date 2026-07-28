@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Field, Section } from "@/components/features/empleados/ficha/_primitives"
 import type { Empleado } from "@/types/empleado"
+import { domicilioLegible, mostrarCrudo } from "@/components/features/empleados/ficha/_domicilio"
 
 const ESTADO_VARIANTS = {
   activo: "default",
@@ -31,7 +32,10 @@ export function DatosEmpleadoSection({ empleado }: { empleado: Empleado }) {
         <Field label="Teléfono alternativo" value={empleado.telefono_alternativo} />
         <Field label="Email" value={empleado.email_corporativo} />
         <Field label="Email alternativo" value={empleado.email_personal} />
-        <Field label="Domicilio" value={empleado.domicilio} />
+        <Field label="Domicilio" value={domicilioLegible(empleado)} />
+        {mostrarCrudo(empleado) && (
+          <Field label="Domicilio (sin desglosar)" value={empleado.domicilio} />
+        )}
         <Field label="Estudios" value={empleado.estudios} />
       </Section>
 

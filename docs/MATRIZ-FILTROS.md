@@ -330,6 +330,14 @@ Hoy el síntoma está **enmascarado**: como esos dos filtros tampoco tienen cont
 (ver PARCIALES en la Parte 1), nadie puede activarlos. **En el momento en que se agregue el
 control, el export miente** — salvo que se arregle el wrapper en la misma sesión.
 
+> 🕓 **CANDIDATO ANOTADO — filtro por provincia / localidad en empleados.** La migración 081
+> (C4) desglosó el domicilio en seis columnas, dos de ellas pensadas para agrupar
+> (`domicilio_provincia`, con lista cerrada de 24 valores, y `domicilio_localidad`), y las dejó
+> indexadas. **El filtro NO se construyó**: Bloque B está cerrado y con 0 domicilios cargados no
+> filtraría nada. Cuando RRHH cargue domicilios, es el corte más barato que queda — el índice ya
+> está, las dos columnas ya salen en el export de empleados, y el patrón de filtros del módulo
+> ya existe.
+
 **Módulos con listado y sin export (9 → 7):** ~~auditoría~~ · proyectos · horas de proyecto ·
 ~~costos/nómina~~ · presupuesto · onboarding · offboarding · áreas · vacantes · candidatos ·
 períodos.

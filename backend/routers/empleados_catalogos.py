@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 
+from schemas._provincias import PROVINCIAS
 from schemas.empleado import EmpleadoSeleccionable
 from services.empleado_catalogos_service import EmpleadoCatalogosService
 from utils.permisos import Accion, Seccion, require_permission
@@ -41,3 +42,15 @@ async def seleccionables(
 ) -> list[EmpleadoSeleccionable]:
     """Lista liviana (id, nombre, apellido) de empleados activos de una empresa, para selects."""
     return service.get_seleccionables(empresa_id)
+
+
+@router.get("/provincias", response_model=list[str], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+async def provincias() -> list[str]:
+    """Las 24 jurisdicciones argentinas, para el select de domicilio del modal.
+
+    Existe para que la lista tenga UNA fuente de verdad. El front podría tener su propia copia
+    —son 24 strings que no cambian— pero dos listas escritas a mano se separan: es el problema
+    ya documentado de permisos.ts como espejo manual de permisos.py. Sirviéndola desde acá, el
+    backend valida y el front muestra exactamente lo mismo, por construcción.
+    """
+    return list(PROVINCIAS)

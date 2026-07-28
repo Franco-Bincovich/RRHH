@@ -41,6 +41,10 @@ def construir_filas_export(items: List[EmpleadoResponse]) -> List[dict]:
             "Modalidad": e.modalidad_trabajo,
             "Horas de contrato": e.horas_contrato,
             "Fecha de ingreso": _fecha(e.fecha_ingreso),
+            # Del domicilio salen SOLO las dos agregables: en un listado, calle/número/piso
+            # no responden ninguna pregunta, y agregarlas por completitud infla el archivo.
+            "Localidad": e.domicilio_localidad,
+            "Provincia": e.domicilio_provincia,
             "Estado": e.estado,
             "Es líder": "Sí" if e.es_lider else "No",
             "Días de vacaciones": e.dias_vacaciones_asignados,

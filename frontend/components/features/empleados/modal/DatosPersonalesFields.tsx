@@ -1,6 +1,7 @@
 import { Label } from "@/components/ui/label"
 import { TextFields } from "./TextFields"
 import { AutocompleteFields } from "./AutocompleteFields"
+import { DomicilioFields } from "./DomicilioFields"
 import {
   PERSONAL_AUTOCOMPLETE, PERSONAL_CONTACT_FIELDS, PERSONAL_DOC_FIELDS,
   PERSONAL_IDENTITY_FIELDS, SELECT_CLASS,
@@ -9,7 +10,7 @@ import {
 
 /**
  * Sección "Información personal" (controlada). Orden: identidad → documento
- * (tipo + número + CUIT/CUIL juntos) → sexo (F/M fijo) → contacto. El estado vive
+ * (tipo + número + CUIT/CUIL juntos) → sexo (F/M fijo) → contacto → domicilio. El estado vive
  * en el orquestador.
  */
 export function DatosPersonalesFields({
@@ -41,6 +42,9 @@ export function DatosPersonalesFields({
       </div>
 
       <TextFields fields={PERSONAL_CONTACT_FIELDS} form={form} errors={errors} field={field} />
+
+      {/* Domicilio, agrupado: seis campos que se completan juntos. */}
+      <DomicilioFields form={form} errors={errors} field={field} />
     </>
   )
 }

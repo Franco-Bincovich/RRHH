@@ -281,6 +281,16 @@ CREATE TABLE public.empleados (
     sexo text,
     telefono_alternativo text,
     domicilio text,
+    -- Domicilio desglosado (migración 081). `domicilio` de arriba se conserva como texto libre:
+    -- es el destino de lo que no encaje acá. `domicilio_numero` es TEXT porque existen "S/N",
+    -- "1234 bis", "KM 4". `domicilio_provincia` se valida en la app contra las 24
+    -- jurisdicciones (backend/schemas/_provincias.py), no por CHECK: una sola fuente.
+    domicilio_calle text,
+    domicilio_numero text,
+    domicilio_piso_depto text,
+    domicilio_localidad text,
+    domicilio_provincia text,
+    domicilio_cp text,
     estudios text,
     ubicacion text,
     turno text,
@@ -1161,6 +1171,8 @@ CREATE INDEX idx_ec_empleado_id ON public.empleado_capacitacion USING btree (emp
 CREATE INDEX idx_ec_empresa_id ON public.empleado_capacitacion USING btree (empresa_id);
 CREATE INDEX idx_empleados_area ON public.empleados USING btree (area_id);
 CREATE INDEX idx_empleados_desempeno ON public.empleados USING btree (desempeno);
+CREATE INDEX idx_empleados_domicilio_localidad ON public.empleados USING btree (domicilio_localidad) WHERE (domicilio_localidad IS NOT NULL);
+CREATE INDEX idx_empleados_domicilio_provincia ON public.empleados USING btree (domicilio_provincia) WHERE (domicilio_provincia IS NOT NULL);
 CREATE INDEX idx_empleados_empresa ON public.empleados USING btree (empresa_id);
 CREATE INDEX idx_empleados_estado ON public.empleados USING btree (estado);
 CREATE INDEX idx_empleados_manager ON public.empleados USING btree (manager_id);

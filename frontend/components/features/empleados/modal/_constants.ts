@@ -23,6 +23,12 @@ export type FormData = {
   telefono_alternativo: string
   email_personal: string
   domicilio: string
+  domicilio_calle: string
+  domicilio_numero: string
+  domicilio_piso_depto: string
+  domicilio_localidad: string
+  domicilio_provincia: string
+  domicilio_cp: string
   estudios: string
   ubicacion: string
   turno: string
@@ -82,6 +88,12 @@ export const EMPTY: FormData = {
   telefono_alternativo: "",
   email_personal: "",
   domicilio: "",
+  domicilio_calle: "",
+  domicilio_numero: "",
+  domicilio_piso_depto: "",
+  domicilio_localidad: "",
+  domicilio_provincia: "",
+  domicilio_cp: "",
   estudios: "",
   ubicacion: "",
   turno: "",
@@ -116,8 +128,24 @@ export const PERSONAL_CONTACT_FIELDS: TextField[] = [
   { field: "telefono_alternativo", label: "Teléfono alternativo", type: "tel" },
   { field: "email_corporativo", label: "Email corporativo", required: true, type: "email" },
   { field: "email_personal", label: "Email alternativo", type: "email" },
-  { field: "domicilio", label: "Domicilio" },
   { field: "estudios", label: "Estudios" },
+]
+
+/**
+ * Domicilio desglosado (C4). Va en su propio bloque y NO junto al resto de los datos de
+ * contacto: son seis campos que se completan de una sola vez, y mezclarlos con teléfono y
+ * email hace que el formulario se lea como una lista sin fin.
+ *
+ * `domicilio_provincia` NO está acá: es un select cerrado y lo renderiza DomicilioFields.
+ * `domicilio` (el texto libre viejo) tampoco: dejó de editarse, se muestra como referencia en
+ * la ficha mientras estos estén vacíos.
+ */
+export const DOMICILIO_FIELDS: TextField[] = [
+  { field: "domicilio_calle", label: "Calle" },
+  { field: "domicilio_numero", label: "Número", placeholder: "Ej: 1234, S/N, KM 4" },
+  { field: "domicilio_piso_depto", label: "Piso / Depto" },
+  { field: "domicilio_localidad", label: "Localidad" },
+  { field: "domicilio_cp", label: "Código postal" },
 ]
 
 export const LABORAL_TEXT_FIELDS: TextField[] = [

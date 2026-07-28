@@ -41,6 +41,56 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-28 · Domicilio desglosado (migración 081) · commit pendiente
+
+**Qué cambió:** `empleados.domicilio` era un único campo de texto libre, así que el domicilio
+no se podía filtrar ni agregar. Se agregaron seis columnas estructuradas (calle, número,
+piso/depto, localidad, provincia, CP). El texto libre se conserva. La provincia se valida
+contra las 24 jurisdicciones argentinas.
+
+**Impacto en infraestructura:** 🔴 **UNA MIGRACIÓN. Tiene ORDEN DE DEPLOY.**
+
+- **`081_add_domicilio_desglosado.sql` — NO DESTRUCTIVA.** Solo agrega seis columnas nullable
+  y dos índices parciales sobre `empleados`. No toca datos, no reescribe `domicilio`, no
+  dropea nada. Es segura de correr con la aplicación arriba.
+- 🔴 **ORDEN: LA MIGRACIÓN VA ANTES QUE EL CÓDIGO.** El backend nuevo hace `SELECT *` sobre
+  `empleados` y valida la respuesta contra un schema que ya incluye las seis columnas; si el
+  código sube primero, PostgREST devuelve filas sin esos campos. Como son opcionales, Pydantic
+  no rompe — pero el modal guardaría los valores contra columnas inexistentes y el error
+  aparecería recién al escribir, no al leer. **Migración → deploy backend → deploy front.**
+- **`backend/db/schema.sql` actualizado** (columnas + los dos índices). Sigue siendo la fuente
+  de verdad de reconstrucción.
+- **Endpoint nuevo:** `GET /api/empleados/provincias` — autenticado, gateado por
+  `Seccion.EMPLEADOS + READ`. Devuelve las 24 jurisdicciones para el select del modal.
+- **`ubicacion` NO se tocó.** Es otra cosa: sale de "Ubicación Física" del CSV y es dónde la
+  persona trabaja, no dónde vive. Sigue en 14/19.
+- Sin variables de entorno, sin dependencias, sin buckets, sin cambios en el modelo de auth.
+
+> **LOS CAMPOS NACEN VACÍOS, y no hubo nada que migrar.** `domicilio` estaba **0/19** en
+> producción antes de esta tanda: ni un solo empleado tenía domicilio cargado. Eso quiere decir
+> que **no hubo migración de datos ni parseo de texto libre** — que era el riesgo principal del
+> trabajo y simplemente no se materializó. Verificado después de correr la migración: 19 filas,
+> las seis columnas nuevas en NULL, `ubicacion` intacta en 14.
+>
+> Consecuencia: como en las dos tandas anteriores, **esto entrega capacidad, no valor
+> observable**. Los cortes por provincia y localidad existen y están testeados, pero no hay
+> nada que cortar hasta que RRHH cargue domicilios.
+
+> ⚠️ **LA PROVINCIA ES UNA LISTA CERRADA, Y ESO ES LO QUE HACE QUE EL CAMPO SIRVA.** Si fuera
+> texto libre, "Córdoba" / "CORDOBA" / "Cba" convivirían y agrupar por provincia volvería a ser
+> imposible — o sea, un campo estructurado que no estructura nada.
+>
+> · Los nombres son los **oficiales del IGN**, tomados de la API Georef del Estado
+>   (`apis.datos.gob.ar/georef/api/provincias`), no escritos de memoria. Incluyen los acentos y
+>   la forma larga "Tierra del Fuego, Antártida e Islas del Atlántico Sur" — **ojo con esa: trae
+>   comas**, así que en cualquier CSV va entre comillas.
+> · **NO hay CHECK en la base ni tabla de catálogo.** La lista vive en UN solo lugar
+>   (`backend/schemas/_provincias.py`) y el `Literal` de Pydantic rechaza con 422 lo que no esté.
+>   Un CHECK sería una segunda copia; una tabla, un join y un ABM que nadie usaría.
+> · El frontend **no tiene su propia copia**: la pide al endpoint nuevo. Hay un test que barre
+>   el front y falla si alguien pega la lista ahí — el problema conocido de `permisos.ts` como
+>   espejo manual de `permisos.py`, que esta vez se evitó por construcción.
+
 ## 2026-07-28 · Historial salarial en el legajo · area_id legible en auditoría · commit pendiente
 
 **Qué cambió:** la ficha del empleado suma una sección de historial salarial que sale de la
