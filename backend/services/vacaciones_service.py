@@ -24,6 +24,7 @@ from schemas.vacaciones import (
 )
 from services._audit_payloads import payload_cancelacion_vacacion
 from services._empleado_scope import ensure_empleado_visible
+from repositories._scope_filtros import empleados_de_proyecto
 from services._ownership_filter import resolver_empleado_ids
 from services._periodo_utils import verificar_periodo_abierto
 from services._vacaciones_export import construir_filas_export
@@ -45,19 +46,20 @@ class VacacionesService:
         self._ownership = ownership_repo or EmpleadoOwnershipRepo()
         self._empleados = empleado_repo or EmpleadoRepo()
 
-    def get_all(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, estado: Optional[str] = None, page: int = 1, page_size: int = 20, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None) -> SolicitudVacacionesListResponse:
+    def get_all(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, estado: Optional[str] = None, page: int = 1, page_size: int = 20, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None, proyecto_id: Optional[UUID] = None) -> SolicitudVacacionesListResponse:
         """Página de solicitudes (estado derivado) filtrada por empresa/área/empleado/estado y ownership. vacio → devuelve vacío sin consultar.
         `today` se calcula una vez: mismo valor para el filtro server-side y para derive_estado (sin desalineación en los bordes).
         fecha_desde/fecha_hasta acotan por SOLAPAMIENTO con el rango (ver repositories/_rango_fechas): una solicitud que
         empieza antes del rango pero lo cruza ENTRA. Se compone por INTERSECCIÓN con el ownership, que ya viajó en empleado_ids."""
         today = date.today()
-        empleado_ids, vacio = resolver_empleado_ids(user_id, rol, empresa_id, area_id, empleado_id, self._ownership)
+        proyecto_ids = empleados_de_proyecto(proyecto_id) if proyecto_id else None
+        empleado_ids, vacio = resolver_empleado_ids(user_id, rol, empresa_id, area_id, empleado_id, self._ownership, proyecto_ids)
         rows, total = ([], 0) if vacio else self._repo.find_all(empresa_id, empleado_ids, page, page_size, estado, today, desde=fecha_desde, hasta=fecha_hasta)
         return SolicitudVacacionesListResponse(items=[derive_estado(r, today) for r in rows], total=total)
 
-    def exportar(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, estado: Optional[str] = None, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None) -> Descarga:
+    def exportar(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, estado: Optional[str] = None, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
         """Exporta vacaciones (columnas legibles, sin UUIDs) respetando ownership; acotable por área/empleado/estado (mismos filtros que el listado)."""
-        filas = construir_filas_export(self.get_all(user_id, rol, empresa_id, area_id, empleado_id, estado, 1, 100000, fecha_desde, fecha_hasta).items)
+        filas = construir_filas_export(self.get_all(user_id, rol, empresa_id, area_id, empleado_id, estado, 1, 100000, fecha_desde, fecha_hasta, proyecto_id).items)
         return build_export(nombre="Vacaciones", datos={"Vacaciones": filas}, filename_base="vacaciones", formato=formato)
 
     def get_by_empleado(self, empleado_id: UUID, user_id: Optional[str] = None, rol: Optional[str] = None, empresa_id: Optional[UUID] = None) -> SolicitudVacacionesListResponse:

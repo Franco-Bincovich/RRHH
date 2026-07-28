@@ -22,17 +22,20 @@ export interface EmpleadosFiltros {
   empresaId?: string
   areaId?: string
   esLider?: boolean
+  /** Empleados asignados a ese proyecto (semántica en el backend, _scope_filtros). */
+  proyectoId?: string
 }
 
 export async function fetchEmpleados(
   opts: EmpleadosFiltros & { page: number; pageSize: number },
 ): Promise<EmpleadoListResponse> {
-  const { page, pageSize, search, estado, empresaId, areaId, esLider } = opts
+  const { page, pageSize, search, estado, empresaId, areaId, esLider, proyectoId } = opts
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
   if (search) params.set("search", search)
   if (estado) params.set("estado", estado)
   if (areaId) params.set("area_id", areaId)
   if (esLider !== undefined) params.set("es_lider", String(esLider))
+  if (proyectoId) params.set("proyecto_id", proyectoId)
   return apiFetch<EmpleadoListResponse>(
     `/api/empleados?${params}`,
     empresaId ? { headers: { "X-Empresa-Id": empresaId } } : {},
@@ -43,13 +46,14 @@ export async function fetchEmpleados(
 export function exportarEmpleados(
   opts: EmpleadosFiltros & { formato: FormatoExport },
 ): Promise<void> {
-  const { formato, search, estado, empresaId, areaId, esLider } = opts
+  const { formato, search, estado, empresaId, areaId, esLider, proyectoId } = opts
   const headers = empresaId ? { "X-Empresa-Id": empresaId } : undefined
   return descargarArchivo("/api/empleados/exportar", formato, "empleados", headers, {
     search,
     estado,
     area_id: areaId,
     es_lider: esLider === undefined ? undefined : String(esLider),
+    proyecto_id: proyectoId,
   })
 }
 

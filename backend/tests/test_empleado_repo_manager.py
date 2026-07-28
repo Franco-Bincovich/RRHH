@@ -1,6 +1,7 @@
 """
 Test repo-level de EmpleadoRepo.update para el manejo de manager_id: capturar el `patch`
-que se envía a Supabase con un fake, sin red. Verifica que un null EXPLÍCITO limpia el
+que se envía a Supabase con un fake, sin red. El doble se instala en _empleado_write_repo,
+que es donde vive el UPDATE desde que el repo se partió (EmpleadoRepo.update delega ahí). Verifica que un null EXPLÍCITO limpia el
 superior (deja de ser no-op), que asignar castea a str, y que omitir el campo no lo toca.
 """
 import os
@@ -19,7 +20,7 @@ for _k, _v in _TEST_ENV.items():
 from types import SimpleNamespace
 from uuid import UUID
 
-import repositories.empleado_repo as empleado_repo
+import repositories._empleado_write_repo as empleado_write_repo
 from repositories.empleado_repo import EmpleadoRepo
 from schemas.empleado import EmpleadoUpdate
 
@@ -61,7 +62,7 @@ class _FakeSupabase:
 
 def _patch_de(monkeypatch, data: EmpleadoUpdate) -> dict:
     cap: dict = {}
-    monkeypatch.setattr(empleado_repo, "supabase_admin", _FakeSupabase(cap))
+    monkeypatch.setattr(empleado_write_repo, "supabase_admin", _FakeSupabase(cap))
     EmpleadoRepo().update("11111111-1111-1111-1111-111111111111", data)
     return cap["patch"]
 

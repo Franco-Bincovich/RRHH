@@ -21,6 +21,8 @@ export interface VacacionesFiltros {
   estado?: string
   fechaDesde?: string
   fechaHasta?: string
+  /** Empleados asignados a ese proyecto (semántica en el backend, _scope_filtros). */
+  proyectoId?: string
 }
 
 /** Traducción filtros → query params. Fuente ÚNICA compartida por listado y export. */
@@ -31,6 +33,7 @@ function queryVacaciones(f: VacacionesFiltros): Record<string, string | undefine
     estado: f.estado,
     fecha_desde: f.fechaDesde,
     fecha_hasta: f.fechaHasta,
+    proyecto_id: f.proyectoId,
   }
 }
 

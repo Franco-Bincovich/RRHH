@@ -32,6 +32,15 @@ siguiente se planifique sobre datos viejos.
 | estado | `empleado_repo.py:73` | ✅ | `empleados.py:25` `estado` | `useFiltrosEmpleados.ts:58` | ✅ |
 | búsqueda (nombre) | `empleado_repo.py:77` (`.or_`) | ✅ | `empleados.py:25` `search` | `useFiltrosEmpleados.ts:59` | ✅ |
 | es_lider | `empleado_repo.py:75` | ✅ | `empleados.py:25` `es_lider` | `useFiltrosEmpleados.ts` | ✅ |
+| proyecto ‡ | `_scope_filtros.py::empleados_de_proyecto` | ✅ | `empleados.py` `proyecto_id` | `useFiltrosEmpleados.ts` | ✅ |
+
+‡ **Filtro por proyecto (B4), en 4 módulos: empleados, vacaciones, ausencias y evaluaciones.**
+Significa *"las filas de la gente asignada a ese proyecto"*. **Sin ventana temporal**: entran
+todas las solicitudes del empleado, incluidas las anteriores a su asignación. La alternativa
+(acotar a la ventana) hoy no se puede verificar — las 19 asignaciones tienen `fecha_desde` y
+`fecha_hasta` en NULL. Disparador para revisarla: que empiecen a cargarse esas fechas.
+⚠️ **Poco selectivo por diseño**: los 19 empleados están asignados a algún proyecto y uno solo
+concentra 13.
 
 > ✅ **`es_lider` cerrado** (tanda de PARCIALES): control "Liderazgo" en la barra de filtros.
 > ⚠️ Hoy los 19 empleados tienen `es_lider = false`, así que "Solo líderes" devuelve 0. El
@@ -141,6 +150,12 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 | perfil | *en Python* | ✅ | `:58` | `:26` | ✅ |
 | con_nota | *en Python* | ✅ | `:59` | `:30` | ✅ |
 
+> 🔴 **Desde B4 el panel tiene filtros de los DOS tipos.** `proyecto_id` es **server-side**
+> (resolver quién trabaja en el proyecto necesita la base) y obliga a re-traer al cambiarlo;
+> `sector`/`perfil`/`con_nota` siguen aplicándose sobre el array ya traído. Está anotado en el
+> hook y en el panel. La duplicación de abajo sigue vigente y ahora convive con un filtro que
+> NO puede duplicarse — cuando se unifique, el corte natural es llevar los tres al backend.
+>
 > 🔴 **El listado filtra CLIENT-side y el export server-side.** `useFiltrosEvaluadosResultados.ts:35-40`
 > aplica los tres filtros con un `useMemo` sobre el array ya traído; el export manda los mismos
 > valores como `Query`. Dos implementaciones de la misma regla. Aceptable al volumen actual
@@ -585,6 +600,14 @@ así que esta tanda desbloquea también ese reporte.
 ## Correcciones al relevamiento original (27/7/2026, tanda de PARCIALES)
 
 Al verificar los PARCIALES contra el código aparecieron **dos errores de este documento**:
+
+-1. **Tanda de proyecto (B4), 27/7/2026.** Filtro por proyecto en empleados, vacaciones,
+   ausencias y evaluaciones. `_area_scope.py` se renombró a **`_scope_filtros.py`** (el nombre
+   ya mentía). `_ownership_filter` pasó a componer **tres** ejes (ownership ∩ área ∩ proyecto)
+   con un fold, manteniendo el fail-closed por eje. Divisiones previas: `empleado_repo.py`
+   174→98 (+ `_empleado_row.py` + `_empleado_write_repo.py`) y
+   `routers/evaluaciones_resultados.py` 80→69 (+ `_export.py`, que al fin recibió su franja de
+   rate limiting, pendiente desde A2).
 
 0. **Tanda de área (proyectos + inventario), 27/7/2026.** Cerró el PARCIAL de empresa en
    proyectos y sumó área en los dos módulos. Divisiones previas: `proyectos_repo.py` 104→74

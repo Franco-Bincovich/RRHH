@@ -11,6 +11,8 @@ import { etiquetaArea } from "@/components/features/shared/filtros"
 import type { FiltroCampo } from "@/components/ui/FiltersBar"
 import { fetchAreas } from "@/services/areas"
 import { fetchEmpresas } from "@/services/empresas"
+import { fetchProyectos } from "@/services/proyectos"
+import type { Proyecto } from "@/types/proyecto"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Area } from "@/types/area"
 import type { Empresa } from "@/types/empresa"
@@ -28,6 +30,8 @@ const ESTADO_OPCIONES = [
 
 export function useFiltrosEmpleados(onFiltroChange: () => void) {
   const [empresaActivaId, setEmpresaActivaId] = useState<string | null>(null)
+  const [proyectoFiltro, setProyectoFiltro] = useState("")
+  const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [empresaFiltro, setEmpresaFiltro] = useState("")
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [areaFiltro, setAreaFiltro] = useState("")
@@ -48,6 +52,10 @@ export function useFiltrosEmpleados(onFiltroChange: () => void) {
   useEffect(() => {
     const empId = empresaActivaId || empresaFiltro || undefined
     fetchAreas(empId).then(setAreas).catch(() => setAreas([]))
+    // El selector no necesita etiquetaProyecto: hoy no hay nombres de proyecto repetidos
+    // entre empresas. Si algún día los hay, reusar el patrón de shared/filtros.ts.
+    fetchProyectos({ empresaIdOverride: empId })
+      .then((r) => setProyectos(r.items)).catch(() => setProyectos([]))
   }, [empresaActivaId, empresaFiltro])
 
   // Debounce del search: commitea el valor y resetea la página en el mismo tick (un solo fetch).
@@ -69,10 +77,13 @@ export function useFiltrosEmpleados(onFiltroChange: () => void) {
       onChange: (v: string) => { setEstadoFiltro(v); onFiltroChange() }, opciones: ESTADO_OPCIONES },
     { tipo: "select" as const, label: "Liderazgo", value: liderFiltro, opcionTodos: "Todos",
       onChange: (v: string) => { setLiderFiltro(v); onFiltroChange() }, opciones: LIDER_OPCIONES },
+    ...(proyectos.length > 0 ? [{ tipo: "select" as const, label: "Proyecto", value: proyectoFiltro, opcionTodos: "Todos los proyectos",
+      onChange: (v: string) => { setProyectoFiltro(v); onFiltroChange() },
+      opciones: proyectos.map((p) => ({ value: p.id, label: p.nombre })) }] : []),
   ]
 
   const empresaOverride = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
   // `false` es un filtro válido (solo no-líderes), así que no se puede colapsar con `|| undefined`.
   const esLider = liderFiltro === "" ? undefined : liderFiltro === "si"
-  return { empresaActivaId, empresaOverride, areaFiltro, estadoFiltro, esLider, debouncedSearch, campos }
+  return { empresaActivaId, empresaOverride, areaFiltro, estadoFiltro, esLider, proyectoId: proyectoFiltro || undefined, debouncedSearch, campos }
 }

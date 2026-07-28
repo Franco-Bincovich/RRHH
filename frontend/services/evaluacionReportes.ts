@@ -11,6 +11,8 @@ export interface FiltrosEvaluados {
   sector?: string
   perfil?: string
   con_nota?: string
+  /** ÚNICO filtro server-side del panel: resolver quién trabaja en el proyecto necesita la base. */
+  proyecto_id?: string
 }
 
 export async function fetchLotesEvaluaciones(): Promise<LotesResponse> {
@@ -54,8 +56,14 @@ export async function fetchMetricas(loteId: string): Promise<MetricasResponse> {
   return apiFetch<MetricasResponse>(`${BASE}/lotes/${loteId}/metricas`)
 }
 
-export async function fetchEvaluadosResultados(loteId: string): Promise<EvaluadoListadoResponse> {
-  return apiFetch<EvaluadoListadoResponse>(`${BASE}/lotes/${loteId}/evaluados`)
+export async function fetchEvaluadosResultados(
+  loteId: string, filtros: FiltrosEvaluados = {},
+): Promise<EvaluadoListadoResponse> {
+  // Solo viajan los filtros server-side; sector/perfil/nota se aplican en el cliente.
+  const params = new URLSearchParams()
+  if (filtros.proyecto_id) params.set("proyecto_id", filtros.proyecto_id)
+  const qs = params.size ? `?${params}` : ""
+  return apiFetch<EvaluadoListadoResponse>(`${BASE}/lotes/${loteId}/evaluados${qs}`)
 }
 
 export async function fetchFicha(loteId: string, evaluadoId: string): Promise<FichaResponse> {
@@ -68,6 +76,6 @@ export function exportarEvaluadosResultados(
   // Mismos Query que el listado (estándar 1.2), vía descargarArchivo con params.
   return descargarArchivo(
     `${BASE}/lotes/${loteId}/evaluados/export`, formato, "evaluaciones_resultados", undefined,
-    { sector: f.sector, perfil: f.perfil, con_nota: f.con_nota },
+    { sector: f.sector, perfil: f.perfil, con_nota: f.con_nota, proyecto_id: f.proyecto_id },
   )
 }

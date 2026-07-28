@@ -9,7 +9,7 @@ De ahí salen dos comportamientos que parecen bugs y no lo son, y por eso están
   · un proyecto SIN empleados asignados no aparece bajo NINGUNA área;
   · un proyecto de la empresa A con gente de la empresa B SÍ aparece bajo un área de B —
     acotar la búsqueda de empleados por la empresa activa lo rompería en silencio, que es
-    justo la "corrección por consistencia" contra la que advierte _area_scope.
+    justo la "corrección por consistencia" contra la que advierte scope_filtros.
 
 Inventario es el caso simple: mismo camino (área → empleados → asignaciones) y la vigencia ya
 viene resuelta porque el listado solo muestra asignaciones sin devolver.
@@ -34,7 +34,7 @@ from uuid import uuid4
 
 import pytest
 
-import repositories._area_scope as area_scope
+import repositories._scope_filtros as area_scope
 
 AREA_SISTEMAS, AREA_VENTAS = uuid4(), uuid4()
 EMPRESA_A, EMPRESA_B = uuid4(), uuid4()
@@ -101,7 +101,7 @@ class _Res:
 
 @pytest.fixture
 def cliente(monkeypatch):
-    """Reemplaza supabase_admin dentro de _area_scope y cuenta las queries por tabla."""
+    """Reemplaza supabase_admin dentro de scope_filtros y cuenta las queries por tabla."""
     contador: dict = {}
     monkeypatch.setattr(area_scope, "supabase_admin",
                         type("C", (), {"table": staticmethod(lambda t: _Query(t, contador))})())
@@ -227,7 +227,7 @@ class _QueryInv:
 
 
 class TestCableadoInventario:
-    """`_area_scope` puede estar perfecto y el repo no usarlo. Esto mira el otro extremo."""
+    """`scope_filtros` puede estar perfecto y el repo no usarlo. Esto mira el otro extremo."""
 
     def _find_all(self, monkeypatch, **kw) -> dict:
         import repositories.inventario_asignaciones_repo as repo_mod

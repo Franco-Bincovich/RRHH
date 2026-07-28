@@ -113,9 +113,10 @@ class _FakeRepo:
         self.soft_deleted = id
         return self.soft_delete_returns
 
-    def find_all(self, page, page_size, empresa_id=None, area_id=None, estado=None, search=None, es_lider=None):
+    def find_all(self, page, page_size, empresa_id=None, area_id=None, estado=None, search=None, es_lider=None, proyecto_ids=None):
         self.find_all_args = dict(page=page, page_size=page_size, empresa_id=empresa_id,
-                                  area_id=area_id, estado=estado, search=search, es_lider=es_lider)
+                                  area_id=area_id, estado=estado, search=search, es_lider=es_lider,
+                                  proyecto_ids=proyecto_ids)
         return self.find_all_returns
 
 

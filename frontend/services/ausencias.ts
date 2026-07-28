@@ -35,6 +35,8 @@ export interface AusenciasFiltros {
   empleadoId?: string
   fechaDesde?: string
   fechaHasta?: string
+  /** Empleados asignados a ese proyecto (semántica en el backend, _scope_filtros). */
+  proyectoId?: string
 }
 
 /** Traducción filtros → query params. Fuente ÚNICA compartida por listado y export. */
@@ -45,6 +47,7 @@ function queryAusencias(f: AusenciasFiltros): Record<string, string | undefined>
     tipo_id: f.tipoId,
     fecha_desde: f.fechaDesde,
     fecha_hasta: f.fechaHasta,
+    proyecto_id: f.proyectoId,
   }
 }
 

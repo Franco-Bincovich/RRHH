@@ -1,10 +1,12 @@
 """
-Resolución de "qué entidades caen bajo un área". Compartido por los módulos que filtran por
-área sin tener la columna: el área vive en `empleados`, y los listados llegan a ella por el
-empleado. Un lookup batch por dimensión, nunca uno por fila.
+Resolución de "qué empleados caen bajo un filtro de scope" — área y proyecto.
+
+Lo comparten los módulos que filtran por esos ejes sin tener la columna: ni el área ni el
+proyecto viven en sus tablas, y los listados llegan a ellos por el empleado. Un lookup batch
+por dimensión, nunca uno por fila.
 
 Existe como módulo aparte porque la decisión de si el lookup se acota o no por empresa
-DIFIERE entre módulos y no es obvia — está explicada en cada función. Ver también
+DIFIERE entre funciones y no es obvia — está explicada en cada una. Ver también
 `asignacion_repo.py` (capacitaciones), que hace lo mismo inline y puede migrar acá.
 """
 from uuid import UUID
@@ -56,3 +58,36 @@ def proyecto_ids_con_area(area_id: UUID) -> list[str]:
     filas = (supabase_admin.table("proyecto_asignaciones").select("proyecto_id")
              .in_("empleado_id", empleados).execute().data or [])
     return list({f["proyecto_id"] for f in filas})
+
+
+def empleados_de_proyecto(proyecto_id: UUID) -> list[str]:
+    """Ids de los empleados asignados al proyecto dado.
+
+    🔴 QUÉ SIGNIFICA EL FILTRO en los módulos que lo consumen (empleados, vacaciones,
+    ausencias, evaluaciones): "las filas de la gente que trabaja en este proyecto". Un
+    empleado entra si tiene asignación al proyecto, punto.
+
+    ⚠️ NO HAY VENTANA TEMPORAL, y es una decisión, no un olvido. Filtrar vacaciones por un
+    proyecto devuelve TODAS las solicitudes de esa gente, incluidas las anteriores a que se
+    los asignara. La alternativa —acotar cada solicitud a la ventana de su asignación— hoy
+    **no se puede verificar**: las 19 asignaciones de producción tienen `fecha_desde` y
+    `fecha_hasta` en NULL, así que esa regla devolvería exactamente lo mismo que esta, con un
+    cruce de rangos por empleado que nadie podría probar que funciona. Sería complejidad que
+    no se ejercita. Es además la misma decisión que ya se tomó para el filtro de área
+    (activas e inactivas): la relación empleado↔proyecto se trata como un hecho, no como un
+    intervalo.
+    DISPARADOR para revisarla: que empiecen a cargarse `fecha_desde`/`fecha_hasta` en
+    `proyecto_asignaciones`. Ahí la ventana pasa a ser información real y la decisión cambia.
+
+    ⚠️ EFECTO DE BAJA SELECTIVIDAD, para que no se lea como un bug: hoy los 19 empleados
+    están asignados a algún proyecto, y uno solo concentra 13. Filtrar por ese proyecto
+    devuelve casi todo. El filtro está bien; el reparto de la gente es así.
+
+    Sin acotar por empresa, por el mismo motivo que `proyecto_ids_con_area`: un proyecto
+    puede tener gente de otra empresa y el modelo lo soporta a propósito.
+
+    Una sola query batch: no escala con la cantidad de filas del módulo que filtra.
+    """
+    filas = (supabase_admin.table("proyecto_asignaciones").select("empleado_id")
+             .eq("proyecto_id", str(proyecto_id)).execute().data or [])
+    return list({f["empleado_id"] for f in filas})

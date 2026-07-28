@@ -13,6 +13,8 @@ import { fetchAreas } from "@/services/areas"
 import type { VacacionesFiltros } from "@/services/vacaciones"
 import { fetchEmpleadosSeleccionables } from "@/services/empleados"
 import { fetchEmpresas } from "@/services/empresas"
+import { fetchProyectos } from "@/services/proyectos"
+import type { Proyecto } from "@/types/proyecto"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Area } from "@/types/area"
 import type { EmpleadoSeleccionable } from "@/types/empleado"
@@ -26,6 +28,8 @@ const ESTADO_OPCIONES = [
 
 export function useFiltrosVacaciones(onFiltroChange: () => void) {
   const [empresaActivaId, setEmpresaActivaId] = useState<string | null>(null)
+  const [proyectoFiltro, setProyectoFiltro] = useState("")
+  const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [empresaFiltro, setEmpresaFiltro] = useState("")
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [areaFiltro, setAreaFiltro] = useState("")
@@ -44,6 +48,10 @@ export function useFiltrosVacaciones(onFiltroChange: () => void) {
   useEffect(() => {
     const empId = empresaActivaId || empresaFiltro || undefined
     fetchAreas(empId).then(setAreas).catch(() => setAreas([]))
+    // El selector no necesita etiquetaProyecto: hoy no hay nombres de proyecto repetidos
+    // entre empresas. Si algún día los hay, reusar el patrón de shared/filtros.ts.
+    fetchProyectos({ empresaIdOverride: empId })
+      .then((r) => setProyectos(r.items)).catch(() => setProyectos([]))
   }, [empresaActivaId, empresaFiltro])
 
   useEffect(() => {
@@ -68,6 +76,9 @@ export function useFiltrosVacaciones(onFiltroChange: () => void) {
     { tipo: "daterange" as const, label: "Período",
       value: rango,
       onChange: (v: RangoFechas) => { setRango(v); onFiltroChange() } },
+    ...(proyectos.length > 0 ? [{ tipo: "select" as const, label: "Proyecto", value: proyectoFiltro, opcionTodos: "Todos los proyectos",
+      onChange: (v: string) => { setProyectoFiltro(v); onFiltroChange() },
+      opciones: proyectos.map((p) => ({ value: p.id, label: p.nombre })) }] : []),
   ]
 
   // Un solo objeto de filtros: lo consumen el listado y el export, así que no pueden divergir.
@@ -78,6 +89,7 @@ export function useFiltrosVacaciones(onFiltroChange: () => void) {
     estado: estadoFiltro || undefined,
     fechaDesde: rango.desde || undefined,
     fechaHasta: rango.hasta || undefined,
+    proyectoId: proyectoFiltro || undefined,
   }
   return { empresaActivaId, filtros, campos }
 }

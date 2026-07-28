@@ -6,6 +6,7 @@ import math
 from typing import Optional
 from uuid import UUID
 
+from repositories._scope_filtros import empleados_de_proyecto
 from repositories.area_repo import AreaRepo
 from repositories.empleado_repo import EmpleadoRepo
 from schemas.empleado import EmpleadoCreate, EmpleadoListResponse, EmpleadoResponse, EmpleadoUpdate
@@ -47,6 +48,7 @@ class EmpleadoService:
         estado: Optional[str] = None,
         search: Optional[str] = None,
         es_lider: Optional[bool] = None,
+        proyecto_id: Optional[UUID] = None,
     ) -> EmpleadoListResponse:
         """
         Retorna la lista paginada de empleados con filtros opcionales.
@@ -63,13 +65,14 @@ class EmpleadoService:
         Returns:
             EmpleadoListResponse con items, total y metadatos de paginación.
         """
-        items, total = self._repo.find_all(page, page_size, empresa_id, area_id, estado, search, es_lider)
+        proyecto_ids = empleados_de_proyecto(proyecto_id) if proyecto_id else None
+        items, total = self._repo.find_all(page, page_size, empresa_id, area_id, estado, search, es_lider, proyecto_ids)
         total_pages = math.ceil(total / page_size) if page_size > 0 else 0
         return EmpleadoListResponse(items=items, total=total, page=page, page_size=page_size, total_pages=total_pages)
 
-    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[str] = None, estado: Optional[str] = None, search: Optional[str] = None, es_lider: Optional[bool] = None) -> Descarga:
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[str] = None, estado: Optional[str] = None, search: Optional[str] = None, es_lider: Optional[bool] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
         """Exporta empleados (columnas legibles del legajo, sin UUIDs) con los MISMOS filtros que el listado; sin paginar."""
-        items = self.get_empleados(1, 100000, empresa_id, area_id, estado, search, es_lider).items
+        items = self.get_empleados(1, 100000, empresa_id, area_id, estado, search, es_lider, proyecto_id).items
         return build_export(nombre="Empleados", datos={"Empleados": construir_filas_export(items)}, filename_base="empleados", formato=formato)
 
     def get_empleado(self, id: UUID, empresa_id: Optional[UUID] = None) -> EmpleadoResponse:

@@ -279,7 +279,7 @@ def _empleado_row(**extra: object) -> dict:
 
 class TestManagerRow:
     def test_manager_nombre_resuelto_apellido_nombre(self) -> None:
-        from repositories.empleado_repo import _row
+        from repositories._empleado_row import row as _row
         row = _empleado_row(
             manager_id="33333333-3333-3333-3333-333333333333",
             manager={"nombre": "Carlos", "apellido": "Pérez"},
@@ -289,7 +289,7 @@ class TestManagerRow:
         assert emp.manager_nombre == "Pérez, Carlos"
 
     def test_sin_manager_nombre_none(self) -> None:
-        from repositories.empleado_repo import _row
+        from repositories._empleado_row import row as _row
         emp = _row(_empleado_row())
         assert emp.manager_nombre is None
 

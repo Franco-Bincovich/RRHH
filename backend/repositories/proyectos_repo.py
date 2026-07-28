@@ -3,8 +3,8 @@ from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
-from repositories._area_scope import proyecto_ids_con_area
 from repositories._proyectos_enrich import batch_costos, enriquecer
+from repositories._scope_filtros import proyecto_ids_con_area
 from schemas.proyectos import ProyectoCreate, ProyectoResponse
 from utils.errors import AppError
 
@@ -16,7 +16,7 @@ class ProyectosRepo:
                  area_id: Optional[UUID] = None) -> List[ProyectoResponse]:
         """Proyectos de la empresa dueña (None = todas), con costeo batch.
         `area_id` acota a los que tienen al menos un empleado asignado de esa área — la
-        semántica completa (y por qué no se acota por empresa) está en _area_scope."""
+        semántica completa (y por qué no se acota por empresa) está en scope_filtros."""
         if area_id:
             ids = proyecto_ids_con_area(area_id)
             if not ids:

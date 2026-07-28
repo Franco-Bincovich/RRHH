@@ -260,6 +260,7 @@ class TestFranjaExport:
         ("asignaciones_capacitacion", "exportar_asignaciones"),
         ("inventario_asignaciones", "exportar_asignaciones"),
         ("reportes", "exportar_reporte"),
+        ("evaluaciones_resultados_export", "exportar"),
     ]
 
     @pytest.mark.parametrize("modulo,funcion", ENDPOINTS)
@@ -273,11 +274,15 @@ class TestFranjaExport:
     @pytest.mark.parametrize("modulo,funcion", [
         ("objetivos", "exportar_objetivos"),
         ("inventario_items", "exportar_items"),
-        ("evaluaciones_resultados", "exportar"),
     ])
-    def test_los_tres_pendientes_siguen_sin_decorador(self, modulo: str, funcion: str) -> None:
+    def test_los_dos_pendientes_siguen_sin_decorador(self, modulo: str, funcion: str) -> None:
         """Quedaron bajo el baseline porque el decorador los pasaba del límite de 80 líneas.
-        Cuando esos routers se dividan, este test falla y recuerda agregarles la franja."""
+        Cuando esos routers se dividan, este test falla y recuerda agregarles la franja.
+
+        Eran TRES: evaluaciones_resultados se cerró al dividir su router (B4). Ojo con cómo se
+        cierra el próximo — si el endpoint cambia de módulo, la clave de _limites cambia con él
+        y este assert pasa a ser vacuo. Por eso el que se cierra se MUEVE a TestFranjaExport,
+        donde se verifica que el decorador esté, en vez de solo borrarlo de acá."""
         assert not _limites(modulo, funcion)
 
 

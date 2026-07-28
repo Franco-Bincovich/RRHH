@@ -4,7 +4,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
-from repositories._area_scope import empleados_de_area
+from repositories._scope_filtros import empleados_de_area
 from schemas.inventario import AsignacionResponse
 from utils.errors import AppError
 from utils.logger import logger
@@ -48,7 +48,7 @@ class InventarioAsignacionesRepo:
                  area_id: Optional[UUID] = None) -> List[AsignacionResponse]:
         """Asignaciones activas (fecha_devolucion IS NULL), filtradas por empresa, empleado y/o área.
 
-        El área se resuelve a empleados en _area_scope (un lookup batch, no uno por fila). La
+        El área se resuelve a empleados en scope_filtros (un lookup batch, no uno por fila). La
         semántica de VIGENCIA la hereda del filtro de arriba: el listado ya muestra solo
         asignaciones sin devolver, así que "ítems del área X" son los que esa área tiene HOY en
         su poder — no hay que decidir nada sobre histórico.

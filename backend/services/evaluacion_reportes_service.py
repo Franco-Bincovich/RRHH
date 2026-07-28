@@ -11,6 +11,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from repositories.evaluacion_repo import EvaluacionRepo
+from repositories._scope_filtros import empleados_de_proyecto
 from schemas.evaluacion_reportes import (
     EvaluadoListadoItem, EvaluadoListadoResponse, FichaResponse, MetricasResponse,
 )
@@ -33,17 +34,17 @@ class EvaluacionReportesService:
             sectores=met.por_sector(evaluados), competencias=met.competencias(evaluados, resultados))
 
     def listado(self, lote_id: UUID, empresa_id: Optional[UUID], sector: Optional[str] = None,
-                perfil: Optional[str] = None, con_nota: Optional[str] = None) -> EvaluadoListadoResponse:
+                perfil: Optional[str] = None, con_nota: Optional[str] = None, proyecto_id: Optional[UUID] = None) -> EvaluadoListadoResponse:
         """Listado de evaluados del lote con filtros de sector/perfil/con_nota."""
-        items = self._items(lote_id, empresa_id, sector, perfil, con_nota)
+        items = self._items(lote_id, empresa_id, sector, perfil, con_nota, proyecto_id)
         return EvaluadoListadoResponse(items=items, total=len(items))
 
     def exportar(self, lote_id: UUID, empresa_id: Optional[UUID], formato: str = "excel",
                  sector: Optional[str] = None, perfil: Optional[str] = None,
-                 con_nota: Optional[str] = None) -> Descarga:
+                 con_nota: Optional[str] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
         """Export del listado — recibe y aplica los mismos filtros que listado (estándar 1.2)."""
         datos = {"Evaluados": construir_filas_export(
-            self._items(lote_id, empresa_id, sector, perfil, con_nota))}
+            self._items(lote_id, empresa_id, sector, perfil, con_nota, proyecto_id))}
         return build_export(nombre="Resultados de evaluaciones", datos=datos,
                             filename_base="evaluaciones_resultados", formato=formato)
 
@@ -58,11 +59,12 @@ class EvaluacionReportesService:
             raise AppError("Evaluado no encontrado en el lote", "EVALUADO_NOT_FOUND", 404)
         return met.ficha(ev, resultados)
 
-    def _items(self, lote_id: UUID, empresa_id, sector, perfil, con_nota) -> List[EvaluadoListadoItem]:
+    def _items(self, lote_id: UUID, empresa_id, sector, perfil, con_nota, proyecto_id=None) -> List[EvaluadoListadoItem]:
         evaluados, resultados = self._lote_rows(lote_id, empresa_id)
         tipos = met.tipos_por_evaluado(resultados)
         items = (self._item(e, tipos.get(str(e.id), [])) for e in evaluados)
-        return [i for i in items if _pasa(i, sector, perfil, con_nota)]
+        del_proyecto = set(empleados_de_proyecto(proyecto_id)) if proyecto_id else None
+        return [i for i in items if _pasa(i, sector, perfil, con_nota, del_proyecto)]
 
     def _lote_rows(self, lote_id: UUID, empresa_id: Optional[UUID]):
         """Filas del lote, previa validación de empresa (404 idéntico al de lote inexistente)."""
@@ -80,13 +82,22 @@ class EvaluacionReportesService:
             perfil=e.perfil, nota_final=e.nota_final, asignado=e.empleado_id is not None)
 
 
-def _pasa(i: EvaluadoListadoItem, sector, perfil, con_nota) -> bool:
-    """Filtros del listado. con_nota: 'si' | 'no' | None."""
+def _pasa(i: EvaluadoListadoItem, sector, perfil, con_nota, del_proyecto=None) -> bool:
+    """Filtros del listado. con_nota: 'si' | 'no' | None.
+
+    `del_proyecto` = ids de empleados del proyecto, o None si no se filtra por proyecto.
+    ⚠️ Un evaluado con `empleado_id` NULL queda EXCLUIDO cuando se filtra por proyecto, y es
+    la definición, no un bug: el estado "sin_candidato" es válido (el CSV trae solo nombre y
+    no matcheó a nadie), pero sin empleado NO se lo puede atribuir a ningún proyecto — igual
+    que un proyecto sin asignados no aparece bajo ninguna área. La UI ya lo expone con el
+    flag `asignado`, así que el usuario ve por qué desapareció."""
     if sector and (i.sector or "") != sector:
         return False
     if perfil and i.perfil != perfil:
         return False
     if con_nota == "si" and i.nota_final is None:
+        return False
+    if del_proyecto is not None and (i.empleado_id is None or i.empleado_id not in del_proyecto):
         return False
     if con_nota == "no" and i.nota_final is not None:
         return False

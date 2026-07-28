@@ -25,11 +25,13 @@ export function EvaluadosResultadosPanel({ loteId }: { loteId: string }) {
   useEffect(() => {
     setCargando(true)
     setError(false)
-    fetchEvaluadosResultados(loteId)
+    fetchEvaluadosResultados(loteId, { proyecto_id: filtros.proyecto_id })
       .then((r) => setTodos(r.items))
       .catch(() => setError(true))
       .finally(() => setCargando(false))
-  }, [loteId, nonce])
+    // proyecto es server-side (ver el hook): cambiarlo obliga a re-traer, a diferencia
+    // de sector/perfil/nota, que se aplican sobre `todos` sin volver al backend.
+  }, [loteId, nonce, filtros.proyecto_id])
 
   async function exportar() {
     try {

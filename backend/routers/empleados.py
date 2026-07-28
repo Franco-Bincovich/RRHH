@@ -22,15 +22,15 @@ def _service() -> EmpleadoService:
 
 
 @router.get("", response_model=EmpleadoListResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-async def list_empleados(request: Request, page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100), area_id: Optional[str] = Query(None), estado: Optional[str] = Query(None), search: Optional[str] = Query(None), es_lider: Optional[bool] = Query(None), service: EmpleadoService = Depends(_service)) -> EmpleadoListResponse:
+async def list_empleados(request: Request, page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100), area_id: Optional[str] = Query(None), estado: Optional[str] = Query(None), search: Optional[str] = Query(None), es_lider: Optional[bool] = Query(None), proyecto_id: Optional[UUID] = Query(None), service: EmpleadoService = Depends(_service)) -> EmpleadoListResponse:
     empresa_id = get_empresa_id(request)
-    return service.get_empleados(page, page_size, empresa_id, area_id, estado, search, es_lider)
+    return service.get_empleados(page, page_size, empresa_id, area_id, estado, search, es_lider, proyecto_id)
 
 
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 @limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
-async def exportar_empleados(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), area_id: Optional[str] = Query(None), estado: Optional[str] = Query(None), search: Optional[str] = Query(None), es_lider: Optional[bool] = Query(None), service: EmpleadoService = Depends(_service)) -> Response:
-    d = service.exportar(get_empresa_id(request), formato, area_id, estado, search, es_lider)
+async def exportar_empleados(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), area_id: Optional[str] = Query(None), estado: Optional[str] = Query(None), search: Optional[str] = Query(None), es_lider: Optional[bool] = Query(None), proyecto_id: Optional[UUID] = Query(None), service: EmpleadoService = Depends(_service)) -> Response:
+    d = service.exportar(get_empresa_id(request), formato, area_id, estado, search, es_lider, proyecto_id)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 

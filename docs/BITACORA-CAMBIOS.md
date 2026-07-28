@@ -41,6 +41,40 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-27 · Filtro por proyecto en cuatro módulos · commits `<pendiente>` ×2
+
+**Qué cambió:** empleados, vacaciones, ausencias y evaluaciones pueden acotarse por proyecto —
+"las filas de la gente asignada a ese proyecto". En vacaciones y ausencias el filtro se compone
+por intersección con el ownership de `mandos_medios` y con el de área: `_ownership_filter` pasó
+a resolver **tres** ejes. Antes se dividieron `empleado_repo.py` (174→98, el peor over-limit del
+backend) y `routers/evaluaciones_resultados.py` (80→69), y `_area_scope.py` se renombró a
+`_scope_filtros.py`.
+
+**Impacto en infraestructura:** Ninguno.
+
+*(Sin migraciones, sin variables de entorno, sin dependencias, sin buckets, sin cambios en el
+modelo de auth ni en los claims del token. `proyecto_id` es un query param opcional más.)*
+
+> **Un endpoint cambió de archivo, no de ruta.**
+> `GET /api/evaluaciones/resultados/lotes/{lote_id}/evaluados/export` se mudó a
+> `routers/evaluaciones_resultados_export.py`, con la misma ruta y el mismo comportamiento. Al
+> mudarlo **recibió la franja de rate limiting que le faltaba desde A2** (30/hora compartida con
+> el resto de los exports): si alguien tenía una regla de borde asumiendo que ese export no
+> estaba limitado, ahora lo está.
+
+> **Nota de consultas, no acción:** el filtro agrega **una query batch** a
+> `proyecto_asignaciones` por request que lo use — no escala con la cantidad de filas del módulo
+> filtrado. Cuando haya volumen, la columna candidata a índice es
+> `proyecto_asignaciones.proyecto_id`.
+
+> **Sobre los tests, para que no se lea mal:** 5 tests existentes cambiaron **el target de un
+> monkeypatch y de un import** al dividirse `empleado_repo.py` — estaban acoplados a símbolos
+> privados (`_row`, el `supabase_admin` del módulo) que el corte movió. **Ningún assert, valor
+> esperado ni caso cambió**, y el comportamiento del código es idéntico. El refactor fue puro;
+> lo que se corrigió es un acoplamiento del test a internals.
+
+---
+
 ## 2026-07-27 · Filtro por área en proyectos e inventario · commits `<pendiente>` ×3
 
 **Qué cambió:** los dos módulos pasaron a poder acotarse por área, y proyectos ganó además el

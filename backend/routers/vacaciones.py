@@ -35,19 +35,20 @@ async def list_vacaciones(
     estado: Optional[str] = Query(None),
     fecha_desde: Optional[date] = Query(None, description="Inicio del rango; solapamiento, no contención"),
     fecha_hasta: Optional[date] = Query(None),
+    proyecto_id: Optional[UUID] = Query(None, description="Empleados asignados a ese proyecto"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     service: VacacionesService = Depends(_svc),
 ) -> SolicitudVacacionesListResponse:
     u = request.state.user
-    return service.get_all(u.get("id"), u.get("rol"), get_empresa_id(request), area_id, empleado_id, estado, page, page_size, fecha_desde, fecha_hasta)
+    return service.get_all(u.get("id"), u.get("rol"), get_empresa_id(request), area_id, empleado_id, estado, page, page_size, fecha_desde, fecha_hasta, proyecto_id)
 
 
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 @limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
-async def exportar_vacaciones(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), area_id: Optional[UUID] = Query(None), empleado_id: Optional[UUID] = Query(None), estado: Optional[str] = Query(None), fecha_desde: Optional[date] = Query(None), fecha_hasta: Optional[date] = Query(None), service: VacacionesService = Depends(_svc)) -> Response:
+async def exportar_vacaciones(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), area_id: Optional[UUID] = Query(None), empleado_id: Optional[UUID] = Query(None), estado: Optional[str] = Query(None), fecha_desde: Optional[date] = Query(None), fecha_hasta: Optional[date] = Query(None), proyecto_id: Optional[UUID] = Query(None), service: VacacionesService = Depends(_svc)) -> Response:
     u = request.state.user
-    d = service.exportar(u.get("id"), u.get("rol"), get_empresa_id(request), formato, area_id, empleado_id, estado, fecha_desde, fecha_hasta)
+    d = service.exportar(u.get("id"), u.get("rol"), get_empresa_id(request), formato, area_id, empleado_id, estado, fecha_desde, fecha_hasta, proyecto_id)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 

@@ -260,6 +260,37 @@ describe("proyectos — área y empresa", () => {
   })
 })
 
+describe("proyecto — el filtro llega a los cuatro módulos y a sus exports", () => {
+  it("empleados: listado y export", async () => {
+    await fetchEmpleados({ page: 1, pageSize: 20, proyectoId: "proy-1" })
+    expect(queryListado().get("proyecto_id")).toBe("proy-1")
+    await exportarEmpleados({ formato: "excel", proyectoId: "proy-1" })
+    expect(queryExport()).toEqual({ proyecto_id: "proy-1" })
+  })
+
+  it("vacaciones: el mismo objeto va a los dos", async () => {
+    const filtros = { proyectoId: "proy-1", estado: "tomada" }
+    await fetchVacaciones(filtros)
+    await exportarVacaciones("excel", filtros)
+    const { page, page_size, ...listado } = listadoComoObjeto()
+    expect(queryExport()).toEqual(listado)
+    expect(queryExport().proyecto_id).toBe("proy-1")
+  })
+
+  it("ausencias: el mismo objeto va a los dos", async () => {
+    const filtros = { proyectoId: "proy-1", tipoId: "tipo-1" }
+    await fetchAusencias(filtros)
+    await exportarAusencias("csv", filtros)
+    const { page, page_size, ...listado } = listadoComoObjeto()
+    expect(queryExport()).toEqual(listado)
+  })
+
+  it("sin proyecto no manda el param", async () => {
+    await fetchEmpleados({ page: 1, pageSize: 20 })
+    expect(queryListado().has("proyecto_id")).toBe(false)
+  })
+})
+
 describe("la empresa viaja por header, no por query", () => {
   // Es la regla de todo el repo: empresa se resuelve en AuthMiddleware desde X-Empresa-Id.
   // Si alguna vez apareciera como query param, el backend la ignoraría en silencio.
