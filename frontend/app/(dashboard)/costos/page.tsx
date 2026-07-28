@@ -30,7 +30,8 @@ import {
 } from "@/components/ui/table"
 import { NominaModal } from "@/components/features/costos/NominaModal"
 import { ImportarNominaCSVModal } from "@/components/features/costos/ImportarNominaCSVModal"
-import { cargarNomina, fetchDashboardCostos, fetchNominaMes } from "@/services/costos"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { cargarNomina, exportarNomina, fetchDashboardCostos, fetchNominaMes } from "@/services/costos"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { DashboardCostos, EvolucionMes, Nomina } from "@/types/costo"
@@ -498,7 +499,12 @@ export default function CostosPage() {
           className="rounded-xl border bg-card p-4 md:p-6"
           aria-label="Detalle de nómina"
         >
-          <h2 className="mb-4 text-base font-semibold text-foreground">Detalle de nómina</h2>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-foreground">Detalle de nómina</h2>
+            {!nominaListLoading && !nominaListError && nomina.length > 0 && (
+              <ExportMenu onExport={(f) => exportarNomina(f, mes, anio)} />
+            )}
+          </div>
           {nominaListLoading ? (
             <Skeleton className="h-40 rounded-lg" />
           ) : nominaListError ? (

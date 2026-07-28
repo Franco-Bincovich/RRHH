@@ -8,7 +8,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 
-from schemas.offboarding import ActivoUpdate, OffboardingCreate, OffboardingResponse
+from schemas.offboarding import (
+    ActivoUpdate, EntrevistaUpdate, OffboardingCreate, OffboardingResponse,
+)
 from services.offboarding_service import OffboardingService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
@@ -53,6 +55,24 @@ async def actualizar_activo(
 ) -> dict:
     service.marcar_activo_devuelto(
         instancia_id, activo_id, body.devuelto,
+        request.state.user.get("id", "system"), get_empresa_id(request),
+    )
+    return {"ok": True}
+
+
+@router.put(
+    "/{instancia_id}/entrevista",
+    response_model=dict,
+    dependencies=[Depends(require_permission(SECCION, Accion.WRITE))],
+)
+async def registrar_entrevista(
+    instancia_id: UUID,
+    body: EntrevistaUpdate,
+    request: Request,
+    service: OffboardingService = Depends(_service),
+) -> dict:
+    service.registrar_entrevista(
+        instancia_id, body.entrevista_salida, body.notas_entrevista,
         request.state.user.get("id", "system"), get_empresa_id(request),
     )
     return {"ok": True}

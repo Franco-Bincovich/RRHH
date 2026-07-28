@@ -8,9 +8,8 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from services.reportes._common import EMBED_AREA_DE_EMPLEADO as _AREA_EMBED
 from services.reportes._common import _eid, periodo_str, rango_mes
-
-_AREA_EMBED = "areas!empleados_area_id_fkey(nombre)"
 
 
 def _nombre(r: dict) -> str:

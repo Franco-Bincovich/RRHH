@@ -1,11 +1,21 @@
 """
 Helpers compartidos por los generadores de reportes (services/reportes/_reporte_*.py):
-formato de período, rango de fechas del mes y normalización de empresa_id. Sin lógica de dominio.
+formato de período, rango de fechas del mes, normalización de empresa_id y los embeds hacia
+`areas`. Sin lógica de dominio.
 """
 import calendar
 from datetime import date
 from typing import Optional
 from uuid import UUID
+
+# Embeds hacia `areas` con la FK NOMBRADA. No es una preferencia de estilo: hay más de un
+# camino entre esas tablas y sin el hint PostgREST no elige — responde 300 PGRST201 y el
+# reporte entero muere. Viven acá, compartidos, porque el nombre de la constraint es un
+# detalle que ningún generador debería tener que recordar por su cuenta:
+#   · empleados ↔ areas   → empleados.area_id  Y  areas.responsable_id (dos relaciones)
+#   · presupuesto_areas ↔ areas → la FK simple Y la compuesta con empresa (dos FKs)
+EMBED_AREA_DE_EMPLEADO = "areas!empleados_area_id_fkey(nombre)"
+EMBED_AREA_DE_PRESUPUESTO = "areas!presupuesto_areas_area_emp_fkey(nombre)"
 
 _MESES_ES = {
     1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",

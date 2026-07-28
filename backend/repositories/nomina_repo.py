@@ -1,5 +1,6 @@
 """
 Repositorio de nómina (costos_nomina). Acceso a Supabase con supabase_admin.
+La tabla, el SELECT con joins y el mapper de fila viven en _nomina_row.py.
 Interfaz pública: get_nomina_mes · save_nomina · get_evolucion
 empresa_id en escritura se hereda automáticamente del empleado (no se solicita explícito).
 Todas las lecturas y el cálculo de evolución filtran por empresa_id cuando se provee.
@@ -8,40 +9,15 @@ from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._nomina_row import SELECT as _NOM_SEL
+from repositories._nomina_row import TABLE as _NOM
+from repositories._nomina_row import row as _to_nomina
 from schemas.costo import EvolucionMes, NominaCreate, NominaResponse
 from utils.errors import AppError
-
-_NOM = "costos_nomina"
-_NOM_SEL = (
-    "id,empleado_id,empresa_id,mes,anio,salario_bruto,cargas_sociales,total,"
-    "empleados!costos_nomina_empleado_emp_fkey(nombre,apellido,areas!empleados_area_id_fkey(nombre)),"
-    "empresas(nombre)"
-)
 
 
 def _prev_period(mes: int, anio: int) -> tuple[int, int]:
     return (mes - 1, anio) if mes > 1 else (12, anio - 1)
-
-
-def _to_nomina(row: dict) -> NominaResponse:
-    emp = row.get("empleados") or {}
-    area = emp.get("areas") or {}
-    empresa = row.get("empresas") or {}
-    bruto = float(row.get("salario_bruto") or 0)
-    cargas = float(row.get("cargas_sociales") or 0)
-    return NominaResponse(
-        id=str(row["id"]),
-        empleado_id=str(row["empleado_id"]),
-        empresa_id=str(row["empresa_id"]) if row.get("empresa_id") else None,
-        empresa_nombre=empresa.get("nombre"),
-        empleado_nombre=f"{emp.get('nombre', '')} {emp.get('apellido', '')}".strip(),
-        area_nombre=area.get("nombre", "Sin área"),
-        mes=int(row["mes"]),
-        anio=int(row["anio"]),
-        monto_bruto=bruto,
-        monto_neto=bruto - cargas,
-        total=float(row.get("total") or 0),
-    )
 
 
 class NominaRepo:

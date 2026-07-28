@@ -11,6 +11,7 @@ from repositories.offboarding_repo import OffboardingRepo
 from schemas.offboarding import OffboardingCreate, OffboardingResponse
 from services._audit_payloads import payload_devolucion_activo, payload_inicio_offboarding
 from services._empleado_scope import ensure_empleado_de_empresa
+from services._offboarding_entrevista import registrar as _registrar_entrevista
 from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
@@ -92,6 +93,14 @@ class OffboardingService:
             },
         )
         return offboarding
+
+    def registrar_entrevista(
+        self, instancia_id: UUID, entrevista_salida: bool, notas: Optional[str] = None,
+        usuario_id: Optional[str] = None, empresa_id: Optional[UUID] = None,
+    ) -> bool:
+        """Registra la entrevista de salida del offboarding. Ver _offboarding_entrevista."""
+        return _registrar_entrevista(self._repo, self._audit, instancia_id, entrevista_salida,
+                                     notas, usuario_id, empresa_id)
 
     def marcar_activo_devuelto(
         self, instancia_id: UUID, activo_id: UUID, devuelto: bool,

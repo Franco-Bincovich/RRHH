@@ -82,6 +82,26 @@ def payload_inicio_offboarding(row, usuario_id: Optional[str], empresa_id: Optio
     }
 
 
+def payload_entrevista_salida(
+    instancia_id: UUID, entrevista_salida: bool, notas: Optional[str],
+    usuario_id: Optional[str], empresa_id: Optional[str],
+) -> dict:
+    """Evento UPDATE del registro de la entrevista de salida.
+
+    Guarda si hay notas y su largo, NO el texto: una entrevista de salida puede contener
+    apreciaciones sobre terceros, y la auditoría la lee gente que no es la que la tomó.
+    El texto vive en la instancia, que es donde corresponde consultarlo."""
+    return {
+        "usuario_id": usuario_id, "entidad": "offboarding", "registro_id": str(instancia_id),
+        "accion": "UPDATE", "evento": "entrevista_salida", "empresa_id": empresa_id,
+        "datos_anteriores": None,
+        "datos_nuevos": {
+            "entrevista_salida": entrevista_salida,
+            "notas_cargadas": bool(notas), "notas_largo": len(notas or ""),
+        },
+    }
+
+
 def payload_devolucion_activo(
     instancia_id: UUID, activo_id: UUID, devuelto: bool,
     usuario_id: Optional[str], empresa_id: Optional[str],

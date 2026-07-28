@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from services.reportes._common import EMBED_AREA_DE_PRESUPUESTO as _AREA_PRE
 from services.reportes._common import _eid, periodo_str
 
 
@@ -32,7 +33,7 @@ def generate_costos(mes: int, anio: int, empresa_id: Optional[UUID] = None,
         nom_q = nom_q.eq("empleados.area_id", aid)
 
     pre_q = (db.table("presupuesto_areas")
-             .select("monto_presupuestado, areas(nombre)")
+             .select(f"monto_presupuestado, {_AREA_PRE}")
              .eq("mes", mes).eq("anio", anio).eq("tipo_costo", "nomina"))
     if eid:
         pre_q = pre_q.eq("empresa_id", eid)
@@ -89,7 +90,7 @@ def generate_presupuesto(mes: int, anio: int, empresa_id: Optional[UUID] = None,
     (presupuesto_areas.area_id, directo). Suma todos los tipo_costo del área."""
     eid, aid = _eid(empresa_id), _eid(area_id)
     q = (supabase_admin.table("presupuesto_areas")
-         .select("monto_presupuestado, monto_ejecutado, areas(nombre)")
+         .select(f"monto_presupuestado, monto_ejecutado, {_AREA_PRE}")
          .eq("mes", mes).eq("anio", anio))
     if eid:
         q = q.eq("empresa_id", eid)

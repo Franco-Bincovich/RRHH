@@ -3,8 +3,6 @@ Servicio de Costos de Personal. Lógica de negocio del módulo de Costos.
 Flujo: router → service → repository → DB
 CRÍTICO: todo cálculo de totales y agregaciones filtra por empresa_id cuando se provee.
 """
-from calendar import monthrange
-from datetime import date
 from typing import List, Optional
 from uuid import UUID
 
@@ -15,11 +13,11 @@ from schemas.costo import (
     CostoArea, DashboardCostosResponse, NominaCreate, NominaResponse,
     PresupuestoCreate, PresupuestoResponse,
 )
-from services._audit_payloads_rrhh import payload_carga_nomina, payload_set_presupuesto
-from services._periodo_utils import verificar_periodo_abierto
+from services._costos_write import cargar_nomina, set_presupuesto_area
+from services._limite_export import verificar_limite_export
+from services._nomina_export import construir_filas_export
 from services.audit_service import AuditService
-from utils.errors import AppError
-from utils.logger import logger
+from services.export import Descarga, build_export
 
 
 class CostoService:
@@ -91,60 +89,20 @@ class CostoService:
         """
         return self._nomina.get_nomina_mes(mes, anio, empresa_id)
 
-    def cargar_nomina(self, data: NominaCreate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> NominaResponse:
-        """
-        Registra o actualiza la nómina de un empleado para un período (upsert). empresa_id
-        se hereda del empleado (lo resuelve el repo); auditado. Bloquea si el mes está cerrado.
+    def exportar(self, mes: int, anio: int, empresa_id: Optional[UUID] = None, formato: str = "excel") -> Descarga:
+        """Exporta la nómina del período con los MISMOS filtros que `get_nomina_mes` — lo que
+        se ve en la pantalla es lo que sale en el archivo. El motor genérico no se toca."""
+        rows = self._nomina.get_nomina_mes(mes, anio, empresa_id)
+        verificar_limite_export(len(rows))
+        datos = {"Nómina": construir_filas_export(rows)}
+        # Guion y no barra: openpyxl rechaza "/" en el título de la hoja y el export moriría
+        # con EXPORT_ERROR en vez de entregar el archivo.
+        return build_export(nombre=f"Nómina {mes:02d}-{anio}", datos=datos, filename_base="nomina", formato=formato)
 
-        Raises:
-            AppError: NOMINA_SAVE_ERROR (500) si la DB falla; PERIODO_CERRADO (409) si el mes está cerrado.
-        """
-        # rol REAL, no None hardcodeado: con None el check era un no-op que dejaría de proteger en silencio.
-        verificar_periodo_abierto(empresa_id, "costos", rol, desde=date(data.anio, data.mes, 1), hasta=date(data.anio, data.mes, monthrange(data.anio, data.mes)[1]), repo=self._periodos)
-        # Best-effort para el diff de auditoría: leé la nómina previa (mismo empleado/mes/anio)
-        # ANTES del upsert. Sin previo → primera carga (alta). Falla de lectura → prior=None
-        # (el audit es un extra, no debe romper la carga). No toca el repo ni el upsert.
-        try:
-            prev = self._nomina.get_nomina_mes(data.mes, data.anio, None)
-            prior = next((n for n in prev if str(n.empleado_id) == str(data.empleado_id)), None)
-        except Exception:
-            prior = None
-        try:
-            nomina = self._nomina.save_nomina(data)
-        except AppError:
-            raise
-        except Exception as exc:
-            raise AppError("Error al guardar la nómina", "NOMINA_SAVE_ERROR", 500) from exc
-        self._audit.registrar(**payload_carga_nomina(nomina, usuario_id, nomina.empresa_id, prior))
-        logger.info(
-            "Nómina cargada",
-            extra={"empleado_id": data.empleado_id, "mes": data.mes, "anio": data.anio},
-        )
-        return nomina
+    def cargar_nomina(self, data: NominaCreate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> NominaResponse:
+        """Registra o actualiza la nómina de un empleado para un período. Ver _costos_write."""
+        return cargar_nomina(self._nomina, self._periodos, self._audit, data, empresa_id, usuario_id, rol)
 
     def set_presupuesto_area(self, data: PresupuestoCreate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> PresupuestoResponse:
-        """
-        Establece o actualiza el presupuesto de nómina de un área para un período (upsert).
-        empresa_id se hereda del área — el repositorio lo resuelve automáticamente.
-        Registra el evento de auditoría (empresa_id = el del header, puede ser None).
-
-        Args:
-            data: Datos del presupuesto (área, período, monto presupuestado).
-            empresa_id: Contexto de empresa (header) para validación y audit. None = consolidado.
-            usuario_id: ID del operador (trazabilidad de audit).
-
-        Raises:
-            AppError: PRESUPUESTO_SAVE_ERROR (500) si la operación en DB falla.
-        """
-        try:
-            presupuesto = self._presupuesto.save_presupuesto(data)
-        except AppError:
-            raise
-        except Exception as exc:
-            raise AppError("Error al guardar el presupuesto", "PRESUPUESTO_SAVE_ERROR", 500) from exc
-        self._audit.registrar(**payload_set_presupuesto(presupuesto, usuario_id, str(empresa_id) if empresa_id else None))
-        logger.info(
-            "Presupuesto de área configurado",
-            extra={"area_id": data.area_id, "mes": data.mes, "anio": data.anio},
-        )
-        return presupuesto
+        """Establece o actualiza el presupuesto de nómina de un área. Ver _costos_write."""
+        return set_presupuesto_area(self._presupuesto, self._audit, data, empresa_id, usuario_id)

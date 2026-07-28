@@ -32,6 +32,8 @@ export interface OffboardingInstancia {
   estado: string
   fecha_inicio: string
   progreso: number
+  entrevista_salida: boolean
+  notas_entrevista: string | null
   activos: ActivoResponse[]
   accesos: AccesoResponse[]
 }

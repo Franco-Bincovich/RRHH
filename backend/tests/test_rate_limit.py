@@ -261,6 +261,8 @@ class TestFranjaExport:
         ("inventario_asignaciones", "exportar_asignaciones"),
         ("reportes", "exportar_reporte"),
         ("evaluaciones_resultados_export", "exportar"),
+        ("costos", "exportar_nomina"),
+        ("auditoria", "exportar_auditoria"),
     ]
 
     @pytest.mark.parametrize("modulo,funcion", ENDPOINTS)

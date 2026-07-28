@@ -43,6 +43,14 @@ def generate_vacantes(empresa_id: Optional[UUID] = None,
     }
 
 
+def _progreso(tareas: list) -> int:
+    """% de tareas completadas sobre el total. Misma fórmula que onboarding_repo._inst_row —
+    si un día cambia el criterio de "completado", tienen que cambiar los dos."""
+    total = len(tareas)
+    done = sum(1 for t in tareas if t.get("estado") == "completado")
+    return round(done / total * 100) if total else 0
+
+
 def generate_onboarding(empresa_id: Optional[UUID] = None,
                         area_id: Optional[UUID] = None) -> Dict[str, Any]:
     """
@@ -55,8 +63,11 @@ def generate_onboarding(empresa_id: Optional[UUID] = None,
     # onboarding_instancias tiene DOS FKs a empleados → nombrar la FK o PostgREST da PGRST201.
     fk = "empleados!onboarding_instancias_empleado_id_fkey"
     emb = f"{fk}!inner(nombre, apellido)" if aid else f"{fk}(nombre, apellido)"
+    # El progreso NO es una columna: se deriva de las tareas completadas sobre el total, igual
+    # que en onboarding_repo._inst_row. Se trae la lista de estados embebida (una sola query,
+    # sin N+1) nombrando la FK, que acá también es doble.
     q = (supabase_admin.table("onboarding_instancias")
-         .select(f"id, progreso, created_at, {emb}")
+         .select(f"id, created_at, onboarding_progreso!onb_prog_instancia_emp_fkey(estado), {emb}")
          .eq("estado", "en_progreso").order("created_at", desc=True))
     if eid:
         q = q.eq("empresa_id", eid)
@@ -69,7 +80,7 @@ def generate_onboarding(empresa_id: Optional[UUID] = None,
     for row in rows:
         emp = row.get("empleados") or {}
         nombre = f"{emp.get('nombre', '')} {emp.get('apellido', '')}".strip()
-        progreso = int(row.get("progreso") or 0)
+        progreso = _progreso(row.get("onboarding_progreso") or [])
         total_progreso += progreso
         detalle.append({
             "empleado": nombre,

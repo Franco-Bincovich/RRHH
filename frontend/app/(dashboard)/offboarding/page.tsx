@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { AdjuntosDialog } from "@/components/features/adjuntos/AdjuntosDialog"
 import { cn } from "@/lib/utils"
+import { EntrevistaSalida } from "@/components/features/offboarding/EntrevistaSalida"
 import { fetchOffboardings, marcarActivoDevuelto } from "@/services/offboarding"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
@@ -274,6 +275,20 @@ export default function OffboardingPage() {
                     Sin activos registrados para devolver.
                   </p>
                 )}
+
+                <EntrevistaSalida
+                  instancia={inst}
+                  canWrite={canWrite}
+                  onGuardado={(id, realizada, notas) =>
+                    setOffboardings((prev) =>
+                      prev.map((o) =>
+                        o.id === id
+                          ? { ...o, entrevista_salida: realizada, notas_entrevista: notas }
+                          : o,
+                      ),
+                    )
+                  }
+                />
               </li>
             )
           })}

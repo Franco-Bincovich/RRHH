@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from services.reportes._common import EMBED_AREA_DE_EMPLEADO as _AREA
 from services.reportes._common import _eid, periodo_str, rango_mes
 
 
@@ -37,7 +38,7 @@ def generate_saldos_vacaciones(mes: int, anio: int, empresa_id: Optional[UUID] =
     db = supabase_admin
 
     emp_q = (db.table("empleados")
-             .select("id, nombre, apellido, dias_vacaciones_asignados, areas(nombre)")
+             .select(f"id, nombre, apellido, dias_vacaciones_asignados, {_AREA}")
              .eq("estado", "activo"))
     if eid:
         emp_q = emp_q.eq("empresa_id", eid)
@@ -82,7 +83,8 @@ def generate_listado_vac_aus(mes: int, anio: int, empresa_id: Optional[UUID] = N
     ini, fin = rango_mes(mes, anio)
     eid, aid = _eid(empresa_id), _eid(area_id)
     db = supabase_admin
-    emb = "empleados!inner(nombre, apellido, areas(nombre))" if aid else "empleados(nombre, apellido, areas(nombre))"
+    emb = (f"empleados!inner(nombre, apellido, {_AREA})" if aid
+           else f"empleados(nombre, apellido, {_AREA})")
 
     vac_q = (db.table("solicitudes_vacaciones")
              .select(f"fecha_desde, fecha_hasta, dias, tipo, cancelada, {emb}")

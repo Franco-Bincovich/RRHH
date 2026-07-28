@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from services.reportes._common import EMBED_AREA_DE_EMPLEADO as _AREA
 from services.reportes._common import _eid, periodo_str, rango_mes
 
 _BASE_DIAS_HABILES = 22
@@ -29,7 +30,9 @@ def generate_ausentismo(mes: int, anio: int, empresa_id: Optional[UUID] = None,
     db = supabase_admin
 
     # Denominador: headcount de activos por área.
-    emp_q = db.table("empleados").select("area_id, areas(nombre)").eq("estado", "activo")
+    # `areas` se alcanza nombrando la FK: hay DOS relaciones entre empleados y areas
+    # (empleados.area_id y areas.responsable_id), y sin el hint PostgREST devuelve PGRST201.
+    emp_q = db.table("empleados").select(f"area_id, {_AREA}").eq("estado", "activo")
     if eid:
         emp_q = emp_q.eq("empresa_id", eid)
     if aid:
@@ -39,7 +42,8 @@ def generate_ausentismo(mes: int, anio: int, empresa_id: Optional[UUID] = None,
         nombre = (e.get("areas") or {}).get("nombre") or "Sin área"
         headcount[nombre] = headcount.get(nombre, 0) + 1
 
-    aus_sel = "dias, justificada, empleados!inner(areas(nombre))" if aid else "dias, justificada, empleados(areas(nombre))"
+    aus_sel = (f"dias, justificada, empleados!inner({_AREA})" if aid
+               else f"dias, justificada, empleados({_AREA})")
     aus_q = (db.table("solicitudes_ausencia").select(aus_sel)
              .gte("fecha_desde", ini).lte("fecha_desde", fin))
     if eid:

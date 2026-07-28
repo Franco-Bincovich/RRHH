@@ -7,11 +7,12 @@ import { PageHeader } from "@/components/layout/PageHeader"
 import { AuditTable } from "@/components/features/auditoria/AuditTable"
 import { AuditFilters } from "@/components/features/auditoria/AuditFilters"
 import { AuditDetailModal } from "@/components/features/auditoria/AuditDetailModal"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Pagination } from "@/components/ui/Pagination"
 import { Skeleton } from "@/components/ui/skeleton"
-import { fetchAuditoria, type AuditoriaFiltros } from "@/services/auditoria"
+import { exportarAuditoria, fetchAuditoria, type AuditoriaFiltros } from "@/services/auditoria"
 import { fetchUsuarios, type UsuarioOption } from "@/services/usuarios"
 import type { AuditLog } from "@/types/auditoria"
 
@@ -67,6 +68,11 @@ export default function AuditoriaPage() {
       <PageHeader
         title="Auditoría"
         description="Registro de cambios realizados en el sistema"
+        action={
+          !loading && !error && logs.length > 0 ? (
+            <ExportMenu onExport={(f) => exportarAuditoria(f, filtros)} />
+          ) : undefined
+        }
       />
 
       <AuditFilters filtros={filtros} onChange={handleFiltrosChange} usuarios={usuarios} />

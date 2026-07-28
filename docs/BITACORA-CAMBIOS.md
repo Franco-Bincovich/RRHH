@@ -41,6 +41,63 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-28 · Seis reportes de Fase 1 estaban rotos en producción · exports de nómina y auditoría · entrevista de salida · commit pendiente
+
+**Qué cambió:** cinco tandas. (1) Dos repos y un service se dividieron para volver a entrar en
+su límite de líneas, sin cambio de comportamiento. (2) **Se arreglaron siete queries rotas en
+los generadores de reportes**: dos pedían columnas que no existen y cinco armaban embeds que
+PostgREST rechaza por ambiguos. (3) El listado de auditoría y la nómina del período ahora se
+exportan a PDF/Excel/CSV/Word con los mismos filtros que la pantalla. (4) La entrevista de
+salida del offboarding se puede registrar desde la ficha. (5) Áreas apareció en el sidebar.
+
+**Impacto en infraestructura:** Endpoints nuevos, ninguna migración.
+
+- **Tres endpoints nuevos**, los tres **autenticados** (ninguno público):
+  - `GET /api/costos/nomina/exportar`
+  - `GET /api/auditoria/exportar`
+  - `PUT /api/offboarding/{instancia_id}/entrevista`
+  Los dos de export entran en la franja de rate limiting compartida `export` (30/hora), la
+  misma que ya usaban los otros ocho. No hay cupo nuevo que dimensionar.
+- **Sin migraciones.** La entrevista de salida usa `offboarding_instancias.entrevista_salida` y
+  `notas_entrevista`, que **ya existían en la tabla** desde su migración original y nunca se
+  habían cableado. Verificado contra el catálogo de producción antes de escribir.
+- Sin variables de entorno, sin dependencias, sin buckets, sin cambios en el modelo de auth.
+
+> **🔴 LO QUE MÁS TE IMPORTA DE ESTA ENTRADA: seis de los once reportes de Fase 1 nunca
+> funcionaron en producción, y la suite de 799 tests los daba por buenos.**
+>
+> Los reportes de rotación, onboarding, ausentismo, saldos de vacaciones, listado de
+> vacaciones/ausencias, masa salarial y presupuesto vs. real devolvían un error de PostgREST en
+> cada llamada — con datos o sin ellos, desde el día que se entregaron. Dos causas:
+>
+> 1. **Nombres de columna que no existen.** El reporte de rotación pedía `motivo` cuando la
+>    columna se llama `motivo_egreso`. El de onboarding pedía `progreso`, que no es una columna
+>    sino un cálculo sobre las tareas. PostgREST responde `400 42703`.
+> 2. **Embeds ambiguos.** `areas(nombre)` desde `empleados` se lee correcto y no lo es: hay
+>    **dos** relaciones entre esas tablas (`empleados.area_id` y `areas.responsable_id`), y
+>    PostgREST no elige — responde `300 PGRST201`. Lo mismo entre `presupuesto_areas` y `areas`,
+>    que tienen dos FKs. La solución es nombrar la constraint en el embed.
+>
+> **Por qué ningún test lo vio, que es lo que hay que llevarse:** el fake de Supabase de la
+> suite implementa `select(*a, **k)` **ignorando el argumento**. Acepta cualquier spec, exista
+> o no la columna. Peor: un test tenía la columna mal escrita **también en su fixture**, así
+> que código y test coincidían en un nombre que la base no tiene y el test pasaba en verde.
+>
+> **Lo que cierra la clase, no el caso:** se agregó un test que ejecuta los 13 generadores
+> contra un fake que **valida el spec contra `db/schema.sql`** — columnas y relaciones. Cada
+> generador corre dos veces, con y sin filtro de área, porque el filtro cambia la query. Si
+> mañana alguien escribe una columna que no existe, falla en la suite y no en producción.
+>
+> **Para la migración a AWS esto es directamente relevante:** el mismo agujero explica por qué
+> el aprendizaje de PGRST201 ya estaba documentado y aun así volvió a aparecer siete veces. Al
+> pasar a asyncpg los embeds de PostgREST desaparecen (pasan a ser JOINs explícitos), así que
+> **las cinco queries de embed hay que reescribirlas igual**; las dos de nombre de columna se
+> arreglan solas al escribir el SQL a mano, pero recién ahí — no antes.
+
+> ⚠️ **Un dato de producción, por si te sirve para dimensionar:** la tabla `auditoria` tiene
+> **133 eventos** (14/7 al 27/7), muy lejos del tope de 5.000 del export. `offboarding_instancias`
+> está **vacía**, y por eso nadie notó que el reporte de rotación estaba caído.
+
 ## 2026-07-27 · El export avisa en vez de truncar en silencio · commits `<pendiente>` ×2
 
 **Qué cambió:** los exports verifican cuántas filas devolvería la consulta **antes** de armar el

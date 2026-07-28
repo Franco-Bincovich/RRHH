@@ -24,6 +24,13 @@ class ActivoUpdate(BaseModel):
     devuelto: bool
 
 
+class EntrevistaUpdate(BaseModel):
+    """Entrevista de salida. Las notas son opcionales: se puede marcar que la entrevista se
+    hizo sin dejar constancia escrita, y también guardar notas de una entrevista en curso."""
+    entrevista_salida: bool
+    notas_entrevista: Optional[str] = None
+
+
 class ActivoResponse(BaseModel):
     id: UUID
     tipo_activo: str
@@ -49,5 +56,7 @@ class OffboardingResponse(BaseModel):
     estado: str
     fecha_inicio: str
     progreso: int
+    entrevista_salida: bool = False
+    notas_entrevista: Optional[str] = None
     activos: List[ActivoResponse] = []
     accesos: List[AccesoResponse] = []

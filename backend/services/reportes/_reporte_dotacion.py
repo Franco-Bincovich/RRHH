@@ -94,7 +94,8 @@ def generate_rotacion(mes: int, anio: int, empresa_id: Optional[UUID] = None,
     ingresos = ingresos_q.execute().count or 0
 
     # offboarding_instancias tiene DOS FKs a empleados → nombrar la FK o PostgREST da PGRST201.
-    off_sel = "motivo, empleados!offboarding_instancias_empleado_id_fkey!inner(area_id)" if aid else "motivo"
+    off_sel = ("motivo_egreso, empleados!offboarding_instancias_empleado_id_fkey!inner(area_id)"
+               if aid else "motivo_egreso")
     off_q = (db.table("offboarding_instancias").select(off_sel)
              .gte("created_at", f"{ini}T00:00:00").lte("created_at", f"{fin}T23:59:59"))
     if eid:
@@ -106,7 +107,7 @@ def generate_rotacion(mes: int, anio: int, empresa_id: Optional[UUID] = None,
 
     motivos: dict[str, int] = {}
     for row in (off_res.data or []):
-        m = row.get("motivo", "otro")
+        m = row.get("motivo_egreso") or "otro"
         motivos[m] = motivos.get(m, 0) + 1
 
     base = empleados_activos + bajas

@@ -179,12 +179,17 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `nomina_repo.py:48` | `costo_service.py:38` | header | ✅ (en la página) | ❌ sin export |
-| mes | `nomina_repo.py:48` | ✅ | `costos.py:30,40` **obligatorio** | ✅ | — |
-| año | `nomina_repo.py:48` | ✅ | `costos.py:31,41` **obligatorio** | ✅ | — |
+| empresa | `nomina_repo.py:24` | `costo_service.py:33` | header | ✅ (en la página) | ✅ |
+| mes | `nomina_repo.py:24` | ✅ | `costos.py:30,40,49` **obligatorio** | ✅ | ✅ |
+| año | `nomina_repo.py:24` | ✅ | `costos.py:31,41,50` **obligatorio** | ✅ | ✅ |
 
-> **Sin área, sin empleado, sin rango de períodos.** Solo un mes puntual, y obligatorio: no se
-> puede pedir "todo el año" ni "de marzo a junio". Y **no tiene export**.
+> ✅ **Export agregado (bloque C).** `GET /api/costos/nomina/exportar` acepta exactamente los
+> mismos Query que el listado; el front arma los params con la misma función
+> (`queryNomina` en `services/costos.ts`), así que un filtro nuevo no puede quedar en uno solo
+> de los dos. Cubierto por los dos barridos estructurales (paridad y tope de filas).
+>
+> **Sigue sin área, sin empleado y sin rango de períodos.** Solo un mes puntual, y obligatorio:
+> no se puede pedir "todo el año" ni "de marzo a junio".
 
 ### Presupuesto
 
@@ -243,15 +248,23 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `audit_repo.py:79` | `audit_service.py:72` | header | — | ❌ **sin export** |
-| usuario | `audit_repo.py:81` | ✅ | `auditoria.py:29` | `AuditFilters.tsx:45` | — |
-| entidad | `audit_repo.py:83` | ✅ | `auditoria.py:30` | `AuditFilters.tsx:25` | — |
-| evento | `audit_repo.py:87` | ✅ | `auditoria.py:31` | `AuditFilters.tsx:35` | — |
-| registro_id | `audit_repo.py:85` | ✅ | `auditoria.py:32` | ❌ **PARCIAL** | — |
-| fecha_desde | `audit_repo.py:89` (`.gte`) | ✅ | `auditoria.py:33` | `AuditFilters.tsx:55` | — |
-| fecha_hasta | `audit_repo.py:91` (`.lte`) | ✅ | `auditoria.py:34` | `AuditFilters.tsx:60` | — |
+| empresa | `audit_repo.py:79` | `audit_service.py:72` | header | — | ✅ |
+| usuario | `audit_repo.py:81` | ✅ | `auditoria.py:29,55` | `AuditFilters.tsx:45` | ✅ |
+| entidad | `audit_repo.py:83` | ✅ | `auditoria.py:30,56` | `AuditFilters.tsx:25` | ✅ |
+| evento | `audit_repo.py:87` | ✅ | `auditoria.py:31,57` | `AuditFilters.tsx:35` | ✅ |
+| registro_id | `audit_repo.py:85` | ✅ | `auditoria.py:32,58` | ❌ **PARCIAL** | ✅ |
+| fecha_desde | `audit_repo.py:89` (`.gte`) | ✅ | `auditoria.py:33,59` | `AuditFilters.tsx:55` | ✅ |
+| fecha_hasta | `audit_repo.py:91` (`.lte`) | ✅ | `auditoria.py:34,60` | `AuditFilters.tsx:60` | ✅ |
 
-> El módulo con más filtros del repo — **y el único de esa riqueza que no tiene export**.
+> El módulo con más filtros del repo. ✅ **Export agregado (bloque C):**
+> `GET /api/auditoria/exportar` acepta **los seis**, con la misma función de query que el
+> listado (`queryAuditoria` en `services/auditoria.ts`). `registro_id` sigue siendo PARCIAL en
+> la UI —existe en backend y no tiene control— pero eso ahora vale para listado Y export por
+> igual, que es la invariante.
+>
+> ⚠️ **No confundir con el reporte de auditoría** (`services/reportes/_reporte_auditoria.py`),
+> que es otra cosa: un reporte del catálogo de Fase 1, acotado a un mes y con truncado
+> declarado. Este export sale con los filtros de la pantalla y falla ruidoso si no entra.
 
 ### Períodos · Cesiones · Usuarios
 
@@ -317,8 +330,10 @@ Hoy el síntoma está **enmascarado**: como esos dos filtros tampoco tienen cont
 (ver PARCIALES en la Parte 1), nadie puede activarlos. **En el momento en que se agregue el
 control, el export miente** — salvo que se arregle el wrapper en la misma sesión.
 
-**Módulos con listado y sin export (9):** auditoría · proyectos · horas de proyecto · costos/nómina ·
-presupuesto · onboarding · offboarding · áreas · vacantes · candidatos · períodos.
+**Módulos con listado y sin export (9 → 7):** ~~auditoría~~ · proyectos · horas de proyecto ·
+~~costos/nómina~~ · presupuesto · onboarding · offboarding · áreas · vacantes · candidatos ·
+períodos.
+*(auditoría y costos/nómina salieron de esta lista en el bloque C.)*
 
 ---
 

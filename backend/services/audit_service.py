@@ -11,6 +11,9 @@ from uuid import UUID
 
 from repositories.audit_repo import AuditRepo
 from schemas.auditoria import ACCIONES, AuditLogListResponse
+from services._auditoria_export import construir_filas_export
+from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
+from services.export import Descarga, build_export
 from utils.logger import logger
 
 
@@ -87,6 +90,33 @@ class AuditService:
             registro_id=registro_id,
         )
         return AuditLogListResponse(items=items, total=total)
+
+    def exportar(
+        self,
+        empresa_id: Optional[UUID] = None,
+        usuario_id: Optional[UUID] = None,
+        entidad: Optional[str] = None,
+        evento: Optional[str] = None,
+        fecha_desde: Optional[date] = None,
+        fecha_hasta: Optional[date] = None,
+        registro_id: Optional[str] = None,
+        formato: str = "excel",
+    ) -> Descarga:
+        """Exporta el listado de auditoría con los MISMOS filtros que `listar` — lo que se ve
+        en la pantalla es lo que sale en el archivo.
+
+        No se pagina (invariante del repo), pero se pide una sola página del tamaño del tope:
+        así el `count` exacto llega para decidir, sin traerse de más si el pedido es enorme.
+        """
+        items, total = self._repo.listar(
+            empresa_id, usuario_id, entidad, evento, fecha_desde, fecha_hasta,
+            page=1, page_size=LIMITE_FILAS_EXPORT, registro_id=registro_id,
+        )
+        verificar_limite_export(total)
+        return build_export(
+            nombre="Auditoría", datos={"Auditoría": construir_filas_export(items)},
+            filename_base="auditoria", formato=formato,
+        )
 
     @staticmethod
     def _diff(antes: dict, despues: dict) -> Tuple[dict, dict]:

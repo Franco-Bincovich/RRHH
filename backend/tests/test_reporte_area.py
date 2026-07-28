@@ -129,9 +129,12 @@ def test_headcount_sin_area_toda_la_empresa(monkeypatch):
 def test_rotacion_area_join_excluye_otras(monkeypatch):
     monkeypatch.setattr(dot, "supabase_admin", _FakeDB({
         "empleados": [{"id": 1, "estado": "activo", "area_id": "A"}],
+        # La columna es `motivo_egreso`. La fixture decía `motivo`, igual que el generador, así
+        # que los dos coincidían en un nombre que la base no tiene y el test daba verde sobre
+        # una query que en producción respondía 400. Ver tests/test_reportes_columnas.py.
         "offboarding_instancias": [
-            {"motivo": "renuncia", "created_at": "2026-03-10T00:00:00", "empleados": {"area_id": "A"}},
-            {"motivo": "despido", "created_at": "2026-03-11T00:00:00", "empleados": {"area_id": "B"}},
+            {"motivo_egreso": "renuncia", "created_at": "2026-03-10T00:00:00", "empleados": {"area_id": "A"}},
+            {"motivo_egreso": "despido", "created_at": "2026-03-11T00:00:00", "empleados": {"area_id": "B"}},
         ],
     }))
     r = dot.generate_rotacion(3, 2026, empresa_id=None, area_id="A")
@@ -141,15 +144,21 @@ def test_rotacion_area_join_excluye_otras(monkeypatch):
 
 def test_onboarding_area_join_excluye_otras(monkeypatch):
     monkeypatch.setattr(sel, "supabase_admin", _FakeDB({
+        # `progreso` no es una columna: se deriva de las tareas de onboarding_progreso. La
+        # fixture traía el número servido, así que nunca ejercitó el cálculo. Ahora modela las
+        # tareas — 1 de 2 completadas = 50%.
         "onboarding_instancias": [
-            {"id": 1, "progreso": 50, "estado": "en_progreso", "created_at": "2026-01-01",
+            {"id": 1, "estado": "en_progreso", "created_at": "2026-01-01",
+             "onboarding_progreso": [{"estado": "completado"}, {"estado": "pendiente"}],
              "empleados": {"nombre": "Ana", "apellido": "G", "area_id": "A"}},
-            {"id": 2, "progreso": 80, "estado": "en_progreso", "created_at": "2026-01-02",
+            {"id": 2, "estado": "en_progreso", "created_at": "2026-01-02",
+             "onboarding_progreso": [{"estado": "completado"}],
              "empleados": {"nombre": "Beto", "apellido": "R", "area_id": "B"}},
         ],
     }))
     r = sel.generate_onboarding(empresa_id=None, area_id="A")
     assert r["total_activos"] == 1 and r["detalle"][0]["empleado"] == "Ana G"
+    assert r["detalle"][0]["progreso"] == 50
 
 
 def test_costos_area_join_excluye_otras(monkeypatch):

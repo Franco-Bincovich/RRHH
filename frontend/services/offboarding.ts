@@ -22,3 +22,19 @@ export async function marcarActivoDevuelto(
     { method: "PUT", body: JSON.stringify({ devuelto }) },
   )
 }
+
+/**
+ * Registra la entrevista de salida de un offboarding.
+ * empresa_id NO va como parámetro: apiFetch inyecta X-Empresa-Id y el backend acota la
+ * instancia a esa empresa, igual que el resto de las escrituras del módulo.
+ */
+export async function registrarEntrevista(
+  instanciaId: string,
+  entrevistaSalida: boolean,
+  notas: string | null,
+): Promise<void> {
+  await apiFetch<{ ok: boolean }>(`/api/offboarding/${instanciaId}/entrevista`, {
+    method: "PUT",
+    body: JSON.stringify({ entrevista_salida: entrevistaSalida, notas_entrevista: notas }),
+  })
+}

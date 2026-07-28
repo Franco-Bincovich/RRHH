@@ -38,7 +38,7 @@ def _enrich_rows(rows: List[dict]) -> List[InstanciaResponse]:
     eval_ids = list({r["evaluador_id"] for r in rows if r.get("evaluador_id")})
     ciclo_ids = list({r["ciclo_id"] for r in rows})
     emp_map = {e["id"]: e for e in supabase_admin.table("empleados").select(
-        "id,nombre,apellido,areas(nombre)").in_("id", emp_ids).execute().data or []}
+        "id,nombre,apellido,areas!empleados_area_id_fkey(nombre)").in_("id", emp_ids).execute().data or []}
     eval_map = {e["id"]: e for e in supabase_admin.table("empleados").select(
         "id,nombre,apellido").in_("id", eval_ids).execute().data or []} if eval_ids else {}
     ciclo_map = {c["id"]: c for c in supabase_admin.table("ev_ciclos").select(
