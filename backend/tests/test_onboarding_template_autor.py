@@ -44,7 +44,7 @@ from starlette.requests import Request
 
 from repositories import onboarding_templates_repo as repo_mod
 from repositories._onboarding_templates_row import SELECT_DETALLE, SELECT_LISTA, template
-from routers.onboarding_templates import create_template as router_create
+from routers.onboarding_templates_escrituras import create_template as router_create
 from schemas.onboarding import TemplateCreate, TemplateResponse
 from services.onboarding_templates_service import OnboardingTemplatesService
 from tests._postgrest_schema import SelectInvalidoError, cargar_schema
@@ -211,7 +211,13 @@ class TestLosSelectSobrevivenAPostgrest:
 
 
 class _RepoDosEmpresas:
-    """HONRA empresa_id: dos empresas, None cuando no coincide."""
+    """HONRA empresa_id: dos empresas, None cuando no coincide.
+
+    ⚠️ PERMISIVO EN VISIBILIDAD A PROPÓSITO: acepta `user_id`/`rol` y no los usa. Este archivo cubre
+    el AUTOR y la empresa; el eje de visibilidad lo cubre
+    tests/test_onboarding_template_visibilidad.py con un fake que sí lo honra. Mezclarlos acá
+    haría que un fallo de empresa se pudiera confundir con uno de visibilidad.
+    """
 
     def __init__(self) -> None:
         self._t = {
@@ -219,7 +225,7 @@ class _RepoDosEmpresas:
             str(AJENO): TemplateResponse(id=AJENO, nombre="T", empresa_id=EMPRESA_B, created_by=USUARIO),
         }
 
-    def get_template(self, template_id, empresa_id=None):
+    def get_template(self, template_id, empresa_id=None, user_id=None, rol=None):
         t = self._t.get(str(template_id))
         if not t or (empresa_id and str(t.empresa_id) != str(empresa_id)):
             return None

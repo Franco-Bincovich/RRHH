@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronRight, ClipboardList, X } from "lucide-react"
+import { ChevronRight, ClipboardList, Lock, X } from "lucide-react"
 
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
@@ -66,7 +66,21 @@ export function TemplatesList({
           >
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-foreground">{t.nombre}</p>
+                <p className="flex items-center gap-1.5 font-medium text-foreground">
+                  {t.nombre}
+                  {/* Solo las privadas se marcan: "compartida" es el estado normal y un chip
+                      en cada fila sería ruido. Aparece solo si podés verla, así que o es tuya
+                      o sos gerencia. */}
+                  {!t.es_publica && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"
+                      title={t.created_by_nombre ? `Privada de ${t.created_by_nombre}` : "Privada"}
+                    >
+                      <Lock className="size-3" />
+                      Privada
+                    </span>
+                  )}
+                </p>
                 {t.descripcion && (
                   <p className="mt-0.5 truncate text-sm text-muted-foreground">{t.descripcion}</p>
                 )}

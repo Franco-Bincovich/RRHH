@@ -3,8 +3,10 @@ Repositorio de templates de onboarding — CRUD de templates y tareas.
 Interfaz: get_templates · get_template · create_template · update_template
           delete_template · add_tarea · update_tarea · delete_tarea
 
-Las primitivas compartidas (tablas, SELECT con joins, filtro de empresa, mappers) viven en
-_onboarding_templates_row.py.
+Las primitivas compartidas (tablas, SELECT con joins, filtros, payloads y mappers) viven en
+_onboarding_templates_row.py. Las lecturas componen `with_empresa` y `with_visibilidad` sobre
+la misma query, empresa primero; la regla de cada uno está escrita en su función y no se repite
+acá, para que no puedan divergir.
 """
 from typing import Optional
 from uuid import UUID
@@ -12,22 +14,30 @@ from uuid import UUID
 from integrations.supabase_client import supabase_admin
 from repositories._onboarding_templates_row import (
     INSTANCIAS, SELECT_DETALLE, SELECT_LISTA, TAREAS, TEMPLATES,
-    tarea, template, with_empresa,
+    payload_tarea, payload_tarea_update, payload_template, tarea, template,
+    with_empresa, with_visibilidad,
 )
 from schemas.onboarding import TareaResponse, TemplateResponse
 from utils.errors import AppError
 
 
 class OnboardingTemplatesRepo:
-    def get_templates(self, empresa_id: Optional[UUID] = None) -> list[TemplateResponse]:
-        """Retorna todos los templates activos con conteo de tareas, filtrado por empresa."""
+    def get_templates(self, empresa_id: Optional[UUID] = None, user_id: Optional[str] = None,
+                      rol: Optional[str] = None) -> list[TemplateResponse]:
+        """Templates activos que `user_id` puede ver, con conteo de tareas."""
         q = supabase_admin.table(TEMPLATES).select(SELECT_LISTA).eq("activo", True)
-        return [template(r) for r in (with_empresa(q, empresa_id).execute().data or [])]
+        q = with_visibilidad(with_empresa(q, empresa_id), user_id, rol)
+        return [template(r) for r in (q.execute().data or [])]
 
-    def get_template(self, template_id: str, empresa_id: Optional[UUID] = None) -> Optional[TemplateResponse]:
-        """Retorna un template con todas sus tareas ordenadas por semana y orden."""
+    def get_template(self, template_id: str, empresa_id: Optional[UUID] = None,
+                     user_id: Optional[str] = None, rol: Optional[str] = None) -> Optional[TemplateResponse]:
+        """Un template con sus tareas ordenadas, si `user_id` puede verlo.
+
+        Devuelve None indistintamente si no existe, si es de otra empresa o si es privada de
+        otro: los tres casos son el mismo 404 aguas arriba (services/_template_scope.py).
+        """
         q = supabase_admin.table(TEMPLATES).select(SELECT_DETALLE).eq("id", template_id).eq("activo", True)
-        res = with_empresa(q, empresa_id).maybe_single().execute()
+        res = with_visibilidad(with_empresa(q, empresa_id), user_id, rol).maybe_single().execute()
         if not (res and res.data):
             return None
         tareas = sorted([tarea(t) for t in (res.data.get(TAREAS) or [])], key=lambda x: (x.semana, x.orden))
@@ -42,17 +52,23 @@ class OnboardingTemplatesRepo:
         la columna es nullable y tiene FK a users, así que un placeholder que no sea un UUID
         real haría fallar el insert entero.
         """
-        payload = {"nombre": nombre, "descripcion": descripcion, "activo": True,
-                   "empresa_id": str(empresa_id), "created_by": created_by}
-        res = supabase_admin.table(TEMPLATES).insert(payload).execute()
+        res = supabase_admin.table(TEMPLATES).insert(
+            payload_template(nombre, descripcion, empresa_id, created_by)).execute()
         if not res.data:
             raise AppError("Error al crear template", "DB_ERROR", 500)
         return template(res.data[0])
 
-    def update_template(self, template_id: str, data: dict) -> Optional[TemplateResponse]:
-        """Actualiza nombre y/o descripción de un template."""
+    def update_template(self, template_id: str, data: dict, user_id: Optional[str] = None,
+                        rol: Optional[str] = None) -> Optional[TemplateResponse]:
+        """Actualiza nombre, descripción y/o visibilidad, y relee la fila con sus joins.
+
+        La relectura lleva `user_id` porque el update pudo haber vuelto la plantilla privada:
+        sin él, `with_visibilidad` no filtraría (None = sin restricción) y con otro user_id
+        devolvería None sobre una fila recién editada legítimamente. El gate de acceso ya
+        corrió aguas arriba, en el service.
+        """
         res = supabase_admin.table(TEMPLATES).update(data).eq("id", template_id).eq("activo", True).execute()
-        return self.get_template(template_id) if res.data else None
+        return self.get_template(template_id, None, user_id, rol) if res.data else None
 
     def delete_template(self, template_id: str) -> bool:
         """Soft delete si tiene instancias; hard delete si no."""
@@ -65,20 +81,14 @@ class OnboardingTemplatesRepo:
 
     def add_tarea(self, template_id: str, data: dict, empresa_id: str) -> TareaResponse:
         """Agrega una tarea al template, heredando el empresa_id de la plantilla."""
-        res = supabase_admin.table(TAREAS).insert({
-            "template_id": template_id, "empresa_id": str(empresa_id), "nombre": data["titulo"],
-            "descripcion": data.get("descripcion"), "semana": data["semana"],
-            "orden": data["orden"], "responsable_tipo": data.get("responsable_tipo", "rrhh"),
-            "dias_limite": data.get("dias_limite", 1),
-        }).execute()
+        res = supabase_admin.table(TAREAS).insert(payload_tarea(template_id, empresa_id, data)).execute()
         if not res.data:
             raise AppError("Error al agregar tarea", "DB_ERROR", 500)
         return tarea(res.data[0])
 
     def update_tarea(self, tarea_id: str, data: dict) -> Optional[TareaResponse]:
         """Actualiza los campos provistos de una tarea."""
-        payload = {k: v for k, v in {"nombre": data.get("titulo"), "descripcion": data.get("descripcion"),
-                                      "semana": data.get("semana"), "orden": data.get("orden")}.items() if v is not None}
+        payload = payload_tarea_update(data)
         if not payload:
             return None
         res = supabase_admin.table(TAREAS).update(payload).eq("id", tarea_id).execute()

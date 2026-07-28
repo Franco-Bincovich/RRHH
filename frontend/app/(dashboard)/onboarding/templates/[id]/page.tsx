@@ -10,17 +10,20 @@ import { ErrorState } from "@/components/ui/ErrorState"
 import { InlineEdit } from "@/components/features/onboarding/InlineEdit"
 import { SemanaSection } from "@/components/features/onboarding/SemanaSection"
 import { useTemplateDetalle } from "@/components/features/onboarding/useTemplateDetalle"
+import { VisibilidadToggle } from "@/components/features/onboarding/VisibilidadToggle"
 import { SEMANAS, type Semana } from "@/components/features/onboarding/_templates_ui"
 import { useCanWrite } from "@/hooks/useCanWrite"
+import { useUserId } from "@/hooks/useUserId"
 import type { TemplateTarea } from "@/types/onboarding"
 
 export default function TemplateDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const canWrite = useCanWrite()
+  const userId = useUserId()
   const {
     template, loading, error,
-    guardarNombre, guardarDescripcion, guardarCampoTarea, eliminarTarea, agregarTarea,
+    guardarCampo, marcarVisibilidad, guardarCampoTarea, eliminarTarea, agregarTarea,
   } = useTemplateDetalle(id)
   const [addingSemana, setAddingSemana] = useState<Semana | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -68,7 +71,7 @@ export default function TemplateDetailPage() {
 
         <InlineEdit
           value={template.nombre}
-          onSave={guardarNombre}
+          onSave={(v) => guardarCampo("nombre", v)}
           className="text-2xl font-semibold tracking-tight text-foreground"
           placeholder="Nombre del template"
           canEdit={canWrite}
@@ -76,16 +79,28 @@ export default function TemplateDetailPage() {
         <div className="mt-1">
           <InlineEdit
             value={template.descripcion ?? ""}
-            onSave={guardarDescripcion}
+            onSave={(v) => guardarCampo("descripcion", v)}
             className="text-sm text-muted-foreground"
             multiline
             placeholder="Agregar descripción…"
             canEdit={canWrite}
           />
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {template.tareas_total} tarea{template.tareas_total !== 1 ? "s" : ""} en total
-        </p>
+        <div className="mt-2 flex items-center gap-3">
+          <p className="text-xs text-muted-foreground">
+            {template.tareas_total} tarea{template.tareas_total !== 1 ? "s" : ""} en total
+          </p>
+          {canWrite && (
+            <VisibilidadToggle
+              templateId={id}
+              esPublica={template.es_publica}
+              // Sin autor la puede cambiar cualquiera (regla de huérfanas). userId null =
+              // todavía no montó: no se habilita hasta saber quién sos.
+              puedeCambiar={template.created_by === null || (userId !== null && template.created_by === userId)}
+              onCambiada={marcarVisibilidad}
+            />
+          )}
+        </div>
       </div>
 
       <div className="space-y-6">

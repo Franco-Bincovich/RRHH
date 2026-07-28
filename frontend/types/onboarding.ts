@@ -16,6 +16,8 @@ export interface OnboardingTemplate {
   /** Autor. null en templates previos al cableado del autor, o cuyo usuario se borró. */
   created_by: string | null
   created_by_nombre: string | null
+  /** true = la ven todos los usuarios de la empresa; false = solo su autor. */
+  es_publica: boolean
   tareas: TemplateTarea[]
   tareas_total: number
 }

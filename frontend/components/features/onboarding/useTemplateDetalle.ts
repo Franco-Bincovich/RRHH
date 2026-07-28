@@ -5,7 +5,8 @@ import { useEffect, useState } from "react"
 import { deleteTarea, fetchTemplate, updateTarea, updateTemplate } from "@/services/onboarding"
 import type { OnboardingTemplate, TemplateTarea } from "@/types/onboarding"
 
-/** Campos de texto de una tarea que el detalle deja editar en el lugar. */
+/** Campos de texto que el detalle deja editar en el lugar, del template y de una tarea. */
+type CampoTemplate = "nombre" | "descripcion"
 type CampoTarea = "titulo" | "descripcion"
 
 /**
@@ -32,14 +33,15 @@ export function useTemplateDetalle(id: string) {
       .finally(() => setLoading(false))
   }, [id])
 
-  async function guardarNombre(nombre: string) {
-    const updated = await updateTemplate(id, { nombre })
-    setTemplate((prev) => prev ? { ...prev, nombre: updated.nombre } : prev)
+  /** Un solo camino para los campos de texto del template. */
+  async function guardarCampo(campo: CampoTemplate, valor: string) {
+    const updated = await updateTemplate(id, { [campo]: valor })
+    setTemplate((prev) => prev ? { ...prev, [campo]: updated[campo] } : prev)
   }
 
-  async function guardarDescripcion(descripcion: string) {
-    const updated = await updateTemplate(id, { descripcion })
-    setTemplate((prev) => prev ? { ...prev, descripcion: updated.descripcion } : prev)
+  /** Refleja en el estado local la visibilidad que el toggle ya persistió. */
+  function marcarVisibilidad(esPublica: boolean) {
+    setTemplate((prev) => prev ? { ...prev, es_publica: esPublica } : prev)
   }
 
   /** Un solo camino para los campos de texto de una tarea: sumar un cuarto es un call site. */
@@ -72,5 +74,6 @@ export function useTemplateDetalle(id: string) {
     )
   }
 
-  return { template, loading, error, guardarNombre, guardarDescripcion, guardarCampoTarea, eliminarTarea, agregarTarea }
+  return { template, loading, error, guardarCampo, marcarVisibilidad, guardarCampoTarea,
+           eliminarTarea, agregarTarea }
 }

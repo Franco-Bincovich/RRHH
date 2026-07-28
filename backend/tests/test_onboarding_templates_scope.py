@@ -1,12 +1,17 @@
 """
-Barrera de empresa en los 4 endpoints de escritura de templates de onboarding — fakes, sin red.
+Barrera de empresa en los 5 endpoints de escritura de templates de onboarding — fakes, sin red.
 
-Dos de los cuatro eran FALSOS POSITIVOS del barrido: update_template y update_tarea recibían
-empresa_id del router y no lo usaban (update_template solo lo miraba en el early-return de payload
-vacío; update_tarea nunca). delete_template y delete_tarea directamente no lo recibían.
+Dos de los primeros cuatro eran FALSOS POSITIVOS del barrido de la Fase 2: update_template y
+update_tarea recibían empresa_id del router y no lo usaban (update_template solo lo miraba en
+el early-return de payload vacío; update_tarea nunca). delete_template y delete_tarea
+directamente no lo recibían.
+
+El QUINTO —add_tarea— apareció después, al cablear la visibilidad pública/privada: era el
+único que llamaba a `self._repo.get_template` en vez de al gate del service, así que se leía
+como cubierto y no lo estaba. Ahora los cinco pasan por `ensure_template_accesible`.
 
 Las tareas se alcanzan por su template: gatear el template cubre la cadena tarea → template →
-empresa. Cero cambios de repo — get_template(template_id, empresa_id) ya filtraba.
+empresa.
 
 ⚠️ El fake HONRA empresa_id. No calcar los que la aceptan y la ignoran.
 """
@@ -27,7 +32,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from schemas.onboarding import TareaResponse, TareaUpdate, TemplateResponse, TemplateUpdate
+from schemas.onboarding import TareaCreate, TareaResponse, TareaUpdate, TemplateResponse, TemplateUpdate
 from services.onboarding_templates_service import OnboardingTemplatesService
 from utils.errors import AppError
 
@@ -45,28 +50,43 @@ def _tmpl(id_: UUID, empresa_id: UUID) -> TemplateResponse:
 
 
 class _Repo:
-    """HONRA empresa_id en get_template (el único filtro real del módulo)."""
+    """HONRA empresa_id en get_template.
+
+    ⚠️ PERMISIVO EN VISIBILIDAD A PROPÓSITO: acepta `user_id`/`rol` y no los usa. Este archivo cubre
+    UN eje —la empresa— y mezclar el otro haría que un fallo de empresa se pudiera confundir
+    con uno de visibilidad. El eje de visibilidad lo cubre
+    tests/test_onboarding_template_visibilidad.py, con un fake que sí lo honra. La regla del
+    repo pide declarar los fakes permisivos: esto es la declaración.
+    """
 
     def __init__(self) -> None:
         self._t = {str(PROPIO): _tmpl(PROPIO, EMPRESA_A), str(AJENO): _tmpl(AJENO, EMPRESA_B)}
         self.updates: list = []
         self.borrados: list = []
+        self.tareas_creadas: list = []
         self.tareas_updated: list = []
         self.tareas_borradas: list = []
 
-    def get_template(self, template_id, empresa_id=None):
+    def get_template(self, template_id, empresa_id=None, user_id=None, rol=None):
         t = self._t.get(str(template_id))
         if not t or (empresa_id and str(t.empresa_id) != str(empresa_id)):
             return None
         return t
 
-    def update_template(self, template_id, data):
+    def update_template(self, template_id, data, user_id=None, rol=None):
         self.updates.append(str(template_id))
         return self._t[str(template_id)]
 
     def delete_template(self, template_id):
         self.borrados.append(str(template_id))
         return True
+
+    def add_tarea(self, template_id, data, empresa_id) -> TareaResponse:
+        self.tareas_creadas.append(str(template_id))
+        return TareaResponse.model_validate({
+            "id": str(TAREA), "template_id": str(template_id), "titulo": "X",
+            "semana": 1, "orden": 1,
+        })
 
     def update_tarea(self, tarea_id, data) -> TareaResponse:
         self.tareas_updated.append(str(tarea_id))
@@ -106,8 +126,14 @@ def _del_tarea(svc, tid, empresa=EMPRESA_A):
     return svc.delete_tarea(tid, TAREA, empresa)
 
 
-_OPS = [_upd_tmpl, _del_tmpl, _upd_tarea, _del_tarea]
-_IDS = ["update_template", "delete_template", "update_tarea", "delete_tarea"]
+def _add_tarea(svc, tid, empresa=EMPRESA_A):
+    return svc.add_tarea(tid, TareaCreate(titulo="Z", semana=1, orden=1), empresa)
+
+
+# add_tarea se sumó al barrido cuando dejó de llamar al repo directo y pasó por el mismo gate
+# que sus hermanos: los CINCO endpoints de escritura del módulo validan empresa.
+_OPS = [_upd_tmpl, _del_tmpl, _upd_tarea, _del_tarea, _add_tarea]
+_IDS = ["update_template", "delete_template", "update_tarea", "delete_tarea", "add_tarea"]
 
 
 @pytest.mark.parametrize("llamar", _OPS, ids=_IDS)
@@ -135,10 +161,11 @@ def test_consolidado_no_restringe(llamar):
 
 
 def test_ninguna_escritura_ocurre_con_template_ajeno():
-    """El gate corta ANTES de tocar el repo, en las cuatro operaciones."""
+    """El gate corta ANTES de tocar el repo, en las cinco operaciones."""
     repo = _Repo()
     svc = _svc(repo)
     for llamar in _OPS:
         _error(lambda f=llamar: f(svc, AJENO))
     assert repo.updates == [] and repo.borrados == []
     assert repo.tareas_updated == [] and repo.tareas_borradas == []
+    assert repo.tareas_creadas == []

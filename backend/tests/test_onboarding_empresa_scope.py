@@ -12,7 +12,10 @@ router y nunca llega al service. Solo entran admin_rrhh y gerencia_lectura, para
 ids_empleados_visibles devuelve None (sin restricción). Por eso el service usa
 ensure_empleado_de_empresa y no ensure_empleado_visible, a diferencia de vacaciones.
 
-⚠️ _TemplatesRepo.get_template es permisivo a propósito: el eje bajo prueba es el EMPLEADO.
+⚠️ _TemplatesRepo.get_template y _OnbRepo.get_default_template son permisivos a propósito
+(aceptan empresa_id, user_id y rol y no los usan): el eje bajo prueba es el EMPLEADO. La empresa de
+la plantilla la cubre test_onboarding_templates_scope.py y la visibilidad
+test_onboarding_template_visibilidad.py, cada uno con un fake que sí honra su eje.
 El gate de templates se cubre en test_onboarding_templates_scope.py.
 ⚠️ El fake de empleado SÍ honra empresa_id en find_by_id: dos empresas, None cuando no coincide, como
 el _with_empresa real. NO calcar los que lo aceptan y lo ignoran (test_empleado_service.py:97,
@@ -89,7 +92,7 @@ class _OnbRepo:
     def find_instancia_by_empleado(self, empleado_id, empresa_id=None):
         return object() if self._activa else None
 
-    def get_default_template(self, empresa_id=None):
+    def get_default_template(self, empresa_id=None, user_id=None, rol=None):
         return _template(TEMPLATE_A if str(empresa_id) == str(EMPRESA_A) else TEMPLATE_B,
                          empresa_id or EMPRESA_A)
 
@@ -104,7 +107,7 @@ class _OnbRepo:
 
 
 class _TemplatesRepo:
-    def get_template(self, template_id, empresa_id=None):
+    def get_template(self, template_id, empresa_id=None, user_id=None, rol=None):
         return _template(UUID(str(template_id)), EMPRESA_A)
 
 

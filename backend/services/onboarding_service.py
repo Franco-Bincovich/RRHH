@@ -62,13 +62,15 @@ class OnboardingService:
         return detalle
 
     def iniciar_onboarding(self, empleado_id: UUID, template_id: Optional[UUID] = None,
-                           empresa_id: Optional[UUID] = None) -> InstanciaResponse:
+                           empresa_id: Optional[UUID] = None, user_id: Optional[str] = None,
+                           rol: Optional[str] = None) -> InstanciaResponse:
         """Inicia el onboarding para un empleado. Delegado a _onboarding_iniciar.iniciar.
-        `empresa_id` acota a qué empleado se puede apuntar (None = consolidado).
+        `empresa_id` acota a qué empleado se puede apuntar (None = consolidado); `user_id`/`rol` son
+        el sujeto de la visibilidad de la plantilla elegida.
         Raises: EMPLEADO_NOT_FOUND (404), ONBOARDING_ALREADY_ACTIVE (409),
-        TEMPLATE_NOT_FOUND (404), EMPRESA_MISMATCH (422)."""
+        TEMPLATE_NOT_FOUND (404)."""
         return iniciar(self._repo, self._templates_repo, self._empleado_repo,
-                       empleado_id, template_id, empresa_id)
+                       empleado_id, template_id, empresa_id, user_id, rol)
 
     def completar_tarea(self, instancia_id: UUID, tarea_id: UUID) -> bool:
         """

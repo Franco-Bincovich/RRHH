@@ -2,74 +2,50 @@
 Repositorio de onboarding — queries Supabase.
 Interfaz: find_instancias_activas · find_instancia_by_empleado · create_instancia
           get_progreso · completar_tarea · get_default_template
+
+Las primitivas compartidas (tablas, SELECT con joins, filtro de empresa, mappers) viven en
+_onboarding_row.py.
 """
 from datetime import date, datetime, timedelta
 from typing import Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
-from schemas.onboarding import InstanciaDetalleResponse, InstanciaResponse, TareaProgresoResponse, TemplateResponse
+from repositories._onboarding_row import (
+    EXCLUIDOS, INSTANCIAS, JOIN_EMPLEADO, PROGRESO, TAREAS, TEMPLATES,
+    instancia_row, tarea_progreso_row, with_empresa,
+)
+from repositories._onboarding_templates_row import with_visibilidad
+from schemas.onboarding import InstanciaDetalleResponse, InstanciaResponse, TemplateResponse
 from utils.errors import AppError
 
-_TI, _TP, _TT, _TMPL = "onboarding_instancias", "onboarding_progreso", "onboarding_tareas", "onboarding_templates"
-_EJ = "empleados!onboarding_instancias_empleado_id_fkey(nombre,apellido,roles,areas!empleados_area_id_fkey(nombre)), empresas(nombre)"
-_EXCL = ["completado", "cancelado"]
-
-
-def _with_empresa(q, empresa_id: Optional[UUID]):
-    return q.eq("empresa_id", str(empresa_id)) if empresa_id else q
-
-
-def _inst_row(r: dict, progs: Optional[list] = None) -> InstanciaResponse:
-    emp = r.get("empleados") or {}
-    area = emp.get("areas") or {}
-    empresa = r.get("empresas") or {}
-    ps = progs if progs is not None else (r.get("onboarding_progreso") or [])
-    total = len(ps)
-    done = sum(1 for p in ps if p.get("estado") == "completado")
-    return InstanciaResponse(
-        id=r["id"], empleado_id=r["empleado_id"],
-        empresa_id=r.get("empresa_id"), empresa_nombre=empresa.get("nombre"),
-        empleado_nombre=f"{emp.get('nombre', '')} {emp.get('apellido', '')}".strip(),
-        empleado_cargo=(emp.get("roles") or [emp.get("cargo")])[0], empleado_area=area.get("nombre"),
-        template_id=r["template_id"], estado=r["estado"],
-        fecha_inicio=str(r.get("fecha_inicio", "")),
-        progreso=round(done / total * 100) if total else 0,
-        tareas_completadas=done, tareas_total=total,
-    )
-
-
-def _tarea_row(p: dict) -> TareaProgresoResponse:
-    t = p.get("onboarding_tareas") or {}
-    return TareaProgresoResponse(progreso_id=p["id"], tarea_id=p["tarea_id"], titulo=t.get("nombre", ""),
-                                 descripcion=t.get("descripcion"), semana=t.get("semana", 1), orden=t.get("orden", 1),
-                                 completada=p.get("estado") == "completado")
+_PROGRESO_EMBED = f"{PROGRESO}!onb_prog_instancia_emp_fkey(estado)"
 
 
 class OnboardingRepo:
     def find_instancias_activas(self, empresa_id: Optional[UUID] = None) -> list[InstanciaResponse]:
-        q = supabase_admin.table(_TI).select(f"*, {_EJ}, onboarding_progreso!onb_prog_instancia_emp_fkey(estado)").not_.in_("estado", _EXCL)
-        return [_inst_row(r) for r in (_with_empresa(q, empresa_id).execute().data or [])]
+        q = supabase_admin.table(INSTANCIAS).select(f"*, {JOIN_EMPLEADO}, {_PROGRESO_EMBED}").not_.in_("estado", EXCLUIDOS)
+        return [instancia_row(r) for r in (with_empresa(q, empresa_id).execute().data or [])]
 
     def find_instancia_by_empleado(self, empleado_id: str, empresa_id: Optional[UUID] = None) -> Optional[InstanciaResponse]:
-        q = supabase_admin.table(_TI).select(f"*, {_EJ}, onboarding_progreso!onb_prog_instancia_emp_fkey(estado)").eq("empleado_id", empleado_id).not_.in_("estado", _EXCL).limit(1)
-        res = _with_empresa(q, empresa_id).maybe_single().execute()
+        q = supabase_admin.table(INSTANCIAS).select(f"*, {JOIN_EMPLEADO}, {_PROGRESO_EMBED}").eq("empleado_id", empleado_id).not_.in_("estado", EXCLUIDOS).limit(1)
+        res = with_empresa(q, empresa_id).maybe_single().execute()
         if res is None or not res.data:
             return None
-        return _inst_row(res.data)
+        return instancia_row(res.data)
 
     def get_progreso(self, instancia_id: str) -> Optional[InstanciaDetalleResponse]:
-        inst = supabase_admin.table(_TI).select(f"*, {_EJ}").eq("id", instancia_id).maybe_single().execute()
+        inst = supabase_admin.table(INSTANCIAS).select(f"*, {JOIN_EMPLEADO}").eq("id", instancia_id).maybe_single().execute()
         if not (inst and inst.data):
             return None
-        progs = supabase_admin.table(_TP).select(f"id,tarea_id,estado,{_TT}!onboarding_progreso_tarea_id_fkey(nombre,descripcion,semana,orden)").eq("instancia_id", instancia_id).execute().data or []
-        base = _inst_row(inst.data, progs)
-        tareas = sorted([_tarea_row(p) for p in progs], key=lambda t: (t.semana, t.orden))
+        progs = supabase_admin.table(PROGRESO).select(f"id,tarea_id,estado,{TAREAS}!onboarding_progreso_tarea_id_fkey(nombre,descripcion,semana,orden)").eq("instancia_id", instancia_id).execute().data or []
+        base = instancia_row(inst.data, progs)
+        tareas = sorted([tarea_progreso_row(p) for p in progs], key=lambda t: (t.semana, t.orden))
         return InstanciaDetalleResponse(**base.model_dump(), tareas=tareas)
 
     def create_instancia(self, empleado_id: str, template_id: str, empresa_id: str) -> InstanciaResponse:
         hoy = date.today()
-        ins = supabase_admin.table(_TI).insert({
+        ins = supabase_admin.table(INSTANCIAS).insert({
             "empleado_id": empleado_id, "template_id": template_id, "empresa_id": empresa_id,
             "estado": "en_progreso", "fecha_inicio": str(hoy),
             "fecha_fin_esperada": str(hoy + timedelta(days=30)),
@@ -77,22 +53,32 @@ class OnboardingRepo:
         if not ins.data:
             raise AppError("Error al crear onboarding", "DB_ERROR", 500)
         inst_id = ins.data[0]["id"]
-        tareas = supabase_admin.table(_TT).select("id").eq("template_id", template_id).execute()
+        tareas = supabase_admin.table(TAREAS).select("id").eq("template_id", template_id).execute()
         if tareas.data:
-            supabase_admin.table(_TP).insert([
+            supabase_admin.table(PROGRESO).insert([
                 {"instancia_id": inst_id, "tarea_id": t["id"], "estado": "pendiente", "empresa_id": empresa_id}
                 for t in tareas.data
             ]).execute()
-        return self.find_instancia_by_empleado(empleado_id) or _inst_row(ins.data[0], [])
+        return self.find_instancia_by_empleado(empleado_id) or instancia_row(ins.data[0], [])
 
     def completar_tarea(self, instancia_id: str, tarea_id: str) -> bool:
-        res = supabase_admin.table(_TP).update({"estado": "completado", "fecha_completada": datetime.utcnow().isoformat()}).eq("instancia_id", instancia_id).eq("tarea_id", tarea_id).execute()
+        res = supabase_admin.table(PROGRESO).update({"estado": "completado", "fecha_completada": datetime.utcnow().isoformat()}).eq("instancia_id", instancia_id).eq("tarea_id", tarea_id).execute()
         return bool(res.data)
 
-    def get_default_template(self, empresa_id: Optional[UUID] = None) -> Optional[TemplateResponse]:
-        """Retorna el primer template activo de la empresa indicada (plantilla por defecto)."""
-        q = supabase_admin.table(_TMPL).select("id,empresa_id,nombre,descripcion").eq("activo", True).limit(1)
-        res = _with_empresa(q, empresa_id).maybe_single().execute()
+    def get_default_template(self, empresa_id: Optional[UUID] = None, user_id: Optional[str] = None,
+                             rol: Optional[str] = None) -> Optional[TemplateResponse]:
+        """Primer template activo VISIBLE de la empresa (plantilla por defecto).
+
+        🔴 EL FILTRO DE VISIBILIDAD ACÁ NO ES UN CONTROL DE ACCESO, ES SEMÁNTICA. Sin él, una
+        plantilla que su autor marcó privada podía seguir siendo la que el sistema elige para
+        onboardear gente de todo el equipo —basta con que sea la primera activa—, y "privada"
+        no habría significado nada en el flujo principal del módulo.
+
+        Reusa `with_visibilidad` de _onboarding_templates_row: la regla vive en un solo lugar,
+        y este camino no pasa por el repo de templates ni por su service.
+        """
+        q = supabase_admin.table(TEMPLATES).select("id,empresa_id,nombre,descripcion").eq("activo", True).limit(1)
+        res = with_visibilidad(with_empresa(q, empresa_id), user_id, rol).maybe_single().execute()
         if res is None or not res.data:
             return None
         d = res.data

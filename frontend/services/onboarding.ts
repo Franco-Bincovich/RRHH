@@ -40,7 +40,10 @@ export async function createTemplate(data: { nombre: string; empresa_id: string;
   })
 }
 
-export async function updateTemplate(id: string, data: { nombre?: string; descripcion?: string }): Promise<OnboardingTemplate> {
+export async function updateTemplate(
+  id: string,
+  data: { nombre?: string; descripcion?: string; es_publica?: boolean },
+): Promise<OnboardingTemplate> {
   return apiFetch<OnboardingTemplate>(`/api/onboarding/templates/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),

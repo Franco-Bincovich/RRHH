@@ -41,6 +41,51 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-28 · C6 sesión 2 · visibilidad pública/privada de plantillas (mig 082) · commits pendientes ×4
+
+**Qué cambió:** las plantillas de onboarding ahora pueden ser **compartidas** (las ve todo el
+equipo, es el default) o **privadas** (solo su autor). El filtro va server-side, en el WHERE, y
+se compone por INTERSECCIÓN con la barrera de empresa —empresa primero—; `gerencia_lectura`
+no se filtra, ve todo. Un `created_by IS NULL` cuenta como pública, que es lo único que evita
+dejar plantillas inalcanzables cuando se borra el usuario dueño (la FK es ON DELETE SET NULL).
+El gate vive en un helper nuevo, `services/_template_scope.py`, y no en el service: **tres
+caminos leen una plantilla por id sin pasar por esa clase** (`add_tarea`, el alta de onboarding
+y la plantilla por defecto), así que un gate adentro del service quedaba incompleto por
+construcción. Cierra el Bloque C.
+
+🔴 **CAMBIO DE CONTRATO HTTP — `POST /api/onboarding/{empleado_id}/iniciar`.** Pedir el
+`template_id` de una plantilla de OTRA empresa devolvía **422 `EMPRESA_MISMATCH`**; ahora
+devuelve **404 `TEMPLATE_NOT_FOUND`**, el mismo que un id inventado. El 422 era un oráculo de
+enumeración: un status distinto confirmaba que esa plantilla existe. La guarda se **borró** (no
+quedó como guarda muerta) porque además era inalcanzable: la plantilla ahora se resuelve contra
+la empresa del EMPLEADO antes de decidir, y `empleados.empresa_id` es NOT NULL. Si algún
+cliente discriminaba por 422, deja de recibirlo.
+
+🔴 **Agujero semántico cerrado:** `get_default_template` elegía "la primera plantilla activa de
+la empresa" sin mirar visibilidad. Sin el fix, una plantilla marcada privada podía seguir
+siendo la que el sistema usa para onboardear a todo el equipo.
+
+**Impacto en infraestructura:**
+- **Migraciones: 082** `082_add_es_publica_onboarding_templates.sql` — agrega
+  `es_publica boolean NOT NULL DEFAULT true` + un índice parcial sobre las privadas.
+  **NO DESTRUCTIVA**: solo agrega una columna con default, no toca datos y **no cambia lo que
+  ve nadie** (el default reproduce el comportamiento actual). Segura con la app arriba.
+- ⚠️ **ORDEN DE DEPLOY: LA MIGRACIÓN VA ANTES QUE EL CÓDIGO.** El código nuevo pide `es_publica`
+  en el SELECT de los dos endpoints de lectura de plantillas; si el código sale primero, esas
+  queries piden una columna inexistente y PostgREST responde **400 42703**. Al revés no hay
+  problema: la columna con su default es inerte para el código viejo.
+- **`backend/db/schema.sql` actualizado**: la columna en `CREATE TABLE onboarding_templates` y
+  el índice `idx_onboarding_templates_privadas`.
+- **Variables de entorno:** ninguna. **Dependencias:** ninguna. **Storage:** ninguno.
+- **Endpoints:** ninguno nuevo. `PUT /api/onboarding/templates/{id}` acepta `es_publica` en el
+  body y puede devolver **403 `TEMPLATE_NO_SOS_AUTOR`** (código nuevo) si quien lo manda no es
+  el autor. `TemplateResponse` suma `es_publica` — aditivo, no rompe clientes.
+- **Procesos fuera de serverless:** ninguno. **Autenticación:** sin cambios en el modelo ni en
+  los claims; se **lee** `request.state.user["rol"]` además del `id`, los dos ya estaban.
+- **URLs/dominios:** ninguno.
+
+---
+
 ## 2026-07-28 · C6 sesión 1 · autor de las plantillas de onboarding · embed ambiguo · commits pendientes ×5
 
 **Qué cambió:** preparación de C6 (visibilidad pública/privada), sin agregar todavía la

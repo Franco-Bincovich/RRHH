@@ -138,7 +138,7 @@ El requisito de fondo: **llegar a cualquier corte de información sin pedirle na
 | **C3** | **Offboarding: entrevista de salida + reporte de motivos** | 🟠 Alta | Baja | 2 | Las columnas `entrevista_salida` y `notas_entrevista` existen en DB y están **muertas**. El reporte: cantidad de egresos y motivos por período y por empresa (o todas). **Sin IA por ahora.** ⚠️ Verificar primero si el reporte "rotación por motivo" de la Fase 1 ya lo cubre parcialmente |
 | **C4** | **Domicilio desglosado** | 🟡 Media | Media | 2 | Hoy es un campo de texto libre. Con 19 filas la migración es barata; con datos cargados, cara. ⚠️ El import de nómina trae el domicilio como texto: se conservan los campos estructurados **y** el crudo, y la UI permite completar |
 | **C5** | **Áreas al sidebar** | 🟡 Media | Trivial | — | La página existe y responde, sin entrada en `NAV_GROUPS`. Va de acompañante |
-| **C6** | **Plantillas públicas y privadas** | 🟡 Media | Media | 1 | Visibilidad por usuario de RRHH. ⚠️ Falta definir el alcance: ¿templates de onboarding solamente, o también otras? |
+| **C6** | ✅ **Plantillas públicas y privadas — HECHO** | 🟡 Media | Media | 2 | Migración 082 (`es_publica`, default true). Alcance resuelto: **solo onboarding_templates** (ver §4.3). Filtro server-side en el WHERE, compuesto con empresa; `gerencia_lectura` ve todo; `created_by IS NULL` cuenta como pública. |
 
 **Total: 8 sesiones.**
 
@@ -204,8 +204,14 @@ No figura en los documentos del directorio. Es lo único que agrega producto en 
 ### 4.2 · Proyectos: asignar áreas o equipos completos
 Atado a la definición del link de carga de horas (E4). Hoy está descartado en el repo ("el área filtra candidatos, no asigna"). Se retoma en esa reunión.
 
-### 4.3 · Alcance de C6 (plantillas públicas/privadas)
-¿Solo templates de onboarding, o también otras plantillas? Cambia el alcance de 1 a 2 sesiones.
+### 4.3 · Alcance de C6 (plantillas públicas/privadas) — ✅ RESUELTO
+**Solo `onboarding_templates`.** La otra candidata, `ev_plantillas`, quedó afuera: tiene CERO
+callers en el front (su UI se borró al pasar evaluaciones al modelo de resultados importados),
+no tiene columna de autor, y las tablas `ev_*` se limpian tras el cutover a AWS. Ponerle la
+feature encima era trabajo que se tira. No hay otras plantillas en el sistema: se verificó por
+tabla (`%template%`, `%plantilla%`, `%filtro%`, `%saved%`, `%preset%`) y por código —
+`reportes_generados` es un output guardado, no una plantilla reusable, y su `generado_por` es
+texto, no un FK a `users`.
 
 ### 4.4 · Diseño del análisis de offboarding
 La IA queda oculta por ahora (C3 entrega el reporte simple). El diseño a fondo se hace con RRHH cuando haya datos de egresos.

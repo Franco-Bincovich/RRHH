@@ -48,7 +48,10 @@ async def iniciar_onboarding(
     service: OnboardingService = Depends(_service),
 ) -> InstanciaResponse:
     template_id = body.template_id if body else None
-    return service.iniciar_onboarding(empleado_id, template_id, get_empresa_id(request))
+    # user_id: sujeto de la visibilidad — una plantilla privada de otro no se puede elegir.
+    u = request.state.user
+    return service.iniciar_onboarding(empleado_id, template_id, get_empresa_id(request),
+                                      u.get("id"), u.get("rol"))
 
 
 @router.put(

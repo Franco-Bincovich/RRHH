@@ -581,7 +581,8 @@ CREATE TABLE public.onboarding_templates (
     created_by uuid,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
-    empresa_id uuid NOT NULL
+    empresa_id uuid NOT NULL,
+    es_publica boolean NOT NULL DEFAULT true
 );
 CREATE TABLE public.periodos_cerrados (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1229,6 +1230,7 @@ CREATE INDEX idx_onboarding_tareas_template ON public.onboarding_tareas USING bt
 CREATE INDEX idx_onboarding_templates_activo ON public.onboarding_templates USING btree (activo);
 CREATE INDEX idx_onboarding_templates_area ON public.onboarding_templates USING btree (area_id);
 CREATE INDEX idx_onboarding_templates_empresa ON public.onboarding_templates USING btree (empresa_id);
+CREATE INDEX idx_onboarding_templates_privadas ON public.onboarding_templates USING btree (empresa_id, created_by) WHERE (es_publica = false);
 CREATE INDEX idx_periodos_check ON public.periodos_cerrados USING btree (empresa_id, modulo, estado);
 CREATE INDEX idx_planes_carrera_empleado ON public.planes_carrera USING btree (empleado_id);
 CREATE INDEX idx_planes_carrera_empresa ON public.planes_carrera USING btree (empresa_id);

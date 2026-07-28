@@ -41,6 +41,9 @@ class TemplateCreate(BaseModel):
 class TemplateUpdate(BaseModel):
     nombre: Optional[str] = None
     descripcion: Optional[str] = None
+    # Visibilidad. Solo la puede cambiar quien alcanza la plantilla, y a una privada ajena no
+    # se llega (404 antes de escribir) — el gate es el mismo que el del resto de las ediciones.
+    es_publica: Optional[bool] = None
 
 
 class TemplateResponse(BaseModel):
@@ -54,6 +57,9 @@ class TemplateResponse(BaseModel):
     # de un join: NUNCA debe entrar en un diff de auditoría (ver _audit_payloads.py).
     created_by: Optional[UUID] = None
     created_by_nombre: Optional[str] = None
+    # true = la ven todos los usuarios de la empresa; false = solo su autor. Un created_by NULL
+    # se trata como pública (migración 082, regla de huérfanas).
+    es_publica: bool = True
     tareas: List[TareaResponse] = []
     tareas_total: int = 0
 

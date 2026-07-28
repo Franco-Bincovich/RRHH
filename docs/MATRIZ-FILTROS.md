@@ -210,6 +210,23 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 > Solo trae **instancias activas** (`find_instancias_activas`). No hay filtro por estado, por
 > empleado, por template ni por fecha, y no hay forma de ver las cerradas.
 
+### Onboarding · plantillas
+
+| Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
+|---|---|---|---|---|---|
+| empresa | `_onboarding_templates_row.py::with_empresa` | ✅ | header | ✅ (sidebar) | ❌ sin export |
+| visibilidad | `_onboarding_templates_row.py::with_visibilidad` | ✅ | — (sale del token) | ❌ **no hay control** | ❌ sin export |
+
+> La **visibilidad pública/privada** (C6, migración 082) filtra server-side en el WHERE y se
+> compone por intersección con la empresa. NO es un filtro elegible por el usuario: sale de
+> quién sos (`user_id` + `rol`), no de un `Query`. Por eso figura acá pero sin control de UI.
+>
+> 🔴 **PENDIENTE, y es trabajo propio: el listado de plantillas no tiene NINGUNA barra de
+> filtros.** Agregar "ver solo las mías / solo las compartidas" no es sumar un campo — hay que
+> crear el hook `useFiltrosTemplates` y montar `FiltersBar` desde cero, que es fundación. Se
+> dejó afuera de C6 a propósito. Si RRHH lo pide, entra como una tanda del bloque B con el
+> molde de `components/features/shared/filtros.ts`.
+
 ### Offboarding
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
