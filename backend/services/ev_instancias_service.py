@@ -23,6 +23,7 @@ from services._audit_payloads_ev import (
 from services._evaluaciones_export import construir_filas_export
 from services._ev_instancias_utils import calcular_puntaje_global
 from services.audit_service import AuditService
+from services._limite_export import verificar_limite_export
 from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
@@ -49,7 +50,9 @@ class EvInstanciasService:
 
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", ciclo_id: Optional[UUID] = None, estado: Optional[str] = None) -> Descarga:
         """Exporta la lista de instancias (columnas legibles, sin UUIDs) respetando ciclo/estado."""
-        datos = {"Evaluaciones": construir_filas_export(self._repo.find_all(empresa_id, ciclo_id, estado))}
+        items = self._repo.find_all(empresa_id, ciclo_id, estado)
+        verificar_limite_export(len(items))
+        datos = {"Evaluaciones": construir_filas_export(items)}
         return build_export(nombre="Evaluaciones de desempeño", datos=datos, filename_base="evaluaciones_desempeno", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> InstanciaDetalleResponse:

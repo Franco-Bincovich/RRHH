@@ -14,6 +14,7 @@ from repositories.asignacion_repo import AsignacionRepo
 from repositories.capacitacion_repo import CapacitacionRepo
 from schemas.capacitacion import AsignacionCreate, AsignacionListResponse, AsignacionResponse, AsignacionUpdate
 from services._capacitaciones_export import construir_filas_export
+from services._limite_export import verificar_limite_export
 from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
@@ -35,7 +36,9 @@ class AsignacionService:
 
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", empleado_id: Optional[UUID] = None, capacitacion_id: Optional[UUID] = None, estado: Optional[str] = None, area_id: Optional[UUID] = None) -> Descarga:
         """Exporta las asignaciones de capacitación (columnas legibles, sin UUIDs) respetando los filtros (empleado/capacitación/estado/área)."""
-        filas = construir_filas_export(self.get_all(empresa_id, empleado_id, capacitacion_id, estado, area_id).items)
+        items = self.get_all(empresa_id, empleado_id, capacitacion_id, estado, area_id).items
+        verificar_limite_export(len(items))
+        filas = construir_filas_export(items)
         return build_export(nombre="Capacitaciones", datos={"Asignaciones": filas}, filename_base="capacitaciones", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> AsignacionResponse:

@@ -26,6 +26,7 @@ from services._ausencias_write import actualizar, crear, eliminar
 from repositories._scope_filtros import empleados_de_proyecto
 from services._ownership_filter import resolver_empleado_ids
 from services.audit_service import AuditService
+from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
 from services.export import Descarga, build_export
 from services.ownership import puede_gestionar_empleado
 from utils.errors import AppError
@@ -49,7 +50,9 @@ class AusenciasService:
 
     def exportar(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, tipo_id: Optional[UUID] = None, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
         """Exporta ausencias (columnas legibles, sin UUIDs) respetando ownership; acotable por área/empleado/tipo (mismos filtros que el listado)."""
-        filas = construir_filas_export(self.get_all(user_id, rol, empresa_id, area_id, empleado_id, tipo_id, 1, 100000, fecha_desde, fecha_hasta, proyecto_id).items)
+        pagina = self.get_all(user_id, rol, empresa_id, area_id, empleado_id, tipo_id, 1, LIMITE_FILAS_EXPORT, fecha_desde, fecha_hasta, proyecto_id)
+        verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
+        filas = construir_filas_export(pagina.items)
         return build_export(nombre="Ausencias", datos={"Ausencias": filas}, filename_base="ausencias", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> AusenciaResponse:

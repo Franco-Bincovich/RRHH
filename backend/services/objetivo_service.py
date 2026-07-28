@@ -17,6 +17,7 @@ from schemas.objetivo import (
     ObjetivoResponse, ObjetivoUpdate, PRIORIDADES,
 )
 from services._objetivos_export import construir_filas_export
+from services._limite_export import verificar_limite_export
 from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
@@ -40,7 +41,9 @@ class ObjetivoService:
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", estado: Optional[str] = None, responsable_id: Optional[str] = None, prioridad: Optional[str] = None) -> Descarga:
         """Exporta los objetivos (columnas legibles, sin UUIDs) respetando los filtros de estado,
         responsable y prioridad. None = consolidado. El motor genérico no se toca."""
-        datos = {"Objetivos": construir_filas_export(self._repo.find_all(empresa_id, estado, responsable_id, prioridad))}
+        items = self._repo.find_all(empresa_id, estado, responsable_id, prioridad)
+        verificar_limite_export(len(items))
+        datos = {"Objetivos": construir_filas_export(items)}
         return build_export(nombre="Objetivos", datos=datos, filename_base="objetivos", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> ObjetivoResponse:

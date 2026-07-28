@@ -41,6 +41,41 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-27 · El export avisa en vez de truncar en silencio · commits `<pendiente>` ×2
+
+**Qué cambió:** los exports verifican cuántas filas devolvería la consulta **antes** de armar el
+archivo. Si supera 5.000, devuelven un 422 con un mensaje que dice cuántas hay, cuál es el
+máximo y que use los filtros — en vez de entregar un archivo cortado sin ninguna señal. El
+número es una constante única (`services/_limite_export.py`) que reemplazó tres literales
+`100000` sueltos y una constante local. En el front, el menú de exportar dejó de descartar el
+error del backend y ahora muestra su mensaje.
+
+**Impacto en infraestructura:** Ninguno.
+
+*(Sin migraciones, sin variables de entorno, sin dependencias, sin buckets, sin endpoints nuevos
+ni removidos, sin cambios en el modelo de auth. Un export dentro del tope se comporta
+exactamente igual que antes.)*
+
+> **🔴 DOS COSAS QUE ENCONTRÉ MIRANDO LOS TECHOS DE TIEMPO, y que te sirven aunque no sean de
+> esta tanda:**
+>
+> 1. **`vercel.json` declara `maxDuration: 300` dentro de `builds[].config`**, que es el formato
+>    legacy. En la config moderna `maxDuration` va en `functions`. **Muy probablemente esté
+>    siendo ignorado** y rija el default del plan (10 s en Hobby, 60 s en Pro). Vale
+>    verificarlo en el dashboard: si el timeout real es 10 s, hay más operaciones además del
+>    export que pueden estar al límite.
+> 2. **El techo efectivo de las queries son los 30 s del cliente Supabase**
+>    (`settings.supabase_timeout`), no los 120 s del `statement_timeout` de Postgres. Y hay una
+>    ambigüedad sin resolver: PostgREST se conecta como `authenticator`, que tiene
+>    `statement_timeout=8s`, y `service_role` no define uno propio — si el que rige es el de la
+>    sesión, el techo real son **8 s**. No se puede determinar leyendo catálogos; hace falta
+>    medirlo contra el endpoint REST.
+>
+> Nada de esto bloquea el deploy: 5.000 filas está cómodo debajo de cualquiera de esos techos,
+> así que el límite elegido no depende de cuál sea el verdadero.
+
+---
+
 ## 2026-07-27 · Filtro por proyecto en cuatro módulos · commits `<pendiente>` ×2
 
 **Qué cambió:** empleados, vacaciones, ausencias y evaluaciones pueden acotarse por proyecto —

@@ -32,6 +32,7 @@ from services._vacaciones_saldo import calcular_saldo
 from services._vacaciones_utils import derive_estado
 from services._vacaciones_write import crear
 from services.audit_service import AuditService
+from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
 from services.export import Descarga, build_export
 from services.ownership import puede_gestionar_empleado
 from utils.errors import AppError
@@ -59,7 +60,9 @@ class VacacionesService:
 
     def exportar(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, estado: Optional[str] = None, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
         """Exporta vacaciones (columnas legibles, sin UUIDs) respetando ownership; acotable por área/empleado/estado (mismos filtros que el listado)."""
-        filas = construir_filas_export(self.get_all(user_id, rol, empresa_id, area_id, empleado_id, estado, 1, 100000, fecha_desde, fecha_hasta, proyecto_id).items)
+        pagina = self.get_all(user_id, rol, empresa_id, area_id, empleado_id, estado, 1, LIMITE_FILAS_EXPORT, fecha_desde, fecha_hasta, proyecto_id)
+        verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
+        filas = construir_filas_export(pagina.items)
         return build_export(nombre="Vacaciones", datos={"Vacaciones": filas}, filename_base="vacaciones", formato=formato)
 
     def get_by_empleado(self, empleado_id: UUID, user_id: Optional[str] = None, rol: Optional[str] = None, empresa_id: Optional[UUID] = None) -> SolicitudVacacionesListResponse:

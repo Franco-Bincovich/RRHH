@@ -18,6 +18,7 @@ from schemas.inventario import (
     AsignacionCreate, AsignacionListResponse, AsignacionResponse, DevolucionRequest,
 )
 from services._inventario_export import construir_filas_export
+from services._limite_export import verificar_limite_export
 from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
@@ -40,7 +41,9 @@ class InventarioAsignacionesService:
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", empleado_id: Optional[str] = None, area_id: Optional[UUID] = None) -> Descarga:
         """Exporta las asignaciones activas (columnas legibles, sin UUIDs) respetando el filtro
         de empleado. None = consolidado (todas las empresas). El motor genérico no se toca."""
-        datos = {"Asignaciones": construir_filas_export(self._repo.find_all(empresa_id, empleado_id, area_id))}
+        items = self._repo.find_all(empresa_id, empleado_id, area_id)
+        verificar_limite_export(len(items))
+        datos = {"Asignaciones": construir_filas_export(items)}
         return build_export(nombre="Inventario asignado", datos=datos, filename_base="inventario_asignaciones", formato=formato)
 
     def get_historial(self, item_id: UUID, empresa_id: Optional[UUID] = None) -> AsignacionListResponse:

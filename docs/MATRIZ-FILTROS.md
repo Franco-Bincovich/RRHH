@@ -263,6 +263,30 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 
 ---
 
+## PARTE 1.b — Tope de filas del export (B7)
+
+Todos los exports de listado verifican el total **antes** de armar el archivo, contra la
+constante única `services/_limite_export.LIMITE_FILAS_EXPORT` (**5.000**). Si lo supera,
+devuelven `EXPORT_DEMASIADAS_FILAS` (422) con un mensaje que dice cuántas filas hay, cuál es el
+máximo y que use los filtros — **no entregan un archivo cortado**.
+
+**El techo real no es la cantidad de filas, es el tiempo**: 30 s del cliente httpx de Supabase
+(el más bajo), posiblemente 8 s de `statement_timeout`, y el límite de Vercel. El
+`page_size=100000` anterior nunca se alcanzaba: el corte llegaba por timeout, sin mensaje.
+
+**Dos excepciones declaradas**, ambas en `tests/test_limite_export.py::_SIN_CHEQUEO`:
+- `reporte_export_service` — exporta un reporte puntual por id, no un listado.
+- `_reporte_auditoria` — ya está acotado a un mes y la pantalla no ofrece otro filtro con el que
+  angostarlo; fallar dejaría al usuario sin forma de obtener la auditoría de un mes cargado.
+  Conserva su **truncado declarado** (nota dentro del archivo diciendo cuántas quedaron afuera).
+
+⚠️ **Alcance parcial en 5 módulos.** En los paginados (empleados, vacaciones, ausencias) el
+total llega por `count="exact"` y solo se traen las filas del tope: el control actúa antes de
+cargar nada grande. En capacitaciones, inventario ×2, objetivos y ev_instancias los repos no
+exponen conteo y sus archivos están en o cerca de su límite, así que el chequeo corre sobre la
+lista ya traída — **igual que antes**, sin regresión, pero un volumen que muera por timeout
+muere antes de llegar al chequeo. Cerrarlo pide un `contar()` por repo: tanda propia.
+
 ## PARTE 2 — El invariante list ↔ export
 
 > **Invariante del repo:** *"el endpoint de export acepta los mismos Query que el list"*.

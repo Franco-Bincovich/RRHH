@@ -18,6 +18,7 @@ from schemas.evaluacion_reportes import (
 from services import _evaluacion_metricas as met
 from services._evaluaciones_resultados_export import construir_filas_export
 from services.evaluacion_service import verificar_empresa_lote
+from services._limite_export import verificar_limite_export
 from services.export import Descarga, build_export
 from utils.errors import AppError
 
@@ -43,8 +44,9 @@ class EvaluacionReportesService:
                  sector: Optional[str] = None, perfil: Optional[str] = None,
                  con_nota: Optional[str] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
         """Export del listado — recibe y aplica los mismos filtros que listado (estándar 1.2)."""
-        datos = {"Evaluados": construir_filas_export(
-            self._items(lote_id, empresa_id, sector, perfil, con_nota, proyecto_id))}
+        items = self._items(lote_id, empresa_id, sector, perfil, con_nota, proyecto_id)
+        verificar_limite_export(len(items))
+        datos = {"Evaluados": construir_filas_export(items)}
         return build_export(nombre="Resultados de evaluaciones", datos=datos,
                             filename_base="evaluaciones_resultados", formato=formato)
 

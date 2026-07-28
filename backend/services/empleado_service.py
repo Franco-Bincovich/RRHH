@@ -13,6 +13,7 @@ from schemas.empleado import EmpleadoCreate, EmpleadoListResponse, EmpleadoRespo
 from services._empleados_export import construir_filas_export
 from services._empleados_utils import empleado_or_404
 from services._empleados_write import actualizar, crear, desactivar
+from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
 from services.audit_service import AuditService
 from services.export import Descarga, build_export
 
@@ -72,7 +73,9 @@ class EmpleadoService:
 
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[str] = None, estado: Optional[str] = None, search: Optional[str] = None, es_lider: Optional[bool] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
         """Exporta empleados (columnas legibles del legajo, sin UUIDs) con los MISMOS filtros que el listado; sin paginar."""
-        items = self.get_empleados(1, 100000, empresa_id, area_id, estado, search, es_lider, proyecto_id).items
+        pagina = self.get_empleados(1, LIMITE_FILAS_EXPORT, empresa_id, area_id, estado, search, es_lider, proyecto_id)
+        verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
+        items = pagina.items
         return build_export(nombre="Empleados", datos={"Empleados": construir_filas_export(items)}, filename_base="empleados", formato=formato)
 
     def get_empleado(self, id: UUID, empresa_id: Optional[UUID] = None) -> EmpleadoResponse:

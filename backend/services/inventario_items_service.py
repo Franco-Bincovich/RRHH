@@ -14,6 +14,7 @@ from uuid import UUID
 from repositories.inventario_items_repo import InventarioItemsRepo
 from schemas.inventario import ItemCreate, ItemListResponse, ItemResponse, ItemUpdate
 from services._inventario_items_export import construir_filas_export
+from services._limite_export import verificar_limite_export
 from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
@@ -31,7 +32,9 @@ class InventarioItemsService:
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", estado: Optional[str] = None) -> Descarga:
         """Exporta el catálogo de ítems (columnas legibles, sin UUIDs) respetando el filtro
         de estado. None = consolidado (todas las empresas). El motor genérico no se toca."""
-        datos = {"Ítems": construir_filas_export(self._repo.find_all(empresa_id, estado))}
+        items = self._repo.find_all(empresa_id, estado)
+        verificar_limite_export(len(items))
+        datos = {"Ítems": construir_filas_export(items)}
         return build_export(nombre="Inventario de ítems", datos=datos, filename_base="inventario_items", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> ItemResponse:
