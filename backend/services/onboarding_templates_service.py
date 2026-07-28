@@ -34,15 +34,21 @@ class OnboardingTemplatesService:
             raise AppError("Template no encontrado", "TEMPLATE_NOT_FOUND", 404)
         return tmpl
 
-    def create_template(self, data: TemplateCreate) -> TemplateResponse:
+    def create_template(self, data: TemplateCreate, created_by: Optional[str] = None) -> TemplateResponse:
         """
         Crea un nuevo template de onboarding asociado a la empresa indicada en el body.
+
+        Args:
+            data: Nombre, descripción y empresa (la empresa es un dato explícito del form —
+                crear es una ACCIÓN, no se toma del header; ver Vista vs Acción en CLAUDE.md).
+            created_by: UUID del usuario que lo crea, para saber de quién es el template.
+                None si el caller no lo pudo determinar; la columna es nullable.
 
         Returns:
             TemplateResponse del template recién creado.
         """
-        tmpl = self._repo.create_template(data.nombre, data.descripcion, data.empresa_id)
-        logger.info("Template creado", extra={"template_id": str(tmpl.id), "empresa_id": str(data.empresa_id)})
+        tmpl = self._repo.create_template(data.nombre, data.descripcion, data.empresa_id, created_by)
+        logger.info("Template creado", extra={"template_id": str(tmpl.id), "empresa_id": str(data.empresa_id), "created_by": created_by})
         return tmpl
 
     def update_template(self, template_id: UUID, data: TemplateUpdate, empresa_id: Optional[UUID] = None) -> TemplateResponse:

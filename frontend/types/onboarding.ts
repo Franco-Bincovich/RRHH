@@ -13,6 +13,9 @@ export interface OnboardingTemplate {
   empresa_id: string | null
   empresa_nombre: string | null
   descripcion: string | null
+  /** Autor. null en templates previos al cableado del autor, o cuyo usuario se borró. */
+  created_by: string | null
+  created_by_nombre: string | null
   tareas: TemplateTarea[]
   tareas_total: number
 }

@@ -1,0 +1,102 @@
+"use client"
+
+import { ChevronRight, ClipboardList, X } from "lucide-react"
+
+import { EmptyState } from "@/components/ui/EmptyState"
+import { ErrorState } from "@/components/ui/ErrorState"
+import type { OnboardingTemplate } from "@/types/onboarding"
+
+interface TemplatesListProps {
+  templates: OnboardingTemplate[]
+  loading: boolean
+  error: string | null
+  canWrite: boolean
+  /** Sufija cada fila con el nombre de la empresa. True en la vista consolidada. */
+  mostrarEmpresa: boolean
+  deletingId: string | null
+  onAbrir: (id: string) => void
+  /** Recibe el template entero: la confirmación lo nombra, no muestra un UUID. */
+  onEliminar: (t: OnboardingTemplate) => void
+}
+
+/**
+ * Listado de templates de onboarding: presentacional puro (loading / error / vacío / datos).
+ * No fetchea ni tiene estado propio — la página conserva los datos y los handlers.
+ */
+export function TemplatesList({
+  templates,
+  loading,
+  error,
+  canWrite,
+  mostrarEmpresa,
+  deletingId,
+  onAbrir,
+  onEliminar,
+}: TemplatesListProps) {
+  if (loading) {
+    return (
+      <ul className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <li key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
+        ))}
+      </ul>
+    )
+  }
+
+  if (error) return <ErrorState description={error} />
+
+  if (templates.length === 0) {
+    return (
+      <EmptyState
+        icon={<ClipboardList />}
+        title="Sin templates"
+        description="Creá un template para definir el proceso de onboarding de tu empresa."
+      />
+    )
+  }
+
+  return (
+    <ul className="space-y-3" role="list">
+      {templates.map((t) => (
+        <li key={t.id} className="flex items-stretch gap-2">
+          <button
+            type="button"
+            onClick={() => onAbrir(t.id)}
+            className="min-w-0 flex-1 rounded-xl border bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground">{t.nombre}</p>
+                {t.descripcion && (
+                  <p className="mt-0.5 truncate text-sm text-muted-foreground">{t.descripcion}</p>
+                )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t.tareas_total} tarea{t.tareas_total !== 1 ? "s" : ""}
+                  {mostrarEmpresa && t.empresa_nombre && (
+                    <span className="ml-2 text-muted-foreground/70">· {t.empresa_nombre}</span>
+                  )}
+                  {/* Sin autor no se escribe nada: "Creada por —" no aporta y ensucia la fila. */}
+                  {t.created_by_nombre && (
+                    <span className="ml-2 text-muted-foreground/70">· Creada por {t.created_by_nombre}</span>
+                  )}
+                </p>
+              </div>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </div>
+          </button>
+          {canWrite && (
+            <button
+              type="button"
+              onClick={() => onEliminar(t)}
+              disabled={deletingId === t.id}
+              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border bg-card text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              aria-label="Eliminar template"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}

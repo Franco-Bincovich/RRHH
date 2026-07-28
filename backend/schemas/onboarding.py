@@ -49,6 +49,11 @@ class TemplateResponse(BaseModel):
     empresa_id: Optional[UUID] = None
     empresa_nombre: Optional[str] = None
     descripcion: Optional[str] = None
+    # Autor. `created_by` es NULL en los templates anteriores al cableado del autor y en
+    # aquellos cuyo usuario se borró (FK ON DELETE SET NULL). `created_by_nombre` es derivado
+    # de un join: NUNCA debe entrar en un diff de auditoría (ver _audit_payloads.py).
+    created_by: Optional[UUID] = None
+    created_by_nombre: Optional[str] = None
     tareas: List[TareaResponse] = []
     tareas_total: int = 0
 

@@ -41,6 +41,47 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-28 · C6 sesión 1 · autor de las plantillas de onboarding · embed ambiguo · commits pendientes ×5
+
+**Qué cambió:** preparación de C6 (visibilidad pública/privada), sin agregar todavía la
+visibilidad. Se dividieron las dos páginas de templates, que estaban muy sobre el límite
+(290 y 412 líneas), en 6 componentes + 1 hook bajo `components/features/onboarding/`. Se
+alinearon los `confirm()`/`alert()` nativos al patrón canónico `ConfirmDialog` + toast de
+Vacantes. Y se cableó `created_by`, que existía en la tabla desde la migración 007 con FK a
+`users` pero **ningún camino de escritura la escribía**: toda plantilla creada por la app
+nacía sin autor. Ahora el router lee el usuario del request, el repo lo persiste y la
+respuesta lo expone con el nombre resuelto.
+
+🔴 **Bug PREVIO encontrado y corregido en el camino, con impacto en producción:** los dos
+endpoints de lectura de templates (`GET /api/onboarding/templates` y `.../{id}`) embebían
+`onboarding_tareas(...)` sin nombrar la FK. Hay **DOS** relaciones entre `onboarding_tareas` y
+`onboarding_templates` —la simple sobre `template_id` y la compuesta `(template_id, empresa_id)`
+que agregó el retrofit multiempresa—, así que PostgREST no puede elegir y responde **300
+PGRST201 en vez de datos**. No se había notado porque la tabla tiene 0 filas en producción y
+nadie usó el módulo. Es el mismo caso que las 2 FKs de `costos_nomina` a `empleados`. Se nombró
+la FK (`onboarding_tareas!onboarding_tareas_template_id_fkey`) y quedó cubierto por un test que
+valida los dos `select` contra `db/schema.sql` con `tests/_postgrest_schema.py`.
+
+**Impacto en infraestructura:**
+- **Migraciones:** ninguna. `created_by` ya existía (migración 007). **No se agregó
+  `es_publica`** — va en la sesión 2, y ahí sí habrá migración (la 082 es el próximo número
+  libre; 001–081 está completo sin huecos entre `backend/migrations/` y `migracionAWS/`).
+- **Variables de entorno:** ninguna.
+- **Dependencias:** ninguna.
+- **Buckets de Storage:** ninguno.
+- **Endpoints:** ninguno nuevo. `POST /api/onboarding/templates` cambia su **firma interna**
+  (ahora recibe `request`), no su contrato HTTP. `TemplateResponse` **suma dos campos**
+  (`created_by`, `created_by_nombre`) — es aditivo, no rompe clientes.
+- **Procesos fuera de serverless:** ninguno.
+- **Autenticación:** sin cambios en el modelo ni en los claims. Se **lee** `request.state.user["id"]`,
+  que `AuthMiddleware` ya dejaba puesto.
+- **URLs/dominios:** ninguno.
+- ⚠️ **Para el que migre a AWS:** el fix del embed depende del nombre de constraint
+  `onboarding_tareas_template_id_fkey`. Si la reconstrucción en RDS renombra esa constraint,
+  el embed vuelve a romperse — el test lo detecta, porque valida contra `db/schema.sql`.
+
+---
+
 ## 2026-07-28 · Domicilio desglosado (migración 081) · commit pendiente
 
 **Qué cambió:** `empleados.domicilio` era un único campo de texto libre, así que el domicilio

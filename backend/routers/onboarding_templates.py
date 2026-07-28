@@ -27,8 +27,12 @@ async def list_templates(request: Request, svc: OnboardingTemplatesService = _Sv
 
 
 @router.post("", response_model=TemplateResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def create_template(body: TemplateCreate, svc: OnboardingTemplatesService = _Svc) -> TemplateResponse:
-    return svc.create_template(body)
+async def create_template(body: TemplateCreate, request: Request, svc: OnboardingTemplatesService = _Svc) -> TemplateResponse:
+    # Sin el fallback "system" que usan empleados/areas/empresa: acá el valor va a una columna
+    # con FK a users, y un literal que no es UUID rompería el insert entero. None es lo que la
+    # columna ya significa (nullable) y además es inalcanzable en la práctica — AuthMiddleware
+    # es fail-closed, así que todo request que llega hasta acá trae usuario.
+    return svc.create_template(body, request.state.user.get("id"))
 
 
 @router.get("/{template_id}", response_model=TemplateResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
