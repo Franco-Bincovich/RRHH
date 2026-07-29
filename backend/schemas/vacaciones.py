@@ -25,6 +25,18 @@ class SolicitudVacacionesCreate(BaseModel):
     fecha_hasta: date
     comentario: Optional[str] = None
     tipo: str = "vacaciones"
+    # Año al que CORRESPONDE la licencia, que puede diferir del año de fecha_desde: una
+    # licencia tomada en 2026 puede ser del período 2025. Opcional — las filas previas a la
+    # migración 083 no lo tienen y no se puede derivar (ver el encabezado de esa migración).
+    periodo: Optional[int] = None
+    dias_liquidados: int = 0
+
+    @field_validator("periodo")
+    @classmethod
+    def validate_periodo(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not (2000 <= v <= 2100):
+            raise ValueError(f"periodo inválido '{v}'. Rango: 2000–2100")
+        return v
 
     @field_validator("tipo")
     @classmethod
@@ -37,6 +49,8 @@ class SolicitudVacacionesCreate(BaseModel):
 class SolicitudVacacionesUpdate(BaseModel):
     comentario: Optional[str] = None
     tipo: Optional[str] = None
+    periodo: Optional[int] = None
+    dias_liquidados: Optional[int] = None
 
     @field_validator("tipo")
     @classmethod
@@ -61,6 +75,8 @@ class SolicitudVacacionesResponse(BaseModel):
     comentario: Optional[str] = None
     cancelada: bool
     estado: str  # "planificada" | "tomada" | "cancelada"
+    periodo: Optional[int] = None      # año devengado; None en las filas previas a la mig. 083
+    dias_liquidados: int = 0
     created_at: datetime
 
 

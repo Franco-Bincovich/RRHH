@@ -5,12 +5,11 @@ from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from repositories._rango_fechas import aplicar_rango
-from repositories._vacaciones_utils import aplicar_filtro_estado, build_responses
+from repositories._vacaciones_utils import TABLE, aplicar_filtro_estado, build_responses
+from repositories._vacaciones_write_repo import actualizar, cancelar, guardar
 from schemas.vacaciones import SolicitudVacacionesResponse
-from utils.errors import AppError
-from utils.logger import logger
 
-_T = "solicitudes_vacaciones"
+_T = TABLE
 
 
 class VacacionesRepo:
@@ -78,23 +77,16 @@ class VacacionesRepo:
     def save(
         self, empleado_id: str, empresa_id: str, fecha_desde: date, fecha_hasta: date,
         dias: int, tipo: str, comentario: Optional[str],
+        periodo: Optional[int] = None, dias_liquidados: int = 0,
     ) -> SolicitudVacacionesResponse:
-        """Inserta una solicitud y devuelve el registro enriquecido."""
-        payload = {
-            "empleado_id": empleado_id, "empresa_id": empresa_id,
-            "fecha_desde": str(fecha_desde), "fecha_hasta": str(fecha_hasta),
-            "dias": dias, "tipo": tipo, "comentario": comentario, "cancelada": False,
-        }
-        res = supabase_admin.table(_T).insert(payload).execute()
-        if not res.data:
-            logger.error("Supabase insert vacío en solicitudes_vacaciones")
-            raise AppError("Error al registrar vacaciones", "DB_ERROR", 500)
-        return self.find_by_id(str(res.data[0]["id"]))  # type: ignore[return-value]
+        """Inserta una solicitud y devuelve el registro enriquecido (ver _vacaciones_write_repo)."""
+        return guardar(empleado_id, empresa_id, fecha_desde, fecha_hasta, dias, tipo,
+                       comentario, self.find_by_id, periodo, dias_liquidados)
+
+    def update(self, id: str, patch: dict, empresa_id: Optional[UUID] = None) -> Optional[SolicitudVacacionesResponse]:
+        """Edita la solicitud con la empresa en el WHERE (ver _vacaciones_write_repo)."""
+        return actualizar(id, patch, empresa_id, self.find_by_id)
 
     def cancel(self, id: str, empresa_id: Optional[UUID] = None) -> Optional[SolicitudVacacionesResponse]:
-        """Setea cancelada=True. Si empresa_id se provee, restringe el WHERE por empresa."""
-        q = supabase_admin.table(_T).update({"cancelada": True}).eq("id", id)
-        if empresa_id:
-            q = q.eq("empresa_id", str(empresa_id))
-        res = q.execute()
-        return self.find_by_id(id, empresa_id) if res.data else None
+        """Setea cancelada=True, restringiendo por empresa si se provee (ver _vacaciones_write_repo)."""
+        return cancelar(id, empresa_id, self.find_by_id)

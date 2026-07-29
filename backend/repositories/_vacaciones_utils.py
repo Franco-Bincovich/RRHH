@@ -5,6 +5,10 @@ from typing import List, Optional
 from integrations.supabase_client import supabase_admin
 from schemas.vacaciones import SolicitudVacacionesResponse
 
+# Nombre de la tabla, acá para que el repo de lectura y el de escritura lo compartan sin
+# que ninguno de los dos lo redefina (mismo criterio que _empleado_row.TABLE).
+TABLE = "solicitudes_vacaciones"
+
 
 def aplicar_filtro_estado(q, estado: Optional[str], today: Optional[date]):
     """Traduce el estado DERIVADO al filtro SQL equivalente sobre cancelada + fecha_desde.
@@ -23,8 +27,13 @@ def aplicar_filtro_estado(q, estado: Optional[str], today: Optional[date]):
     return q
 
 
-def build_responses(rows: List[dict]) -> List[SolicitudVacacionesResponse]:
-    """Enriquece filas con empresa_nombre, empleado_nombre, area_id y area_nombre via batch queries."""
+def enriquecer(rows: List[dict]) -> List[dict]:
+    """Agrega empresa_nombre, empleado_nombre, area_id y area_nombre a cada fila (batch, sin N+1).
+
+    Compartido por solicitudes_vacaciones y vacaciones_pendientes: las dos cuelgan de un empleado
+    y resuelven exactamente los mismos derivados. Una sola implementación para que las dos
+    pantallas no puedan mostrar el área de formas distintas.
+    """
     if not rows:
         return []
 
@@ -50,12 +59,16 @@ def build_responses(rows: List[dict]) -> List[SolicitudVacacionesResponse]:
     for r in rows:
         emp = emp_map.get(r["empleado_id"]) or {}
         aid = emp.get("area_id")
-        result.append(SolicitudVacacionesResponse.model_validate({
+        result.append({
             **r,
             "empresa_nombre": empresa_map.get(r["empresa_id"]),
             "empleado_nombre": emp.get("nombre"),
             "area_id": aid,
             "area_nombre": area_map.get(aid) if aid else None,
-            "estado": "",
-        }))
+        })
     return result
+
+
+def build_responses(rows: List[dict]) -> List[SolicitudVacacionesResponse]:
+    """Filas de solicitudes_vacaciones enriquecidas → responses. `estado` lo deriva el service."""
+    return [SolicitudVacacionesResponse.model_validate({**r, "estado": ""}) for r in enriquecer(rows)]

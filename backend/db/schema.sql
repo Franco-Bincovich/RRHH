@@ -699,7 +699,23 @@ CREATE TABLE public.solicitudes_vacaciones (
     cancelada boolean NOT NULL DEFAULT false,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
-    tipo character varying NOT NULL DEFAULT 'vacaciones'::character varying
+    tipo character varying NOT NULL DEFAULT 'vacaciones'::character varying,
+    periodo smallint,
+    dias_liquidados integer NOT NULL DEFAULT 0
+);
+
+-- Días de un período que NO se tomaron (sin fechas: nadie faltó ningún día). Separada de
+-- solicitudes_vacaciones a propósito — ver migrations/083 antes de fusionarlas.
+CREATE TABLE public.vacaciones_pendientes (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    empresa_id uuid NOT NULL,
+    empleado_id uuid NOT NULL,
+    periodo smallint NOT NULL,
+    dias integer NOT NULL,
+    dias_liquidados integer NOT NULL DEFAULT 0,
+    comentario text,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 CREATE TABLE public.sucesion_posiciones (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -842,6 +858,7 @@ ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_pkey P
 ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_pkey PRIMARY KEY (id);
 ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 ALTER TABLE public.usuario_integraciones ADD CONSTRAINT usuario_integraciones_pkey PRIMARY KEY (id);
+ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_pkey PRIMARY KEY (id);
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_pkey PRIMARY KEY (id);
 ALTER TABLE public.areas ADD CONSTRAINT areas_codigo_key UNIQUE (codigo);
 ALTER TABLE public.areas ADD CONSTRAINT areas_id_empresa_uq UNIQUE (id, empresa_id);
@@ -893,6 +910,10 @@ ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_nombre_key UNIQU
 ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE (email);
 ALTER TABLE public.users ADD CONSTRAINT users_username_key UNIQUE (username);
 ALTER TABLE public.usuario_integraciones ADD CONSTRAINT usuario_integraciones_user_id_tipo_key UNIQUE (user_id, tipo);
+-- "N días pendientes del año X" es un hecho único por empleado y período. Da idempotencia al
+-- import (ON CONFLICT actualiza en vez de duplicar). empresa_id NO va: empleado_id ya la
+-- determina vía vp_empleado_empresa_fk, y sumarla debilitaría la restricción. Ver migración 083.
+ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empleado_periodo_key UNIQUE (empleado_id, periodo);
 ALTER TABLE public.adjuntos ADD CONSTRAINT adjuntos_estado_check CHECK ((estado = ANY (ARRAY['activo'::text, 'eliminado'::text])));
 ALTER TABLE public.adjuntos ADD CONSTRAINT adjuntos_tamano_bytes_check CHECK ((tamano_bytes > 0));
 ALTER TABLE public.areas ADD CONSTRAINT areas_nivel_check CHECK (((nivel >= 1) AND (nivel <= 10)));
@@ -966,7 +987,12 @@ ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT sa_fechas_check CHECK ((f
 ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_dias_check CHECK ((dias > 0));
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT solicitudes_vacaciones_dias_check CHECK ((dias > 0));
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT solicitudes_vacaciones_tipo_check CHECK (((tipo)::text = ANY ((ARRAY['vacaciones'::character varying, 'semana_free'::character varying, 'dia_free'::character varying, 'permiso_especial'::character varying])::text[])));
+ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT sv_dias_liquidados_check CHECK (((dias_liquidados >= 0) AND (dias_liquidados <= dias)));
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT sv_fechas_check CHECK ((fecha_hasta >= fecha_desde));
+ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT sv_periodo_check CHECK (((periodo IS NULL) OR ((periodo >= 2000) AND (periodo <= 2100))));
+ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_dias_check CHECK ((dias > 0));
+ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_dias_liquidados_check CHECK (((dias_liquidados >= 0) AND (dias_liquidados <= dias)));
+ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_periodo_check CHECK (((periodo >= 2000) AND (periodo <= 2100)));
 ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_criticidad_check CHECK (((criticidad)::text = ANY ((ARRAY['baja'::character varying, 'media'::character varying, 'alta'::character varying, 'critica'::character varying])::text[])));
 ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_estado_check CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying, 'en_revision'::character varying, 'cerrado'::character varying])::text[])));
 ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_nivel_preparacion_primario_check CHECK (((nivel_preparacion_primario)::text = ANY ((ARRAY['listo_ya'::character varying, '1_2_anios'::character varying, '3_5_anios'::character varying, 'potencial'::character varying])::text[])));
@@ -1112,6 +1138,9 @@ ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_empr
 ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_tipo_id_fkey FOREIGN KEY (tipo_id) REFERENCES tipos_ausencia(id);
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT solicitudes_vacaciones_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT sv_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
+ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
+ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
+ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
 ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE SET NULL;
 ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
 ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_sucesor_primario_id_fkey FOREIGN KEY (sucesor_primario_id) REFERENCES empleados(id) ON DELETE SET NULL;
@@ -1253,6 +1282,9 @@ CREATE INDEX idx_sa_empresa_id ON public.solicitudes_ausencia USING btree (empre
 CREATE INDEX idx_solicitudes_vacaciones_empresa_tipo ON public.solicitudes_vacaciones USING btree (empresa_id, tipo);
 CREATE INDEX idx_sv_empleado_id ON public.solicitudes_vacaciones USING btree (empleado_id);
 CREATE INDEX idx_sv_empresa_id ON public.solicitudes_vacaciones USING btree (empresa_id);
+CREATE INDEX idx_sv_periodo ON public.solicitudes_vacaciones USING btree (empleado_id, periodo) WHERE (periodo IS NOT NULL);
+CREATE INDEX idx_vp_empleado ON public.vacaciones_pendientes USING btree (empleado_id);
+CREATE INDEX idx_vp_empresa ON public.vacaciones_pendientes USING btree (empresa_id);
 CREATE INDEX idx_sucesion_area ON public.sucesion_posiciones USING btree (area_id);
 CREATE INDEX idx_sucesion_criticidad ON public.sucesion_posiciones USING btree (criticidad);
 CREATE INDEX idx_sucesion_posiciones_empresa ON public.sucesion_posiciones USING btree (empresa_id);

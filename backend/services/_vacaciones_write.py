@@ -65,10 +65,14 @@ def crear(repo, periodos, ownership, data: SolicitudVacacionesCreate, created_by
         )
 
     dias = (data.fecha_hasta - data.fecha_desde).days + 1
+    if data.dias_liquidados > dias:
+        raise AppError("Los días liquidados no pueden superar los días de la licencia",
+                       "DIAS_LIQUIDADOS_INVALIDOS", 422)
     row = repo.save(
         str(data.empleado_id), empresa_id,
         data.fecha_desde, data.fecha_hasta,
         dias, data.tipo, data.comentario,
+        data.periodo, data.dias_liquidados,
     )
     logger.info(
         "Vacaciones registradas",

@@ -12,6 +12,7 @@ from schemas.vacaciones import (
     SolicitudVacacionesCreate,
     SolicitudVacacionesListResponse,
     SolicitudVacacionesResponse,
+    SolicitudVacacionesUpdate,
 )
 from services.vacaciones_service import VacacionesService
 from utils.empresa import get_empresa_id
@@ -65,6 +66,12 @@ async def create_vacacion(
     service: VacacionesService = Depends(_svc),
 ) -> SolicitudVacacionesResponse:
     return service.create(body, request.state.user.get("id", "system"), request.state.user.get("rol"))
+
+
+@router.put("/{id}", response_model=SolicitudVacacionesResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
+async def update_vacacion(id: UUID, request: Request, body: SolicitudVacacionesUpdate, service: VacacionesService = Depends(_svc)) -> SolicitudVacacionesResponse:
+    u = request.state.user
+    return service.actualizar(id, body, get_empresa_id(request), u.get("id", "system"), u.get("rol"))
 
 
 @router.put("/{id}/cancelar", response_model=SolicitudVacacionesResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])

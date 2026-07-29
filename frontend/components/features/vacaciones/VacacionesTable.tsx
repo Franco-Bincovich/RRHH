@@ -24,7 +24,10 @@ const ESTADO_VARIANTS: Record<EstadoVacacion, "default" | "secondary" | "outline
   cancelada: "destructive",
 }
 
-function formatFecha(s: string): string {
+// Null-safe aunque hoy fecha_desde/fecha_hasta sean NOT NULL en la DB: si alguna vez llegara
+// un null, `s.split` tumbaría la tabla entera. Mismo molde que AsignacionesCapTable.
+function formatFecha(s: string | null): string {
+  if (!s) return "—"
   const [y, m, d] = s.split("-")
   return `${d}/${m}/${y}`
 }

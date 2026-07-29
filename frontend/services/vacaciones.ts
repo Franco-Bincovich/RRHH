@@ -3,6 +3,7 @@ import type {
   SolicitudVacaciones,
   SolicitudVacacionesCreate,
   SolicitudVacacionesListResponse,
+  SolicitudVacacionesUpdate,
 } from "@/types/vacaciones"
 import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
 
@@ -68,6 +69,17 @@ export async function createVacacion(
 ): Promise<SolicitudVacaciones> {
   return apiFetch<SolicitudVacaciones>("/api/vacaciones", {
     method: "POST",
+    body: JSON.stringify(data),
+  })
+}
+
+/** Edita una licencia ya creada. Hoy la UI solo cambia `dias_liquidados` (el tilde "Liquidada"). */
+export async function updateVacacion(
+  id: string,
+  data: SolicitudVacacionesUpdate,
+): Promise<SolicitudVacaciones> {
+  return apiFetch<SolicitudVacaciones>(`/api/vacaciones/${id}`, {
+    method: "PUT",
     body: JSON.stringify(data),
   })
 }

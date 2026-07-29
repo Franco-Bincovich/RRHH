@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState } from "react"
 import { Umbrella, Plus } from "lucide-react"
-import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { EmptyState } from "@/components/ui/EmptyState"
@@ -14,16 +13,16 @@ import { Pagination } from "@/components/ui/Pagination"
 import { VacacionesModal } from "@/components/features/vacaciones/VacacionesModal"
 import { VacacionesTable } from "@/components/features/vacaciones/VacacionesTable"
 import { useFiltrosVacaciones } from "@/components/features/vacaciones/useFiltrosVacaciones"
+import { useVacacionesLista, PAGE_SIZE } from "@/components/features/vacaciones/useVacacionesLista"
 import { AdjuntosDialog } from "@/components/features/adjuntos/AdjuntosDialog"
 import { MapaVacaciones } from "@/components/features/vacaciones/MapaVacaciones"
-import { fetchVacaciones, cancelarVacacion, exportarVacaciones } from "@/services/vacaciones"
+import { PendientesSection } from "@/components/features/vacaciones/PendientesSection"
+import { exportarVacaciones } from "@/services/vacaciones"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { SolicitudVacaciones } from "@/types/vacaciones"
 
 type Vista = "lista" | "mapa"
-
-const PAGE_SIZE = 20
 
 function TableSkeleton() {
   return (
@@ -37,46 +36,16 @@ function TableSkeleton() {
 
 export default function VacacionesPage() {
   const canWrite = useCanWrite()
-  const [solicitudes, setSolicitudes] = useState<SolicitudVacaciones[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
   const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
   const [vista, setVista] = useState<Vista>("lista")
   const [modalOpen, setModalOpen] = useState(false)
-  const [cancelingId, setCancelingId] = useState<string | null>(null)
   const [docsFor, setDocsFor] = useState<SolicitudVacaciones | null>(null)
+  // El modal puede crear en cualquiera de las dos tablas, así que al guardar se refrescan las dos.
+  const [pendientesKey, setPendientesKey] = useState(0)
 
   const { empresaActivaId, filtros, campos } = useFiltrosVacaciones(() => setPage(1))
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(false)
-    try {
-      const data = await fetchVacaciones(filtros, page, PAGE_SIZE)
-      setSolicitudes(data.items)
-      setTotal(data.total)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-    }
-    // filtros es un objeto nuevo en cada render; se serializa para no re-fetchear de más.
-  }, [JSON.stringify(filtros), page])  // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => { load() }, [load])
-
-  async function handleCancel(id: string) {
-    setCancelingId(id)
-    try {
-      await cancelarVacacion(id)
-      await load()
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "No se pudo cancelar la solicitud. Intentá de nuevo.")
-    } finally {
-      setCancelingId(null)
-    }
-  }
+  const { solicitudes, loading, error, total, cancelingId, load, handleCancel } =
+    useVacacionesLista(filtros, page)
 
   return (
     <div>
@@ -130,10 +99,12 @@ export default function VacacionesPage() {
         <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
       )}
 
+      {vista === "lista" && <PendientesSection showEmpresa={!empresaActivaId} refreshKey={pendientesKey} />}
+
       <VacacionesModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onSuccess={() => { setModalOpen(false); load() }}
+        onSuccess={() => { setModalOpen(false); load(); setPendientesKey((k) => k + 1) }}
       />
 
       <AdjuntosDialog

@@ -12,11 +12,12 @@ import { getRol } from "@/services/permisos"
 import { SeleccionEmpleado } from "@/components/features/shared/SeleccionEmpleado"
 import { SaldoResumen } from "./SaldoResumen"
 import { CamposVacacion } from "./CamposVacacion"
+import { createVacacionPendiente } from "@/services/vacacionesPendientes"
 import {
-  EMPTY_VACACION, calcDias, validateVacacion,
+  EMPTY_VACACION, diasDelForm, payloadPendiente, payloadTomada, validateVacacion,
   type VacacionFormData, type VacacionFormErrors,
 } from "./vacacionesForm"
-import type { SaldoVacaciones, SolicitudVacacionesCreate } from "@/types/vacaciones"
+import type { SaldoVacaciones } from "@/types/vacaciones"
 
 interface VacacionesModalProps {
   open: boolean
@@ -47,15 +48,19 @@ export function VacacionesModal({ open, onClose, onSuccess }: VacacionesModalPro
       .catch(() => setSaldo(null))
   }, [form.empleado_id])
 
-  const diasSolicitados = useMemo(
-    () => calcDias(form.fecha_desde, form.fecha_hasta),
-    [form.fecha_desde, form.fecha_hasta],
-  )
+  const diasSolicitados = useMemo(() => diasDelForm(form), [form])
 
   function field(key: keyof VacacionFormData) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       setForm((prev) => ({ ...prev, [key]: e.target.value }))
       if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }))
+    }
+  }
+
+  function toggle(key: "pendiente" | "liquidada") {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      setForm((prev) => ({ ...prev, [key]: e.target.checked }))
+      setErrors({})
     }
   }
 
@@ -77,14 +82,10 @@ export function VacacionesModal({ open, onClose, onSuccess }: VacacionesModalPro
     setSubmitting(true)
     setServerError("")
     try {
-      const payload: SolicitudVacacionesCreate = {
-        empleado_id: form.empleado_id,
-        fecha_desde: form.fecha_desde,
-        fecha_hasta: form.fecha_hasta,
-        tipo: form.tipo,
-        comentario: form.comentario.trim() || undefined,
-      }
-      await createVacacion(payload)
+      // El tilde "No se tomó" decide la TABLA, no solo los campos: sin fechas el registro va
+      // a vacaciones_pendientes (ver backend/migrations/083).
+      if (form.pendiente) await createVacacionPendiente(payloadPendiente(form))
+      else await createVacacion(payloadTomada(form))
       onSuccess()
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Ocurrió un error al guardar")
@@ -97,7 +98,7 @@ export function VacacionesModal({ open, onClose, onSuccess }: VacacionesModalPro
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Registrar vacaciones</DialogTitle>
+          <DialogTitle>{form.pendiente ? "Registrar días pendientes" : "Registrar vacaciones"}</DialogTitle>
         </DialogHeader>
 
         <form id="vacaciones-form" onSubmit={handleSubmit} noValidate>
@@ -114,7 +115,7 @@ export function VacacionesModal({ open, onClose, onSuccess }: VacacionesModalPro
 
             {saldo && <SaldoResumen saldo={saldo} diasSolicitados={diasSolicitados} tipo={form.tipo} />}
 
-            <CamposVacacion form={form} errors={errors} field={field} />
+            <CamposVacacion form={form} errors={errors} field={field} toggle={toggle} />
           </div>
 
           {serverError && <p className="mt-2 text-sm text-destructive" role="alert">{serverError}</p>}

@@ -41,6 +41,75 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-29 · Vacaciones: período, días pendientes y liquidación (mig 083) · commits pendientes ×4
+
+**Qué cambió:** las vacaciones ahora distinguen **cuándo se tomaron** de **a qué año
+corresponden** (`periodo`), y los **días que no se tomaron** pasan a existir como entidad
+propia en una tabla nueva, `vacaciones_pendientes`. Los archivos históricos de RRHH traen las
+dos cosas mezcladas: licencias del 13/4/2026 al 19/4/2026 que son del período 2025, y "2
+semanas pendientes del 2025" que no tienen fechas porque nadie faltó ningún día. También se
+agregó `dias_liquidados` a las dos tablas y un endpoint de edición para la licencia tomada.
+
+🔴 **POR QUÉ DOS TABLAS Y NO FECHAS NULLABLE — no fusionarlas después "por simplicidad".** Se
+diagnosticó permitir `fecha_desde`/`fecha_hasta` NULL en `solicitudes_vacaciones` sobre el
+código real: **rompe 15 lugares, 6 con crash y 9 EN SILENCIO**. Ocho de los nueve silenciosos
+comparten una sola causa: en SQL un predicado sobre NULL da NULL, que **no es TRUE**, así que
+la fila se cae del WHERE — y como el `count` viaja en la misma query, se cae también del total.
+Un filtro no deja pasar esas filas: **las esconde, y el total viaja escondido con ellas.** Los
+dos peores: el reporte de saldos (R11) **infla el saldo** —le dice a RRHH que el empleado tiene
+más días de los que tiene— y el bloqueo por período cerrado **deja de aplicar**. Con tablas
+separadas, `fecha_desde` y `fecha_hasta` siguen NOT NULL y nada de eso pasa: los reportes, el
+mapa, el saldo, el export y los filtros no ven la tabla nueva. Hay tests que lo verifican.
+
+🔴 **`dias_liquidados` es un INT y no un bool `liquidada`.** En el archivo real **todas** las
+filas dicen "Liquidado", incluidas las tomadas, porque las vacaciones siempre se pagan: lo que
+separa las dos tablas es **si se tomó**, no si se pagó. Y con un bool no se puede representar
+una liquidación **parcial** (5 de 10 días) sin una segunda fila del mismo `(empleado, período)`,
+que es justo lo que la UNIQUE prohíbe. La UI lo maneja como un tilde binario; el modelo ya
+soporta el parcial si RRHH lo confirma, sin otra migración.
+
+**Impacto en infraestructura:**
+
+- **🔴 MIGRACIÓN 083 — `083_vacaciones_periodo_y_pendientes.sql`. ORDEN DE DEPLOY: LA MIGRACIÓN
+  VA ANTES QUE EL CÓDIGO.** El backend nuevo escribe `periodo` y `dias_liquidados` en cada alta
+  de vacaciones y lee la tabla `vacaciones_pendientes` al abrir la pantalla; si el código sale
+  primero, **el alta de vacaciones falla con 500** (columna inexistente) y la sección de días
+  pendientes tira error. Al revés no rompe nada: la migración es **no destructiva** (agrega
+  columnas nullable/con default y crea una tabla) y es segura de correr con la app arriba.
+- **Tabla nueva `vacaciones_pendientes`** con `UNIQUE (empleado_id, periodo)` — le da
+  idempotencia al import histórico (`ON CONFLICT` actualiza en vez de duplicar), que es
+  precisamente lo que `solicitudes_vacaciones` **no** tiene. Lleva FK compuesta contra
+  `empleados(id, empresa_id)`, igual que `sv_empleado_empresa_fk`, y RLS habilitada sin
+  policies (deny-all; el control es app-level, mismo criterio que 061 y 066).
+- **`db/schema.sql` actualizado**: pasa de 52 a **53 tablas**, de 331 a **341 constraints** y
+  de 132 a **135 `CREATE INDEX`**.
+- **Trigger nuevo** `trg_vacaciones_pendientes_updated_at` — usa `public.set_updated_at()`, la
+  misma función que el resto. **Suma uno a los 36 triggers de `updated_at` que `schema.sql` no
+  trae y que la migración 077 (en `migracionAWS/`) recrea: pasan a ser 37.**
+- **Endpoints nuevos, todos con auth y gate `Seccion.VACACIONES`** (ninguno público):
+  `GET·POST /api/vacaciones-pendientes`, `GET /api/vacaciones-pendientes/empleado/{id}`,
+  `PUT·DELETE /api/vacaciones-pendientes/{id}`, y `PUT /api/vacaciones/{id}` (edición de la
+  licencia tomada). **Prefijo propio y no `/api/vacaciones/pendientes`**: el `GET
+  /api/vacaciones/{id}` se comería la ruta estática, la misma colisión que `main.py` ya había
+  resuelto montando `vacaciones_empleado` antes que `vacaciones`.
+- **Variables de entorno:** ninguna. **Dependencias:** ninguna. **Buckets:** ninguno.
+  **Procesos fuera de serverless:** ninguno. **Auth:** sin cambios.
+
+**Anotado, fuera de alcance de esta sesión:**
+- **El cálculo del saldo NO se tocó**: sigue funcionando exactamente como antes. Depende de si
+  los días no usados se acumulan al año siguiente, que se define con RRHH. Hay un test que
+  falla si alguien engancha los pendientes al saldo antes de esa definición.
+- **El bloqueo por período cerrado NO aplica a los pendientes**, deliberadamente. Las cuatro
+  razones están escritas en `services/vacaciones_pendientes_service.py`. Revisar cuando RRHH
+  cierre un período de verdad Y se defina la acumulación.
+- **El import queda pendiente**: no hay ancla de matcheo (`legajo` está 0/19 y el CSV de nómina
+  ni siquiera trae esa columna — ver `docs/Resultado_import.md`).
+
+**Corrección al `CLAUDE.md`:** decía "79 archivos SQL, backend va por 081". Eran **80** y iba
+por **082**; con esta sesión son **81** y va por **083**.
+
+---
+
 ## 2026-07-28 · C6 sesión 2 · visibilidad pública/privada de plantillas (mig 082) · commits pendientes ×4
 
 **Qué cambió:** las plantillas de onboarding ahora pueden ser **compartidas** (las ve todo el
