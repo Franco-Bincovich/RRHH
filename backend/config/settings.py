@@ -23,17 +23,21 @@ class Settings(BaseSettings):
     # PARA ENTRE FILAS y devuelve el reporte de lo que hizo, en vez de morir en un timeout sin
     # decir nada. Reintentar con el mismo archivo continúa donde quedó (dedup por DNI).
     #
-    # 🔴 EL DEFAULT ES CONSERVADOR A PROPÓSITO, y hay que ajustarlo en cada entorno.
-    # El techo real de esta app NO ESTÁ VERIFICADO: `backend/vercel.json` declara
-    # `maxDuration: 300`, pero lo hace dentro de `builds[].config`, que es el formato legacy —
-    # la duración de una función se configura en la clave `functions` de nivel superior, que ese
-    # archivo no tiene. O sea que muy probablemente esté IGNORADO y el backend corra con el
-    # default del plan (que en el más bajo son 10 s).
-    # 8 s asume ese peor caso y deja margen para serializar la respuesta. Un presupuesto MAYOR
-    # que el techo real no sirve de nada: el request muere antes de que el import pueda cortar
-    # solo, que es justamente lo que esto vino a evitar.
-    # En AWS el techo es otro (ALB/Lambda/ECS) → REVISAR este valor en el cutover.
-    import_presupuesto_segundos: float = 8.0
+    # EL TECHO ESTÁ VERIFICADO (docs de Vercel al 1/7/2026): con **fluid compute** —habilitado
+    # por defecto en proyectos creados después de abril 2025, y este es de 2026— el plan Hobby
+    # tiene **300 s de default Y de máximo**.
+    # ⚠️ En Hobby los 300 s son también el MÁXIMO: no se puede subir. Un presupuesto > 300 no
+    # compra nada — el request muere antes de que el import pueda cortar solo, que es justamente
+    # lo que esto vino a evitar.
+    # 280 deja 20 s de margen para serializar la respuesta y emitir el evento de auditoría del
+    # corte, que son las dos cosas que pasan DESPUÉS de la última fila.
+    #
+    # El `maxDuration: 300` que `backend/vercel.json` declara dentro de `builds[].config` está
+    # en el lugar equivocado (formato legacy; va en la clave `functions` de nivel superior), pero
+    # es INOCUO: el default de la plataforma ya es 300 s.
+    #
+    # En AWS el techo lo pone otra cosa (ALB / Lambda / ECS) → REVISAR este valor en el cutover.
+    import_presupuesto_segundos: float = 280.0
 
     # Supabase
     supabase_url: str

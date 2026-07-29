@@ -4,6 +4,7 @@ import { useRef, useState } from "react"
 import { Upload } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { MAX_SUBIDA_MB } from "@/lib/limitesSubida"
 
 const DEFAULT_ACCEPT = ".pdf,.docx,.xlsx,.jpg,.jpeg,.png,.webp"
 
@@ -11,6 +12,7 @@ interface Props {
   /** Envía el archivo elegido. El componente maneja el estado subiendo/error alrededor. */
   onUpload: (file: File) => Promise<void>
   accept?: string
+  /** Default: el límite compartido (ver lib/limitesSubida). Solo pasarlo para bajarlo. */
   maxSizeMB?: number
   label?: string
   disabled?: boolean
@@ -25,7 +27,7 @@ interface Props {
 export function FileUpload({
   onUpload,
   accept = DEFAULT_ACCEPT,
-  maxSizeMB = 10,
+  maxSizeMB = MAX_SUBIDA_MB,
   label = "Subir archivo",
   disabled = false,
 }: Props) {
@@ -35,7 +37,7 @@ export function FileUpload({
 
   function validar(file: File): string | null {
     if (file.size > maxSizeMB * 1024 * 1024) {
-      return `El archivo supera los ${maxSizeMB} MB`
+      return `El archivo supera el tamaño máximo de ${maxSizeMB} MB`
     }
     const exts = accept
       .split(",")

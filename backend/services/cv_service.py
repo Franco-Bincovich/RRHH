@@ -8,10 +8,10 @@ from typing import Optional
 
 from integrations.supabase_client import supabase_admin
 from utils.errors import AppError
+from utils.files import MAX_SIZE_CV, mensaje_supera_tamano
 from utils.logger import logger
 
 _BUCKET = "cvs"
-_MAX_SIZE = 5 * 1024 * 1024  # 5 MB
 _EXT = {"pdf", "doc", "docx"}
 _MIME = {
     "application/pdf",
@@ -27,17 +27,23 @@ def _ext(filename: str) -> str:
 
 class CvService:
     def validar(self, content: bytes, filename: str, content_type: Optional[str]) -> None:
-        """Valida formato (pdf/doc/docx) y tamaño (≤5 MB) del CV.
+        """Valida formato (pdf/doc/docx) y tamaño del CV.
 
         Gate principal por extensión; el MIME se acepta si está en la lista o es genérico
         (octet-stream/None), porque algunos navegadores no lo informan bien para .doc.
+
+        El límite y el texto del error salen de `utils/files.py`, no de acá: tener el número en
+        dos lugares es cómo se desincronizan — este archivo decía 5 MB cuando el techo de la
+        plataforma ya era 4,5. NO usa `validate_upload` entero porque conserva su propio
+        code/status (`CV_TOO_LARGE`, 413) y cambiarlos sería alterar el contrato HTTP sin motivo.
+
         Raises: INVALID_CV_FORMAT (400), CV_TOO_LARGE (413).
         """
         mime_ok = content_type in _MIME or content_type in (None, "application/octet-stream")
         if _ext(filename) not in _EXT or not mime_ok:
             raise AppError("Formato de CV no permitido. Usá PDF o Word", "INVALID_CV_FORMAT", 400)
-        if len(content) > _MAX_SIZE:
-            raise AppError("El CV supera el tamaño máximo de 5 MB", "CV_TOO_LARGE", 413)
+        if len(content) > MAX_SIZE_CV:
+            raise AppError(mensaje_supera_tamano("CV", MAX_SIZE_CV), "CV_TOO_LARGE", 413)
 
     def subir(
         self, empresa_id: Optional[str], candidato_id: str, content: bytes,

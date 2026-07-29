@@ -4,16 +4,16 @@ import { useRef } from "react"
 import { Paperclip, X } from "lucide-react"
 
 import { Label } from "@/components/ui/label"
+import { MAX_SUBIDA_MB, mensajeSuperaTamano } from "@/lib/limitesSubida"
 
 const ACCEPT = ".pdf,.doc,.docx"
-const MAX_MB = 5
 const EXTS = ["pdf", "doc", "docx"]
 
 /** Valida tipo y tamaño del CV en el cliente. Devuelve mensaje de error o null si es válido. */
 function validarCv(file: File): string | null {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? ""
   if (!EXTS.includes(ext)) return "Formato no permitido. Usá PDF o Word (.pdf, .doc, .docx)."
-  if (file.size > MAX_MB * 1024 * 1024) return `El CV supera el máximo de ${MAX_MB} MB.`
+  if (file.size > MAX_SUBIDA_MB * 1024 * 1024) return `${mensajeSuperaTamano("CV")}.`
   return null
 }
 
@@ -69,7 +69,7 @@ export function CvField({ file, error, onChange }: Props) {
         />
       )}
       {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
-      {!error && <p className="text-xs text-muted-foreground">PDF o Word, hasta {MAX_MB} MB.</p>}
+      {!error && <p className="text-xs text-muted-foreground">PDF o Word, hasta {MAX_SUBIDA_MB} MB.</p>}
     </div>
   )
 }

@@ -52,27 +52,67 @@ agregó persistencia de progreso: el reintento se apoya en el dedup por DNI que 
 
 ### 🔴 VARIABLE DE ENTORNO NUEVA — `IMPORT_PRESUPUESTO_SEGUNDOS`
 
-**Default: `8.0`. Tiene default seguro, pero conviene declararla explícita en `sofia-backend`.**
+**Default: `280.0`. Tiene default seguro, pero conviene declararla explícita en `sofia-backend`.**
 
-🔴 **El default es CONSERVADOR a propósito, y hay que revisarlo en cada entorno.** El techo real
-de esta app **NO ESTÁ VERIFICADO**:
+**EL TECHO ESTÁ VERIFICADO** (docs de Vercel al 1/7/2026): con **fluid compute** —habilitado por
+defecto en proyectos creados después de abril 2025, y este es de 2026— el plan **Hobby tiene 300 s
+de default Y de máximo**.
 
-> **Dato para el dev de infraestructura:** `backend/vercel.json` declara `maxDuration: 300`, pero
-> lo hace **dentro de `builds[].config`**, que es el formato **legacy v2**. La duración de una
-> función se configura en la clave **`functions` de nivel superior**, que ese archivo **no tiene**
-> (verificado: el único `maxDuration` del repo está en esa línea). O sea que **muy probablemente
-> esté IGNORADO** y el backend corra con el default del plan. El `vercel.json` de la raíz fue
-> borrado hace tiempo, así que no hay otra fuente que lo sobrescriba.
+- ⚠️ **En Hobby los 300 s son también el MÁXIMO: no se puede subir.** Un presupuesto > 300 no
+  compra nada; el request muere antes de que el import pueda cortar solo.
+- **280 deja 20 s de margen** para serializar la respuesta y emitir el evento de auditoría del
+  corte — las dos cosas que ocurren DESPUÉS de la última fila.
+- Un valor **≤ 0 significa SIN LÍMITE** (procesa todo, comportamiento previo). Degradado seguro:
+  una configuración en 0 por error no rompe el import. Hay un test que fija que el **default sí
+  enforza** un presupuesto, para que nadie lo lleve a 0 en silencio — y afirma la CONDUCTA
+  (`> 0`), no el número, así que ajustar el valor no lo rompe.
+- 🔴 **En AWS hay que REVISARLO en el cutover.** El techo lo van a poner ALB / Lambda / ECS, no
+  Vercel.
 
-Por eso 8 s asume el peor caso plausible (10 s del plan más bajo) y deja margen para serializar la
-respuesta. **Un presupuesto MAYOR que el techo real no sirve de nada**: el request muere antes de
-que el import pueda cortar solo, que es justamente lo que esto vino a evitar.
+> **Dato para el dev de infraestructura, ya resuelto:** `backend/vercel.json` declara
+> `maxDuration: 300` **dentro de `builds[].config`**, que es el formato legacy v2 — la duración de
+> una función se configura en la clave `functions` de nivel superior, que ese archivo no tiene.
+> **Está mal ubicado, pero es INOCUO: el default de la plataforma ya es 300 s.** No hace falta
+> tocarlo; sí conviene no confiar en él como si estuviera configurando algo.
 
-- **En AWS hay que REVISARLO en el cutover.** El techo lo van a poner ALB / Lambda / ECS, no
-  Vercel, y probablemente sea más alto → subir el valor para que un archivo entero entre de una.
-- Un valor **≤ 0 significa SIN LÍMITE** (procesa todo, comportamiento previo). Es un degradado
-  seguro: una configuración en 0 por error no rompe el import. Hay un test que fija que el
-  **default sí enforza** un presupuesto, para que nadie lo lleve a 0 en silencio.
+### 🔴 TECHO DE PAYLOAD DE LA PLATAFORMA — 4,5 MB por request · LOS CUATRO LÍMITES ALINEADOS
+
+Vercel rechaza cualquier request con body > **4,5 MB**, y lo hace **antes de invocar la función**:
+el código nunca lo ve. Un límite propio por encima de ese número **no protege nada** — solo cambia
+quién produce el error, y la plataforma produce un 413 crudo que el usuario no puede interpretar.
+
+**No era decisión de producto:** los 10 MB no eran un requisito alcanzable. Un adjunto de 6 MB
+**hoy no se puede subir**, con el límite en 10 MB o en 4,2. Lo único que decide el número es si el
+usuario entiende por qué.
+
+**Los cuatro límites de subida quedaron en 4,2 MB, derivados de un solo valor** (`utils/files.py`):
+
+| Constante | Antes | Ahora |
+|---|---|---|
+| `MAX_SIZE_CSV` | 5 MB | **4,2 MB** |
+| `MAX_SIZE_CERTIFICADO` | 10 MB | **4,2 MB** |
+| `MAX_SIZE_ADJUNTO` | 10 MB | **4,2 MB** |
+| `MAX_SIZE_CV` (era `cv_service._MAX_SIZE`) | 5 MB, en otro archivo | **4,2 MB**, constante compartida |
+| `MAX_SIZE_LOGO` | 2 MB | **2 MB** — sin cambio, es criterio propio y ya estaba debajo del techo |
+
+🔴 **`LIMITE_PLATAFORMA_MB = 4.5` en `utils/files.py` es el ÚNICO número a revisar cuando cambie
+el hosting.** Los cuatro derivan de `MAX_SIZE_SUBIDA`, que sale de ahí con ~0,3 MB de margen (el
+request pesa más que el archivo: un multipart lleva boundaries, headers por parte y el nombre).
+**En AWS ese techo lo define API Gateway / ALB, no la app** → se toca ese número, no los cuatro.
+`tests/test_limites_subida.py` **barre las constantes por introspección** y falla si alguna queda
+por encima del techo, así que un límite nuevo también queda cubierto sin tocar el test.
+
+**Dos fuentes que se eliminaron** (es como se desincronizan):
+- `cv_service` tenía su propio `_MAX_SIZE` y su propio *"5 MB"* hardcodeado en el mensaje. Ahora
+  usa la constante compartida y el texto sale de `mensaje_supera_tamano`. Conserva su `code` y su
+  status propios (`CV_TOO_LARGE`, 413): no se cambió el contrato HTTP.
+- El **front** tenía dos números distintos, los dos mal: `FileUpload` decía 10 MB y `CvField` 5 MB.
+  Ahora salen de `frontend/lib/limitesSubida.ts`. ⚠️ Es **espejo manual** del backend —mismo patrón
+  y mismo riesgo que `permisos.ts` ↔ `permisos.py`, sin test que los compare—; el backend sigue
+  siendo el único que enforza, el front solo da feedback antes de gastar la subida.
+
+⚠️ El mensaje pasó de división entera a `:g`, porque con 4,2 MB decía *"4 MB"* y le mentía al
+usuario sobre cuánto puede subir. Los límites redondos siguen diciendo *"2 MB"*.
 
 ### 🔴 PRIMERA MEDICIÓN DE TIEMPO DEL REPO
 
@@ -105,7 +145,7 @@ env var** — y también para decidir si el rediseño a batch sigue siendo neces
 
 ### Impacto en infraestructura
 
-- **Variables de entorno:** 🔴 **`IMPORT_PRESUPUESTO_SEGUNDOS` (nueva, default 8.0)** — ver arriba.
+- **Variables de entorno:** 🔴 **`IMPORT_PRESUPUESTO_SEGUNDOS` (nueva, default 280.0)** — ver arriba.
 - **Migraciones:** ninguna. **Dependencias:** ninguna. **Buckets:** ninguno. **Endpoints:**
   ninguno nuevo; `POST /api/importacion/nomina-empleados` suma 4 campos a su respuesta.
   **Auth:** sin cambios. **Procesos fuera de serverless:** ninguno.

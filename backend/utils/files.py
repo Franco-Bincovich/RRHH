@@ -4,10 +4,40 @@ Usar en todo endpoint que reciba un UploadFile, antes de procesar el contenido.
 """
 from utils.errors import AppError
 
-MAX_SIZE_CERTIFICADO = 10 * 1024 * 1024  # 10 MB
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# 🔴 TECHO DE LA PLATAFORMA — ES EL ÚNICO NÚMERO A REVISAR CUANDO CAMBIE EL HOSTING
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# Vercel rechaza cualquier request con body > 4,5 MB (docs al 1/7/2026), y lo hace ANTES de
+# invocar la función: nuestro código nunca lo ve. Un límite propio POR ENCIMA de este número no
+# protege nada — solo cambia quién produce el error, y la plataforma produce un 413 crudo que
+# para el usuario es incomprensible.
+#
+# Por eso ninguno de los límites de abajo puede superarlo. No es una preferencia: un adjunto de
+# 6 MB HOY NO SE PUEDE SUBIR, con nuestro límite en 10 MB o en 4,2. Lo único que decide el
+# número es si el usuario entiende por qué.
+#
+# EN AWS ESTE TECHO CAMBIA (lo define API Gateway / ALB, no la app) → se toca ACÁ, una sola vez,
+# y los cuatro límites derivados se mueven con él. `tests/test_limites_subida.py` falla si algún
+# límite queda por encima del techo.
+LIMITE_PLATAFORMA_MB = 4.5
+
+# Límite propio de TODA subida: el techo menos ~0,3 MB de margen. El margen no es paranoia —
+# el request pesa MÁS que el archivo: un multipart lleva boundaries, headers por parte y el
+# nombre del archivo, así que un archivo de exactamente 4,5 MB ya se pasa del techo.
+MAX_SIZE_SUBIDA = int(4.2 * 1024 * 1024)
+
+# Los cuatro derivan del mismo valor. Se conservan como nombres separados a propósito: cada uno
+# marca la semántica de su endpoint, y si alguna vez uno tiene que ser más chico que el resto,
+# el lugar donde bajarlo ya existe.
+MAX_SIZE_CERTIFICADO = MAX_SIZE_SUBIDA
+MAX_SIZE_CSV = MAX_SIZE_SUBIDA
+MAX_SIZE_ADJUNTO = MAX_SIZE_SUBIDA
+MAX_SIZE_CV = MAX_SIZE_SUBIDA
+
+# El logo es el único que NO sale del techo: 2 MB es criterio propio (un logo institucional no
+# pesa 4 MB, y aceptarlo así solo infla el bundle de toda pantalla que lo muestre). Si el techo
+# de la plataforma subiera, este NO tiene por qué acompañarlo.
 MAX_SIZE_LOGO = 2 * 1024 * 1024  # 2 MB
-MAX_SIZE_CSV = 5 * 1024 * 1024  # 5 MB
-MAX_SIZE_ADJUNTO = 10 * 1024 * 1024  # 10 MB
 
 ALLOWED_TYPES_CERTIFICADO = ("application/pdf", "image/jpeg", "image/png", "image/webp")
 ALLOWED_TYPES_IMAGEN = ("image/jpeg", "image/png", "image/webp")
@@ -21,6 +51,20 @@ ALLOWED_TYPES_ADJUNTO = (
     "image/png",
     "image/webp",
 )
+
+
+def mensaje_supera_tamano(field_name: str, max_size: int) -> str:
+    """Mensaje único de "archivo demasiado grande", para que el número no se escriba dos veces.
+
+    Lo usan `validate_upload` y `CvService.validar` — este último no puede usar `validate_upload`
+    entero porque tiene su propio code/status (`CV_TOO_LARGE`, 413) y cambiarlos sería alterar el
+    contrato HTTP sin motivo. Lo que sí comparte es de dónde sale el texto y el límite.
+
+    `:g` en vez de división entera: con un límite de 4,2 MB, `//` mostraba "4 MB" y le mentía al
+    usuario sobre cuánto puede subir. `:g` saca los ceros sobrantes, así que un límite redondo
+    sigue diciendo "2 MB" y el de 4,2 dice "4.2 MB".
+    """
+    return f"El {field_name} supera el tamaño máximo de {max_size / (1024 * 1024):g} MB"
 
 
 def validate_upload(
@@ -45,7 +89,7 @@ def validate_upload(
                   si content_type es None; INVALID_FILE_TYPE (400) si el MIME no está permitido.
     """
     if len(content) > max_size:
-        raise AppError(f"El {field_name} supera el tamaño máximo de {max_size // (1024 * 1024)} MB", "FILE_TOO_LARGE", 400)
+        raise AppError(mensaje_supera_tamano(field_name, max_size), "FILE_TOO_LARGE", 400)
     if content_type is None:
         raise AppError(f"No se pudo determinar el tipo del {field_name}", "MISSING_CONTENT_TYPE", 400)
     if content_type not in allowed_types:
