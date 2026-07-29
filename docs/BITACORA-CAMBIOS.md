@@ -41,6 +41,97 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-29 · Import de nómina: fix chico de performance, legajo y deprecación de modalidad (mig 084) · commits pendientes ×7
+
+**Qué cambió:** el import de nómina de empleados dejó de hacer cuatro lookups que ya tenía
+resueltos, consolidó la auditoría de las altas en un evento de lote, aprendió a leer la columna
+**Legajo** (opcional), y se corrigió el reporte de distribución, que leía una columna que nadie
+escribía. **La arquitectura del import NO se tocó**: sigue procesando fila por fila. El rediseño
+a batch es otra sesión, y este trabajo existe para poder decidirla con un número medido.
+
+### 🔴 EL DATO QUE DEFINE LA SESIÓN SIGUIENTE — no hace falta volver a medirlo
+
+**Round-trips a la base POR FILA del CSV: de 8–13 a 2–8** (sin legajo; con legajo, +1).
+
+| Escenario | Antes | Ahora |
+|---|---|---|
+| Alta, sin gerencia, sin fecha reconocida | 4 | **2** |
+| Alta con gerencia | 8 | **3** |
+| Alta con gerencia + cesión nueva | 13 | **8** |
+| Update con gerencia + cesión ya existente (reimport) | 11 | **6** |
+
+Para un archivo de 120 filas del caso realista: **~960 → ~400 round-trips**.
+
+🔴 **Y el hallazgo que reordena la prioridad: la CESIÓN es ahora el costo dominante.** De las 8
+queries del caso realista, **5 son `_nomina_cesiones.crear_si_falta`** (`cesion_service.listar`
+= 2 queries, y si tiene que crear, +3 más). Ese camino NO se tocó en esta tanda. Sin él, un alta
+con gerencia cuesta **3**.
+
+**Implicancia concreta para quien retome:** antes de rediseñar el import a batch —dos pasadas,
+chunks, upsert, mapa fila→resultado— **batchear las cesiones sale mucho más barato y baja de 8 a
+4**. Recién ahí el batch tiene que justificarse contra ~4 por fila, no contra los 13 originales.
+El diagnóstico completo (incluido por qué el batch es "batch" y no "batch + replicar
+validaciones") está en `docs/Resultado_nomina_batch.md`.
+
+**El conteo está FIJADO POR TESTS**: `tests/test_nomina_fix_chico.py::TestRoundTripsPorFila`
+asserta 2 para un alta, 2 para un update y 3 para un alta con legajo, contando invocaciones de
+repo con fakes que las registran. Si alguien vuelve a meter un lookup por fila, falla.
+
+### Impacto en infraestructura
+
+- **🔴 MIGRACIÓN 084 — `084_drop_modalidad_contratacion_y_nivel.sql`. ES DESTRUCTIVA (DROP
+  COLUMN) y su ORDEN DE DEPLOY ES EL INVERSO al de una migración aditiva: EL CÓDIGO VA PRIMERO,
+  LA MIGRACIÓN DESPUÉS.** Si las columnas se borran mientras el código viejo sigue arriba, todo
+  SELECT que las pida —el listado de empleados, la ficha, el export— falla con **42703**. Con el
+  código nuevo ya desplegado quedan sin lectores y el DROP no rompe nada.
+  - Borra `empleados.modalidad_contratacion` (0/19 en producción, nadie la escribía) y
+    `empleados.nivel` (0/19, cero referencias en el código). No hay UN dato que migrar: esa es
+    toda la ventana, y se cierra cuando entren los imports de 50-120 empleados.
+  - ⚠️ **`modalidad_trabajo` NO se toca.** Es otro concepto (dónde trabaja: presencial/remoto/
+    híbrido, con CHECK cerrado). Su 19/19 en "presencial" **no es un dato cargado**: es el
+    default de `schemas/empleado.py`, porque el CSV no trae la columna. Anotado para que nadie
+    lo lea como "todos son presenciales".
+- **`db/schema.sql` actualizado**: 53 tablas (sin cambio) · 341 → **340 constraints** (se va el
+  CHECK de `nivel`) · 135 índices (sin cambio). Las dos columnas salieron del `CREATE TABLE
+  public.empleados`.
+- **Variables de entorno:** ninguna. **Dependencias:** ninguna. **Buckets:** ninguno.
+  **Endpoints:** ninguno nuevo ni modificado. **Auth:** sin cambios. **Procesos fuera de
+  serverless:** ninguno.
+- ⚠️ **Contrato de la API, cambio menor:** el `EmpleadoResponse` deja de traer
+  `modalidad_contratacion`. El front ya no la pide (ficha, modal, tipos y la whitelist de
+  autocompletado se limpiaron en la misma tanda), pero cualquier consumidor externo del JSON la
+  perdería.
+- ⚠️ **`/api/empleados/valores-conocidos`**: la whitelist `CAMPOS_AUTOCOMPLETABLES` cambió
+  `modalidad_contratacion` por `tipo_contrato`. Dejar la vieja habría dado 42703 tras la migración.
+
+### El bug que se corrigió, para que no se vuelva a introducir
+
+El reporte **R4 (distribución de plantilla)** y el **KPI de distribución del dashboard** leían
+`modalidad_contratacion`, y mostraban **"Sin especificar" para toda la plantilla teniendo el
+dato en la columna de al lado**. La causa: la migración 060 creó `modalidad_contratacion` como
+campo de ficha, y poco después la 065 resolvió lo mismo por otro lado — mandó la columna
+"Modalidad Contratacion" del CSV a `tipo_contrato` y la pasó a TEXT para que entrara. La 065
+consolidó **de hecho pero no de derecho**: dejó la columna vieja viva, vacía y con un lector.
+Ahora el generador lee `tipo_contrato` y la columna duplicada ya no existe.
+
+### Lo que quedó anotado y NO se hizo
+
+- **El batch del import.** Sesión aparte, y con la cesión como primer candidato (arriba).
+- **`_nomina_cesiones` sigue con 2-5 queries por fila.** No estaba en el alcance de esta tanda.
+- **El upsert de `nomina_import_repo.batch_upsert_nomina` manda la lista entera sin chunk.**
+  Deuda latente, no problema actual: con 120 filas anda.
+
+### Nota para el dev de AWS
+
+Los cuatro atajos de lookup se implementaron como **parámetros keyword-only con default seguro
+que ES el resultado de la validación**, no como flags que la apagan: `areas_validadas`,
+`prior`, `auditar` y `AsignacionPrecargada`. **Con el default, todo caller que no sea el import
+se comporta exactamente igual que antes** — hay un test que lo fija (`test_el_alta_manual_sigue_auditando`).
+Al portar a asyncpg, esa forma se conserva: lo que cambia es de dónde sale el dato, no que la
+validación exista.
+
+---
+
 ## 2026-07-29 · Vacaciones: período, días pendientes y liquidación (mig 083) · commits pendientes ×4
 
 **Qué cambió:** las vacaciones ahora distinguen **cuándo se tomaron** de **a qué año

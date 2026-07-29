@@ -64,6 +64,7 @@ def _base_nomina(f: dict, email: Optional[str]) -> dict:
     """Campos comunes CSV→empleado (sin empresa/area, que se resuelven en el service)."""
     return {
         "nombre": f["nombre"], "apellido": f["apellido"], "email_corporativo": email,
+        "legajo": f["legajo"],
         "roles": f["roles"], "tipo_contrato": f["tipo_contrato"], "fecha_ingreso": f["fecha_ingreso"],
         "dni": f["dni"], "cuil": f["cuil"], "sexo": f["sexo"], "fecha_nacimiento": f["fecha_nacimiento"],
         "gerencia": f["gerencia"], "seniority": f["seniority"], "categoria": f["categoria"],

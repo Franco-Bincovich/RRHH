@@ -43,7 +43,6 @@ export interface Empleado {
   seniority: string | null
   perfil: string | null
   categoria: string | null
-  modalidad_contratacion: string | null
   referido: string | null
   es_lider: boolean
   created_at: string
@@ -98,7 +97,6 @@ export interface EmpleadoCreate {
   seniority?: string
   perfil?: string
   categoria?: string
-  modalidad_contratacion?: string
   referido?: string
   es_lider?: boolean
 }

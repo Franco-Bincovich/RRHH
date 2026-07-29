@@ -61,7 +61,8 @@ def ensure_manager_valido(repo: EmpleadoRepo, manager_id, empresa_id: Optional[U
         raise AppError("Superior no encontrado", "MANAGER_NOT_FOUND", 404)
 
 
-def ensure_area_valida(area_repo, area_id, empresa_id: Optional[UUID]) -> None:
+def ensure_area_valida(area_repo, area_id, empresa_id: Optional[UUID],
+                       ya_validadas: frozenset = frozenset()) -> None:
     """Lanza AREA_NOT_FOUND (404) si `area_id` no es un área activa de `empresa_id`.
 
     Las áreas son POR EMPRESA (dos empresas pueden tener un "Sistemas" distinto), y el WHERE de
@@ -73,15 +74,28 @@ def ensure_area_valida(area_repo, area_id, empresa_id: Optional[UUID]) -> None:
     restringe. Mismo mensaje y code que "el área no existe" —nunca un 403—: no confirma la
     existencia de áreas de otra empresa.
 
+    `ya_validadas` es un atajo de LECTURA, no un permiso: son ids que el caller YA probó de
+    `empresa_id` dentro de la MISMA operación, así que volver a preguntárselo a la base es
+    consultar dos veces por lo mismo. Lo usa el import de nómina, que resuelve el área con
+    `NominaCatalogos` —cuyo cache solo contiene áreas de esa empresa, por construcción— dos
+    líneas antes de llamar acá; sin esto paga una query por fila del CSV.
+
+    🔴 NO es un flag que apague la validación: si el id no está en el set, se valida igual
+    contra la base. El default vacío deja el comportamiento IDÉNTICO para todos los demás
+    callers (alta y edición manual desde la ficha), que no pasan nada.
+
     Args:
         area_repo: AreaRepo (o doble de test) — su find_by_id ya filtra por empresa.
         area_id: área candidata (UUID o str). None = no hay nada que validar.
         empresa_id: empresa contra la que se valida. None = sin restricción.
+        ya_validadas: ids de área ya probados de `empresa_id` en esta operación. Vacío = validar todo.
 
     Raises:
         AppError: AREA_NOT_FOUND (404) si el área no existe, está inactiva o es de otra empresa.
     """
     if area_id is None:
+        return
+    if str(area_id) in ya_validadas:
         return
     if not area_repo.find_by_id(str(area_id), str(empresa_id) if empresa_id else None):
         raise AppError("Área no encontrada", "AREA_NOT_FOUND", 404)

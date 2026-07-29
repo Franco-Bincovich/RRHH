@@ -56,7 +56,6 @@ export function DatosEmpleadoSection({ empleado }: { empleado: Empleado }) {
         <Field label="Fecha de ingreso" value={empleado.fecha_ingreso} />
         <Field label="Modalidad de trabajo" value={empleado.modalidad_trabajo} />
         <Field label="Tipo de contrato" value={empleado.tipo_contrato} />
-        <Field label="Modalidad de contratación" value={empleado.modalidad_contratacion} />
         <Field label="Líder" value={empleado.es_lider ? "Sí" : "No"} />
         <div>
           <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

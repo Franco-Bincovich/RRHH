@@ -15,6 +15,7 @@ from repositories.proyecto_asignaciones_repo import (
     AsignacionesRepo, find_empresa_for_empleado, get_estado_empleado,
 )
 from repositories.proyectos_repo import ProyectosRepo
+from services._asignacion_precargada import AsignacionPrecargada
 from schemas.proyectos import (
     AsignacionBulkCreate, AsignacionBulkError, AsignacionBulkResult,
     AsignacionCreate, AsignacionListResponse, AsignacionResponse, AsignacionUpdate,
@@ -39,30 +40,46 @@ class AsignacionesService:
         items = self._repo.find_by_proyecto(str(proyecto_id))
         return AsignacionListResponse(items=items, total=len(items))
 
-    def asignar(self, proyecto_id: UUID, data: AsignacionCreate, empresa_id: Optional[UUID] = None) -> AsignacionResponse:
+    def asignar(self, proyecto_id: UUID, data: AsignacionCreate, empresa_id: Optional[UUID] = None,
+                *, precargado: Optional[AsignacionPrecargada] = None) -> AsignacionResponse:
         """
         Asigna un empleado al proyecto (alta individual). Valida el proyecto y delega en _asignar_uno.
+
+        `precargado` (ver AsignacionPrecargada) evita las 3 queries de validación cuando el caller
+        ya tiene esos datos. None (default) = comportamiento idéntico al de siempre.
 
         Raises:
             AppError: PROYECTO_NOT_FOUND (404), EMPLEADO_NOT_FOUND (404),
                       EMPLEADO_INACTIVO (422), ASIGNACION_DUPLICADA (409).
         """
-        if not self._proyectos.find_by_id(str(proyecto_id), empresa_id):
+        if precargado is None:
+            if not self._proyectos.find_by_id(str(proyecto_id), empresa_id):
+                raise AppError("Proyecto no encontrado", "PROYECTO_NOT_FOUND", 404)
+        elif not precargado.proyecto_existe_en_empresa:
             raise AppError("Proyecto no encontrado", "PROYECTO_NOT_FOUND", 404)
-        return self._asignar_uno(proyecto_id, data.empleado_id, data.rol, data.valor_hora, data.fecha_desde, data.fecha_hasta)
+        return self._asignar_uno(proyecto_id, data.empleado_id, data.rol, data.valor_hora,
+                                 data.fecha_desde, data.fecha_hasta, precargado)
 
-    def _asignar_uno(self, proyecto_id: UUID, empleado_id, rol, valor_hora, fecha_desde, fecha_hasta) -> AsignacionResponse:
+    def _asignar_uno(self, proyecto_id: UUID, empleado_id, rol, valor_hora, fecha_desde, fecha_hasta,
+                     precargado: Optional[AsignacionPrecargada] = None) -> AsignacionResponse:
         """
         Inserta UNA asignación (empresa del empleado por lookup — permite cruce multi-empresa).
         NO valida el proyecto (lo hace el caller una sola vez). El duplicado lo detecta el UNIQUE
         uq_proyecto_empleado, no un check previo.
 
+        Con `precargado`, la empresa y el estado del empleado vienen del caller en vez de dos
+        queries. Los DOS chequeos se siguen haciendo, sobre los valores provistos.
+
         Raises: EMPLEADO_NOT_FOUND (404), EMPLEADO_INACTIVO (422), ASIGNACION_DUPLICADA (409).
         """
-        empleado_empresa_id = find_empresa_for_empleado(str(empleado_id))
+        if precargado is None:
+            empleado_empresa_id = find_empresa_for_empleado(str(empleado_id))
+            estado = get_estado_empleado(str(empleado_id))
+        else:
+            empleado_empresa_id, estado = precargado.empleado_empresa_id, precargado.empleado_estado
         if not empleado_empresa_id:
             raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
-        if get_estado_empleado(str(empleado_id)) == "baja":
+        if estado == "baja":
             raise AppError("No se puede asignar un empleado dado de baja", "EMPLEADO_INACTIVO", 422)
         try:
             row = self._repo.save(str(proyecto_id), str(empleado_id), empleado_empresa_id, rol, valor_hora, fecha_desde, fecha_hasta)

@@ -1,10 +1,14 @@
 """
-Transformaciones puras del CSV de nómina de empleados (27 columnas, separador ';', latin1).
-Sin IO ni acceso a DB: valida headers, parsea fechas DD/MM/YYYY, SI/NO->bool, M/F->sexo,
-"NO APLICA"/vacío->None, normaliza nombres (empresa/área) y arma el dict de una fila.
+VOCABULARIO DE COLUMNAS del CSV de nómina de empleados (27 requeridas + opcionales, ';', latin1).
+Sin IO ni acceso a DB: qué columnas existen, cuáles son obligatorias, cómo leer una celda por
+nombre tolerando variaciones de caso/espacios, y cómo armar el dict de una fila.
+
+La interpretación de los VALORES (fechas, SI/NO, M/F, "NO APLICA") vive en `_nomina_parsers.py`,
+que es la mitad reusable por otros imports del mismo formato — ver su encabezado.
 """
-from datetime import date, datetime
 from typing import Optional
+
+from services._nomina_parsers import _norm, limpiar, parse_bool, parse_fecha, parse_sexo
 
 # Headers exactos del archivo real. El match se hace por nombre NORMALIZADO (case/espacios).
 HEADERS = [
@@ -16,58 +20,25 @@ HEADERS = [
     "Product Owner", "Fecha Baja", "Motivo Baja",
 ]
 
-_VACIOS = {"", "NO APLICA", "N/A", "NA", "-", "--"}
-
-
-def _norm(s: Optional[str]) -> str:
-    """Normaliza para comparar: trim + colapsa espacios internos + casefold."""
-    return " ".join((s or "").split()).casefold()
-
-
-def normalizar_nombre(s: str) -> str:
-    """Clave de match/dedup para empresas y áreas (trim + espacios + case-insensitive)."""
-    return _norm(s)
-
-
-def limpiar(v: Optional[str]) -> Optional[str]:
-    """Texto libre: trim; '' o 'NO APLICA' (y variantes) -> None."""
-    t = (v or "").strip()
-    return None if t.upper() in _VACIOS else t
-
-
-def parse_fecha(v: Optional[str]) -> Optional[date]:
-    """DD/MM/YYYY -> date. Vacío -> None. Formato inválido -> ValueError con mensaje claro."""
-    t = (v or "").strip()
-    if not t:
-        return None
-    try:
-        return datetime.strptime(t, "%d/%m/%Y").date()
-    except ValueError:
-        raise ValueError(f"Fecha inválida '{t}' (se espera DD/MM/YYYY)")
-
-
-def parse_bool(v: Optional[str]) -> Optional[bool]:
-    """'SI'->True, 'NO'->False, vacío/otro -> None."""
-    t = (v or "").strip().upper()
-    if t == "SI":
-        return True
-    if t == "NO":
-        return False
-    return None
-
-
-def parse_sexo(v: Optional[str]) -> Optional[str]:
-    """'M'->'Masculino', 'F'->'Femenino'. Otro -> texto limpio o None (sexo es texto libre)."""
-    t = (v or "").strip().upper()
-    if t == "M":
-        return "Masculino"
-    if t == "F":
-        return "Femenino"
-    return limpiar(v)
+# Columnas que el parser LEE si están, y cuya ausencia NO invalida el archivo.
+#
+# 🔴 "Legajo" es opcional a propósito. `validar_headers` rechaza el archivo entero si falta una
+# columna requerida, así que sumarlo a HEADERS haría que todo CSV histórico —ninguno lo trae—
+# se caiga completo en la fila 1, con cero empleados cargados, por una columna que la mayoría
+# de los flujos no necesita. Y el legajo importa: es el ancla del import de vacaciones, que no
+# trae DNI ni CUIT. Optativo es la única forma de pedirlo sin romper lo que ya funciona.
+#
+# `_get` ya devuelve "" para una columna ausente, y `limpiar("")` da None, así que el parseo de
+# una columna opcional no necesita ninguna rama especial.
+HEADERS_OPCIONALES = ["Legajo"]
 
 
 def validar_headers(fieldnames: Optional[list]) -> Optional[str]:
-    """Devuelve un mensaje si faltan columnas requeridas; None si están todas."""
+    """Devuelve un mensaje si faltan columnas REQUERIDAS; None si están todas.
+
+    Solo mira `HEADERS`. Las de `HEADERS_OPCIONALES` se leen si vienen y se ignoran si no —
+    un archivo sin ellas es válido y se importa completo.
+    """
     if not fieldnames:
         return "El archivo está vacío o no tiene encabezados"
     presentes = {_norm(f) for f in fieldnames if f}
@@ -92,12 +63,6 @@ def identificador(row: dict) -> str:
     return ", ".join(partes) or "(sin nombre)"
 
 
-def email_valido(email: Optional[str]) -> bool:
-    """Email presente y con formato mínimo (para decidir si va como faltante)."""
-    e = email or ""
-    return "@" in e and "." in e.split("@")[-1]
-
-
 def obligatorios_faltantes(f: dict) -> list:
     """Campos sin los que NO se puede crear el empleado (bloqueantes). Devuelve etiquetas.
     Los 3 del negocio (nombre/apellido/DNI) + los que exige el schema/DB para poder crear."""
@@ -117,6 +82,9 @@ def parsear_fila(row: dict) -> dict:
     return {
         "apellido": _get(row, "Apellido"),
         "nombre": _get(row, "Nombre"),
+        # Columna OPCIONAL (ver HEADERS_OPCIONALES): si el archivo no la trae, `_get` devuelve
+        # "" y `limpiar` lo pasa a None, que es "sin legajo" — igual que hoy.
+        "legajo": limpiar(_get(row, "Legajo")),
         "dni": limpiar(_get(row, "DNI")),
         "cuil": limpiar(_get(row, "CUIT")),
         "sexo": parse_sexo(_get(row, "Sexo")),

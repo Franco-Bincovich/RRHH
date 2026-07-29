@@ -39,7 +39,6 @@ export type FormData = {
   seniority: string
   perfil: string
   categoria: string
-  modalidad_contratacion: string
   referido: string
   es_lider: boolean
 }
@@ -51,7 +50,7 @@ export type TextKey = Exclude<keyof FormData, "roles" | "es_lider">
 /** Claves con autocompletado de texto libre + sugerencias (single-value). */
 export type AutocompleteKey =
   | "tipo_documento" | "ubicacion" | "organismo" | "gerencia" | "sector"
-  | "seniority" | "perfil" | "categoria" | "modalidad_contratacion"
+  | "seniority" | "perfil" | "categoria"
 
 /** Handler de cambio de un input/select controlado del form. */
 export type FieldChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void
@@ -104,7 +103,6 @@ export const EMPTY: FormData = {
   seniority: "",
   perfil: "",
   categoria: "",
-  modalidad_contratacion: "",
   referido: "",
   es_lider: false,
 }
@@ -168,7 +166,6 @@ export const LABORAL_AUTOCOMPLETE: ReadonlyArray<{ field: AutocompleteKey; label
   { field: "seniority", label: "Seniority" },
   { field: "perfil", label: "Perfil" },
   { field: "categoria", label: "Categoría" },
-  { field: "modalidad_contratacion", label: "Modalidad de contratación" },
 ]
 
 export const SELECT_CLASS =

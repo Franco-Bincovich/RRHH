@@ -25,15 +25,22 @@ class EmpleadoService:
         self._audit = audit or AuditService()
         self._areas = area_repo or AreaRepo()
 
-    def create_empleado(self, data: EmpleadoCreate, created_by: str, empresa_id: UUID) -> EmpleadoResponse:
+    def create_empleado(self, data: EmpleadoCreate, created_by: str, empresa_id: UUID, *,
+                        areas_validadas: frozenset = frozenset(), auditar: bool = True) -> EmpleadoResponse:
         """Alta de empleado + audit. Delegado a _empleados_write.crear.
+        Los dos keyword-only son para el import de nómina; su default deja el alta manual igual.
         Raises: LEGAJO_DUPLICADO (409), AREA_NOT_FOUND (404), MANAGER_NOT_FOUND (404)."""
-        return crear(self._repo, self._audit, self._areas, data, created_by, empresa_id)
+        return crear(self._repo, self._audit, self._areas, data, created_by, empresa_id,
+                     areas_validadas=areas_validadas, auditar=auditar)
 
-    def update_empleado(self, id: UUID, data: EmpleadoUpdate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> EmpleadoResponse:
+    def update_empleado(self, id: UUID, data: EmpleadoUpdate, empresa_id: Optional[UUID] = None,
+                        usuario_id: Optional[str] = None, *, areas_validadas: frozenset = frozenset(),
+                        prior: Optional[EmpleadoResponse] = None) -> EmpleadoResponse:
         """Actualización parcial + audit del diff. Delegado a _empleados_write.actualizar.
+        Los dos keyword-only son para el import de nómina; su default deja la edición manual igual.
         Raises: EMPLEADO_NOT_FOUND (404), AREA_NOT_FOUND (404), MANAGER_NOT_FOUND (404), MANAGER_CICLO (400)."""
-        return actualizar(self._repo, self._audit, self._areas, id, data, empresa_id, usuario_id)
+        return actualizar(self._repo, self._audit, self._areas, id, data, empresa_id, usuario_id,
+                          areas_validadas=areas_validadas, prior=prior)
 
     def deactivate_empleado(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> bool:
         """Baja lógica (soft delete) + audit. Delegado a _empleados_write.desactivar.

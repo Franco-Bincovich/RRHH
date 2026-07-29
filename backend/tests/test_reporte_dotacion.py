@@ -123,11 +123,15 @@ def test_altas_bajas_sin_bajas_empty_state(monkeypatch):
 
 
 def test_distribucion_agrupa_y_nulos_van_a_sin_especificar(monkeypatch):
+    # `por_modalidad` sale de `tipo_contrato`, NO de la ex `modalidad_contratacion` (mig. 084):
+    # esa columna no la escribía nadie, así que el reporte mostraba "Sin especificar" para toda
+    # la plantilla teniendo el dato al lado. Si el generador volviera a leerla, estas filas no
+    # tendrían la clave y todo caería en "Sin especificar" → este test falla.
     def resolver(_table, _gte):
         return [
-            {"seniority": "Senior", "modalidad_contratacion": "efectivo", "turno": "mañana"},
-            {"seniority": "Senior", "modalidad_contratacion": None, "turno": None},
-            {"seniority": None, "modalidad_contratacion": "efectivo", "turno": "tarde"},
+            {"seniority": "Senior", "tipo_contrato": "efectivo", "turno": "mañana"},
+            {"seniority": "Senior", "tipo_contrato": None, "turno": None},
+            {"seniority": None, "tipo_contrato": "efectivo", "turno": "tarde"},
         ]
     monkeypatch.setattr(dist, "supabase_admin", _FakeSupa(resolver))
     r = dist.generate_distribucion(None)

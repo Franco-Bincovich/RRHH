@@ -13,7 +13,7 @@ from utils.errors import AppError
 # Única fuente de verdad de qué columnas del legajo se pueden autocompletar (A1.2).
 # Restringe el endpoint /valores-conocidos: evita exponer columnas arbitrarias de empleados.
 CAMPOS_AUTOCOMPLETABLES = frozenset({
-    "gerencia", "sector", "seniority", "modalidad_contratacion",
+    "gerencia", "sector", "seniority", "tipo_contrato",
     "perfil", "categoria", "ubicacion", "organismo", "tipo_documento",
 })
 

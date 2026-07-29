@@ -22,7 +22,8 @@ from utils.logger import logger
 
 
 def crear(repo: EmpleadoRepo, audit, areas, data: EmpleadoCreate, created_by: str,
-          empresa_id: UUID) -> EmpleadoResponse:
+          empresa_id: UUID, *, areas_validadas: frozenset = frozenset(),
+          auditar: bool = True) -> EmpleadoResponse:
     """
     Crea un nuevo empleado en el sistema y registra el evento de auditoría.
 
@@ -33,6 +34,12 @@ def crear(repo: EmpleadoRepo, audit, areas, data: EmpleadoCreate, created_by: st
         data: Datos del empleado a crear (validados por Pydantic).
         created_by: ID del usuario que realiza la operación (para trazabilidad y audit).
         empresa_id: UUID de la empresa a la que pertenecerá el empleado (obligatorio).
+        areas_validadas: ids de área ya probados de `empresa_id` en esta operación — ver
+            `ensure_area_valida`. Vacío (default) = validar contra la base, como siempre.
+        auditar: False solo para el import de nómina, que consolida las altas en UN evento de
+            lote (regla del repo: "al auditar una importación, un evento por lote"). El registro
+            creado es su propia evidencia, y el evento de lote lleva la lista de ids. El default
+            True deja el alta manual exactamente igual.
 
     Returns:
         EmpleadoResponse con los datos del empleado creado, incluyendo su ID generado.
@@ -42,17 +49,20 @@ def crear(repo: EmpleadoRepo, audit, areas, data: EmpleadoCreate, created_by: st
         AppError: AREA_NOT_FOUND (404) si el área no es de la misma empresa.
     """
     ensure_legajo_unico(repo, data.legajo, empresa_id)
-    ensure_area_valida(areas, data.area_id, empresa_id)
+    ensure_area_valida(areas, data.area_id, empresa_id, areas_validadas)
     # Sin chequeo de ciclos: un empleado que aún no existe no está en la cadena de nadie.
     ensure_manager_valido(repo, data.manager_id, empresa_id)
     empleado = repo.save(data, empresa_id)
-    audit.registrar(**payload_alta_empleado(empleado, created_by, empleado.empresa_id))
+    if auditar:
+        audit.registrar(**payload_alta_empleado(empleado, created_by, empleado.empresa_id))
     logger.info("Empleado creado", extra={"empleado_id": empleado.id, "created_by": created_by, "empresa_id": str(empresa_id)})
     return empleado
 
 
 def actualizar(repo: EmpleadoRepo, audit, areas, id: UUID, data: EmpleadoUpdate,
-               empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> EmpleadoResponse:
+               empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, *,
+               areas_validadas: frozenset = frozenset(),
+               prior: Optional[EmpleadoResponse] = None) -> EmpleadoResponse:
     """
     Actualiza los datos de un empleado existente (actualización parcial).
     Lee el estado anterior (read-before) para registrar el diff de auditoría.
@@ -65,6 +75,14 @@ def actualizar(repo: EmpleadoRepo, audit, areas, id: UUID, data: EmpleadoUpdate,
         data: Campos a actualizar — solo los no-None se aplican.
         empresa_id: Si se provee, el UPDATE solo afecta empleados de esa empresa.
         usuario_id: ID del operador (trazabilidad de audit).
+        areas_validadas: ids de área ya probados de `empresa_id` — ver `ensure_area_valida`.
+        prior: la fila ANTERIOR, si el caller ya la leyó en esta misma operación. El import de
+            nómina la trae de `find_by_dni` (es la fila que usó para decidir alta vs. update),
+            así que sin esto se lee dos veces la MISMA fila, una vez por CSV.
+            🔴 Tiene que venir del MISMO select con joins que `find_by_id` — los dos usan el
+            `SELECT` de `_empleado_row`, así que la forma coincide. Una fila con otra forma
+            generaría un diff fantasma (campos de join en null), que es el bug que
+            `sin_derivados` vino a cerrar. None (default) = leer, como siempre.
 
     Returns:
         EmpleadoResponse con los datos actualizados.
@@ -76,10 +94,11 @@ def actualizar(repo: EmpleadoRepo, audit, areas, id: UUID, data: EmpleadoUpdate,
     """
     ensure_legajo_unico(repo, data.legajo, empresa_id, str(id))
     # Las tres cortan solas si su campo es None (un update parcial no toca lo que no manda).
-    ensure_area_valida(areas, data.area_id, empresa_id)
+    ensure_area_valida(areas, data.area_id, empresa_id, areas_validadas)
     ensure_manager_valido(repo, data.manager_id, empresa_id)
     ensure_no_ciclo_manager(repo, id, data.manager_id, empresa_id)
-    prior = repo.find_by_id(str(id), empresa_id)
+    if prior is None:
+        prior = repo.find_by_id(str(id), empresa_id)
     empleado = empleado_or_404(repo.update(str(id), data, empresa_id))
     audit.registrar(**payload_update_empleado(prior, empleado, usuario_id, empleado.empresa_id))
     logger.info("Empleado actualizado", extra={"empleado_id": str(id)})

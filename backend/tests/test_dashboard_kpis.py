@@ -132,13 +132,18 @@ def test_distribucion_nulos_sin_especificar(monkeypatch):
     import services.reportes._reporte_distribucion as rd
     monkeypatch.setattr(rd, "supabase_admin", _FakeDB({
         "empleados": [
-            {"estado": "activo", "seniority": "Senior", "modalidad_contratacion": "Full time", "turno": None},
-            {"estado": "activo", "seniority": None, "modalidad_contratacion": None, "turno": None},
+            {"estado": "activo", "seniority": "Senior", "tipo_contrato": "Full time", "turno": None},
+            {"estado": "activo", "seniority": None, "tipo_contrato": None, "turno": None},
         ],
     }))
     r = dk.calcular_extras(_HOY, None)
     seniority = {d.categoria: d.total for d in r.distribucion_seniority}
     assert seniority.get("Senior") == 1 and seniority.get("Sin especificar") == 1
+    # El KPI de modalidad se afirma explícitamente: antes la clave del fake era
+    # `modalidad_contratacion` y NADIE la leía, así que este bloque pasaba con el dato en
+    # cualquier columna. Ahora sale de `tipo_contrato` (ver mig. 084).
+    modalidad = {d.categoria: d.total for d in r.distribucion_modalidad}
+    assert modalidad.get("Full time") == 1 and modalidad.get("Sin especificar") == 1
 
 
 # ── KPI 30 — cumpleaños / aniversarios del mes ────────────────────────────────────

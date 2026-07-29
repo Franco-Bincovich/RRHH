@@ -15,9 +15,14 @@ de divergencia silenciosa que la regla de ese módulo existe para evitar. El dif
 `AuditService._diff` (no se reimplementa).
 """
 from typing import Optional
-from uuid import uuid4
 
 from services._audit_payloads import sin_derivados
+
+# `payload_importacion_nomina` se MUDÓ a _audit_payloads_import.py (este archivo estaba en
+# 149/150 y la consolidación de auditoría del import lo va a extender). Se re-exporta desde acá
+# para que el path de import viejo siga funcionando: mover un símbolo no tiene por qué ser un
+# cambio incompatible para quien lo importa. Los callers nuevos deben usar el módulo nuevo.
+from services._audit_payloads_import import payload_importacion_nomina  # noqa: F401
 from services.audit_service import AuditService, _jsonable
 
 _CAMPOS_EMPLEADO = ("nombre", "apellido", "legajo", "roles", "area_id", "estado", "seniority")
@@ -128,22 +133,3 @@ def payload_reapertura_periodo(p, usuario_id: Optional[str]) -> dict:
         "datos_anteriores": {"estado": "cerrado"}, "datos_nuevos": {"estado": "abierto"},
     }
 
-
-def payload_importacion_nomina(
-    archivo: str, creados: int, actualizados: int, con_faltantes: int, no_cargados: int,
-    usuario_id: Optional[str],
-) -> dict:
-    """Evento de auditoría de un lote de import de nómina de empleados (UN evento por lote).
-    Refleja el resumen: nuevos, actualizados (dedup DNI), con faltantes y no cargados.
-    empresa_id None: el lote puede crear empleados en varias empresas (columna Organismo)."""
-    return {
-        # registro_id = id DE EVENTO (uuid4 generado), no de recurso: el import de nómina no
-        # persiste un lote con id propio (a diferencia de evaluaciones). NO "corregir" a un id real.
-        "usuario_id": usuario_id, "entidad": "empleado", "registro_id": str(uuid4()),
-        "accion": "INSERT", "evento": "importacion_nomina", "empresa_id": None,
-        "datos_anteriores": None,
-        "datos_nuevos": {
-            "archivo": archivo, "creados": creados, "actualizados": actualizados,
-            "con_faltantes": con_faltantes, "no_cargados": no_cargados,
-        },
-    }

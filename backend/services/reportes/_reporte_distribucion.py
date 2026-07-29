@@ -29,11 +29,18 @@ def _agrupar(rows: List[dict], campo: str) -> List[dict]:
 
 def generate_distribucion(empresa_id: Optional[UUID] = None,
                           area_id: Optional[UUID] = None) -> Dict[str, Any]:
-    """Distribución de la plantilla activa por seniority / modalidad_contratacion / turno.
-    Filtra por empresa_id y/o area_id (empleados.area_id, directo)."""
+    """Distribución de la plantilla activa por seniority / tipo_contrato / turno.
+    Filtra por empresa_id y/o area_id (empleados.area_id, directo).
+
+    🔴 `por_modalidad` sale de `tipo_contrato`, NO de la ex `modalidad_contratacion`. Esta
+    consulta leía esa otra columna, que ningún camino escribía: el reporte mostraba
+    "Sin especificar" para toda la plantilla teniendo el dato en la columna de al lado (el
+    import lo escribe en `tipo_contrato` desde la migración 065). La columna duplicada se borró
+    en la 084; el porqué completo está ahí. La clave de salida sigue llamándose
+    `por_modalidad` porque es lo que el front y el PDF ya consumen."""
     eid = _eid(empresa_id)
     aid = _eid(area_id)
-    q = supabase_admin.table("empleados").select("seniority, modalidad_contratacion, turno").eq("estado", "activo")
+    q = supabase_admin.table("empleados").select("seniority, tipo_contrato, turno").eq("estado", "activo")
     if eid:
         q = q.eq("empresa_id", eid)
     if aid:
@@ -44,6 +51,6 @@ def generate_distribucion(empresa_id: Optional[UUID] = None,
         "titulo": "Distribución de plantilla",
         "total_empleados": len(rows),
         "por_seniority": _agrupar(rows, "seniority"),
-        "por_modalidad": _agrupar(rows, "modalidad_contratacion"),
+        "por_modalidad": _agrupar(rows, "tipo_contrato"),
         "por_turno": _agrupar(rows, "turno"),
     }

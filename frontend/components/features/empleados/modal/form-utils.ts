@@ -61,7 +61,6 @@ export function toFormData(empleado: Empleado): FormData {
     seniority: empleado.seniority ?? "",
     perfil: empleado.perfil ?? "",
     categoria: empleado.categoria ?? "",
-    modalidad_contratacion: empleado.modalidad_contratacion ?? "",
     referido: empleado.referido ?? "",
     es_lider: empleado.es_lider ?? false,
   }
@@ -108,7 +107,6 @@ export function buildPayload(form: FormData): Omit<EmpleadoCreate, "empresa_id">
     seniority: form.seniority || undefined,
     perfil: form.perfil || undefined,
     categoria: form.categoria || undefined,
-    modalidad_contratacion: form.modalidad_contratacion || undefined,
     referido: form.referido || undefined,
     es_lider: form.es_lider,
   }

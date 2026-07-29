@@ -261,7 +261,6 @@ CREATE TABLE public.empleados (
     fecha_egreso date,
     area_id uuid,
     cargo character varying(100),
-    nivel character varying(20),
     modalidad_trabajo character varying(20),
     tipo_contrato text,
     estado character varying(20) NOT NULL DEFAULT 'activo'::character varying,
@@ -301,7 +300,6 @@ CREATE TABLE public.empleados (
     seniority text,
     perfil text,
     categoria text,
-    modalidad_contratacion text,
     referido text,
     es_lider boolean DEFAULT false,
     fecha_ingreso_reconocida date,
@@ -943,7 +941,6 @@ ALTER TABLE public.empleado_capacitacion ADD CONSTRAINT empleado_capacitacion_es
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_desempeno_check CHECK (((desempeno)::text = ANY ((ARRAY['alto'::character varying, 'medio'::character varying, 'bajo'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_estado_check CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying, 'baja'::character varying, 'licencia'::character varying, 'suspendido'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_modalidad_trabajo_check CHECK (((modalidad_trabajo)::text = ANY ((ARRAY['presencial'::character varying, 'remoto'::character varying, 'hibrido'::character varying])::text[])));
-ALTER TABLE public.empleados ADD CONSTRAINT empleados_nivel_check CHECK (((nivel)::text = ANY ((ARRAY['junior'::character varying, 'semi_senior'::character varying, 'senior'::character varying, 'lider'::character varying, 'manager'::character varying, 'director'::character varying, 'c_level'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_potencial_check CHECK (((potencial)::text = ANY ((ARRAY['alto'::character varying, 'medio'::character varying, 'bajo'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_roles_no_vacio CHECK ((array_length(roles, 1) >= 1));
 ALTER TABLE public.ev_ciclos ADD CONSTRAINT ev_ciclos_estado_check CHECK ((estado = ANY (ARRAY['abierto'::text, 'cerrado'::text])));

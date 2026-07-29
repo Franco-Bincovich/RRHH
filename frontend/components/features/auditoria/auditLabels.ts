@@ -87,7 +87,6 @@ const CAMPO_LABEL: Record<string, string> = {
   fecha_egreso: "Fecha de egreso",
   fecha_nacimiento: "Fecha de nacimiento",
   tipo_contrato: "Tipo de contrato",
-  modalidad_contratacion: "Modalidad de contratación",
   modalidad_trabajo: "Modalidad de trabajo",
   turno: "Turno",
   dias_vacaciones_asignados: "Días de vacaciones asignados",

@@ -57,7 +57,6 @@ class EmpleadoResponse(BaseModel):
     seniority: Optional[str] = None
     perfil: Optional[str] = None
     categoria: Optional[str] = None
-    modalidad_contratacion: Optional[str] = None
     referido: Optional[str] = None
     es_lider: bool = False
     # Domicilio desglosado (C4, migración 081). `domicilio` de arriba se conserva como texto
