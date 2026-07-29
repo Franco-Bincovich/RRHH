@@ -1,12 +1,33 @@
-import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, PauseCircle, XCircle } from "lucide-react"
 
 import type { ImportacionNominaEmpleadosResult } from "@/types/importacion"
 
-/** Reporte del import de nómina en 3 grupos: OK · con faltantes · no cargados. */
+/**
+ * Reporte del import de nómina en 3 grupos: OK · con faltantes · no cargados.
+ *
+ * Si `parcial` viene en true, el archivo no se terminó de procesar. Se muestra como
+ * INFORMACIÓN (azul, con instrucción), no como error: lo procesado quedó cargado y el
+ * reintento continúa donde quedó. Pintarlo de rojo haría que RRHH crea que perdió el trabajo.
+ */
 export function NominaResultView({ result }: { result: ImportacionNominaEmpleadosResult }) {
   const { creados, actualizados, con_faltantes, no_cargados } = result
   return (
     <div className="space-y-4 py-2">
+      {result.parcial && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950">
+          <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-sky-900 dark:text-sky-100">
+            <PauseCircle className="size-4 shrink-0" />
+            Se procesó una parte del archivo
+          </p>
+          <p className="text-sm text-sky-900 dark:text-sky-100">
+            Llegó hasta la fila {result.ultima_fila_procesada ?? "—"} y quedaron{" "}
+            {result.filas_sin_procesar} sin procesar.{" "}
+            <strong>Volvé a subir el mismo archivo para continuar</strong>: lo ya cargado no se
+            duplica y el import sigue donde quedó.
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
         <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
           <CheckCircle2 className="size-4" />

@@ -26,21 +26,27 @@ export function ImportarNominaModal({ open, onClose, onSuccess }: ImportarNomina
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [result, setResult] = useState<ImportacionNominaEmpleadosResult | null>(null)
+  // 🔴 Se disparó un import, sin importar cómo terminó. NO es lo mismo que tener `result`:
+  // si el request muere por timeout o corte de red, la respuesta no llega pero el backend YA
+  // escribió N empleados. Refrescar solo con `result` dejaba a RRHH cerrando el modal con la
+  // lista vieja, creyendo que no se cargó nada mientras la base tenía 73 empleados nuevos.
+  // Ante la duda se refresca: mostrar datos frescos nunca es peor que mostrarlos viejos.
+  const [intentado, setIntentado] = useState(false)
 
-  // Al cerrar tras un import, refresca la lista de empleados.
+  // Al cerrar tras un intento de import, refresca la lista de empleados.
   function resetAndClose() {
     if (loading) return
-    if (result) onSuccess()
-    setFile(null); setError(""); setResult(null); onClose()
+    if (intentado) onSuccess()
+    setFile(null); setError(""); setResult(null); setIntentado(false); onClose()
   }
 
   function importarOtro() {
-    setFile(null); setError(""); setResult(null)
+    setFile(null); setError(""); setResult(null)   // `intentado` NO se limpia: ya se tocó la base
   }
 
   async function run() {
     if (!file) return
-    setLoading(true); setError("")
+    setLoading(true); setError(""); setIntentado(true)
     try {
       setResult(await importarNominaEmpleados(file))
     } catch (err: unknown) {

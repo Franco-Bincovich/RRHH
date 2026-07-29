@@ -52,12 +52,22 @@ class FilaNoCargada(BaseModel):
 
 
 class ImportacionNominaEmpleadosResult(BaseModel):
+    """Reporte de un import. `parcial=True` significa que el archivo NO se terminó de procesar.
+
+    El corte parcial NO es un error: las filas procesadas quedaron cargadas y el reintento con
+    el MISMO archivo continúa donde quedó, porque el dedup por (empresa_id, dni) manda las ya
+    cargadas por la rama de update. No hay estado de progreso que limpiar.
+    """
     total: int
     creados: int          # altas nuevas (DNI no existía)
     actualizados: int     # updates (DNI ya existía) — dedup
     cargados_ok: int      # cargados sin faltantes (nuevos + actualizados)
     con_faltantes: List[FilaConFaltantes]
     no_cargados: List[FilaNoCargada]
+    parcial: bool = False                      # se agotó el presupuesto de tiempo
+    ultima_fila_procesada: Optional[int] = None  # nº de fila del CSV (el encabezado es la 1)
+    filas_sin_procesar: int = 0                # las que quedaron en el archivo, sin tocar
+    segundos: Optional[float] = None           # tiempo consumido, para calibrar el presupuesto
 
 
 def _base_nomina(f: dict, email: Optional[str]) -> dict:

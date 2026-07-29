@@ -41,6 +41,79 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-29 · Import de nómina recuperable: presupuesto de tiempo · commits pendientes ×4
+
+**Qué cambió:** el import de nómina ya no muere en silencio si se pasa de tiempo. Ahora tiene un
+**presupuesto en segundos**: procesa filas, y cuando se acerca al techo **para ENTRE FILAS** y
+devuelve el reporte completo de lo que hizo, marcado como parcial. En vez de un `504` con
+`"Error del servidor"`, RRHH recibe *"llegó hasta la fila 73, quedaron 47, volvé a subir el mismo
+archivo para continuar"*. **No se tocó la arquitectura del import** (sigue fila por fila) ni se
+agregó persistencia de progreso: el reintento se apoya en el dedup por DNI que ya existía.
+
+### 🔴 VARIABLE DE ENTORNO NUEVA — `IMPORT_PRESUPUESTO_SEGUNDOS`
+
+**Default: `8.0`. Tiene default seguro, pero conviene declararla explícita en `sofia-backend`.**
+
+🔴 **El default es CONSERVADOR a propósito, y hay que revisarlo en cada entorno.** El techo real
+de esta app **NO ESTÁ VERIFICADO**:
+
+> **Dato para el dev de infraestructura:** `backend/vercel.json` declara `maxDuration: 300`, pero
+> lo hace **dentro de `builds[].config`**, que es el formato **legacy v2**. La duración de una
+> función se configura en la clave **`functions` de nivel superior**, que ese archivo **no tiene**
+> (verificado: el único `maxDuration` del repo está en esa línea). O sea que **muy probablemente
+> esté IGNORADO** y el backend corra con el default del plan. El `vercel.json` de la raíz fue
+> borrado hace tiempo, así que no hay otra fuente que lo sobrescriba.
+
+Por eso 8 s asume el peor caso plausible (10 s del plan más bajo) y deja margen para serializar la
+respuesta. **Un presupuesto MAYOR que el techo real no sirve de nada**: el request muere antes de
+que el import pueda cortar solo, que es justamente lo que esto vino a evitar.
+
+- **En AWS hay que REVISARLO en el cutover.** El techo lo van a poner ALB / Lambda / ECS, no
+  Vercel, y probablemente sea más alto → subir el valor para que un archivo entero entre de una.
+- Un valor **≤ 0 significa SIN LÍMITE** (procesa todo, comportamiento previo). Es un degradado
+  seguro: una configuración en 0 por error no rompe el import. Hay un test que fija que el
+  **default sí enforza** un presupuesto, para que nadie lo lleve a 0 en silencio.
+
+### 🔴 PRIMERA MEDICIÓN DE TIEMPO DEL REPO
+
+`logger.info("Import nómina empleados")` ahora incluye **`segundos`**, `parcial` y
+`filas_sin_procesar`, **siempre**, no solo cuando corta. Hasta hoy **no existía una sola medición
+de duración en ningún import del repo** (verificado en los cinco archivos del camino), así que el
+presupuesto se calibraba a ojo. **Con el primer import real, ese log es el dato para ajustar la
+env var** — y también para decidir si el rediseño a batch sigue siendo necesario. El campo
+`segundos` viaja además en la respuesta HTTP.
+
+### Contrato HTTP — 4 campos nuevos (aditivos, nada se saca)
+
+`ImportacionNominaEmpleadosResult` suma: `parcial` (bool), `ultima_fila_procesada` (int|null),
+`filas_sin_procesar` (int), `segundos` (float|null). Ningún consumidor existente se rompe.
+
+### Otros dos cambios que van en el mismo empujón
+
+- **Un UPDATE cuyo diff sale vacío ya NO se audita** (`services/_audit_omision.py`, aplicado en
+  `AuditService.registrar`). Aplica a **todo el sistema**, no solo al import: una edición manual
+  que no cambia nada tampoco deja evento. El escenario que lo motivó es el reintento —reimportar
+  73 filas idénticas insertaba **73 filas en `auditoria` con `{}` y `{}`**, que no registran nada.
+  🔴 La regla distingue `{}` ("difeé y no hubo cambios" → omitir) de `None` ("no se guarda dato, a
+  propósito" → registrar). Esa distinción es lo que protege a `payload_cambio_password`, que es un
+  UPDATE con los dos campos en `None` y cuyo valor está entero en el `evento`.
+- **Bug de refresco del front, arreglado.** `ImportarNominaModal` solo llamaba `onSuccess()` si la
+  respuesta llegaba, así que en un timeout **la lista de empleados no se refrescaba**: RRHH cerraba
+  el modal viendo los datos viejos y creyendo que no se había cargado nada, con N empleados nuevos
+  en la base. Ahora el refresco depende de que se haya **disparado** el import, no de que la
+  respuesta haya vuelto.
+
+### Impacto en infraestructura
+
+- **Variables de entorno:** 🔴 **`IMPORT_PRESUPUESTO_SEGUNDOS` (nueva, default 8.0)** — ver arriba.
+- **Migraciones:** ninguna. **Dependencias:** ninguna. **Buckets:** ninguno. **Endpoints:**
+  ninguno nuevo; `POST /api/importacion/nomina-empleados` suma 4 campos a su respuesta.
+  **Auth:** sin cambios. **Procesos fuera de serverless:** ninguno.
+- **Orden de deploy:** indistinto (no hay migración). El backend con los campos nuevos y el front
+  viejo conviven: los campos se ignoran.
+
+---
+
 ## 2026-07-29 · Import de nómina: fix chico de performance, legajo y deprecación de modalidad (mig 084) · commits pendientes ×7
 
 **Qué cambió:** el import de nómina de empleados dejó de hacer cuatro lookups que ya tenía

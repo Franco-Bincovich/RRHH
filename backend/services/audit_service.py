@@ -10,6 +10,7 @@ from typing import Optional, Tuple
 from uuid import UUID
 
 from repositories.audit_repo import AuditRepo
+from services._audit_omision import es_update_sin_cambios as _es_update_sin_cambios
 from schemas.auditoria import ACCIONES, AuditLogListResponse
 from services._auditoria_export import construir_filas_export
 from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
@@ -51,10 +52,14 @@ class AuditService:
 
         accion debe ser un verbo CRUD válido (INSERT/UPDATE/DELETE); evento lleva la
         semántica de negocio. tabla se setea = entidad (columna legacy del trigger).
-        Todo lo que va al payload se vuelve JSON-serializable (UUID/fechas → str)."""
+        Todo lo que va al payload se vuelve JSON-serializable (UUID/fechas → str).
+
+        🔴 UN UPDATE QUE NO CAMBIÓ NADA NO SE REGISTRA. Ver `_es_update_sin_cambios`."""
         try:
             if accion not in ACCIONES:
                 logger.error("audit_accion_invalida", extra={"accion": accion, "evento": evento})
+                return
+            if _es_update_sin_cambios(accion, datos_anteriores, datos_nuevos):
                 return
             payload = {
                 "tabla": entidad,

@@ -16,6 +16,7 @@ from uuid import uuid4
 def payload_importacion_nomina(
     archivo: str, creados: int, actualizados: int, con_faltantes: int, no_cargados: int,
     usuario_id: Optional[str], empleado_ids_creados: Optional[List[str]] = None,
+    parcial: bool = False,
 ) -> dict:
     """Evento de auditoría de un lote de import de nómina de empleados (UN evento por lote).
     Refleja el resumen: nuevos, actualizados (dedup DNI), con faltantes y no cargados.
@@ -32,10 +33,18 @@ def payload_importacion_nomina(
 
     Es Optional con default None para no romper a quien lo llame sin la lista (el evento sale
     igual, solo sin el detalle nominal).
+
+    🔴 `parcial=True` marca que el import se cortó por PRESUPUESTO DE TIEMPO y el archivo no se
+    terminó de procesar. El evento se emite igual —y tiene que emitirse— porque es el ÚNICO
+    rastro de las altas: se consolidaron acá y ya no emiten evento individual. Un corte sin este
+    evento dejaría empleados creados sin una línea en `auditoria`.
+    El flag va DENTRO de `datos_nuevos` y no como un `evento` distinto (`importacion_nomina_parcial`)
+    a propósito: quien filtre por `evento="importacion_nomina"` tiene que ver los dos casos, o un
+    corte quedaría invisible en la pantalla de auditoría justo cuando es lo que más importa mirar.
     """
     datos = {
         "archivo": archivo, "creados": creados, "actualizados": actualizados,
-        "con_faltantes": con_faltantes, "no_cargados": no_cargados,
+        "con_faltantes": con_faltantes, "no_cargados": no_cargados, "parcial": parcial,
     }
     if empleado_ids_creados is not None:
         datos["empleado_ids_creados"] = empleado_ids_creados

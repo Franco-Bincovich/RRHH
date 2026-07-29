@@ -30,9 +30,11 @@ def test_registro_id_es_uuid_valido_no_literal():
     # el resto del payload queda igual
     assert p["entidad"] == "empleado" and p["evento"] == "importacion_nomina"
     assert p["empresa_id"] is None
+    # `parcial` va SIEMPRE, no solo en el corte: un import completo lo trae en False. Así quien
+    # lee un evento viejo no tiene que adivinar si el campo faltaba o el import fue completo.
     assert p["datos_nuevos"] == {
         "archivo": "nomina.csv", "creados": 3, "actualizados": 2,
-        "con_faltantes": 1, "no_cargados": 0,
+        "con_faltantes": 1, "no_cargados": 0, "parcial": False,
     }
 
 

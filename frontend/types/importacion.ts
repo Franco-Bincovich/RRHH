@@ -32,6 +32,15 @@ export interface ImportacionNominaEmpleadosResult {
   cargados_ok: number   // cargados sin faltantes
   con_faltantes: FilaConFaltantes[]
   no_cargados: FilaNoCargada[]
+  /**
+   * El archivo NO se terminó de procesar: se agotó el presupuesto de tiempo del backend.
+   * NO es un error — lo procesado quedó cargado y reintentar con el MISMO archivo continúa
+   * donde quedó (el dedup por DNI manda las ya cargadas por la rama de update).
+   */
+  parcial: boolean
+  ultima_fila_procesada: number | null   // nº de fila del CSV (el encabezado es la 1)
+  filas_sin_procesar: number
+  segundos: number | null                // tiempo que consumió el backend
 }
 
 // ─── Nómina de sueldos (costos_nomina) ──────────────────────────────────────

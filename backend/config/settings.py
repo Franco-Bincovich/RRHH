@@ -19,6 +19,22 @@ class Settings(BaseSettings):
     # middleware/auth.py (qué rutas se consideran públicas).
     assessment_enabled: bool = False
 
+    # Presupuesto de tiempo del import de nómina, en segundos. Cuando se agota, el import
+    # PARA ENTRE FILAS y devuelve el reporte de lo que hizo, en vez de morir en un timeout sin
+    # decir nada. Reintentar con el mismo archivo continúa donde quedó (dedup por DNI).
+    #
+    # 🔴 EL DEFAULT ES CONSERVADOR A PROPÓSITO, y hay que ajustarlo en cada entorno.
+    # El techo real de esta app NO ESTÁ VERIFICADO: `backend/vercel.json` declara
+    # `maxDuration: 300`, pero lo hace dentro de `builds[].config`, que es el formato legacy —
+    # la duración de una función se configura en la clave `functions` de nivel superior, que ese
+    # archivo no tiene. O sea que muy probablemente esté IGNORADO y el backend corra con el
+    # default del plan (que en el más bajo son 10 s).
+    # 8 s asume ese peor caso y deja margen para serializar la respuesta. Un presupuesto MAYOR
+    # que el techo real no sirve de nada: el request muere antes de que el import pueda cortar
+    # solo, que es justamente lo que esto vino a evitar.
+    # En AWS el techo es otro (ALB/Lambda/ECS) → REVISAR este valor en el cutover.
+    import_presupuesto_segundos: float = 8.0
+
     # Supabase
     supabase_url: str
     supabase_anon_key: str

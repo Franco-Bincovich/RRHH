@@ -13,17 +13,18 @@ y eso no se puede reconstruir desde un id.
 """
 import csv
 import io
+from typing import Optional
 from uuid import UUID
 
 from repositories.empleado_repo import EmpleadoRepo
 from schemas.importacion_nomina_empleados import (
-    FilaConFaltantes, FilaNoCargada, ImportacionNominaEmpleadosResult,
-    build_create, build_update,
+    ImportacionNominaEmpleadosResult, build_create, build_update,
 )
 from services import _nomina_empleados_transforms as tx
 from services._nomina_parsers import email_valido
 from services._audit_payloads_import import payload_importacion_nomina
 from services._nomina_catalogos import NominaCatalogos
+from services._nomina_lote import LoteNomina, resultado_headers_invalidos
 from services._nomina_cesiones import NominaCesiones
 from services._nomina_proyectos import NominaProyectos
 from services.audit_service import AuditService
@@ -48,44 +49,47 @@ class NominaEmpleadosImportService:
         self._proyectos = NominaProyectos()  # proyecto por gerencia + asignación
         self._cesiones = NominaCesiones(usuario_id)  # cesión por Fecha Ingreso Reconocida
 
-    def importar(self, contenido: str, archivo: str) -> ImportacionNominaEmpleadosResult:
-        """Procesa el CSV completo. Reporta cada fila en su grupo; no aborta por errores."""
+    def importar(self, contenido: str, archivo: str,
+                 presupuesto: Optional[float] = None) -> ImportacionNominaEmpleadosResult:
+        """Procesa el CSV. Reporta cada fila en su grupo; no aborta por errores.
+
+        Si se agota el PRESUPUESTO DE TIEMPO, para ENTRE FILAS y devuelve el reporte de lo hecho
+        con `parcial=True`. Reintentar con el mismo archivo continúa donde quedó: el dedup por
+        (empresa_id, dni) manda las ya cargadas por la rama de update. No hay estado que limpiar.
+
+        `presupuesto` en segundos; None → `settings.import_presupuesto_segundos`. Solo los tests
+        lo pasan explícito."""
         reader = csv.DictReader(io.StringIO(contenido), delimiter=";")
         error_headers = tx.validar_headers(reader.fieldnames)
         if error_headers:
-            return ImportacionNominaEmpleadosResult(
-                total=0, creados=0, actualizados=0, cargados_ok=0, con_faltantes=[],
-                no_cargados=[FilaNoCargada(fila=1, empleado="(encabezados)", motivo=error_headers)])
+            return resultado_headers_invalidos(error_headers)
 
-        creados = actualizados = cargados_ok = total = 0
-        con_faltantes: list[FilaConFaltantes] = []
-        no_cargados: list[FilaNoCargada] = []
-        ids_creados: list[str] = []          # nominan las altas en el evento de lote
-        for n, raw in enumerate(reader, start=2):
-            total += 1
+        lote = LoteNomina(presupuesto)
+        for n, raw in lote.filas_con_margen(list(reader)):
             try:
                 nuevo, faltan, empleado_id = self._procesar_fila(raw, n)
             except Exception as exc:  # noqa: BLE001 — el lote no aborta por una fila
-                no_cargados.append(FilaNoCargada(fila=n, empleado=tx.identificador(raw), motivo=str(exc)))
+                lote.registrar_fallo(n, tx.identificador(raw), str(exc))
                 continue
-            creados += 1 if nuevo else 0
-            actualizados += 0 if nuevo else 1
-            if nuevo:
-                ids_creados.append(empleado_id)
-            if faltan:
-                con_faltantes.append(FilaConFaltantes(fila=n, empleado=tx.identificador(raw), faltan=faltan))
-            else:
-                cargados_ok += 1
+            lote.registrar_cargada(n, tx.identificador(raw), nuevo, faltan, empleado_id)
 
+        # 🔴 EL EVENTO DE LOTE SE EMITE SIEMPRE, TAMBIÉN EN EL CORTE PARCIAL, y no es un detalle:
+        # las altas ya NO emiten evento individual (se consolidaron acá, `auditar=False`), así que
+        # este evento es el ÚNICO registro de que alguien importó algo. Si se emitiera solo al
+        # terminar el archivo completo, un corte dejaría N empleados creados sin una sola línea
+        # en `auditoria`. Los updates sí conservan el suyo, así que quedaría un rastro asimétrico
+        # y engañoso: los modificados auditados, los creados invisibles.
         self._audit.registrar(**payload_importacion_nomina(
-            archivo, creados, actualizados, len(con_faltantes), len(no_cargados),
-            self._usuario_id, ids_creados))
+            archivo, lote.creados, lote.actualizados, len(lote.con_faltantes),
+            len(lote.no_cargados), self._usuario_id, lote.ids_creados, lote.parcial))
+        # El tiempo se loguea SIEMPRE, no solo en el corte: es la única medición de duración de
+        # todo el repo, y sin ella el presupuesto se calibra a ojo en vez de con datos reales.
         logger.info("Import nómina empleados", extra={
-            "archivo": archivo, "creados": creados, "actualizados": actualizados,
-            "con_faltantes": len(con_faltantes), "no_cargados": len(no_cargados)})
-        return ImportacionNominaEmpleadosResult(
-            total=total, creados=creados, actualizados=actualizados, cargados_ok=cargados_ok,
-            con_faltantes=con_faltantes, no_cargados=no_cargados)
+            "archivo": archivo, "creados": lote.creados, "actualizados": lote.actualizados,
+            "con_faltantes": len(lote.con_faltantes), "no_cargados": len(lote.no_cargados),
+            "segundos": lote.segundos(), "parcial": lote.parcial,
+            "filas_sin_procesar": lote.filas_sin_procesar})
+        return lote.resultado()
 
     def _procesar_fila(self, raw: dict, fila: int) -> tuple[bool, list, str]:
         """Crea o actualiza (dedup DNI) el empleado de una fila.
