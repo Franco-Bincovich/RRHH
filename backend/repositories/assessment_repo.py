@@ -11,9 +11,10 @@ from utils.errors import AppError
 
 _CAMP, _LINK, _RES = "assessment_campanas", "assessment_links", "assessment_resultados"
 _CAMP_Q = "*, areas!assessment_campanas_area_id_fkey(nombre)"
+# 🔴 Los dos embeds llevan su FK nombrada: tienen DOS relaciones cada uno y sin hint PostgREST da 300 PGRST201. Ver tests/test_selects_repos.py.
 _RES_Q = (
-    "*, assessment_links(nombre_destino, email_destino, campana_id, empleado_id, "
-    "assessment_campanas(tipo, posicion_objetivo, areas!assessment_campanas_area_id_fkey(nombre)))"
+    "*, assessment_links!ass_res_link_emp_fkey(nombre_destino, email_destino, campana_id, empleado_id, "
+    "assessment_campanas!ass_links_campana_emp_fkey(tipo, posicion_objetivo, areas!assessment_campanas_area_id_fkey(nombre)))"
 )
 _TIPO_TO   = {"completo": "mixto"}
 _TIPO_FROM = {"mixto": "completo"}

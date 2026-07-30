@@ -13,7 +13,8 @@ from utils.errors import AppError
 
 _PC, _HIT = "planes_carrera", "planes_carrera_hitos"
 _EJ = "empleados!planes_carrera_empleado_id_fkey(nombre,apellido,roles)"
-_PC_SELECT = f"*, empresa_id, empresas(nombre), {_EJ}, planes_carrera_hitos!planes_carrera_hitos_plan_emp_fkey(estado)"
+# 🔴 `pc_hitos_plan_emp_fkey`: nombre REAL de la FK, y nombrarla es obligatorio (hay dos de hitos a planes). Ver tests/test_selects_repos.py.
+_PC_SELECT = f"*, empresa_id, empresas(nombre), {_EJ}, {_HIT}!pc_hitos_plan_emp_fkey(estado)"
 
 
 def _with_empresa(q, empresa_id: Optional[UUID]):

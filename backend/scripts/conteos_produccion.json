@@ -1,0 +1,15 @@
+{
+  "_comment": "Filas por tabla en produccion al 29/7/2026. Lo consume smoke_test.py --conteos para distinguir 'vacio normal' de 'vacio roto'. Regenerar con el SQL de docs/SMOKE-TEST.md cuando RRHH cargue datos: un conteo viejo convierte un endpoint roto en OK.",
+  "empleados": 19, "empresas": 1, "areas": 9, "proyectos": 6, "proyecto_asignaciones": 19,
+  "vacantes": 0, "candidatos": 0,
+  "solicitudes_vacaciones": 0, "solicitudes_ausencia": 0, "tipos_ausencia": 4,
+  "costos_nomina": 0, "presupuesto_areas": 0, "periodos_cerrados": 0,
+  "capacitaciones": 0, "empleado_capacitacion": 0,
+  "inventario_items": 0, "inventario_asignaciones": 0, "objetivos": 0,
+  "onboarding_templates": 0, "onboarding_instancias": 0, "offboarding_instancias": 0,
+  "evaluacion_lotes": 1, "evaluacion_evaluados": 10,
+  "ev_instancias": 0, "ev_plantillas": 0, "ev_ciclos": 0,
+  "auditoria": 133, "users": 4, "cesiones": 6, "adjuntos": 1,
+  "horas_proyecto": 0, "planes_carrera": 0, "sucesion_posiciones": 0,
+  "usuario_integraciones": 0, "reportes_generados": 0
+}

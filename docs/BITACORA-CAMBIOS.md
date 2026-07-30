@@ -41,6 +41,68 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-07-30 · Embed roto de sucesión + el validador de schema pasa a cubrir los repos · commits pendientes ×2
+
+**Qué cambió:** se arregló el embed que tenía `GET /api/sucesion/planes` en **500** desde meses, y
+—lo que importa más— el validador de selects contra `db/schema.sql` **dejó de mirar solo los
+reportes y ahora barre `repositories/` y `services/` completos**.
+
+### 🔴 Por qué: es la CUARTA vez que aparece la misma clase de bug
+
+| # | Dónde | Síntoma |
+|---|---|---|
+| 1 | Los 6 reportes de Fase 1 | columnas inexistentes y embeds ambiguos → 400 / PGRST201 |
+| 2 | Listado de plantillas de onboarding | mismo patrón |
+| 3 | `planes_carrera_repo` | pedía `planes_carrera_hitos!planes_carrera_hitos_plan_emp_fkey`; la FK real es **`pc_hitos_plan_emp_fkey`** → **500** |
+| 4 | `assessment_repo` + `assessment_resultados_repo` | **dos embeds ambiguos** (`assessment_links` y el anidado `assessment_campanas`, dos FKs cada uno) → PGRST201 latente |
+
+**Ninguna la detectó la suite, y no por mala suerte: es estructural.** El fake de Supabase
+implementa `select(*a, **k)` **ignorando el argumento**, así que acepta cualquier spec —exista o no
+la columna, resuelva o no el embed—. Ningún test que pase por el fake puede desmentir un nombre mal
+escrito. La #3 la encontró el **smoke test**; la #4 la encontró **el barrido nuevo**, en el mismo
+commit que lo agregó.
+
+`tests/_postgrest_schema.py` se había construido para cerrar la clase y validaba **solo los
+generadores de reportes**. Los repos quedaron afuera, y por ahí entraron los casos 2, 3 y 4.
+
+### El barrido nuevo — `tests/test_selects_repos.py`
+
+- **Descubre los selects por INTROSPECCIÓN del AST**, nunca por una lista de archivos: los tres
+  casos se colaron justamente por no estar en una lista. Un repo nuevo queda cubierto solo.
+- Resuelve constantes de módulo, f-strings armados con ellas, y **constantes importadas de otro
+  módulo** — el patrón `from ._empleado_row import SELECT, TABLE` que usan los repos partidos por
+  límite de líneas, que son los más grandes.
+- **Cobertura hoy: 46 selects con embed validados** sobre 189 encontrados.
+- **Tres guardas contra el falso verde:** mínimo de selects (150), mínimo de embeds (40), y que
+  ningún select dinámico aparezca sin declararse. Verificado por mutación: al romper la detección
+  el barrido **falla** en vez de pasar en el vacío.
+- Los **16 selects que no se pueden resolver estáticamente se DECLARAN con su motivo**, nunca se
+  sacan del barrido. Están declarados **por archivo con su conteo**, así que un `.select(variable)`
+  nuevo en un archivo ya declarado también dispara.
+- Los generadores de reportes siguen cubiertos por `test_reportes_columnas.py`, que los valida
+  **mejor**: ejecuta cada uno con un Supabase falso que captura el select real, dos veces, con y
+  sin `area_id`. Un barrido estático solo vería una de las dos ramas — y ahí vivía el bug de
+  ausentismo.
+
+### Impacto en infraestructura
+
+- **Ninguno.** Sin migraciones, sin env vars, sin dependencias, sin cambios de endpoint ni de
+  contrato. Son tres nombres de FK en strings de select, más tests.
+- **Sin orden de deploy.** El fix corrige queries contra el schema que YA está en producción.
+- ⚠️ **`GET /api/sucesion/planes` estaba en 500 en producción** y ahora responde. El módulo de
+  sucesión está oculto en el front, pero el backend está montado y el endpoint es alcanzable con
+  token: por eso nadie lo reportó.
+- ⚠️ Los dos embeds de **assessment** eran un bug LATENTE: el módulo está apagado
+  (`ASSESSMENT_ENABLED=false`) y ese código no corre. Quedan arreglados para cuando se encienda.
+  **`assessment_repo.py` sigue en 131 líneas contra un límite de 100** — ya estaba en 130 antes de
+  esta sesión y CLAUDE.md lo documenta como legacy con CERO callers, candidato a borrar.
+
+**Deuda que queda anotada:** `_postgrest_schema` valida nombres y relaciones, no tipos, filtros ni
+RLS. Y los `.select()` con tabla o spec dinámicos (16) siguen sin validación estática — de esos,
+los 7 de reportes están cubiertos en runtime y los 9 restantes son helpers genéricos verificados
+caller por caller como sin embeds.
+
+
 ## 2026-07-29 · Import de nómina recuperable: presupuesto de tiempo · commits pendientes ×4
 
 **Qué cambió:** el import de nómina ya no muere en silencio si se pasa de tiempo. Ahora tiene un
