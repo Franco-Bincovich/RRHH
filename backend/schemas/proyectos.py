@@ -107,13 +107,43 @@ class AsignacionBulkCreate(BaseModel):
     fecha_hasta: Optional[date] = None
 
 
+class AsignacionAreaCreate(BaseModel):
+    """Alta de un ÁREA ENTERA a un proyecto: mismos datos compartidos que el bulk manual.
+
+    🔴 ES UNA FOTO, NO UN VÍNCULO VIVO. Se resuelven los empleados del área EN ESE MOMENTO y se
+    crean asignaciones individuales; el proyecto NO queda atado al área. Un alta posterior en el
+    área no entra sola al proyecto, y —lo que importa— sacar a alguien del área NO le borra una
+    asignación. Un vínculo vivo lo haría, y `proyecto_asignaciones` lleva `rol`, `valor_hora` y
+    fechas POR PERSONA, además de que `horas_proyecto` cuelga de una asignación concreta: borrarla
+    se llevaría horas cargadas, que es justo lo que `ASIGNACION_CON_HORAS` (409) protege hoy.
+    """
+    area_id: UUID
+    rol: str
+    valor_hora: float = Field(default=0.0, ge=0)
+    fecha_desde: Optional[date] = None
+    fecha_hasta: Optional[date] = None
+
+
 class AsignacionBulkError(BaseModel):
     empleado_id: UUID
     motivo: str  # mensaje legible del AppError (ya asignado / inactivo / no encontrado)
 
 
 class AsignacionBulkResult(BaseModel):
+    """Resultado de un alta múltiple, en TRES grupos.
+
+    🔴 `ya_asignados` SE SEPARA DE `errores` A PROPÓSITO, y no es cosmético. Un empleado que ya
+    estaba en el proyecto no es un fallo: es la operación siendo idempotente. Mezclarlo con los
+    errores reales estaba bien mientras el usuario elegía de a uno y veía la lista; asignando un
+    ÁREA ENTERA lo normal es que la mitad ya esté, y "15 errores" se lee como un fallo masivo.
+
+    La prueba de que hacía falta: el modal tenía que aclararlo a mano en el texto —"N no se
+    pudieron (ya asignados o inactivos)"— porque el tipo no distinguía las dos cosas.
+
+    En `errores` quedan los fallos DE VERDAD: el empleado no existe, o está dado de baja.
+    """
     asignados: List[AsignacionResponse]
+    ya_asignados: List[AsignacionBulkError] = []
     errores: List[AsignacionBulkError]
 
 

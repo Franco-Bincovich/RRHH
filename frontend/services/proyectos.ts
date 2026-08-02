@@ -1,6 +1,6 @@
 import { apiFetch } from "./api"
 import type {
-  Asignacion, AsignacionBulkCreate, AsignacionBulkResult,
+  Asignacion, AsignacionAreaCreate, AsignacionBulkCreate, AsignacionBulkResult,
   AsignacionCreate, AsignacionListResponse, AsignacionUpdate,
   Hora, HoraCreate, HoraListResponse,
   Proyecto, ProyectoCreate, ProyectoListResponse, ProyectoUpdate,
@@ -70,6 +70,19 @@ export function createAsignacion(proyectoId: string, body: AsignacionCreate): Pr
 /** Alta multi-selección: varios empleados en una sola llamada. Devuelve asignados + errores clasificados. */
 export function asignarBulk(proyectoId: string, body: AsignacionBulkCreate): Promise<AsignacionBulkResult> {
   return apiFetch<AsignacionBulkResult>(`${BASE}/${proyectoId}/asignaciones/bulk`, {
+    method: "POST", body: JSON.stringify(body),
+  })
+}
+
+/**
+ * Asigna al proyecto TODOS los empleados de un área, resueltos EN ESE MOMENTO.
+ *
+ * Es una FOTO, no un vínculo vivo: el proyecto no queda atado al área. Un alta posterior en el
+ * área no entra sola, y sacar a alguien del área no le borra la asignación (que podría tener
+ * horas cargadas). Devuelve los mismos tres grupos que el alta manual.
+ */
+export function asignarArea(proyectoId: string, body: AsignacionAreaCreate): Promise<AsignacionBulkResult> {
+  return apiFetch<AsignacionBulkResult>(`${BASE}/${proyectoId}/asignaciones/area`, {
     method: "POST", body: JSON.stringify(body),
   })
 }

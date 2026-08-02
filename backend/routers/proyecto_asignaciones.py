@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request
 
 from schemas.proyectos import (
-    AsignacionBulkCreate, AsignacionBulkResult,
+    AsignacionAreaCreate, AsignacionBulkCreate, AsignacionBulkResult,
     AsignacionCreate, AsignacionListResponse, AsignacionResponse, AsignacionUpdate,
 )
 from services.asignaciones_service import AsignacionesService
@@ -44,6 +44,21 @@ async def asignar_bulk(
     service: AsignacionesService = Depends(_svc),
 ) -> AsignacionBulkResult:
     return service.asignar_bulk(proyecto_id, body, get_empresa_id(request))
+
+
+@router.post("/{proyecto_id}/asignaciones/area", response_model=AsignacionBulkResult, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
+async def asignar_area(
+    proyecto_id: UUID, body: AsignacionAreaCreate, request: Request,
+    service: AsignacionesService = Depends(_svc),
+) -> AsignacionBulkResult:
+    """Asigna al proyecto TODOS los empleados del área, resueltos AHORA (foto, no vínculo vivo).
+
+    Endpoint propio y no un modo del bulk: un schema donde hay que mandar `empleado_ids` O
+    `area_id` obliga a cada caller a conocer esa regla, y el error que sale es peor que un 404.
+    Lo que sí se comparte es la CLASIFICACIÓN del resultado (ver `_asignaciones_bulk`).
+
+    Devuelve los mismos tres grupos que el bulk manual: creadas, ya asignados y errores."""
+    return service.asignar_area(proyecto_id, body, get_empresa_id(request))
 
 
 @router.put("/{proyecto_id}/asignaciones/{asig_id}", response_model=AsignacionResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])

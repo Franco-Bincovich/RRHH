@@ -89,8 +89,25 @@ export interface AsignacionBulkCreate {
   fecha_hasta?: string
 }
 
+export interface AsignacionAreaCreate {
+  area_id: string
+  rol: string
+  valor_hora: number
+  fecha_desde?: string
+  fecha_hasta?: string
+}
+
 export interface AsignacionBulkResult {
   asignados: Asignacion[]
+  /**
+   * Ya estaban en el proyecto. NO son errores: es la operación siendo idempotente.
+   *
+   * Van aparte desde que existe el alta por área, donde lo normal es que la mitad del área ya
+   * esté asignada — "15 errores" se leería como un fallo masivo. Antes el mensaje del modal
+   * tenía que aclararlo a mano ("ya asignados o inactivos") porque el tipo no los distinguía.
+   */
+  ya_asignados: { empleado_id: string; motivo: string }[]
+  /** Fallos DE VERDAD: el empleado no existe, o está dado de baja. */
   errores: { empleado_id: string; motivo: string }[]
 }
 

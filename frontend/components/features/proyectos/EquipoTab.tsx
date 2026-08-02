@@ -106,6 +106,7 @@ export function EquipoTab({ proyectoId, proyectoEmpresaId, canWrite }: Props) {
       )}
 
       <AsignarEmpleadosModal open={assignOpen} proyectoId={proyectoId}
+        yaAsignadosIds={asignaciones.map((a) => a.empleado_id)}
         onClose={() => setAssignOpen(false)}
         onSuccess={() => { setAssignOpen(false); load() }} />
 

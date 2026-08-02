@@ -547,7 +547,20 @@ Ausencias activas hoy, % ausentismo del mes (base de días hábiles configurable
 - **Entrevista de salida (C3):** `services/_offboarding_entrevista.py`. Las columnas `entrevista_salida` y `notas_entrevista` existían en DB y estaban **muertas**; ahora se escriben y se leen.
 - **Domicilio desglosado (C4, mig 081):** 6 columnas nuevas en `empleados` (`domicilio_calle`, `_numero`, `_piso_depto`, `_localidad`, `_provincia`, `_cp`). **Se conserva el `domicilio` crudo** además de las estructuradas, porque el import de nómina lo trae como texto libre. **`provincia` es una lista cerrada servida por endpoint** (`schemas/_provincias.py` + `routers/empleados_catalogos.py`): el front no la hardcodea.
 - **Cesiones** (mig 066): hija de empleado, en la ficha. Gateada por `Seccion.EMPLEADOS`.
-- **Proyectos:** asignación single (`proyecto_asignaciones.py`) + bulk multi-selección (`POST /{id}/asignaciones/bulk`, éxito parcial clasificado). **El área filtra candidatos, NO asigna.**
+- **Proyectos:** asignación single (`proyecto_asignaciones.py`) + bulk multi-selección
+  (`POST /{id}/asignaciones/bulk`) + **alta de un ÁREA ENTERA** (`POST /{id}/asignaciones/area`).
+  Los tres comparten la clasificación en **tres grupos**: `asignados` · `ya_asignados` · `errores`
+  (un duplicado NO es un error: es idempotencia — asignando un área lo normal es que la mitad ya esté).
+  ⚠️ **El área ASIGNA, además de filtrar.** La línea que decía *"el área filtra candidatos, NO
+  asigna"* se corrigió el 2/8/2026: **nunca fue una decisión**. Era un comentario del modal que
+  describía lo implementado, la doc lo copió y al escribirlo en mayúsculas lo volvió norma.
+  🔴 **Es una FOTO, no un vínculo vivo**: se resuelven los empleados del área EN ESE MOMENTO. Un
+  alta posterior en el área no entra sola, y sacar a alguien del área no le borra la asignación —
+  que podría tener horas, y ahí choca con `ASIGNACION_CON_HORAS` (409). *Eso* sí es una decisión.
+  🔴 **La barrera va en DOS pasos** (`services/_asignaciones_bulk.asignar_area`): el ÁREA se valida
+  contra el header (`ensure_area_valida` → 404) y los EMPLEADOS se resuelven **sin** filtro de
+  empresa. Pasarle el `empresa_id` a `empleados_de_area` "porque falta" devolvería lista vacía y un
+  200 mudo — el patrón de filtro que falla en silencio. Está escrito en el código; leerlo antes.
 - **ABM usuarios:** solo admin_rrhh. `POST /api/usuarios` (alta + contraseña temporal una sola vez, `must_change_password=true`) · `DELETE` (auto-eliminación bloqueada) · `POST /cambiar-password` (self-service, 10/hora). Migración 063. **Para crear usuarios directo en DB:** crear auth user en dashboard Supabase con Auto Confirm, copiar el UUID, INSERT en `public.users` (hay FK `users.id → auth.users(id)`). Roles: `admin_rrhh`, `gerencia_lectura`, `mandos_medios`.
 - **Ownership mandos_medios:** `services/ownership.py` app-level. "A cargo" = `manager_id`, no área ni `es_lider`. Aplicado en las 13 superficies de Vacaciones y Ausencias. Falta RLS a nivel DB (en AWS no va — queda app-level definitivo).
 - **Adjuntos (polimórficos, `entidad` + `entidad_id`):** la empresa del adjunto sale de la **entidad PADRE, no del header** — aplicación directa de Vista vs Acción. `services/_adjunto_padres.py::ensure_padre_de_empresa` valida el padre y devuelve **su** `empresa_id` para etiquetar la hija. Resolvers para las 5 entidades que el front usa: `empleado`, `vacacion`, `ausencia`, `vacante`, `offboarding`. Los adjuntos con **`empresa_id` NULL (filas legacy) están bloqueados en TODOS los modos**, incluido el consolidado. ⚠️ `entidad_tipo` **`"evaluacion"` queda fail-closed con `ENTIDAD_INVALIDA` (400)**: está mapeado a una Sección pero **no tiene repo resolver** (no se definió a qué apunta) y tiene **0 callers**. Definir antes de habilitarlo.

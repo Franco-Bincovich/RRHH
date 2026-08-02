@@ -14,10 +14,12 @@ from uuid import UUID
 from repositories.proyecto_asignaciones_repo import (
     AsignacionesRepo, find_empresa_for_empleado, get_estado_empleado,
 )
+from repositories.area_repo import AreaRepo
 from repositories.proyectos_repo import ProyectosRepo
+from services import _asignaciones_bulk as bulk
 from services._asignacion_precargada import AsignacionPrecargada
 from schemas.proyectos import (
-    AsignacionBulkCreate, AsignacionBulkError, AsignacionBulkResult,
+    AsignacionAreaCreate, AsignacionBulkCreate, AsignacionBulkResult,
     AsignacionCreate, AsignacionListResponse, AsignacionResponse, AsignacionUpdate,
 )
 from utils.errors import AppError
@@ -29,9 +31,11 @@ class AsignacionesService:
         self,
         repo: Optional[AsignacionesRepo] = None,
         proyectos_repo: Optional[ProyectosRepo] = None,
+        areas_repo: Optional[AreaRepo] = None,
     ) -> None:
         self._repo = repo or AsignacionesRepo()
         self._proyectos = proyectos_repo or ProyectosRepo()
+        self._areas = areas_repo or AreaRepo()
 
     def get_by_proyecto(self, proyecto_id: UUID, empresa_id: Optional[UUID] = None) -> AsignacionListResponse:
         """Lista asignaciones del proyecto. Valida que el proyecto exista y pertenezca a la empresa."""
@@ -91,22 +95,14 @@ class AsignacionesService:
         return row
 
     def asignar_bulk(self, proyecto_id: UUID, data: AsignacionBulkCreate, empresa_id: Optional[UUID] = None) -> AsignacionBulkResult:
-        """
-        Alta multi-selección: valida el proyecto UNA vez y asigna empleado por empleado.
-        Éxito parcial (patrón nómina): no aborta; clasifica en asignados / errores por empleado.
+        """Alta multi-selección. Delegado a `_asignaciones_bulk.asignar_bulk`, donde vive también
+        la clasificación del resultado — compartida con el alta por área."""
+        return bulk.asignar_bulk(self._asignar_uno, self._proyectos, proyecto_id, data, empresa_id)
 
-        Raises: PROYECTO_NOT_FOUND (404) si el proyecto no existe o no es de la empresa.
-        """
-        if not self._proyectos.find_by_id(str(proyecto_id), empresa_id):
-            raise AppError("Proyecto no encontrado", "PROYECTO_NOT_FOUND", 404)
-        asignados, errores = [], []
-        for eid in data.empleado_ids:
-            try:
-                asignados.append(self._asignar_uno(proyecto_id, eid, data.rol, data.valor_hora, data.fecha_desde, data.fecha_hasta))
-            except AppError as exc:
-                errores.append(AsignacionBulkError(empleado_id=eid, motivo=exc.message))
-        logger.info("Asignación múltiple", extra={"proyecto_id": str(proyecto_id), "asignados": len(asignados), "errores": len(errores)})
-        return AsignacionBulkResult(asignados=asignados, errores=errores)
+    def asignar_area(self, proyecto_id: UUID, data: AsignacionAreaCreate, empresa_id: Optional[UUID] = None) -> AsignacionBulkResult:
+        """Alta de un área entera (FOTO, no vínculo vivo). Delegado a `_asignaciones_bulk`, donde
+        está escrito por qué la barrera va en dos pasos y por qué al segundo NO le falta un filtro."""
+        return bulk.asignar_area(self._asignar_uno, self._proyectos, self._areas, proyecto_id, data, empresa_id)
 
     def update(self, asignacion_id: UUID, data: AsignacionUpdate, empresa_id: Optional[UUID] = None) -> AsignacionResponse:
         """Actualiza rol, valor_hora o fechas de la asignación. Valida ownership: proyecto dueño debe coincidir con empresa_id."""

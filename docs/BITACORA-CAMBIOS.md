@@ -41,6 +41,81 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-02 · Asignar un ÁREA ENTERA a un proyecto · commits pendientes ×3
+
+**Qué cambió:** se puede sumar todos los empleados de un área a un proyecto de una vez, en vez de
+elegirlos de a uno. Tres commits: (1) división de `asignaciones_service` (139/150), (2)
+`ya_asignados` como grupo propio del resultado, (3) el alta por área + la UI.
+
+**"Asignar por equipo" NO se hizo, y no es un olvido:** `empleados.equipo` está **0/19** en
+producción (15 dicen "NO APLICA" y 4 vacío). No hay nada que agrupar. El trabajo era por ÁREA,
+que sí está cargada 19/19. Si RRHH quiere equipos de verdad, es una entidad nueva y un proyecto
+aparte — antes hay que definir si un equipo es distinto del área.
+
+### 🔴 ORDEN DE DEPLOY
+
+1. `sofia-backend` deploya y da 200 en `/health`.
+2. Recién entonces `sofia-front`.
+
+**SIN MIGRACIÓN.** `proyecto_asignaciones` ya tenía todas las columnas: el alta por área no
+agrega un dato nuevo, resuelve una lista de ids y usa el camino de escritura que ya existía.
+
+⚠️ Si el front sale antes, el botón "Asignar el área" pega a un endpoint que no existe y da un
+error genérico. No rompe la pantalla (el alta manual sigue andando), pero el mensaje no ayuda.
+
+### Endpoint nuevo (CON auth)
+
+- `POST /api/proyectos/{proyecto_id}/asignaciones/area` — gate `Seccion.PROYECTOS + WRITE`, 201.
+  Sin franja de rate limit propia: escribe lo mismo que el bulk que ya existía y en el mismo
+  volumen (el área más grande de producción tiene 9 personas).
+
+### 🔴 CAMBIO DE CONTRATO en un endpoint que YA funcionaba
+
+`AsignacionBulkResult` gana un tercer grupo: **`ya_asignados`**, separado de `errores`. Es
+**aditivo** (nada se saca), pero **cambia lo que devuelve el bulk manual**, que ya estaba en
+producción: un empleado que ya estaba asignado deja de contarse como error.
+
+Es lo correcto —asignando un área entera lo normal es que la mitad ya esté, y "15 errores" se lee
+como un fallo masivo— y la evidencia de que hacía falta estaba en el propio front: el mensaje
+tenía que aclarar a mano *"N no se pudieron (ya asignados o inactivos)"* porque el tipo no
+distinguía las dos cosas. Ahora lo dice el backend.
+
+⚠️ **Cualquier consumidor del bulk que cuente `errores.length` va a ver un número menor.** Hoy el
+único consumidor es el modal, y ya está actualizado.
+
+### La decisión de diseño que hay que conocer antes de tocar esto
+
+**Es una FOTO, no un vínculo vivo.** Se resuelven los empleados del área EN ESE MOMENTO y se
+crean asignaciones individuales; el proyecto NO queda atado al área. Un alta posterior en el área
+no entra sola, y —lo que importa— **sacar a alguien del área no le borra la asignación**. Un
+vínculo vivo sí lo haría, y `proyecto_asignaciones` lleva `rol`, `valor_hora` y fechas POR
+PERSONA, además de que `horas_proyecto` cuelga de una asignación concreta: borrarla se llevaría
+horas cargadas, que es justo lo que `ASIGNACION_CON_HORAS` (409) protege.
+
+**Y la barrera de empresa va en DOS PASOS separados**, que es lo que el próximo lector va a
+querer "arreglar": el ÁREA se valida contra el header (404) y los EMPLEADOS se resuelven **sin**
+filtro de empresa. Pasarle el `empresa_id` a `empleados_de_area` sería redundante (los empleados
+de un área son de la empresa del área por construcción) y **silencioso**: un área ajena devolvería
+lista vacía y el endpoint respondería "0 asignados, 0 errores" sin decir nada. Está escrito en
+`services/_asignaciones_bulk.asignar_area`.
+
+⚠️ **El caso cruzado no se puede probar con datos reales**: hay UNA sola empresa en producción y
+las 9 áreas son todas suyas. Vive en los tests hasta que exista la segunda.
+
+### Variables de entorno · dependencias · Storage · auth · dominios · procesos
+
+**Ninguno.** Sin variables, sin dependencias, sin buckets, sin cambios en el token, sin nada
+atado a una URL, y sin procesos de fondo (el alta por área es síncrona: el área más grande son
+9 personas).
+
+### 🚩 Para preguntarle a RRHH
+
+`GESTION DE DEUDA` y `GD - GESTION DE DEUDA` son casi con seguridad **la misma área duplicada**
+por el import de nómina (una por cada grafía del CSV). Con áreas duplicadas, "asignar el área"
+asigna a la mitad de la gente.
+
+---
+
 ## 2026-08-02 · Subtipos de ausencia: jerarquía de dos niveles · commits pendientes ×4
 
 **Qué cambió:** el catálogo de tipos de ausencia pasa a tener **dos niveles**

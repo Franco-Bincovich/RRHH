@@ -1,20 +1,16 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { toast } from "sonner"
-
+import { useAsignarEmpleados } from "@/components/features/proyectos/useAsignarEmpleados"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { asignarBulk } from "@/services/proyectos"
-import { fetchAreas } from "@/services/areas"
-import { fetchEmpleados } from "@/services/empleados"
-import type { Empleado } from "@/types/empleado"
-import type { Area } from "@/types/area"
 
 interface Props {
   open: boolean
   proyectoId: string
+  /** Ids de los empleados YA asignados al proyecto. Llegan por prop desde EquipoTab, que los
+   *  tiene para su propia lista: es lo que hace que el resumen del área no cueste un request. */
+  yaAsignadosIds: string[]
   onClose: () => void
   onSuccess: () => void
 }
@@ -22,61 +18,28 @@ interface Props {
 const INPUT_CLS = "flex min-h-[2.75rem] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 const LABEL_CLS = "block text-xs font-medium text-foreground mb-1"
 
-/** Alta multi-selección. El área FILTRA la lista de candidatos (no asigna el área completa). */
-export function AsignarEmpleadosModal({ open, proyectoId, onClose, onSuccess }: Props) {
-  const [empleados, setEmpleados] = useState<Empleado[]>([])
-  const [areas, setAreas] = useState<Area[]>([])
-  const [areaFiltro, setAreaFiltro] = useState("")
-  const [search, setSearch] = useState("")
-  const [sel, setSel] = useState<Set<string>>(new Set())
-  const [rol, setRol] = useState("")
-  const [valorHora, setValorHora] = useState("0")
-  const [fechaDesde, setFechaDesde] = useState("")
-  const [fechaHasta, setFechaHasta] = useState("")
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (!open) return
-    setSel(new Set()); setSearch(""); setAreaFiltro(""); setRol(""); setValorHora("0"); setFechaDesde(""); setFechaHasta("")
-    fetchAreas(undefined).then(setAreas).catch(() => setAreas([]))
-  }, [open])
-
-  // Candidatos: activos de TODAS las empresas del grupo, acotados por área server-side (param areaId).
-  useEffect(() => {
-    if (!open) return
-    fetchEmpleados({ page: 1, pageSize: 200, estado: "activo", empresaId: "todas", areaId: areaFiltro || undefined })
-      .then((r) => setEmpleados(r.items ?? [])).catch(() => setEmpleados([]))
-  }, [open, areaFiltro])
-
-  const visibles = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return q ? empleados.filter((e) => `${e.nombre} ${e.apellido}`.toLowerCase().includes(q)) : empleados
-  }, [empleados, search])
-
-  const allSelected = visibles.length > 0 && visibles.every((e) => sel.has(e.id))
-
-  function toggle(id: string) {
-    setSel((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  }
-  function toggleAll() {
-    setSel((prev) => { const n = new Set(prev); visibles.forEach((e) => allSelected ? n.delete(e.id) : n.add(e.id)); return n })
-  }
-
-  async function handleSubmit() {
-    if (sel.size === 0 || !rol.trim()) return
-    setSaving(true)
-    try {
-      const res = await asignarBulk(proyectoId, {
-        empleado_ids: [...sel], rol: rol.trim(), valor_hora: parseFloat(valorHora) || 0,
-        fecha_desde: fechaDesde || undefined, fecha_hasta: fechaHasta || undefined,
-      })
-      const ok = `${res.asignados.length} empleado${res.asignados.length !== 1 ? "s" : ""} asignado${res.asignados.length !== 1 ? "s" : ""}`
-      if (res.errores.length) toast.warning(`${ok}. ${res.errores.length} no se pudieron (ya asignados o inactivos).`)
-      else toast.success(ok)
-      onSuccess()
-    } catch { toast.error("No se pudo asignar. Intentá de nuevo.") }
-    finally { setSaving(false) }
-  }
+/**
+ * Alta múltiple: por selección manual, o EL ÁREA ENTERA de una vez.
+ *
+ * El área hace las DOS cosas: filtra la lista de candidatos, y —desde el 2/8/2026— se puede
+ * asignar completa con un botón. Antes solo filtraba; que no asignara no era una decisión de
+ * diseño, era simplemente lo que estaba implementado.
+ *
+ * 🔴 EL RESUMEN DICE CUÁNTOS QUEDAN POR ASIGNAR, no cuántos tiene el área. Con la mitad del área
+ * ya en el proyecto, "trae 9" engaña: se van a crear 4. Y el reparto real lo vuelve necesario —
+ * 6 de las 9 áreas de producción tienen UNA sola persona, así que "asignar ANALISIS" y "asignar
+ * SALUD" se ven idénticas antes de apretar y una asigna a 1 y la otra a 9.
+ *
+ * Sale de datos que ya están acá: los candidatos del área ya se piden server-side, y los ya
+ * asignados llegan por prop desde EquipoTab, que los tiene para su propia lista. Cero requests.
+ */
+export function AsignarEmpleadosModal({ open, proyectoId, yaAsignadosIds, onClose, onSuccess }: Props) {
+  const {
+    empleados, areas, areaFiltro, setAreaFiltro, search, setSearch, sel, rol, setRol,
+    valorHora, setValorHora, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
+    saving, asignandoArea, yaEnElProyecto, faltan, visibles, allSelected,
+    toggle, toggleAll, handleSubmit, handleAsignarArea,
+  } = useAsignarEmpleados(open, proyectoId, yaAsignadosIds, onSuccess)
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
@@ -90,6 +53,23 @@ export function AsignarEmpleadosModal({ open, proyectoId, onClose, onSuccess }: 
             </select>
             <input className={INPUT_CLS} type="search" value={search} placeholder="Buscar por nombre…" onChange={(e) => setSearch(e.target.value)} />
           </div>
+
+          {areaFiltro && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2">
+              <p className="text-xs text-muted-foreground">
+                {empleados.length} en el área
+                {yaEnElProyecto > 0 && <> · {yaEnElProyecto} ya asignado{yaEnElProyecto !== 1 ? "s" : ""}</>}
+                {" · "}
+                <strong className="text-foreground">
+                  {faltan === 0 ? "no queda nadie por agregar" : `se van a agregar ${faltan}`}
+                </strong>
+              </p>
+              <Button variant="outline" size="sm" onClick={handleAsignarArea}
+                      disabled={asignandoArea || saving || faltan === 0 || !rol.trim()}>
+                {asignandoArea ? "Asignando…" : "Asignar el área"}
+              </Button>
+            </div>
+          )}
 
           <div className="rounded-md border">
             <label className="flex items-center gap-2 border-b px-3 py-2 text-xs font-medium text-muted-foreground">
