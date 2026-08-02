@@ -173,11 +173,20 @@ class _Catalogos:
 
 
 class _Noop:
+    """Proyectos, cesiones y superiores: colaboradores fuera del alcance del presupuesto.
+    `resolver` devuelve `(0, [])`, la forma real del contrato de `NominaSuperiores`."""
+
     def resolver_y_asignar(self, *a, **k):
         pass
 
     def crear_si_falta(self, *a, **k):
         pass
+
+    def registrar(self, *a, **k):
+        pass
+
+    def resolver(self, *a, **k):
+        return 0, []
 
 
 def _servicio(emp_repo=None, audit=None):
@@ -197,6 +206,7 @@ def _servicio(emp_repo=None, audit=None):
     svc._seen_legajo = set()
     svc._proyectos = _Noop()
     svc._cesiones = _Noop()
+    svc._superiores = _Noop()
     return svc, emp_repo, audit
 
 

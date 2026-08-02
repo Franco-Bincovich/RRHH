@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, PauseCircle, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Link2, Link2Off, PauseCircle, XCircle } from "lucide-react"
 
 import type { ImportacionNominaEmpleadosResult } from "@/types/importacion"
 
@@ -45,6 +45,12 @@ export function NominaResultView({ result }: { result: ImportacionNominaEmpleado
             {no_cargados.length} no cargado{no_cargados.length !== 1 ? "s" : ""}
           </span>
         )}
+        {result.superiores_resueltos > 0 && (
+          <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+            <Link2 className="size-4" />
+            {result.superiores_resueltos} superior{result.superiores_resueltos !== 1 ? "es" : ""} asignado{result.superiores_resueltos !== 1 ? "s" : ""}
+          </span>
+        )}
       </div>
 
       {con_faltantes.length > 0 && (
@@ -53,6 +59,27 @@ export function NominaResultView({ result }: { result: ImportacionNominaEmpleado
           <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-200" role="list">
             {con_faltantes.map((r, i) => (
               <li key={`f-${r.fila}-${i}`}>Fila {r.fila}: {r.empleado} — cargado, falta {r.faltan.join(", ")}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {result.superiores_pendientes.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
+          <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-amber-800 dark:text-amber-200">
+            <Link2Off className="size-4 shrink-0" />
+            Sin superior asignado
+          </p>
+          {/* Estas filas SÍ se cargaron: lo único que falta es el manager_id. Van en ámbar y
+              aparte de "No cargados" a propósito — leerlas como filas perdidas haría que RRHH
+              vuelva a subir el archivo creyendo que algo falló. */}
+          <p className="mb-1.5 text-sm text-amber-800 dark:text-amber-200">
+            Los empleados quedaron cargados. Podés dar de alta a los superiores que faltan y
+            resolverlos desde el listado, sin volver a subir el archivo.
+          </p>
+          <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-200" role="list">
+            {result.superiores_pendientes.map((s, i) => (
+              <li key={`s-${s.fila}-${i}`}>Fila {s.fila}: {s.empleado} → {s.superior} — {s.motivo}</li>
             ))}
           </ul>
         </div>

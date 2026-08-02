@@ -9,6 +9,11 @@ Reglas de negocio:
     Tipos distintos pueden coexistir en las mismas fechas.
   - Estado derivado: cancelada > planificada (futuro) > tomada (presente o pasado).
   - Saldo: solo el tipo 'vacaciones' descuenta (gozados + pedidos). Los demás tipos son adicionales.
+
+🔴 Para `mandos_medios` la empresa NO restringe: el manager_id la reemplaza (decisión de producto
+2/8/2026). Por eso cada método pasa la empresa por `empresa_efectiva` antes de tocar el repo, y los
+listados van por `alcance_listado`. El porqué —y la invariante de la que depende— en
+`services/_alcance_mandos.py`. No lo repliques en otro módulo sin leerlo.
 """
 from datetime import date
 from typing import Optional
@@ -24,9 +29,9 @@ from schemas.vacaciones import (
 )
 from services._audit_payloads import payload_cancelacion_vacacion
 from services._audit_payloads_vacaciones import payload_update_vacacion
+from services._alcance_mandos import alcance_listado, empresa_efectiva
 from services._empleado_scope import ensure_empleado_visible
 from repositories._scope_filtros import empleados_de_proyecto
-from services._ownership_filter import resolver_empleado_ids
 from services._periodo_utils import verificar_periodo_abierto
 from services._vacaciones_export import construir_filas_export
 from services._vacaciones_saldo import calcular_saldo
@@ -55,8 +60,8 @@ class VacacionesService:
         empieza antes del rango pero lo cruza ENTRA. Se compone por INTERSECCIÓN con el ownership, que ya viajó en empleado_ids."""
         today = date.today()
         proyecto_ids = empleados_de_proyecto(proyecto_id) if proyecto_id else None
-        empleado_ids, vacio = resolver_empleado_ids(user_id, rol, empresa_id, area_id, empleado_id, self._ownership, proyecto_ids)
-        rows, total = ([], 0) if vacio else self._repo.find_all(empresa_id, empleado_ids, page, page_size, estado, today, desde=fecha_desde, hasta=fecha_hasta)
+        empresa, empleado_ids, vacio = alcance_listado(user_id, rol, empresa_id, area_id, empleado_id, self._ownership, proyecto_ids)
+        rows, total = ([], 0) if vacio else self._repo.find_all(empresa, empleado_ids, page, page_size, estado, today, desde=fecha_desde, hasta=fecha_hasta)
         return SolicitudVacacionesListResponse(items=[derive_estado(r, today) for r in rows], total=total)
 
     def exportar(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, estado: Optional[str] = None, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
@@ -69,6 +74,7 @@ class VacacionesService:
     def get_by_empleado(self, empleado_id: UUID, user_id: Optional[str] = None, rol: Optional[str] = None, empresa_id: Optional[UUID] = None) -> SolicitudVacacionesListResponse:
         """Vacaciones (no canceladas) de un empleado, con estado derivado. Gate empresa ∩ ownership:
         un empleado ajeno (otra empresa, o fuera del alcance de un mando) da el MISMO 404 que uno inexistente."""
+        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
         ensure_empleado_visible(self._empleados, self._ownership, empleado_id, empresa_id, user_id, rol)
         today = date.today()
         items = [derive_estado(r, today) for r in self._repo.find_vacaciones_empleado(str(empleado_id), empresa_id)]
@@ -77,6 +83,7 @@ class VacacionesService:
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> SolicitudVacacionesResponse:
         """Detalle de una solicitud. Gate empresa ∩ ownership (empresa en el WHERE del repo, luego
         el rol): una ajena a un mando da el MISMO 404 que una inexistente, igual que cancel."""
+        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
         row = self._repo.find_by_id(str(id), empresa_id)
         if not row or not puede_gestionar_empleado(usuario_id, rol, row.empleado_id, self._ownership):
             raise AppError("Solicitud de vacaciones no encontrada", "VACACION_NOT_FOUND", 404)
@@ -99,6 +106,7 @@ class VacacionesService:
             AppError: VACACION_NOT_FOUND (404) si el ID no existe o no es gestionable por el rol.
             AppError: YA_CANCELADA (422) si ya estaba cancelada.
         """
+        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
         row = self._repo.find_by_id(str(id), empresa_id)
         if not row or not puede_gestionar_empleado(usuario_id, rol, row.empleado_id, self._ownership):
             raise AppError("Solicitud de vacaciones no encontrada", "VACACION_NOT_FOUND", 404)
@@ -115,6 +123,7 @@ class VacacionesService:
         """Edita una solicitud (hoy: período, días liquidados, comentario y tipo). NO toca fechas:
         cambiarlas movería `dias` y el solapamiento, que es otra operación.
         Mismo gate empresa ∩ ownership y mismo 404 único que get_by_id/cancel."""
+        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
         row = self._repo.find_by_id(str(id), empresa_id)
         if not row or not puede_gestionar_empleado(usuario_id, rol, row.empleado_id, self._ownership):
             raise AppError("Solicitud de vacaciones no encontrada", "VACACION_NOT_FOUND", 404)
@@ -131,5 +140,6 @@ class VacacionesService:
     def get_saldo(self, empleado_id: UUID, user_id: Optional[str] = None, rol: Optional[str] = None, empresa_id: Optional[UUID] = None) -> SaldoVacacionesResponse:
         """Saldo anual de vacaciones pagas. Gate empresa ∩ ownership antes de calcular; delegado a
         calcular_saldo (helper). Raises EMPLEADO_NOT_FOUND (404) —mismo 404 para ajeno e inexistente—."""
+        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
         ensure_empleado_visible(self._empleados, self._ownership, empleado_id, empresa_id, user_id, rol)
         return calcular_saldo(self._repo, empleado_id, empresa_id)

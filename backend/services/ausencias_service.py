@@ -10,6 +10,11 @@ Reglas de negocio:
 
 El write path (crear/actualizar/eliminar) vive en services/_ausencias_write.py; el
 service lo delega. Ownership y bloqueo por período son idénticos allá.
+
+🔴 Para `mandos_medios` la empresa NO restringe: el manager_id la reemplaza (decisión de producto
+2/8/2026). Cada método pasa la empresa por `empresa_efectiva` antes de tocar el repo o delegar en
+el write path, y el listado va por `alcance_listado`. El porqué —y la invariante de la que
+depende— en `services/_alcance_mandos.py`. Simétrico con vacaciones, como todo en este módulo.
 """
 from datetime import date
 from typing import Optional
@@ -21,10 +26,10 @@ from repositories.periodo_repo import PeriodoRepo
 from schemas.ausencias import (
     AusenciaCreate, AusenciaListResponse, AusenciaResponse, AusenciaUpdate,
 )
+from services._alcance_mandos import alcance_listado, empresa_efectiva
 from services._ausencias_export import construir_filas_export
 from services._ausencias_write import actualizar, crear, eliminar
 from repositories._scope_filtros import empleados_de_proyecto
-from services._ownership_filter import resolver_empleado_ids
 from services.audit_service import AuditService
 from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
 from services.export import Descarga, build_export
@@ -44,8 +49,8 @@ class AusenciasService:
         fecha_desde/fecha_hasta acotan por SOLAPAMIENTO con el rango (ver repositories/_rango_fechas): una ausencia que
         empieza antes del rango pero lo cruza ENTRA. Se compone por INTERSECCIÓN con el ownership, que ya viajó en empleado_ids."""
         proyecto_ids = empleados_de_proyecto(proyecto_id) if proyecto_id else None
-        empleado_ids, vacio = resolver_empleado_ids(user_id, rol, empresa_id, area_id, empleado_id, self._ownership, proyecto_ids)
-        rows, total = ([], 0) if vacio else self._repo.find_all(empresa_id, empleado_ids, tipo_id, page, page_size, desde=fecha_desde, hasta=fecha_hasta)
+        empresa, empleado_ids, vacio = alcance_listado(user_id, rol, empresa_id, area_id, empleado_id, self._ownership, proyecto_ids)
+        rows, total = ([], 0) if vacio else self._repo.find_all(empresa, empleado_ids, tipo_id, page, page_size, desde=fecha_desde, hasta=fecha_hasta)
         return AusenciaListResponse(items=rows, total=total)
 
     def exportar(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, tipo_id: Optional[UUID] = None, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
@@ -64,6 +69,7 @@ class AusenciasService:
             AppError: AUSENCIA_NOT_FOUND (404) si no existe, no pertenece a la empresa, o el rol
                 no gestiona a ese empleado (mismo 404: no delata la existencia de la solicitud).
         """
+        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
         row = self._repo.find_by_id(str(id), empresa_id)
         if not row or not puede_gestionar_empleado(usuario_id, rol, row.empleado_id, self._ownership):
             raise AppError("Ausencia no encontrada", "AUSENCIA_NOT_FOUND", 404)
@@ -75,8 +81,8 @@ class AusenciasService:
 
     def update(self, id: UUID, data: AusenciaUpdate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> AusenciaResponse:
         """Actualiza una ausencia. Delegado a _ausencias_write.actualizar."""
-        return actualizar(self._repo, self._audit, self._periodos, self._ownership, id, data, empresa_id, usuario_id, rol)
+        return actualizar(self._repo, self._audit, self._periodos, self._ownership, id, data, empresa_efectiva(empresa_id, rol), usuario_id, rol)
 
     def delete(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> None:
         """Elimina una ausencia permanentemente. Delegado a _ausencias_write.eliminar."""
-        eliminar(self._repo, self._audit, self._periodos, self._ownership, id, empresa_id, usuario_id, rol)
+        eliminar(self._repo, self._audit, self._periodos, self._ownership, id, empresa_efectiva(empresa_id, rol), usuario_id, rol)

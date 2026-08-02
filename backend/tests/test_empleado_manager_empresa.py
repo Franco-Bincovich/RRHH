@@ -1,18 +1,29 @@
 """
-Tests de la validación de superior (manager_id) contra la empresa del empleado — fakes, sin red.
+Tests del superior (manager_id) CRUZADO ENTRE EMPRESAS — fakes, sin red.
 
-El WHERE de empresa del UPDATE restringe QUÉ fila se toca, no QUÉ VALOR se escribe: sin
-ensure_manager_valido entra igual un manager_id de otra empresa. Importa más allá del
-organigrama —el ownership de mandos_medios se resuelve por manager_id, así que un superior
-cruzado haría que ids_subordinados atraviese la frontera de empresa—.
+🔴 ESTE ARCHIVO ESTÁ INVERTIDO RESPECTO DE SU VERSIÓN ORIGINAL, A PROPÓSITO.
+Hasta el 2/8/2026 afirmaba lo contrario: que un manager de otra empresa se rechazaba con 404.
+La decisión de producto del 2/8/2026 —UN EMPLEADO PUEDE TENER SUPERIOR DE OTRA EMPRESA DEL
+GRUPO— convierte ese rechazo en el bug. Los tests no se borraron: se MOVIERON a afirmar lo
+contrario, que es lo que deja la aserción con algo que mirar (regla del repo). El porqué de la
+decisión y por qué sigue siendo seguro están en el docstring de `ensure_manager_valido`.
 
-Cubre alta y edición: superior ajeno → 404 MANAGER_NOT_FOUND idéntico al del inexistente (no
-confirma la existencia de empleados de otra empresa), superior propio → ok, null → ok sin
-validar, y que los anti-ciclos intra-empresa siguen detectándose y ahora recorren la cadena
-acotados a la empresa.
+Lo que se sigue exigiendo, y es lo que estos tests cubren:
+  - superior de OTRA empresa → se ACEPTA y se persiste (lo nuevo);
+  - superior INEXISTENTE → sigue dando 404 MANAGER_NOT_FOUND (la validación no se borró, pasó
+    a validar existencia en vez de pertenencia);
+  - null → ok sin consultar nada;
+  - anti-ciclos intra-empresa → siguen detectándose;
+  - 🔴 anti-ciclo CRUZADO A(empresa 1)→B(empresa 2)→A → se detecta. Antes NO: el recorrido iba
+    acotado por empresa, se cortaba en el primer salto de salida y respondía "no hay ciclo".
 
-⚠️ El fake de acá SÍ honra empresa_id en find_by_id — el de test_empleado_service.py la ignora
-(devuelve la misma fila siempre), así que con aquel estos tests pasarían sin validar nada.
+⚠️ EL FAKE HONRA empresa_id EN find_by_id, y es lo único que hace que estos tests puedan fallar.
+Un fake que ignore el parámetro (como el de test_empleado_service.py, que devuelve siempre la
+misma fila) los deja pasar en verde con la validación puesta o sacada — no distingue "busqué
+global" de "busqué en la empresa", que es la única diferencia que este archivo mide.
+Y por eso `empresas_recibidas` se afirma explícitamente: es la prueba de que el lookup viajó
+SIN empresa. Sin esa aserción, el test de aceptación pasaría también con el filtro puesto y un
+fake más permisivo.
 """
 import os
 
@@ -128,22 +139,47 @@ def _error(fn) -> AppError:
 
 # ── PUT /empleados/{id} ───────────────────────────────────────────────────────
 
-def test_update_manager_de_otra_empresa_404_y_no_persiste():
+def test_update_manager_de_otra_empresa_SE_ACEPTA_y_persiste():
+    """🔴 INVERTIDO (2/8/2026). Antes: 404 y no persistía. Ahora el superior cruzado es válido.
+
+    Para que este test pueda fallar hace falta que `ensure_manager_valido` vuelva a pasarle un
+    `empresa_id` a `find_by_id`: el fake devuelve None cuando la empresa no coincide, así que
+    con el filtro puesto MGR_AJENO (empresa B) no se encontraría y volvería el 404.
+    """
+    repo = _Repo()
+    out = _svc(repo).update_empleado(
+        EMPLEADO, EmpleadoUpdate(manager_id=MGR_AJENO), EMPRESA_A, "u1")
+    assert str(out.manager_id) == str(MGR_AJENO)
+    assert repo.actualizado is not None
+
+
+def test_el_lookup_del_superior_viaja_SIN_empresa():
+    """La búsqueda del superior es global. Es la aserción que distingue "acepté porque busqué
+    global" de "acepté porque el fake es permisivo" — sin esto el test de arriba es vacuo."""
+    repo = _Repo()
+    _svc(repo).update_empleado(EMPLEADO, EmpleadoUpdate(manager_id=MGR_AJENO), EMPRESA_A, "u1")
+    # Orden de los find_by_id en update: [0] validación del superior · [1] primer salto del
+    # recorrido de ciclos · [-1] el `prior` que necesita el diff de auditoría.
+    assert len(repo.empresas_recibidas) >= 3, "faltó un lookup: validación o ciclos desaparecieron"
+    assert repo.empresas_recibidas[0] is None, \
+        "el lookup del superior llevó empresa_id: la barrera volvió"
+    assert repo.empresas_recibidas[1] is None, \
+        "el recorrido de ciclos llevó empresa_id: un ciclo cruzado volvería a pasar"
+    # 🔑 Lo que NO se aflojó: el `prior` sigue leyéndose acotado a la empresa del request. Aflojar
+    # el superior no es aflojar la barrera de empresa sobre la fila que se edita.
+    assert repo.empresas_recibidas[-1] == EMPRESA_A
+
+
+def test_update_manager_INEXISTENTE_sigue_dando_404():
+    """La validación no se borró: pasó de validar PERTENENCIA a validar EXISTENCIA.
+
+    Es la mitad del test viejo `..._indistinguible_del_inexistente` que sigue teniendo sujeto:
+    ahora hay un solo motivo de rechazo, así que no queda nada con qué compararlo."""
     repo = _Repo()
     err = _error(lambda: _svc(repo).update_empleado(
-        EMPLEADO, EmpleadoUpdate(manager_id=MGR_AJENO), EMPRESA_A, "u1"))
+        EMPLEADO, EmpleadoUpdate(manager_id=MGR_INEXISTENTE), EMPRESA_A, "u1"))
     assert err.code == "MANAGER_NOT_FOUND" and err.status_code == 404
     assert repo.actualizado is None  # cortó antes de escribir
-
-
-def test_update_manager_ajeno_es_indistinguible_del_inexistente():
-    """No debe confirmar que el superior existe en otra empresa: mismo code, mensaje y status."""
-    ajeno = _error(lambda: _svc(_Repo()).update_empleado(
-        EMPLEADO, EmpleadoUpdate(manager_id=MGR_AJENO), EMPRESA_A, "u1"))
-    inexistente = _error(lambda: _svc(_Repo()).update_empleado(
-        EMPLEADO, EmpleadoUpdate(manager_id=MGR_INEXISTENTE), EMPRESA_A, "u1"))
-    assert (ajeno.code, ajeno.message, ajeno.status_code) == \
-           (inexistente.code, inexistente.message, inexistente.status_code)
 
 
 def test_update_manager_de_la_misma_empresa_ok():
@@ -163,14 +199,17 @@ def test_update_manager_null_no_valida_y_persiste():
     assert len(repo.empresas_recibidas) == 1
 
 
-def test_update_empresa_none_es_consolidado_y_no_restringe():
-    """empresa_id None ('Todas las empresas'): cualquier empleado existente sirve de superior."""
+def test_update_en_consolidado_sigue_funcionando():
+    """empresa_id None ('Todas las empresas') en la fila que se EDITA — otro eje que el superior.
+
+    Ya no prueba nada sobre el manager (cruzado o no, hoy se acepta igual): prueba que el camino
+    consolidado del propio update sigue vivo, que es lo único que quedaba de este caso."""
     repo = _Repo()
     _svc(repo).update_empleado(EMPLEADO, EmpleadoUpdate(manager_id=MGR_AJENO), None, "u1")
     assert repo.actualizado is not None
 
 
-# ── Anti-ciclos: siguen detectándose, ahora acotados a la empresa ─────────────
+# ── Anti-ciclos: siguen detectándose, y ahora TAMBIÉN los que cruzan empresas ─
 
 def test_ciclo_directo_intra_empresa_sigue_rechazado():
     """A→B con B→A ya existente. El manager es válido (misma empresa): lo frena el ciclo, no la empresa."""
@@ -199,31 +238,54 @@ def test_autorreferencia_sigue_rechazada():
     assert err.code == "MANAGER_CICLO" and err.status_code == 400
 
 
-def test_el_recorrido_de_ciclos_va_acotado_a_la_empresa():
-    """La cadena de managers ya no se recorre global: cada salto lleva el empresa_id."""
+def test_ciclo_CRUZADO_entre_empresas_se_detecta():
+    """🔴 EL BUG QUE ESTE COMMIT ARREGLA — invierte `..._va_acotado_a_la_empresa`.
+
+    Cadena: EMPLEADO(A) → MGR_PROPIO(A) → INTERMEDIO(**B**) → EMPLEADO(A). Es un ciclo, y un
+    ciclo entre empresas cuelga `ids_subordinados` exactamente igual que uno interno.
+
+    Antes NO se detectaba: el recorrido consultaba `find_by_id(actual, EMPRESA_A)`, INTERMEDIO
+    es de la empresa B, el fake devolvía None, y la función caía por la rama `nodo is None` →
+    "no hay ciclo" → **pasaba en verde estando roto**. Para que este test vuelva a fallar
+    alcanza con devolverle el `empresa_id` a la línea del `find_by_id` en el recorrido.
+    """
+    repo = _Repo({
+        str(MGR_PROPIO): _resp(MGR_PROPIO, EMPRESA_A, manager_id=INTERMEDIO),
+        str(INTERMEDIO): _resp(INTERMEDIO, EMPRESA_B, manager_id=EMPLEADO),   # ← salto a la B
+    })
+    err = _error(lambda: _svc(repo).update_empleado(
+        EMPLEADO, EmpleadoUpdate(manager_id=MGR_PROPIO), EMPRESA_A, "u1"))
+    assert err.code == "MANAGER_CICLO" and err.status_code == 400
+    assert repo.actualizado is None
+
+
+def test_cadena_cruzada_SIN_ciclo_no_molesta():
+    """El contrapeso del anterior: que el recorrido sea global no puede volver todo un ciclo.
+    EMPLEADO(A) → MGR_PROPIO(A) → INTERMEDIO(B) → (nadie). Cruza empresas y NO es circular."""
     repo = _Repo({str(MGR_PROPIO): _resp(MGR_PROPIO, EMPRESA_A, manager_id=INTERMEDIO),
-                  str(INTERMEDIO): _resp(INTERMEDIO, EMPRESA_A)})
+                  str(INTERMEDIO): _resp(INTERMEDIO, EMPRESA_B)})
     _svc(repo).update_empleado(EMPLEADO, EmpleadoUpdate(manager_id=MGR_PROPIO), EMPRESA_A, "u1")
-    assert repo.empresas_recibidas and all(e == EMPRESA_A for e in repo.empresas_recibidas)
+    assert repo.actualizado is not None
 
 
 # ── POST /empleados ───────────────────────────────────────────────────────────
 
-def test_create_manager_de_otra_empresa_404_y_no_guarda():
+def test_create_manager_de_otra_empresa_SE_ACEPTA_y_guarda():
+    """🔴 INVERTIDO (2/8/2026). Antes: 404 y no guardaba. Simétrico con el de update: la regla
+    es del superior, no del verbo, así que alta y edición tienen que coincidir."""
+    repo = _Repo()
+    _svc(repo).create_empleado(_create(manager_id=MGR_AJENO), "u1", EMPRESA_A)
+    assert repo.guardado is not None
+    assert repo.empresas_recibidas == [None], "el lookup del superior llevó empresa_id"
+
+
+def test_create_manager_INEXISTENTE_sigue_dando_404():
+    """En el alta la validación también sigue viva: cambió de pertenencia a existencia."""
     repo = _Repo()
     err = _error(lambda: _svc(repo).create_empleado(
-        _create(manager_id=MGR_AJENO), "u1", EMPRESA_A))
+        _create(manager_id=MGR_INEXISTENTE), "u1", EMPRESA_A))
     assert err.code == "MANAGER_NOT_FOUND" and err.status_code == 404
     assert repo.guardado is None
-
-
-def test_create_manager_ajeno_es_indistinguible_del_inexistente():
-    ajeno = _error(lambda: _svc(_Repo()).create_empleado(
-        _create(manager_id=MGR_AJENO), "u1", EMPRESA_A))
-    inexistente = _error(lambda: _svc(_Repo()).create_empleado(
-        _create(manager_id=MGR_INEXISTENTE), "u1", EMPRESA_A))
-    assert (ajeno.code, ajeno.message, ajeno.status_code) == \
-           (inexistente.code, inexistente.message, inexistente.status_code)
 
 
 def test_create_manager_de_la_misma_empresa_guarda():

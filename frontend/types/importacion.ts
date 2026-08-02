@@ -25,6 +25,18 @@ export interface FilaNoCargada {
   motivo: string
 }
 
+/**
+ * Fila que SÍ se cargó pero cuyo superior no se pudo asignar. NO es una fila perdida: el
+ * empleado quedó bien, lo único que falta es el `manager_id`. `superior` es el texto crudo del
+ * CSV — es lo que un humano necesita ver para saber a quién apuntaba.
+ */
+export interface SuperiorPendiente {
+  fila: number
+  empleado: string
+  superior: string
+  motivo: string
+}
+
 export interface ImportacionNominaEmpleadosResult {
   total: number
   creados: number       // altas nuevas (DNI no existía)
@@ -32,6 +44,10 @@ export interface ImportacionNominaEmpleadosResult {
   cargados_ok: number   // cargados sin faltantes
   con_faltantes: FilaConFaltantes[]
   no_cargados: FilaNoCargada[]
+  /** Superiores del CSV que se resolvieron a manager_id en la segunda pasada del import. */
+  superiores_resueltos: number
+  /** Los que no: quedan guardados y se pueden resolver después sin re-subir el archivo. */
+  superiores_pendientes: SuperiorPendiente[]
   /**
    * El archivo NO se terminó de procesar: se agotó el presupuesto de tiempo del backend.
    * NO es un error — lo procesado quedó cargado y reintentar con el MISMO archivo continúa
@@ -66,4 +82,32 @@ export interface ImportacionNominaResult {
   importados: number
   actualizados: number
   errores: ConfirmarError[]
+}
+
+// ─── Superiores pendientes de resolver (migración 086) ──────────────────────
+
+/**
+ * Un empleado cuyo superior el import no pudo resolver. `empleado` se resuelve contra la tabla
+ * de empleados al leer (no está duplicado en la fila), así que si lo renombran, esto lo refleja.
+ */
+export interface SuperiorPendienteItem {
+  empleado_id: string
+  empleado: string
+  superior: string
+  motivo: string
+}
+
+export interface SuperioresPendientesListResponse {
+  items: SuperiorPendienteItem[]
+  total: number
+}
+
+/**
+ * Resultado de reintentar. `pendientes` son los que SIGUEN sin resolverse, con el motivo de
+ * AHORA — que puede no ser el del import: dar de alta a un homónimo convierte un "no hay ningún
+ * empleado con ese nombre" en un "hay 2, elegí cuál".
+ */
+export interface ResolucionPendientesResult {
+  resueltos: number
+  pendientes: SuperiorPendienteItem[]
 }

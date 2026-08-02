@@ -16,7 +16,7 @@ from uuid import uuid4
 def payload_importacion_nomina(
     archivo: str, creados: int, actualizados: int, con_faltantes: int, no_cargados: int,
     usuario_id: Optional[str], empleado_ids_creados: Optional[List[str]] = None,
-    parcial: bool = False,
+    parcial: bool = False, superiores_resueltos: int = 0, superiores_pendientes: int = 0,
 ) -> dict:
     """Evento de auditoría de un lote de import de nómina de empleados (UN evento por lote).
     Refleja el resumen: nuevos, actualizados (dedup DNI), con faltantes y no cargados.
@@ -41,10 +41,18 @@ def payload_importacion_nomina(
     El flag va DENTRO de `datos_nuevos` y no como un `evento` distinto (`importacion_nomina_parcial`)
     a propósito: quien filtre por `evento="importacion_nomina"` tiene que ver los dos casos, o un
     corte quedaría invisible en la pantalla de auditoría justo cuando es lo que más importa mirar.
+
+    🔴 Los `superiores_*` viajan EN ESTE MISMO EVENTO y no en uno propio: la resolución de
+    superiores es una segunda pasada DEL MISMO LOTE, no otra operación. Un evento aparte partiría
+    en dos el rastro de un solo import y obligaría a cruzarlos por timestamp para saber qué pasó.
+    Van como CONTEO y no con el detalle de los pendientes: el detalle sale en la respuesta que ve
+    quien importa, y `auditoria` responde "qué se hizo", no "qué falta hacer".
     """
     datos = {
         "archivo": archivo, "creados": creados, "actualizados": actualizados,
         "con_faltantes": con_faltantes, "no_cargados": no_cargados, "parcial": parcial,
+        "superiores_resueltos": superiores_resueltos,
+        "superiores_pendientes": superiores_pendientes,
     }
     if empleado_ids_creados is not None:
         datos["empleado_ids_creados"] = empleado_ids_creados

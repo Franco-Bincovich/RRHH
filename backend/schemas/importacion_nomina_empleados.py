@@ -51,6 +51,20 @@ class FilaNoCargada(BaseModel):
     motivo: str
 
 
+class SuperiorPendiente(BaseModel):
+    """Fila que SÍ se cargó pero cuyo superior no se pudo asignar. NO es un error de la fila.
+
+    El empleado quedó bien creado/actualizado; lo único que falta es el `manager_id`. Se reporta
+    aparte de `no_cargados` justamente para que no se lea como una fila perdida: es un dato
+    incompleto, y el botón "resolver pendientes" existe para completarlo sin re-subir el archivo.
+    `superior` es el texto CRUDO del CSV ("APELLIDO, NOMBRE"), que es lo que un humano necesita
+    ver para decidir a quién apuntaba."""
+    fila: int
+    empleado: str
+    superior: str
+    motivo: str
+
+
 class ImportacionNominaEmpleadosResult(BaseModel):
     """Reporte de un import. `parcial=True` significa que el archivo NO se terminó de procesar.
 
@@ -64,6 +78,11 @@ class ImportacionNominaEmpleadosResult(BaseModel):
     cargados_ok: int      # cargados sin faltantes (nuevos + actualizados)
     con_faltantes: List[FilaConFaltantes]
     no_cargados: List[FilaNoCargada]
+    # Superiores (segunda pasada, ver services/_nomina_superiores). Los defaults dejan el
+    # resultado válido para cualquier caller que no los provea — p. ej. `resultado_headers_invalidos`,
+    # donde no se procesó ninguna fila y por lo tanto no hubo superiores que resolver.
+    superiores_resueltos: int = 0
+    superiores_pendientes: List[SuperiorPendiente] = []
     parcial: bool = False                      # se agotó el presupuesto de tiempo
     ultima_fila_procesada: Optional[int] = None  # nº de fila del CSV (el encabezado es la 1)
     filas_sin_procesar: int = 0                # las que quedaron en el archivo, sin tocar

@@ -727,6 +727,18 @@ CREATE TABLE public.solicitudes_vacaciones (
     dias_liquidados integer NOT NULL DEFAULT 0
 );
 
+-- Superior que el import de nómina leyó del CSV y NO pudo resolver a manager_id. Estado
+-- TRANSITORIO: la fila desaparece cuando el botón "resolver pendientes" la resuelve.
+-- El porqué de que sea una tabla y no dos columnas en empleados: migrations/086.
+CREATE TABLE public.empleado_superior_pendiente (
+    empleado_id uuid NOT NULL,
+    empresa_id uuid NOT NULL,
+    apellido_csv text NOT NULL,
+    nombre_csv text,
+    motivo text NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 -- Días de un período que NO se tomaron (sin fechas: nadie faltó ningún día). Separada de
 -- solicitudes_vacaciones a propósito — ver migrations/083 antes de fusionarlas.
 CREATE TABLE public.vacaciones_pendientes (
@@ -887,6 +899,7 @@ ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_pkey P
 ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_pkey PRIMARY KEY (id);
 ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 ALTER TABLE public.usuario_integraciones ADD CONSTRAINT usuario_integraciones_pkey PRIMARY KEY (id);
+ALTER TABLE public.empleado_superior_pendiente ADD CONSTRAINT empleado_superior_pendiente_pkey PRIMARY KEY (empleado_id);
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_pkey PRIMARY KEY (id);
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_pkey PRIMARY KEY (id);
 ALTER TABLE public.areas ADD CONSTRAINT areas_codigo_key UNIQUE (codigo);
@@ -1177,6 +1190,8 @@ ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_empr
 ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_tipo_id_fkey FOREIGN KEY (tipo_id) REFERENCES tipos_ausencia(id);
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT solicitudes_vacaciones_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT sv_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
+ALTER TABLE public.empleado_superior_pendiente ADD CONSTRAINT empleado_superior_pendiente_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
+ALTER TABLE public.empleado_superior_pendiente ADD CONSTRAINT empleado_superior_pendiente_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
@@ -1332,6 +1347,7 @@ CREATE INDEX idx_sucesion_criticidad ON public.sucesion_posiciones USING btree (
 CREATE INDEX idx_sucesion_posiciones_empresa ON public.sucesion_posiciones USING btree (empresa_id);
 CREATE INDEX idx_sucesion_titular ON public.sucesion_posiciones USING btree (titular_id);
 CREATE INDEX idx_vacantes_area ON public.vacantes USING btree (area_id);
+CREATE INDEX idx_esp_empresa ON public.empleado_superior_pendiente USING btree (empresa_id);
 CREATE INDEX idx_vacantes_empresa ON public.vacantes USING btree (empresa_id);
 CREATE INDEX idx_vacantes_estado ON public.vacantes USING btree (estado);
 CREATE INDEX idx_vacantes_responsable ON public.vacantes USING btree (responsable_id);

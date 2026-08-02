@@ -7,9 +7,16 @@ solicitud de alguien que no gestiona. VACACIONES y AUSENCIAS son las dos únicas
 mandos_medios entra (MANDOS_MEDIOS_SECCIONES), así que acá el eje NO es código muerto — a
 diferencia del resto de los módulos de la Fase 2.
 
-Los dos ejes se COMPONEN y se prueban por separado:
+Los dos ejes se prueban por separado:
   - empresa   → en el WHERE del repo (find_by_id(id, empresa_id)), se aplica primero.
   - ownership → puede_gestionar_empleado sobre el empleado_id de la fila ya cargada.
+
+🔴 DESDE EL 2/8/2026 LOS DOS EJES YA NO SE COMPONEN PARA `mandos_medios`: el manager_id REEMPLAZA
+al filtro de empresa, así que un mando lee la solicitud de su subordinado aunque sea de otra
+empresa del grupo (decisión de producto; el porqué en `services/_alcance_mandos.py`). El eje de
+empresa sigue intacto para admin_rrhh y gerencia_lectura, y los tests de abajo lo verifican con
+esos roles. Para el mando, el ownership pasa a ser la ÚNICA barrera — por eso se agregó
+SOL_AJENA_NO_GESTIONADA: sin ese caso, "soltamos la empresa" y "soltamos todo" se verían igual.
 Se reusa el MISMO mecanismo de las escrituras (services/ownership.py), no uno nuevo: en 1b.2 ya
 se verificó que delega en ids_empleados_visibles, el conjunto que gobierna también las lecturas.
 
@@ -49,14 +56,18 @@ NO_GESTIONADO = UUID("33333333-3333-3333-3333-333333333333")  # misma empresa, f
 
 SOL_SUBORDINADO = UUID("44444444-4444-4444-4444-444444444444")
 SOL_NO_GESTIONADO = UUID("55555555-5555-5555-5555-555555555555")
-SOL_AJENA = UUID("66666666-6666-6666-6666-666666666666")      # empresa B
+SOL_AJENA = UUID("66666666-6666-6666-6666-666666666666")      # empresa B, de SU subordinado
 SOL_INEXISTENTE = UUID("77777777-7777-7777-7777-777777777777")
+# Empresa B Y de alguien que el mando NO gestiona: el control del control. Sin este caso, un
+# "soltamos la empresa" y un "soltamos todo" darían exactamente el mismo verde.
+SOL_AJENA_NO_GESTIONADA = UUID("99999999-9999-9999-9999-999999999999")
 
 # solicitud_id → (empleado_id, empresa_id)
 _SOLICITUDES = {
     str(SOL_SUBORDINADO): (SUBORDINADO, EMPRESA_A),
     str(SOL_NO_GESTIONADO): (NO_GESTIONADO, EMPRESA_A),
     str(SOL_AJENA): (SUBORDINADO, EMPRESA_B),
+    str(SOL_AJENA_NO_GESTIONADA): (NO_GESTIONADO, EMPRESA_B),
 }
 
 
@@ -189,9 +200,37 @@ def test_consolidado_no_restringe(leer):
     assert leer(SOL_AJENA, empresa=None) is not None
 
 
+# ── La excepción de mandos_medios: el manager_id gana sobre la empresa ───────
+
 @pytest.mark.parametrize("leer", _LEER, ids=_IDS)
-def test_empresa_se_evalua_antes_que_ownership(leer):
-    """Una solicitud de otra empresa da 404 aunque el rol SÍ gestione a ese empleado: el filtro
-    de empresa vive en el WHERE del repo, así que la fila ni se carga."""
-    err = _error(lambda: leer(SOL_AJENA, empresa=EMPRESA_A, uid=MANDO_UID, rol="mandos_medios"))
+def test_mando_LEE_la_solicitud_de_su_subordinado_de_OTRA_empresa(leer):
+    """🔴 INVERTIDO (2/8/2026) — antes era `test_empresa_se_evalua_antes_que_ownership`, y
+    afirmaba 404 "aunque el rol SÍ gestione a ese empleado". Ese "aunque" es exactamente el caso
+    que la decisión de producto habilita: si le reporta, es suyo, sea de la empresa que sea.
+
+    SOL_AJENA es de SUBORDINADO (a cargo del mando) pero de EMPRESA_B, y el header dice EMPRESA_A.
+    Para que este test pueda fallar alcanza con que `empresa_efectiva` deje de devolver None para
+    mandos_medios: el fake HONRA empresa_id, así que el `find_by_id` volvería None y saldría 404.
+    """
+    assert leer(SOL_AJENA, empresa=EMPRESA_A, uid=MANDO_UID, rol="mandos_medios") is not None
+
+
+@pytest.mark.parametrize("leer", _LEER, ids=_IDS)
+def test_soltar_la_empresa_NO_es_soltar_el_ownership(leer):
+    """El control del control. Otra empresa Y fuera de su alcance → sigue siendo 404.
+
+    Es el test que distingue "el manager_id reemplaza a la empresa" de "el mando ve todo": sin él,
+    borrar `puede_gestionar_empleado` del service dejaría el archivo entero en verde."""
+    err = _error(lambda: leer(SOL_AJENA_NO_GESTIONADA, empresa=EMPRESA_A,
+                              uid=MANDO_UID, rol="mandos_medios"))
     assert err.status_code == 404
+
+
+@pytest.mark.parametrize("leer", _LEER, ids=_IDS)
+def test_la_excepcion_NO_alcanza_a_admin_ni_a_gerencia(leer):
+    """El eje de empresa sigue rigiendo para los otros dos roles: la excepción es de un rol solo.
+    Mismo dato que el test anterior de mando (SOL_AJENA + EMPRESA_A), distinto rol, distinto
+    resultado — que es la forma de probar que la condición del `if` es el ROL y no otra cosa."""
+    for rol in ("admin_rrhh", "gerencia_lectura"):
+        err = _error(lambda: leer(SOL_AJENA, empresa=EMPRESA_A, uid="u", rol=rol))
+        assert err.status_code == 404

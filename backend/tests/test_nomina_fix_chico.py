@@ -157,13 +157,23 @@ class _Catalogos:
 
 
 class _Noop:
-    """Proyectos y cesiones: fuera del alcance de estos tests (son best-effort y no propagan)."""
+    """Proyectos, cesiones y superiores: fuera del alcance de estos tests.
+
+    Los tres son colaboradores del import que no tocan la clasificación de filas que este
+    archivo mide. `resolver` devuelve `(0, [])` —la forma real del contrato— para que el
+    conteo de round-trips de abajo no vea consultas que no son suyas."""
 
     def resolver_y_asignar(self, *a, **k):
         pass
 
     def crear_si_falta(self, *a, **k):
         pass
+
+    def registrar(self, *a, **k):
+        pass
+
+    def resolver(self, *a, **k):
+        return 0, []
 
 
 def _servicio(existentes=None, monkeypatch=None):
@@ -184,6 +194,7 @@ def _servicio(existentes=None, monkeypatch=None):
     svc._seen_legajo = set()
     svc._proyectos = _Noop()
     svc._cesiones = _Noop()
+    svc._superiores = _Noop()
     return svc, emp_repo, area_repo, audit
 
 

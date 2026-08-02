@@ -41,6 +41,93 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-02 · Superior cruzado entre empresas: el import escribe `manager_id` y el ownership de mandos_medios ignora la empresa · commits pendientes ×6
+
+**Qué cambió:** dos cosas que se habilitan mutuamente. (a) El import de nómina **ya escribe
+`manager_id`**: leía "Apellido Superior"/"Nombre Superior" de las 19 filas y las tiraba
+(`manager_id` estaba 0/19 en producción, y sin ese campo un usuario `mandos_medios` no ve
+absolutamente nada). Ahora las resuelve en una **segunda pasada, después del loop**, porque el
+jefe puede estar en una fila posterior a la de su subordinado. (b) Se cerró la decisión de
+producto de que **un empleado puede tener superior de otra empresa del grupo**: para
+`mandos_medios` el `manager_id` REEMPLAZA al filtro de empresa, en lectura y en escritura.
+Seis commits: (1) división previa del service de import, (2) aflojar la validación de empresa
+del superior + arreglar el chequeo de ciclos, (2b) las dos validaciones de superior a
+`services/_empleados_manager.py` —refactor puro, `_empleados_utils` se había pasado de 150 al
+documentar la excepción—, (3) el ownership cruzado, (4) el import escribiendo `manager_id`,
+(5) migración 086 + botón "resolver pendientes".
+
+### 🔴 ORDEN DE DEPLOY — la migración 086 va PRIMERO
+
+1. **Correr `backend/migrations/086_create_empleado_superior_pendiente.sql`** en producción.
+2. Esperar a que `sofia-backend` deploye y dé 200 en `/health`.
+3. Recién entonces `sofia-front`.
+
+Si el front sale antes, el panel de pendientes de `/empleados` pega a dos endpoints que no
+existen todavía. **No rompe la pantalla** (el panel se traga el error y no se renderiza), pero
+tampoco avisa de nada. Y si el backend sale sin la migración, el import corre igual y escribe los
+`manager_id` —la persistencia de pendientes es best-effort y solo loguea un warning—, pero los
+pendientes se pierden y el botón no tiene qué resolver.
+
+### Migraciones
+
+- **086 `create_empleado_superior_pendiente`** — tabla NUEVA. **No destructiva**, no toca datos
+  existentes, `CREATE TABLE IF NOT EXISTS`. Guarda el nombre crudo del superior que el import no
+  pudo resolver, para poder completarlo después sin re-subir el CSV. PK = `empleado_id`,
+  FK a `empleados` con `ON DELETE CASCADE` y a `empresas`. Un índice por `empresa_id`.
+  🚩 **Es solo hacia adelante:** el import de julio ya corrió sin ella y sus superiores no
+  quedaron registrados. Se recuperan re-subiendo ese CSV, no desde la base.
+- `db/schema.sql` **actualizado** con la tabla, sus 2 FK, su PK y su índice (53 tablas).
+
+### Endpoints nuevos (los dos CON auth, ninguno público)
+
+- `GET  /api/importacion/superiores-pendientes` — gate `IMPORTACION + READ`.
+- `POST /api/importacion/superiores-pendientes/resolver` — gate `IMPORTACION + WRITE`, y **entra
+  en la franja de rate limit `scope="import"` (10/hora compartido con el import de archivos)**.
+  Escribe lo mismo que el import, así que comparte su presupuesto a propósito.
+
+### 🔴 LA INVARIANTE DE LA FASE 2 AHORA TIENE UNA EXCEPCIÓN DOCUMENTADA
+
+Hasta hoy la regla era absoluta: **toda consulta filtra por empresa**. Ya no. Para el rol
+`mandos_medios`, y solo en VACACIONES y AUSENCIAS, el `manager_id` reemplaza ese filtro: sus
+subordinados son suyos sin importar de qué empresa del grupo sean.
+
+La excepción vive **concentrada en `backend/services/_alcance_mandos.py`**, en un módulo propio
+para que se lea como lo que es y no como un patrón a copiar. Ahí está el porqué completo. Tres
+cosas que hay que saber sin leer el código:
+
+- **`_ownership_filter.py` NO se tocó**, ni su contrato de la tupla `(ids, vacio)`. La
+  intersección empresa ∩ ownership nunca ocurrió ahí dentro: ocurre en el WHERE del repo, como dos
+  predicados independientes. Alcanzó con no mandarle el `empresa_id`.
+- **La excepción NO alcanza a `admin_rrhh` ni a `gerencia_lectura`**, ni a ninguna otra sección.
+- ⚠️ **Si algún día se agrega una sección a `MANDOS_MEDIOS_SECCIONES`, hay que revisar si compone
+  ownership.** Los REPORTES **no lo hacen** (cero `ownership` en `services/reportes/`): hoy no es
+  una fuga porque el gate de permisos los frena con 403, pero abrirlos a ese rol devolvería datos
+  org-wide sin filtrar.
+
+### Bug arreglado de paso (no era del cambio, ya estaba)
+
+**Un ciclo de jefaturas que cruzaba empresas no se detectaba.** `ensure_no_ciclo_manager`
+recorría la cadena acotada al `empresa_id` del request: el primer salto fuera de la empresa
+devolvía `None` y la función respondía "no hay ciclo". Un ciclo A(empresa 1) → B(empresa 2) → A
+cuelga `ids_subordinados` igual que uno interno. Ahora el recorrido es global.
+
+### Variables de entorno · dependencias · Storage · auth · dominios
+
+**Ninguno.** No hay variables nuevas, ni dependencias, ni buckets, ni cambios en el token o en
+los claims, ni nada atado a una URL.
+
+### Procesos que no corren en serverless
+
+**Ninguno nuevo**, pero un aviso de costo: la resolución de superiores hace **una lectura
+full-table de `empleados`** (4 columnas, una sola vez por import o por clic del botón). Es
+deliberado y está justificado en `repositories/_empleado_lookup_repo.indice_por_nombre`: el jefe
+puede estar cargado en una empresa que no tiene ni una fila en el CSV que se importa, así que
+acotar la búsqueda por empresa fallaría **en silencio** justo en el caso cruzado. 🚩 **Disparador
+para revisarlo: que el padrón pase de unos pocos miles de empleados** (hoy son 19). La salida
+entonces NO es volver a acotar por empresa, sino un índice normalizado en la base.
+
+---
+
 ## 2026-08-02 · Configuración de reglas de negocio: dos tablas nuevas y el "22" sale de código · commits pendientes ×5
 
 **Qué cambió:** las reglas de vacaciones y ausentismo dejaron de estar hardcodeadas y pasaron a

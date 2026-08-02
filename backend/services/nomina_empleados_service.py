@@ -27,6 +27,8 @@ from services._nomina_catalogos import NominaCatalogos
 from services._nomina_lote import LoteNomina, resultado_headers_invalidos
 from services._nomina_cesiones import NominaCesiones
 from services._nomina_proyectos import NominaProyectos
+from services._nomina_superiores import NominaSuperiores
+from services._nomina_validaciones import validar_y_resolver
 from services.audit_service import AuditService
 from services.empleado_service import EmpleadoService
 from utils.logger import logger
@@ -39,15 +41,13 @@ class NominaEmpleadosImportService:
         self._empleados = EmpleadoService()
         self._emp_repo = EmpleadoRepo()
         self._audit = AuditService()
+        # Dedup INTRA-ARCHIVO (no contra la base). El porqué de los dos sets, en el encabezado
+        # de `_nomina_validaciones`, que es quien los consulta y los llena.
         self._seen_dni: set[tuple] = set()
-        # 🔴 Simétrico con _seen_dni, y por el mismo motivo: `ensure_legajo_unico` valida contra
-        # la BASE, no contra el archivo. Dos filas del mismo CSV con el mismo legajo pasan las
-        # dos (ninguna está en la base todavía) y la segunda revienta en el INSERT con el error
-        # de `empleados_legajo_empresa_key`, que llega al usuario como texto de Postgres en vez
-        # de un motivo legible. Este set lo convierte en un "no cargado" con explicación.
         self._seen_legajo: set[tuple] = set()
         self._proyectos = NominaProyectos()  # proyecto por gerencia + asignación
         self._cesiones = NominaCesiones(usuario_id)  # cesión por Fecha Ingreso Reconocida
+        self._superiores = NominaSuperiores()  # Apellido/Nombre Superior → manager_id (2ª pasada)
 
     def importar(self, contenido: str, archivo: str,
                  presupuesto: Optional[float] = None) -> ImportacionNominaEmpleadosResult:
@@ -73,6 +73,10 @@ class NominaEmpleadosImportService:
                 continue
             lote.registrar_cargada(n, tx.identificador(raw), nuevo, faltan, empleado_id)
 
+        # SEGUNDA PASADA de superiores: con el archivo ya escrito, el orden de las filas deja de
+        # importar. Corre antes del evento de auditoría para que el lote lo reporte completo.
+        sup_ok, sup_pendientes = self._superiores.resolver()
+
         # 🔴 EL EVENTO DE LOTE SE EMITE SIEMPRE, TAMBIÉN EN EL CORTE PARCIAL, y no es un detalle:
         # las altas ya NO emiten evento individual (se consolidaron acá, `auditar=False`), así que
         # este evento es el ÚNICO registro de que alguien importó algo. Si se emitiera solo al
@@ -81,7 +85,8 @@ class NominaEmpleadosImportService:
         # y engañoso: los modificados auditados, los creados invisibles.
         self._audit.registrar(**payload_importacion_nomina(
             archivo, lote.creados, lote.actualizados, len(lote.con_faltantes),
-            len(lote.no_cargados), self._usuario_id, lote.ids_creados, lote.parcial))
+            len(lote.no_cargados), self._usuario_id, lote.ids_creados, lote.parcial,
+            sup_ok, len(sup_pendientes)))
         # El tiempo se loguea SIEMPRE, no solo en el corte: es la única medición de duración de
         # todo el repo, y sin ella el presupuesto se calibra a ojo en vez de con datos reales.
         logger.info("Import nómina empleados", extra={
@@ -89,29 +94,15 @@ class NominaEmpleadosImportService:
             "con_faltantes": len(lote.con_faltantes), "no_cargados": len(lote.no_cargados),
             "segundos": lote.segundos(), "parcial": lote.parcial,
             "filas_sin_procesar": lote.filas_sin_procesar})
-        return lote.resultado()
+        return lote.resultado(sup_ok, sup_pendientes)
 
     def _procesar_fila(self, raw: dict, fila: int) -> tuple[bool, list, str]:
         """Crea o actualiza (dedup DNI) el empleado de una fila.
         Devuelve (es_nuevo, faltantes, empleado_id) — el id nomina el alta en el evento de lote.
         Lanza ValueError con motivo si falta un obligatorio o el DNI está duplicado en el archivo."""
         f = tx.parsear_fila(raw)
-        faltan_oblig = tx.obligatorios_faltantes(f)
-        if faltan_oblig:
-            raise ValueError(f"falta {', '.join(faltan_oblig)}")
-
-        empresa_id = self._catalogos.empresa_id(f["_empresa"])
-        area_id = self._catalogos.area_id(empresa_id, f["_area"])
-        clave = (empresa_id, f["dni"])
-        if clave in self._seen_dni:
-            raise ValueError("DNI duplicado dentro del archivo (fila previa ya procesada)")
-        self._seen_dni.add(clave)
-
-        if f["legajo"]:
-            clave_legajo = (empresa_id, f["legajo"])
-            if clave_legajo in self._seen_legajo:
-                raise ValueError("Legajo duplicado dentro del archivo (fila previa ya procesada)")
-            self._seen_legajo.add(clave_legajo)
+        empresa_id, area_id = validar_y_resolver(
+            f, self._catalogos, self._seen_dni, self._seen_legajo)
 
         email = f["email_corporativo"] if email_valido(f["email_corporativo"]) else None
         faltan = [] if email else ["email"]
@@ -142,4 +133,8 @@ class NominaEmpleadosImportService:
             empresa_id)
         # Fecha Ingreso Reconocida → cesión (idempotente por fecha, best-effort).
         self._cesiones.crear_si_falta(empleado_id, empresa_id, f["fecha_ingreso_reconocida"])
+        # Superior: se ANOTA acá y se resuelve DESPUÉS del loop — el jefe puede estar en una fila
+        # posterior. Anotarlo desde acá es lo que garantiza que solo se resuelvan las filas que
+        # de verdad se escribieron, aun si el presupuesto corta el archivo. Ver `_nomina_superiores`.
+        self._superiores.registrar(fila, empleado_id, empresa_id, f)
         return nuevo, faltan, empleado_id

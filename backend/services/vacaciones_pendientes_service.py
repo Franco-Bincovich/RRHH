@@ -15,9 +15,12 @@ Reglas de negocio:
     de ownership podría cargar días a nombre de un empleado que no es su subordinado. Por eso
     el target se valida con `ensure_empleado_visible` (empresa ∩ ownership) y NO con
     `ensure_empleado_de_empresa`, que alcanza solo para módulos fuera de esa lista.
-  Los listados componen los ejes vía `_ownership_filter.resolver_empleado_ids` — el mismo
-  canal que usan las 13 superficies de vacaciones/ausencias. Un `.eq()` propio que lo esquive
-  no da error: devuelve filas de empleados que ese rol no debería ver.
+  Los listados componen los ejes vía `_alcance_mandos.alcance_listado`, que envuelve al
+  `_ownership_filter.resolver_empleado_ids` de las 13 superficies de vacaciones/ausencias. Un
+  `.eq()` propio que lo esquive no da error: devuelve filas de empleados que ese rol no debería ver.
+  🔴 Y para `mandos_medios` el eje de EMPRESA no restringe —el manager_id lo reemplaza (decisión de
+  producto 2/8/2026)—, por eso toda empresa que llega al repo pasa antes por `empresa_efectiva`.
+  El porqué y la invariante de la que depende, en `services/_alcance_mandos.py`.
 
 🔴 EL BLOQUEO POR PERÍODO CERRADO NO SE APLICA ACÁ, y es deliberado. Cuatro razones:
   1. `verificar_periodo_abierto` compara el RANGO DE FECHAS del registro contra los períodos
@@ -46,8 +49,8 @@ from schemas.vacaciones_pendientes import (
 from services._audit_payloads_vacaciones import (
     payload_alta_pendiente, payload_baja_pendiente, payload_update_pendiente,
 )
+from services._alcance_mandos import alcance_listado, empresa_efectiva
 from services._empleado_scope import ensure_empleado_visible
-from services._ownership_filter import resolver_empleado_ids
 from services.audit_service import AuditService
 from services.ownership import puede_gestionar_empleado
 from utils.errors import AppError
@@ -86,15 +89,16 @@ class VacacionesPendientesService:
         """Página de días pendientes filtrada por empresa/área/empleado/proyecto ∩ ownership.
         `vacio` → devuelve vacío SIN consultar la tabla (fail-closed del contrato de la tupla)."""
         proyecto_ids = empleados_de_proyecto(proyecto_id) if proyecto_id else None
-        empleado_ids, vacio = resolver_empleado_ids(
+        empresa, empleado_ids, vacio = alcance_listado(
             user_id, rol, empresa_id, area_id, empleado_id, self._ownership, proyecto_ids)
-        items, total = ([], 0) if vacio else self._repo.find_all(empresa_id, empleado_ids, page, page_size)
+        items, total = ([], 0) if vacio else self._repo.find_all(empresa, empleado_ids, page, page_size)
         return VacacionPendienteListResponse(items=items, total=total)
 
     def get_by_empleado(self, empleado_id: UUID, user_id: Optional[str] = None,
                         rol: Optional[str] = None, empresa_id: Optional[UUID] = None,
                         ) -> VacacionPendienteListResponse:
         """Días pendientes de un empleado. Gate empresa ∩ ownership sobre el empleado target."""
+        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
         ensure_empleado_visible(self._empleados, self._ownership, empleado_id, empresa_id, user_id, rol)
         items = self._repo.find_by_empleado(str(empleado_id), empresa_id)
         return VacacionPendienteListResponse(items=items, total=len(items))
@@ -103,7 +107,8 @@ class VacacionesPendientesService:
               empresa_id: Optional[UUID] = None) -> VacacionPendienteResponse:
         """Registra días no tomados de un período. La empresa sale del EMPLEADO, no del header."""
         empleado = ensure_empleado_visible(
-            self._empleados, self._ownership, data.empleado_id, empresa_id, created_by, rol)
+            self._empleados, self._ownership, data.empleado_id,
+            empresa_efectiva(empresa_id, rol), created_by, rol)
         if data.dias_liquidados > data.dias:
             raise AppError("Los días liquidados no pueden superar los días pendientes",
                            "DIAS_LIQUIDADOS_INVALIDOS", 422)
@@ -120,6 +125,7 @@ class VacacionesPendientesService:
     def actualizar(self, id: UUID, data: VacacionPendienteUpdate, empresa_id: Optional[UUID] = None,
                    usuario_id: Optional[str] = None, rol: Optional[str] = None) -> VacacionPendienteResponse:
         """Edita el registro (típicamente `dias_liquidados`). Gate empresa ∩ ownership antes de escribir."""
+        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
         prior = self._gestionable(self._repo.find_by_id(str(id), empresa_id), usuario_id, rol)
         patch = data.model_dump(exclude_unset=True, exclude_none=True)
         if patch.get("dias_liquidados", 0) > patch.get("dias", prior.dias):
@@ -132,6 +138,7 @@ class VacacionesPendientesService:
     def eliminar(self, id: UUID, empresa_id: Optional[UUID] = None,
                  usuario_id: Optional[str] = None, rol: Optional[str] = None) -> None:
         """Borra el registro. Audita con el snapshot tomado ANTES del delete."""
+        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
         prior = self._gestionable(self._repo.find_by_id(str(id), empresa_id), usuario_id, rol)
         if not self._repo.delete(str(id), empresa_id):
             self._or_404(None)

@@ -131,11 +131,19 @@ class LoteNomina:
         self.no_cargados.append(FilaNoCargada(fila=fila, empleado=empleado, motivo=motivo))
         self.ultima_fila_procesada = fila
 
-    def resultado(self) -> ImportacionNominaEmpleadosResult:
-        """Proyecta el estado acumulado al schema de respuesta."""
+    def resultado(self, superiores_resueltos: int = 0,
+                  superiores_pendientes: Optional[List] = None) -> ImportacionNominaEmpleadosResult:
+        """Proyecta el estado acumulado al schema de respuesta.
+
+        Los superiores llegan POR PARÁMETRO y no son estado del lote a propósito: se resuelven en
+        una SEGUNDA PASADA, después del loop (ver `_nomina_superiores`), así que el lote —que
+        acumula fila por fila— no los tiene ni los podría tener. Los defaults dejan intacto a
+        cualquier caller que no los pase."""
         return ImportacionNominaEmpleadosResult(
             total=self.total, creados=self.creados, actualizados=self.actualizados,
             cargados_ok=self.cargados_ok, con_faltantes=self.con_faltantes,
             no_cargados=self.no_cargados, parcial=self.parcial,
+            superiores_resueltos=superiores_resueltos,
+            superiores_pendientes=superiores_pendientes or [],
             ultima_fila_procesada=self.ultima_fila_procesada,
             filas_sin_procesar=self.filas_sin_procesar, segundos=self.segundos())

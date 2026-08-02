@@ -13,9 +13,9 @@ from schemas.empleado import EmpleadoCreate, EmpleadoResponse, EmpleadoUpdate
 from services._audit_payloads_rrhh import (
     payload_alta_empleado, payload_baja_empleado, payload_update_empleado,
 )
+from services._empleados_manager import ensure_manager_valido, ensure_no_ciclo_manager
 from services._empleados_utils import (
-    empleado_or_404, ensure_area_valida, ensure_legajo_unico, ensure_manager_valido,
-    ensure_no_ciclo_manager,
+    empleado_or_404, ensure_area_valida, ensure_legajo_unico,
 )
 from utils.errors import AppError
 from utils.logger import logger
@@ -45,13 +45,15 @@ def crear(repo: EmpleadoRepo, audit, areas, data: EmpleadoCreate, created_by: st
         EmpleadoResponse con los datos del empleado creado, incluyendo su ID generado.
 
     Raises:
-        AppError: MANAGER_NOT_FOUND (404) si el superior no es de la misma empresa.
+        AppError: MANAGER_NOT_FOUND (404) si el superior no existe (puede ser de otra empresa).
         AppError: AREA_NOT_FOUND (404) si el área no es de la misma empresa.
     """
     ensure_legajo_unico(repo, data.legajo, empresa_id)
     ensure_area_valida(areas, data.area_id, empresa_id, areas_validadas)
-    # Sin chequeo de ciclos: un empleado que aún no existe no está en la cadena de nadie.
-    ensure_manager_valido(repo, data.manager_id, empresa_id)
+    # Sin chequeo de ciclos: un empleado que aún no existe no está en la cadena de nadie. Vale
+    # también para el import de nómina: los superiores NO se escriben en el alta, sino en una
+    # segunda pasada por `update_empleado` (ver `_nomina_superiores`), que sí los chequea.
+    ensure_manager_valido(repo, data.manager_id)
     empleado = repo.save(data, empresa_id)
     if auditar:
         audit.registrar(**payload_alta_empleado(empleado, created_by, empleado.empresa_id))
@@ -89,14 +91,17 @@ def actualizar(repo: EmpleadoRepo, audit, areas, id: UUID, data: EmpleadoUpdate,
 
     Raises:
         AppError: EMPLEADO_NOT_FOUND (404) si el ID no existe o no pertenece a la empresa.
-        AppError: MANAGER_NOT_FOUND (404) si el superior no es de la misma empresa.
+        AppError: MANAGER_NOT_FOUND (404) si el superior no existe (puede ser de otra empresa).
         AppError: AREA_NOT_FOUND (404) si el área no es de la misma empresa.
     """
     ensure_legajo_unico(repo, data.legajo, empresa_id, str(id))
     # Las tres cortan solas si su campo es None (un update parcial no toca lo que no manda).
     ensure_area_valida(areas, data.area_id, empresa_id, areas_validadas)
-    ensure_manager_valido(repo, data.manager_id, empresa_id)
-    ensure_no_ciclo_manager(repo, id, data.manager_id, empresa_id)
+    # Las dos de manager van SIN empresa_id a propósito: el superior puede ser de otra empresa
+    # del grupo, y el recorrido de ciclos tiene que cruzarla para poder detectarlos. Ver los
+    # docstrings de las dos en `_empleados_utils` antes de "restaurar" la barrera.
+    ensure_manager_valido(repo, data.manager_id)
+    ensure_no_ciclo_manager(repo, id, data.manager_id)
     if prior is None:
         prior = repo.find_by_id(str(id), empresa_id)
     empleado = empleado_or_404(repo.update(str(id), data, empresa_id))

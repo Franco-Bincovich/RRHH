@@ -12,6 +12,7 @@ import { EmpleadosTable } from "@/components/features/empleados/EmpleadosTable"
 import { useFiltrosEmpleados } from "@/components/features/empleados/useFiltrosEmpleados"
 import { EmpleadoModal } from "@/components/features/empleados/EmpleadoModal"
 import { ImportarNominaModal } from "@/components/features/empleados/ImportarNominaModal"
+import { SuperioresPendientesPanel } from "@/components/features/empleados/SuperioresPendientesPanel"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { fetchEmpleados, exportarEmpleados } from "@/services/empleados"
 import { useCanWrite } from "@/hooks/useCanWrite"
@@ -109,6 +110,8 @@ function EmpleadosListado() {
           </div>
         }
       />
+
+      <SuperioresPendientesPanel onResuelto={load} />
 
       <FiltersBar campos={campos} />
 
