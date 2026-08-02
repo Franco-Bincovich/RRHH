@@ -10,6 +10,7 @@ from typing import Optional
 from repositories.integracion_repo import IntegracionRepo
 from schemas.integracion import IntegracionResponse
 from services._google_oauth import construir_url_autorizacion, procesar_callback
+from services._google_scopes import puede_enviar
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -40,6 +41,9 @@ class IntegracionService:
                     email_cuenta=row.get("email_cuenta"),
                     activo=True,
                     connected=True,
+                    # Solo google puede enviar; en las otras dos el scope no significa nada.
+                    puede_enviar=tipo == "google" and puede_enviar(row.get("scopes")),
+                    es_remitente_sistema=bool(row.get("es_remitente_sistema")),
                 ))
             else:
                 result.append(IntegracionResponse(

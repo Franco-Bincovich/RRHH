@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     # En AWS el techo lo pone otra cosa (ALB / Lambda / ECS) → REVISAR este valor en el cutover.
     import_presupuesto_segundos: float = 280.0
 
+    # Presupuesto de tiempo de un envío MASIVO de mails, en segundos. MÁS CHICO que el del
+    # import a propósito: acá cada unidad es una llamada de red externa con su propio timeout,
+    # no una escritura a nuestra base. Al agotarse, el envío para ENTRE MAILS y devuelve el
+    # reporte de lo que salió; la idempotencia del log hace que el reintento no duplique.
+    # Ver services/_lote_mails.py.
+    mail_presupuesto_segundos: float = 120.0
+
     # Supabase
     supabase_url: str
     supabase_anon_key: str
@@ -53,9 +60,10 @@ class Settings(BaseSettings):
     # Anthropic
     anthropic_api_key: str
 
-    # Resend
-    resend_api_key: str
-    resend_from_email: str = "noreply@hrkarstec.com"
+    # (Resend se sacó el 2/8/2026: los mails salen por Gmail, reusando el OAuth que ya existe.
+    # `resend_api_key` era OBLIGATORIA sin default y NINGÚN service la importaba, así que lo
+    # único que podía hacer era tumbar el arranque entero —ni /health respondía— si faltaba en
+    # el entorno. Ver services/mailer/. NO reponerla "por las dudas".)
 
     # Google OAuth
     google_client_id: str = ""

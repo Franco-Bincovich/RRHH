@@ -739,6 +739,39 @@ CREATE TABLE public.empleado_superior_pendiente (
     created_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
+-- Plantillas de mail editables por RRHH (mig 087). empresa_id NULL = global; la lectura
+-- resuelve COALESCE(la de mi empresa, la global). El cuerpo es MARKDOWN, no HTML.
+CREATE TABLE public.plantillas_mail (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    empresa_id uuid,
+    clave text NOT NULL,
+    contexto text NOT NULL,
+    asunto text NOT NULL,
+    cuerpo text NOT NULL,
+    activa boolean NOT NULL DEFAULT true,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+-- Log de mails enviados (mig 087). Guarda el texto YA RENDERIZADO: es lo que reemplaza al
+-- versionado de plantillas. CONTIENE DATOS PERSONALES: gateada y SIN endpoint de export.
+CREATE TABLE public.mail_enviado (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    empresa_id uuid,
+    plantilla_clave text,
+    contexto text,
+    empleado_id uuid,
+    destinatario text NOT NULL,
+    remitente text,
+    asunto_render text NOT NULL,
+    cuerpo_render text NOT NULL,
+    estado text NOT NULL DEFAULT 'enviado',
+    error text,
+    gmail_message_id text,
+    enviado_por uuid,
+    created_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
 -- Días de un período que NO se tomaron (sin fechas: nadie faltó ningún día). Separada de
 -- solicitudes_vacaciones a propósito — ver migrations/083 antes de fusionarlas.
 CREATE TABLE public.vacaciones_pendientes (
@@ -805,7 +838,11 @@ CREATE TABLE public.usuario_integraciones (
     api_key text,
     activo boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    -- Casilla del sistema (mig 087): como máximo UNA en true, lo garantiza un índice único
+    -- parcial. `scopes` = permisos realmente concedidos; NULL = anterior a la columna.
+    es_remitente_sistema boolean NOT NULL DEFAULT false,
+    scopes text[]
 );
 CREATE TABLE public.vacantes (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -900,6 +937,9 @@ ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_pkey PRIMARY KEY
 ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 ALTER TABLE public.usuario_integraciones ADD CONSTRAINT usuario_integraciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.empleado_superior_pendiente ADD CONSTRAINT empleado_superior_pendiente_pkey PRIMARY KEY (empleado_id);
+ALTER TABLE public.plantillas_mail ADD CONSTRAINT plantillas_mail_pkey PRIMARY KEY (id);
+ALTER TABLE public.mail_enviado ADD CONSTRAINT mail_enviado_pkey PRIMARY KEY (id);
+ALTER TABLE public.mail_enviado ADD CONSTRAINT mail_enviado_estado_check CHECK (estado IN ('enviado', 'fallido'));
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_pkey PRIMARY KEY (id);
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_pkey PRIMARY KEY (id);
 ALTER TABLE public.areas ADD CONSTRAINT areas_codigo_key UNIQUE (codigo);
@@ -1192,6 +1232,9 @@ ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT solicitudes_vacaciones_
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT sv_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
 ALTER TABLE public.empleado_superior_pendiente ADD CONSTRAINT empleado_superior_pendiente_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
 ALTER TABLE public.empleado_superior_pendiente ADD CONSTRAINT empleado_superior_pendiente_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
+ALTER TABLE public.plantillas_mail ADD CONSTRAINT plantillas_mail_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
+ALTER TABLE public.mail_enviado ADD CONSTRAINT mail_enviado_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE SET NULL;
+ALTER TABLE public.mail_enviado ADD CONSTRAINT mail_enviado_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE SET NULL;
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
@@ -1348,6 +1391,11 @@ CREATE INDEX idx_sucesion_posiciones_empresa ON public.sucesion_posiciones USING
 CREATE INDEX idx_sucesion_titular ON public.sucesion_posiciones USING btree (titular_id);
 CREATE INDEX idx_vacantes_area ON public.vacantes USING btree (area_id);
 CREATE INDEX idx_esp_empresa ON public.empleado_superior_pendiente USING btree (empresa_id);
+CREATE UNIQUE INDEX uq_integracion_remitente_sistema ON public.usuario_integraciones USING btree ((es_remitente_sistema)) WHERE es_remitente_sistema;
+CREATE UNIQUE INDEX uq_plantilla_empresa_clave ON public.plantillas_mail USING btree (empresa_id, clave) WHERE (empresa_id IS NOT NULL);
+CREATE UNIQUE INDEX uq_plantilla_global_clave ON public.plantillas_mail USING btree (clave) WHERE (empresa_id IS NULL);
+CREATE INDEX idx_mail_enviado_idempotencia ON public.mail_enviado USING btree (plantilla_clave, empleado_id, created_at DESC);
+CREATE INDEX idx_mail_enviado_empresa ON public.mail_enviado USING btree (empresa_id, created_at DESC);
 CREATE INDEX idx_vacantes_empresa ON public.vacantes USING btree (empresa_id);
 CREATE INDEX idx_vacantes_estado ON public.vacantes USING btree (estado);
 CREATE INDEX idx_vacantes_responsable ON public.vacantes USING btree (responsable_id);

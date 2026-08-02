@@ -132,12 +132,10 @@ class TestSettings:
         assert settings.supabase_service_key
         assert settings.jwt_secret
         assert settings.anthropic_api_key
-        assert settings.resend_api_key
 
     def test_defaults_are_valid(self) -> None:
         assert settings.jwt_expiration_minutes > 0
         assert settings.refresh_token_expiration_days > 0
-        assert settings.resend_from_email
         assert settings.allowed_origins
 
     def test_allowed_origins_list_parses(self) -> None:

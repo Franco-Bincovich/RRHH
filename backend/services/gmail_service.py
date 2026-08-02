@@ -1,17 +1,19 @@
-"""Servicio de recepción de emails de candidatos via Gmail API."""
-from datetime import datetime, timezone
+"""Servicio de recepción de emails de candidatos via Gmail API.
 
+El access_token (y su refresh) vive en `services/_google_token.py`: lo comparte con el envío de
+mails, y una segunda copia divergiría. Este archivo queda solo con el caso de uso de
+reclutamiento.
+"""
 import httpx
 
-from config.settings import settings
 from repositories.integracion_repo import IntegracionRepo
 from repositories.vacante_repo import VacanteRepo
 from schemas.vacante import CandidatoCreate, CandidatoResponse, EmailCandidatoResponse
+from services._google_token import access_token_valido
 from utils.errors import AppError
 from utils.logger import logger
 
 _GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
-_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 _CV_KEYWORDS = ("cv", "curriculum", "postulacion", "candidatura", "postulación")
 
 
@@ -39,36 +41,6 @@ class GmailService:
         self._integracion_repo = IntegracionRepo()
         self._vacante_repo = VacanteRepo()
 
-    def _get_access_token(self, user_id: str) -> str:
-        """Obtiene el access_token válido de Google, renovándolo si expiró."""
-        integracion = self._integracion_repo.get_by_user_and_tipo(user_id, "google")
-        if not integracion or not integracion.get("access_token"):
-            raise AppError("Gmail no configurado", "GMAIL_NOT_CONFIGURED", 400)
-        expiry_str = integracion.get("token_expiry")
-        if expiry_str:
-            try:
-                expiry = datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
-                if expiry <= datetime.now(timezone.utc):
-                    refresh = integracion.get("refresh_token")
-                    if not refresh:
-                        raise AppError("Gmail no configurado", "GMAIL_NOT_CONFIGURED", 400)
-                    try:
-                        with httpx.Client(timeout=10.0) as client:
-                            resp = client.post(_GOOGLE_TOKEN_URL, data={
-                                "client_id": settings.google_client_id,
-                                "client_secret": settings.google_client_secret,
-                                "refresh_token": refresh,
-                                "grant_type": "refresh_token",
-                            })
-                            resp.raise_for_status()
-                            return resp.json()["access_token"]
-                    except Exception as exc:
-                        logger.error("Error al renovar token de Google", extra={"error": str(exc)})
-                        raise AppError("No se pudo renovar el token de Google", "GMAIL_TOKEN_EXPIRED", 401)
-            except (ValueError, TypeError):
-                pass
-        return integracion["access_token"]
-
     def get_emails_candidatos(self, vacante_id: str, user_id: str, empresa_id=None) -> list[EmailCandidatoResponse]:
         """
         Obtiene emails de Gmail filtrados por palabras clave de postulación.
@@ -79,7 +51,7 @@ class GmailService:
         """
         if not self._vacante_repo.find_by_id(vacante_id, empresa_id):
             raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
-        access_token = self._get_access_token(user_id)
+        access_token = access_token_valido(self._integracion_repo, user_id)
         headers = {"Authorization": f"Bearer {access_token}"}
         try:
             with httpx.Client(timeout=15.0) as client:
@@ -124,7 +96,7 @@ class GmailService:
         Raises:
             AppError: GMAIL_NOT_CONFIGURED (400) | VACANTE_NOT_FOUND (404) | GMAIL_ERROR (502).
         """
-        access_token = self._get_access_token(user_id)
+        access_token = access_token_valido(self._integracion_repo, user_id)
         if not self._vacante_repo.find_by_id(vacante_id, empresa_id):
             raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
         try:

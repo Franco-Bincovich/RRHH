@@ -19,6 +19,7 @@ from google_auth_oauthlib.flow import Flow
 from config.settings import settings
 from repositories.oauth_state_repo import OAuthStateRepo
 from schemas.integracion import IntegracionResponse
+from services._google_scopes import SCOPES_PEDIDOS
 from services._oauth_state import consumir, generar
 from utils.errors import AppError
 from utils.logger import logger
@@ -27,13 +28,6 @@ _PROVEEDOR = "google"
 
 if settings.app_env == "development":
     os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
-
-_GOOGLE_SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/userinfo.email",
-    "openid",
-]
-
 
 def _google_client_config() -> dict:
     """Construye el dict de configuración OAuth requerido por google-auth-oauthlib."""
@@ -67,7 +61,7 @@ def construir_url_autorizacion(user_id: str, state_repo=None) -> str:
         raise AppError("Google OAuth no está configurado", "GOOGLE_NOT_CONFIGURED", 503)
 
     state = generar(state_repo or OAuthStateRepo(), user_id, _PROVEEDOR)
-    flow = Flow.from_client_config(_google_client_config(), scopes=_GOOGLE_SCOPES)
+    flow = Flow.from_client_config(_google_client_config(), scopes=SCOPES_PEDIDOS)
     flow.redirect_uri = settings.google_redirect_uri
     auth_url, _ = flow.authorization_url(
         access_type="offline",
@@ -103,7 +97,7 @@ def procesar_callback(repo, state, code: str, state_repo=None) -> IntegracionRes
     user_id = consumir(state_repo or OAuthStateRepo(), state, _PROVEEDOR)
     try:
         flow = Flow.from_client_config(
-            _google_client_config(), scopes=_GOOGLE_SCOPES, state=state
+            _google_client_config(), scopes=SCOPES_PEDIDOS, state=state
         )
         flow.redirect_uri = settings.google_redirect_uri
         flow.fetch_token(code=code)
@@ -130,6 +124,10 @@ def procesar_callback(repo, state, code: str, state_repo=None) -> IntegracionRes
         "refresh_token": credentials.refresh_token,
         "token_expiry": expiry.replace(tzinfo=timezone.utc).isoformat() if expiry else None,
         "email_cuenta": email,
+        # Se guardan los scopes REALMENTE concedidos, no los pedidos: el usuario puede destildar
+        # permisos en la pantalla de consentimiento. Sin esto, la única forma de saber si esta
+        # cuenta puede enviar es intentarlo y comerse un 403 en medio de un envío.
+        "scopes": list(credentials.scopes or []),
     }
     repo.save_google_tokens(user_id, tokens)
     logger.info("Google conectado", extra={"user_id": user_id, "email": email})

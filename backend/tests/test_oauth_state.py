@@ -223,6 +223,12 @@ class _FakeCreds:
     token = "access-token"
     refresh_token = "refresh-token"
     expiry = None
+    # Los scopes CONCEDIDOS, que `procesar_callback` persiste desde el 2/8/2026 para poder saber
+    # si la cuenta puede enviar sin tener que intentarlo. Se modelan como una lista PARCIAL —sin
+    # `gmail.send`— a propósito: es el caso real de una cuenta conectada antes del scope de
+    # envío, y deja que este archivo siga probando solo la identidad del state sin afirmar nada
+    # sobre el envío (eso vive en test_google_scopes.py).
+    scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
 
 
 class _FakeFlow:

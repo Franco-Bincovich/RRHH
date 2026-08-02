@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2, KeyRound, Unlink } from "lucide-react"
+import { AlertTriangle, CheckCircle2, KeyRound, Unlink } from "lucide-react"
 
 import { ApiKeyBlock } from "@/components/features/configuracion/ApiKeyBlock"
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
@@ -38,6 +38,22 @@ export function IntegracionesSection() {
         {loading ? (
           <div className="h-9 animate-pulse rounded-md bg-muted" />
         ) : google?.connected ? (
+          <div className="space-y-3">
+            {/* 🔴 El aviso va ACÁ, en la pantalla donde se conecta, y no en el momento del envío.
+                Google no amplía un consentimiento ya otorgado: la cuenta conectada antes del
+                scope de envío lee perfecto y no puede mandar nada. Enterarse por un 403 en medio
+                de un envío es el peor lugar posible — y encima el mensaje de Google no dice qué
+                hacer. Reconectar es un clic (el flujo ya fuerza la pantalla de consentimiento). */}
+            {!google.puede_enviar && (
+              <p className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  Esta cuenta está conectada <strong>solo para lectura</strong>. Para que el
+                  sistema pueda enviar mails, volvé a conectarla: se te va a pedir el permiso de
+                  envío, que antes no existía.
+                </span>
+              </p>
+            )}
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">{google.email_cuenta}</span>
             <Button
@@ -49,6 +65,7 @@ export function IntegracionesSection() {
               <Unlink className="mr-2 size-4" />
               Desconectar
             </Button>
+          </div>
           </div>
         ) : (
           <Button onClick={conectarGoogle} disabled={ocupado.google}>

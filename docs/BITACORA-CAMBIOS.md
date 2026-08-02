@@ -41,6 +41,111 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-02 · Envío de mails por Gmail con plantillas editables · commits pendientes ×6
+
+**Qué cambió:** el sistema pasa a **enviar mails**, cosa que hoy no hace (existía
+`resend_api_key` y ningún service la importaba). Se manda **por Gmail**, reusando el OAuth que ya
+existe, con plantillas que RRHH escribe desde `/configuracion`. Seis commits: (1a) división de
+`gmail_service` (150/150) extrayendo el token a `_google_token.py`, (1b) los **tres bugs del
+refresh** que ya estaban rotos para la lectura, (2) casilla del sistema + scope de envío +
+aviso en la UI, (3) `services/mailer/` como punto único + salida de Resend, (4) migración 087 +
+modelo, (5) catálogo de variables y render, (6) envío con presupuesto y la sección de la UI.
+
+### 🔴 ORDEN DE DEPLOY
+
+1. **Correr `backend/migrations/086_create_empleado_superior_pendiente.sql`** — 🚩 quedó
+   pendiente de la sesión anterior y **va PRIMERO**. Son independientes entre sí, pero el orden
+   numérico es el contrato del directorio.
+2. **Correr `backend/migrations/087_mails_plantillas_y_remitente.sql`.**
+3. Esperar a que `sofia-backend` deploye y dé 200 en `/health`.
+4. Recién entonces `sofia-front`.
+5. **Después del deploy: sacar `RESEND_API_KEY` y `RESEND_FROM_EMAIL` de Vercel** (`sofia-backend`).
+
+⚠️ **El paso 5 va DESPUÉS y no antes.** Mientras el código viejo esté vivo, `resend_api_key` es
+una env var obligatoria sin default: sacarla antes del deploy **tumba la app entera** —ni
+`/health` responde—, porque `Settings()` se instancia en el import de `config.settings`.
+
+### Migraciones
+
+- **087 `mails_plantillas_y_remitente`** — **NO destructiva**. Tres piezas en una sola migración
+  a propósito (mismo cambio funcional; partirla obligaría a coordinar tres pasos de deploy):
+  · `usuario_integraciones` + `es_remitente_sistema` (con **índice único parcial**: garantiza que
+    haya UNA sola casilla) y + `scopes text[]`;
+  · **`plantillas_mail`** — `empresa_id` NULLABLE = plantilla global, con dos índices únicos
+    parciales (en SQL `NULL <> NULL`, un UNIQUE común no impediría dos globales);
+  · **`mail_enviado`** — el log, con el texto ya renderizado.
+- `db/schema.sql` **actualizado**: 2 tablas nuevas (55 en total), 2 columnas, 3 FK, 2 PK, 1 CHECK
+  y 6 índices.
+
+### 🔴 EL SCOPE NUEVO OBLIGA A RECONECTAR — decirlo antes de que alguien intente mandar
+
+Se agrega `https://www.googleapis.com/auth/gmail.send`. **Google NO amplía retroactivamente un
+grant ya otorgado.** La integración que RRHH tiene conectada hoy:
+
+- **sigue funcionando para LEER** (los mails de candidatos): no se rompe nada;
+- **NO va a poder enviar** hasta que la persona reconecte. El primer intento devolvería
+  **403 `ACCESS_TOKEN_SCOPE_INSUFFICIENT`** — no un 401: el token es válido, falta el permiso.
+
+Por eso se persisten los scopes concedidos y **la pantalla de Configuración ya avisa** ("esta
+cuenta está conectada solo para lectura, volvé a conectarla"). Reconectar es un clic: el flujo ya
+fuerza la pantalla de consentimiento (`prompt=consent`), así que devuelve refresh token nuevo.
+
+### 🔴 HAY QUE DESIGNAR UNA CASILLA DEL SISTEMA — sin eso no sale ningún mail
+
+`usuario_integraciones` es por usuario y no tiene `empresa_id`. Sin una casilla designada, el
+mail saldría de la cuenta personal de quien apretó el botón, y **un proceso automático no
+tendría de qué cuenta salir**. El envío corta con `MAIL_SIN_REMITENTE` (400) y un mensaje que
+dice qué hacer; no hay fallback silencioso a "la del usuario logueado", a propósito.
+
+⚠️ **La FK `usuario_integraciones.user_id → users(id)` es `ON DELETE CASCADE`**: si se da de baja
+al usuario que sostiene la casilla, la integración se borra con él y el envío deja de funcionar.
+Hoy eso NO es silencioso (falla al intentar mandar, y la pantalla muestra que no hay casilla),
+pero se entera al MANDAR y no al BORRAR. 🚩 La guarda —bloquear esa baja con un 409— **no se
+implementó**: vive en `usuario_service.eliminar_usuario`, que está en **149/150**, así que exige
+dividirlo primero. Queda propuesta como tanda propia.
+
+### Endpoints nuevos (los 5 CON auth, ninguno público)
+
+- `GET /api/plantillas` · `PUT /api/plantillas` · `DELETE /api/plantillas/{id}` ·
+  `POST /api/plantillas/preview` — gate `Seccion.CONFIGURACION` (preview: **además** lectura de
+  EMPLEADOS, porque lee datos de un empleado real).
+- `POST /api/plantillas/enviar` — gate CONFIGURACION + WRITE y **franja de rate limit propia,
+  `scope="mail"`, 20/hora**: manda correo a nombre de la empresa, no puede correr bajo el
+  baseline de 300/min.
+
+### Variables de entorno
+
+- **SE SACAN: `RESEND_API_KEY` y `RESEND_FROM_EMAIL`** (ver el orden arriba). Un test estructural
+  impide que `resend_api_key` vuelva de un merge distraído.
+- **NUEVA, con default: `MAIL_PRESUPUESTO_SEGUNDOS`** (default **120.0**). Presupuesto de un
+  envío masivo; más chico que el del import (280) porque acá cada unidad es una llamada de red
+  externa. No hace falta declararla, pero conviene.
+- Sin dependencias nuevas: el Markdown→HTML se implementa a mano justamente para **no** sumar una
+  librería de sanitización.
+
+### Procesos que no corren en serverless
+
+**Ninguno nuevo, y es deliberado.** No hay cola ni background job: no existen en este stack (cero
+`BackgroundTasks`, cero `asyncio.create_task` en el backend, y en serverless un thread
+post-respuesta muere con la función). El envío masivo usa **presupuesto de tiempo + reporte
+parcial**, calcado de `LoteNomina`, y la **idempotencia del log** hace que reintentar el mismo
+lote no reenvíe lo que ya salió. El peor caso que eso evita no es "tarda": es mandar 30, morir en
+el timeout de Vercel (`maxDuration: 300`) y que el reintento mande esos 30 de nuevo.
+
+### Datos personales
+
+⚠️ **`mail_enviado` contiene datos personales por definición** (nombre, dirección y el cuerpo
+entero). Se lee gateada por CONFIGURACION y **NO tiene endpoint de export** — el repo ni siquiera
+expone un `find_all` paginado, solo un `ultimos()` con límite duro. Cuando el volumen moleste, la
+salida es una política de retención (borrar el cuerpo a los N meses), no dejar de registrar.
+
+### Buckets de Storage · auth · dominios
+
+**Ninguno.** No hay buckets nuevos, no cambia el modelo de autenticación ni los claims del token,
+y nada queda atado a una URL nueva (el callback OAuth es el que ya existía).
+
+---
+
 ## 2026-08-02 · Superior cruzado entre empresas: el import escribe `manager_id` y el ownership de mandos_medios ignora la empresa · commits pendientes ×6
 
 **Qué cambió:** dos cosas que se habilitan mutuamente. (a) El import de nómina **ya escribe
