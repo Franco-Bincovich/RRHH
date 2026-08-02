@@ -46,10 +46,10 @@ export function useTiposAusencia() {
       }
     })
 
-  const crear = (nombre: string) =>
+  const crear = (nombre: string, padreId?: string) =>
     conBloqueo("nuevo", async () => {
       try {
-        await createTipoAusencia(nombre)
+        await createTipoAusencia(nombre, padreId)
         await load()
         return true
       } catch (e) {

@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._ausencia_row import _build
 from repositories._rango_fechas import aplicar_rango
 from schemas.ausencias import AusenciaResponse
 from utils.errors import AppError
@@ -12,37 +13,8 @@ from utils.logger import logger
 _T, _TA = "solicitudes_ausencia", "tipos_ausencia"
 
 
-def _q(table: str, cols: str, ids: list) -> list:
-    return supabase_admin.table(table).select(cols).in_("id", ids).execute().data or []
-
-
-def _build(rows: List[dict]) -> List[AusenciaResponse]:
-    """Enriquece filas con empresa_nombre, empleado_nombre, area_nombre y tipo_nombre."""
-    if not rows:
-        return []
-    empresa_map = {e["id"]: e["nombre"] for e in _q("empresas", "id, nombre", list({r["empresa_id"] for r in rows}))}
-    emp_data = _q("empleados", "id, nombre, apellido, area_id", list({r["empleado_id"] for r in rows}))
-    emp_map = {e["id"]: {"nombre": f"{e['nombre']} {e['apellido']}", "area_id": e.get("area_id")} for e in emp_data}
-    area_ids = list({e["area_id"] for e in emp_data if e.get("area_id")})
-    area_map = {a["id"]: a["nombre"] for a in (_q("areas", "id, nombre", area_ids) if area_ids else [])}
-    tipo_map = {t["id"]: t["nombre"] for t in _q(_TA, "id, nombre", list({r["tipo_id"] for r in rows}))}
-    result = []
-    for r in rows:
-        emp = emp_map.get(r["empleado_id"]) or {}
-        aid = emp.get("area_id")
-        result.append(AusenciaResponse.model_validate({
-            **r,
-            "empresa_nombre": empresa_map.get(r["empresa_id"]),
-            "empleado_nombre": emp.get("nombre"),
-            "area_id": aid,
-            "area_nombre": area_map.get(aid) if aid else None,
-            "tipo_nombre": tipo_map.get(r["tipo_id"]),
-        }))
-    return result
-
-
 class AusenciasRepo:
-    def find_all(self, empresa_id: Optional[UUID] = None, empleado_ids: Optional[List[str]] = None, tipo_id: Optional[UUID] = None, page: int = 1, page_size: int = 20, *, desde: Optional[date] = None, hasta: Optional[date] = None) -> Tuple[List[AusenciaResponse], int]:
+    def find_all(self, empresa_id: Optional[UUID] = None, empleado_ids: Optional[List[str]] = None, tipo_ids: Optional[List[str]] = None, page: int = 1, page_size: int = 20, *, desde: Optional[date] = None, hasta: Optional[date] = None) -> Tuple[List[AusenciaResponse], int]:
         """Retorna (página filtrada por empresa/empleado_ids/tipo, total real del filtro).
         empleado_ids=None → sin filtro por empleado; la intersección ownership∩área la arma el service.
         desde/hasta → SOLAPAMIENTO con el rango, keyword-only (semántica en _rango_fechas)."""
@@ -51,8 +23,13 @@ class AusenciasRepo:
             q = q.eq("empresa_id", str(empresa_id))
         if empleado_ids is not None:
             q = q.in_("empleado_id", empleado_ids)
-        if tipo_id:
-            q = q.eq("tipo_id", str(tipo_id))
+        if tipo_ids:
+            # 🔴 `.in_()` y NO `.eq()`, desde la migración 088. Las ausencias apuntan a la HOJA,
+            # nunca al padre: filtrar por un tipo padre con un `.eq` devolvería CERO filas, sin
+            # error y sin aviso. La familia (el tipo + sus hijos) la resuelve el service, que es
+            # el mismo punto por el que pasa el export — si se resolviera acá, el export estaría
+            # bien igual, pero cualquier otro caller futuro del repo podría saltearlo.
+            q = q.in_("tipo_id", [str(t) for t in tipo_ids])
         q = aplicar_rango(q, desde, hasta)
         res = q.range((page - 1) * page_size, page * page_size - 1).execute()
         return _build(res.data or []), res.count or 0

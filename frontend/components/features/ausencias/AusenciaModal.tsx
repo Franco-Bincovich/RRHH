@@ -1,23 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { toast } from "sonner"
-
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { crearAusenciaConAdjuntos, updateAusencia } from "@/services/ausencias"
-import { getEmpresaActivaId } from "@/services/empresaStore"
 import { getRol } from "@/services/permisos"
 import { SeleccionEmpleado } from "@/components/features/shared/SeleccionEmpleado"
 import { CamposAusencia } from "./CamposAusencia"
 import { AusenciaAdjuntos } from "./AusenciaAdjuntos"
+import { useAusenciaForm } from "./useAusenciaForm"
 import { useTiposAusencia } from "./useTiposAusencia"
-import {
-  EMPTY_AUSENCIA, toAusenciaCreate, toAusenciaUpdate, validateAusencia,
-  type AusenciaFormData, type AusenciaFormErrors,
-} from "./ausenciasForm"
 import type { Ausencia } from "@/types/ausencias"
 
 interface AusenciaModalProps {
@@ -29,37 +21,11 @@ interface AusenciaModalProps {
 
 export function AusenciaModal({ open, onClose, onSuccess, editing }: AusenciaModalProps) {
   const isMando = getRol() === "mandos_medios"
-  const [form, setForm] = useState<AusenciaFormData>(EMPTY_AUSENCIA)
-  const [errors, setErrors] = useState<AusenciaFormErrors>({})
-  const [submitting, setSubmitting] = useState(false)
-  const [serverError, setServerError] = useState("")
-  const [pendientes, setPendientes] = useState<File[]>([])
+  const { form, setForm, errors, setErrors, submitting, serverError, pendientes, setPendientes,
+          field, submit } = useAusenciaForm(open, editing, isMando)
   const { tipos, nuevoTipo, setNuevoTipo, creandoTipo, crearTipo } = useTiposAusencia(open)
 
   const isEditing = Boolean(editing)
-
-  useEffect(() => {
-    if (!open) return
-    setErrors({})
-    setServerError("")
-    setPendientes([])
-    if (editing) {
-      setForm({
-        empresa_id: editing.empresa_id, empleado_id: editing.empleado_id, tipo_id: editing.tipo_id,
-        fecha_desde: editing.fecha_desde, fecha_hasta: editing.fecha_hasta,
-        justificada: editing.justificada, motivo: editing.motivo ?? "",
-      })
-    } else {
-      setForm({ ...EMPTY_AUSENCIA, empresa_id: isMando ? "" : (getEmpresaActivaId() ?? "") })
-    }
-  }, [open, editing, isMando])
-
-  function field(key: keyof AusenciaFormData) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-      setForm((p) => ({ ...p, [key]: e.target.value }))
-      if (errors[key]) setErrors((p) => ({ ...p, [key]: undefined }))
-    }
-  }
 
   function handleEmpresaChange(empresaId: string) {
     setForm((p) => ({ ...p, empresa_id: empresaId, empleado_id: "" }))
@@ -81,21 +47,9 @@ export function AusenciaModal({ open, onClose, onSuccess, editing }: AusenciaMod
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const errs = validateAusencia(form, !isMando)
-    if (Object.keys(errs).length > 0) { setErrors(errs); return }
-    setSubmitting(true)
-    setServerError("")
-    try {
-      if (isEditing) await updateAusencia(editing!.id, toAusenciaUpdate(form))
-      else { const { fallidos } = await crearAusenciaConAdjuntos(toAusenciaCreate(form), pendientes); if (fallidos > 0) toast.warning(`La ausencia se registró, pero ${fallidos} documento(s) no se pudo adjuntar. Reintentá desde "Documentos" en el listado.`) }
-      onSuccess()
-    } catch (err: unknown) {
-      setServerError(err instanceof Error ? err.message : "Ocurrió un error al guardar")
-    } finally {
-      setSubmitting(false)
-    }
+    void submit(onSuccess)
   }
 
   return (

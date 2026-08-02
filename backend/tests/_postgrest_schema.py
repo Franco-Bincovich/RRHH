@@ -92,6 +92,20 @@ class Schema:
 
         destino = self._destino(tabla, nombre, hint)
         rels = self.entre(tabla, destino)
+        # 🔴 SELF-FK: una tabla que se apunta a sí misma es AMBIGUA con UNA sola FK, no con dos.
+        # `entre(a, a)` devuelve una relación, así que el conteo de abajo no la ve — y PostgREST
+        # igual responde PGRST201, porque esa única FK se puede recorrer en los DOS sentidos
+        # (hacia el padre o hacia los hijos) y no hay forma de saber cuál se pidió.
+        # Se exige desambiguar SOLO cuando el embed apunta por NOMBRE DE TABLA: la forma
+        # `alias:columna_fk(...)` —que es la que ya usa `_empleado_row` con `manager:manager_id`—
+        # nombra la columna y con eso el sentido queda dicho.
+        if hint is None and tabla == destino and nombre == tabla:
+            raise SelectInvalidoError(
+                f"El embed '{nombre}' desde '{tabla}' es AMBIGUO: la tabla se apunta a sí misma "
+                f"y esa FK se recorre en los dos sentidos. PostgREST responde 300 PGRST201. "
+                f"Nombrá la columna ('alias:<columna_fk>(...)') o la constraint "
+                f"('{nombre}!<constraint>(...)')."
+            )
         if hint is None and len(rels) > 1:
             nombres = ", ".join(sorted(r.constraint for r in rels))
             raise SelectInvalidoError(

@@ -13,6 +13,8 @@ from pydantic import BaseModel
 
 class TipoAusenciaCreate(BaseModel):
     nombre: str
+    # None = tipo de primer nivel. Con valor, es un SUBTIPO de ese padre (mig 088).
+    padre_id: Optional[UUID] = None
 
 
 class TipoAusenciaResponse(BaseModel):
@@ -26,6 +28,10 @@ class TipoAusenciaResponse(BaseModel):
     # aun así no computar como ausentismo.
     empresa_id: Optional[str] = None
     cuenta_ausentismo: bool = True
+    # Jerarquía (mig 088). None = tipo de primer nivel. `padre_nombre` viaja resuelto para que
+    # la UI pueda agrupar e indentar sin una segunda vuelta al catálogo.
+    padre_id: Optional[str] = None
+    padre_nombre: Optional[str] = None
 
 
 class TipoAusenciaListResponse(BaseModel):

@@ -23,10 +23,17 @@ export async function fetchTiposAusencia(
   return apiFetch<TipoAusenciaListResponse>(`/api/ausencias/tipos${qs}`)
 }
 
-export async function createTipoAusencia(nombre: string): Promise<TipoAusencia> {
+/**
+ * Crea un tipo. Con `padreId` crea un SUBTIPO (migración 088).
+ *
+ * ⚠️ El backend rechaza colgar un subtipo de otro subtipo (422 TIPO_JERARQUIA_PROFUNDA): la
+ * jerarquía admite dos niveles. La UI ya solo ofrece padres en el selector, así que ese error
+ * no debería verse — es la red por si alguien llama a la API directo.
+ */
+export async function createTipoAusencia(nombre: string, padreId?: string): Promise<TipoAusencia> {
   return apiFetch<TipoAusencia>("/api/ausencias/tipos", {
     method: "POST",
-    body: JSON.stringify({ nombre }),
+    body: JSON.stringify({ nombre, padre_id: padreId ?? null }),
   })
 }
 

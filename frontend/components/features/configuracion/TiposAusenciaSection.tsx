@@ -5,6 +5,7 @@ import { ListChecks, Plus } from "lucide-react"
 
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
 import { TipoAusenciaFila } from "@/components/features/configuracion/TipoAusenciaFila"
+import { candidatosAPadre, ordenarPorJerarquia } from "@/components/features/configuracion/tiposJerarquia"
 import { useTiposAusencia } from "@/components/features/configuracion/useTiposAusencia"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,10 +22,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 export function TiposAusenciaSection({ editable }: { editable: boolean }) {
   const { tipos, loading, ocupado, editar, crear } = useTiposAusencia()
   const [nuevo, setNuevo] = useState("")
+  const [padre, setPadre] = useState("")
 
   const agregar = async () => {
     if (!nuevo.trim()) return
-    if (await crear(nuevo.trim())) setNuevo("")
+    // `padre` vacío = tipo de primer nivel. Con valor, crea un SUBTIPO de ese padre (mig 088).
+    if (await crear(nuevo.trim(), padre || undefined)) { setNuevo(""); setPadre("") }
   }
 
   return (
@@ -39,13 +42,14 @@ export function TiposAusenciaSection({ editable }: { editable: boolean }) {
       ) : (
         <div className="space-y-4">
           <ul className="divide-y text-sm" role="list">
-            {tipos.map((t) => (
+            {ordenarPorJerarquia(tipos).map(({ tipo: t, hijo }) => (
               <TipoAusenciaFila
                 key={t.id}
                 tipo={t}
                 editable={editable}
                 ocupado={Boolean(ocupado[t.id])}
                 onEditar={(cambios) => editar(t.id, cambios)}
+                indentado={hijo}
               />
             ))}
           </ul>
@@ -60,6 +64,19 @@ export function TiposAusenciaSection({ editable }: { editable: boolean }) {
                   onChange={(e) => setNuevo(e.target.value)}
                 />
               </div>
+              {/* El selector ofrece SOLO tipos de primer nivel (`candidatosAPadre`): así la
+                  profundidad 2 se respeta por construcción y el 422 del backend no se ve nunca. */}
+              <select
+                aria-label="Colgar de un tipo (opcional)"
+                value={padre}
+                onChange={(e) => setPadre(e.target.value)}
+                className="h-9 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="">Tipo general</option>
+                {candidatosAPadre(tipos).map((t) => (
+                  <option key={t.id} value={t.id}>Subtipo de {t.nombre}</option>
+                ))}
+              </select>
               <Button onClick={agregar} disabled={Boolean(ocupado.nuevo) || !nuevo.trim()}>
                 <Plus className="mr-2 size-4" />
                 {ocupado.nuevo ? "Agregando…" : "Agregar"}

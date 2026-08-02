@@ -60,7 +60,10 @@ SIN_RESOLVER_DECLARADOS = {
     # Helpers genéricos que reciben tabla y columnas por parámetro. Verificado CALLER POR CALLER
     # que ninguno recibe un embed, solo listas de columnas planas.
     "repositories/asignacion_repo.py": (1, "_q(table, cols, ids): sus 4 callers pasan columnas planas"),
-    "repositories/ausencias_repo.py": (1, "_q(table, cols, ids): sus 4 callers pasan columnas planas"),
+    # `_q` se mudó de ausencias_repo a _ausencia_row al dividirlo (mig 088). La excepción se
+    # MUEVE con el código: dejarla apuntando al archivo viejo la volvía una excepción muerta,
+    # que es justo lo que la segunda mitad de este barrido detecta.
+    "repositories/_ausencia_row.py": (1, "_q(table, cols, ids): sus 4 callers pasan columnas planas"),
     "repositories/empleado_roles_repo.py": (1, "select(campo): UNA columna de la whitelist CAMPOS_AUTOCOMPLETABLES"),
     "repositories/_evaluacion_lotes_enrich.py": (1, "tabla por parámetro, spec literal 'id, nombre' — sin embed"),
     "repositories/dashboard_equipo_repo.py": (1, "tabla por parámetro, spec literal 'id' — sin embed"),

@@ -21,6 +21,7 @@ from typing import Optional
 from uuid import UUID
 
 from repositories.ausencias_repo import AusenciasRepo
+from repositories.tipos_ausencia_repo import TiposAusenciaRepo
 from repositories.empleado_ownership_repo import EmpleadoOwnershipRepo
 from repositories.periodo_repo import PeriodoRepo
 from schemas.ausencias import (
@@ -38,8 +39,9 @@ from utils.errors import AppError
 
 
 class AusenciasService:
-    def __init__(self, repo: Optional[AusenciasRepo] = None, audit: Optional[AuditService] = None, periodo_repo: Optional[PeriodoRepo] = None, ownership_repo: Optional[EmpleadoOwnershipRepo] = None) -> None:
+    def __init__(self, repo: Optional[AusenciasRepo] = None, audit: Optional[AuditService] = None, periodo_repo: Optional[PeriodoRepo] = None, ownership_repo: Optional[EmpleadoOwnershipRepo] = None, tipos_repo: Optional[TiposAusenciaRepo] = None) -> None:
         self._repo = repo or AusenciasRepo()
+        self._tipos = tipos_repo or TiposAusenciaRepo()
         self._audit = audit or AuditService()
         self._periodos = periodo_repo or PeriodoRepo()
         self._ownership = ownership_repo or EmpleadoOwnershipRepo()
@@ -49,8 +51,13 @@ class AusenciasService:
         fecha_desde/fecha_hasta acotan por SOLAPAMIENTO con el rango (ver repositories/_rango_fechas): una ausencia que
         empieza antes del rango pero lo cruza ENTRA. Se compone por INTERSECCIÓN con el ownership, que ya viajó en empleado_ids."""
         proyecto_ids = empleados_de_proyecto(proyecto_id) if proyecto_id else None
+        # 🔴 Filtrar por un tipo PADRE tiene que traer las ausencias de sus hijos. Se resuelve
+        # acá y no en el repo porque este es el punto por el que pasan el listado Y el export
+        # (`exportar` delega en `get_all`): una sola implementación, que es la invariante 1 del
+        # bloque B. Filtrar por un hijo devuelve solo las suyas — un hijo no tiene hijos.
+        tipo_ids = self._tipos.ids_de_familia(str(tipo_id)) if tipo_id else None
         empresa, empleado_ids, vacio = alcance_listado(user_id, rol, empresa_id, area_id, empleado_id, self._ownership, proyecto_ids)
-        rows, total = ([], 0) if vacio else self._repo.find_all(empresa, empleado_ids, tipo_id, page, page_size, desde=fecha_desde, hasta=fecha_hasta)
+        rows, total = ([], 0) if vacio else self._repo.find_all(empresa, empleado_ids, tipo_ids, page, page_size, desde=fecha_desde, hasta=fecha_hasta)
         return AusenciaListResponse(items=rows, total=total)
 
     def exportar(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, tipo_id: Optional[UUID] = None, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None, proyecto_id: Optional[UUID] = None) -> Descarga:

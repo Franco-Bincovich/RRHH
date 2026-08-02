@@ -73,8 +73,14 @@ class _FakeRepo:
     def find_by_id(self, tipo_id):
         return self.filas.get(tipo_id)
 
-    def create(self, nombre, empresa_id=None):
+    def create(self, nombre, empresa_id=None, padre_id=None, cuenta_ausentismo=None):
+        # 🔴 La respuesta se CONSTRUYE con lo recibido, incluido `cuenta_ausentismo`: si
+        # devolviera una constante, el test de que un subtipo se precarga con el valor del padre
+        # estaría afirmando algo sobre el fake y no sobre el service (mig 088).
         nuevo = _tipo(f"nuevo-{nombre}", nombre, empresa_id)
+        nuevo["padre_id"] = str(padre_id) if padre_id else None
+        if cuenta_ausentismo is not None:
+            nuevo["cuenta_ausentismo"] = cuenta_ausentismo
         self.filas[nuevo["id"]] = nuevo
         return TipoAusenciaResponse.model_validate(nuevo)
 

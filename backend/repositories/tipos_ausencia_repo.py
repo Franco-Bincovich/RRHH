@@ -8,11 +8,11 @@ traen SIEMPRE los globales MÁS los de la empresa activa — un tipo global le s
 from typing import Any, Dict, List, Optional
 
 from integrations.supabase_client import supabase_admin
+from repositories._tipo_ausencia_row import SELECT as _COLS, row as _a_response
 from schemas.ausencias import TipoAusenciaResponse
 from utils.errors import AppError
 
 _TA = "tipos_ausencia"
-_COLS = "id, nombre, es_base, activo, empresa_id, cuenta_ausentismo"
 
 
 class TiposAusenciaRepo:
@@ -38,7 +38,7 @@ class TiposAusenciaRepo:
         if not incluir_inactivos:
             q = q.eq("activo", True)
         data = q.order("nombre").execute().data or []
-        return [TipoAusenciaResponse.model_validate(t) for t in data]
+        return [_a_response(t) for t in data]
 
     def find_by_id(self, tipo_id: str) -> Optional[Dict[str, Any]]:
         """Fila cruda del tipo, o None. Cruda y no schema: el service necesita `empresa_id`
@@ -46,13 +46,34 @@ class TiposAusenciaRepo:
         res = supabase_admin.table(_TA).select(_COLS).eq("id", tipo_id).maybe_single().execute()
         return res.data if res and res.data else None
 
-    def create(self, nombre: str, empresa_id: Optional[str] = None) -> TipoAusenciaResponse:
-        """Inserta un tipo nuevo. `empresa_id=None` lo crea global. Lanza AppError si falla."""
-        fila = {"nombre": nombre, "es_base": False, "empresa_id": empresa_id}
+    def ids_de_familia(self, tipo_id: str) -> List[str]:
+        """El tipo MÁS sus hijos. Es lo que el filtro por tipo tiene que pasarle al `.in_()`.
+
+        🔴 SIN ESTO, FILTRAR POR UN PADRE DEVUELVE CERO. Las ausencias apuntan a la hoja, no al
+        padre: un `.eq("tipo_id", padre)` no encuentra ninguna. Filtrar por un HIJO devuelve
+        solo las suyas, porque un hijo no tiene hijos (profundidad 2).
+
+        Una sola query: con profundidad garantizada en 2 no hay recursión que hacer.
+        """
+        hijos = (supabase_admin.table(_TA).select("id")
+                 .eq("padre_id", tipo_id).execute().data or [])
+        return [tipo_id, *[h["id"] for h in hijos]]
+
+    def create(self, nombre: str, empresa_id: Optional[str] = None,
+               padre_id: Optional[str] = None,
+               cuenta_ausentismo: Optional[bool] = None) -> TipoAusenciaResponse:
+        """Inserta un tipo nuevo. `empresa_id=None` lo crea global. Lanza AppError si falla.
+
+        `cuenta_ausentismo` None deja el default de la tabla (True). El service lo pasa con el
+        valor del padre cuando se crea un subtipo — ver `create_tipo`."""
+        fila = {"nombre": nombre, "es_base": False, "empresa_id": empresa_id,
+                "padre_id": padre_id}
+        if cuenta_ausentismo is not None:
+            fila["cuenta_ausentismo"] = cuenta_ausentismo
         res = supabase_admin.table(_TA).insert(fila).execute()
         if not res.data:
             raise AppError("Error al crear el tipo de ausencia", "DB_ERROR", 500)
-        return TipoAusenciaResponse.model_validate(res.data[0])
+        return _a_response(res.data[0])
 
     def update(self, tipo_id: str, cambios: Dict[str, Any]) -> TipoAusenciaResponse:
         """
@@ -64,4 +85,4 @@ class TiposAusenciaRepo:
         res = supabase_admin.table(_TA).update(cambios).eq("id", tipo_id).execute()
         if not res.data:
             raise AppError("Error al actualizar el tipo de ausencia", "DB_ERROR", 500)
-        return TipoAusenciaResponse.model_validate(res.data[0])
+        return _a_response(res.data[0])

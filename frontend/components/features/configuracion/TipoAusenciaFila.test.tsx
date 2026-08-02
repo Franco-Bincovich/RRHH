@@ -18,7 +18,9 @@ import type { TipoAusencia } from "@/types/ausencias"
 function tipo(over: Partial<TipoAusencia> = {}): TipoAusencia {
   return {
     id: "t1", nombre: "Enfermedad", es_base: false, activo: true,
-    empresa_id: null, cuenta_ausentismo: true, ...over,
+    // `padre_id: null` = tipo de primer nivel, que es el caso por defecto (mig 088). Los tests
+    // que prueban un SUBTIPO lo pisan con `over`.
+    empresa_id: null, cuenta_ausentismo: true, padre_id: null, padre_nombre: null, ...over,
   }
 }
 

@@ -7,6 +7,14 @@ export interface TipoAusencia {
   /** Migración 085. null = tipo global, disponible para todas las empresas. */
   empresa_id: string | null
   /**
+   * Migración 088. null = tipo de PRIMER NIVEL; con valor, es un SUBTIPO de ese padre.
+   * La profundidad máxima es 2: un subtipo no puede tener subtipos. Por eso la UI es una lista
+   * indentada y no un árbol.
+   */
+  padre_id: string | null
+  /** Nombre del padre, ya resuelto por el backend para no volver a buscarlo en el catálogo. */
+  padre_nombre: string | null
+  /**
    * Si las ausencias de este tipo entran en la tasa de ausentismo.
    *
    * NO reemplaza a `Ausencia.justificada`: son preguntas distintas. `justificada` es un HECHO

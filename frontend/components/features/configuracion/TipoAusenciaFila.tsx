@@ -14,16 +14,26 @@ import type { TipoAusencia, TipoAusenciaUpdate } from "@/types/ausencias"
  * "Eliminar" prometería algo que no pasa.
  */
 export function TipoAusenciaFila({
-  tipo, editable, ocupado, onEditar,
+  tipo, editable, ocupado, onEditar, indentado = false,
 }: {
   tipo: TipoAusencia
   editable: boolean
   ocupado: boolean
   onEditar: (cambios: TipoAusenciaUpdate) => void
+  /**
+   * Es un SUBTIPO: se indenta debajo de su padre (migración 088).
+   *
+   * 🔴 UN PROP, NO UN COMPONENTE NUEVO NI UN ÁRBOL. La profundidad máxima está garantizada en 2
+   * (la guarda vive en `_tipos_jerarquia`), así que un componente de árbol —expandir, colapsar,
+   * estado por nodo— resolvería un problema que este modelo no tiene. Con 4 padres y una decena
+   * de hijos, todo entra en pantalla sin colapsar nada.
+   */
+  indentado?: boolean
 }) {
   return (
-    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5">
+    <li className={`flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5${indentado ? " pl-6" : ""}`}>
       <span className={`font-medium ${tipo.activo ? "" : "text-muted-foreground line-through"}`}>
+        {indentado && <span aria-hidden className="mr-1.5 text-muted-foreground">└</span>}
         {tipo.nombre}
       </span>
 

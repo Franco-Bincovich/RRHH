@@ -811,7 +811,10 @@ CREATE TABLE public.tipos_ausencia (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
     empresa_id uuid,
-    cuenta_ausentismo boolean NOT NULL DEFAULT true
+    cuenta_ausentismo boolean NOT NULL DEFAULT true,
+    -- Jerarquía de dos niveles (mig 088). NULL = tipo de primer nivel. La profundidad máxima
+    -- (2) la garantiza el service, no un CHECK: un CHECK no puede consultar otra fila.
+    padre_id uuid
 );
 CREATE TABLE public.users (
     id uuid NOT NULL,
@@ -934,6 +937,7 @@ ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_pkey
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT solicitudes_vacaciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_pkey PRIMARY KEY (id);
+ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_padre_no_es_si_mismo CHECK (padre_id IS NULL OR padre_id <> id);
 ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 ALTER TABLE public.usuario_integraciones ADD CONSTRAINT usuario_integraciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.empleado_superior_pendiente ADD CONSTRAINT empleado_superior_pendiente_pkey PRIMARY KEY (empleado_id);
@@ -1228,6 +1232,7 @@ ALTER TABLE public.reportes_generados ADD CONSTRAINT reportes_generados_empresa_
 ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT sa_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
 ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_tipo_id_fkey FOREIGN KEY (tipo_id) REFERENCES tipos_ausencia(id);
+ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_padre_id_fkey FOREIGN KEY (padre_id) REFERENCES tipos_ausencia(id) ON DELETE RESTRICT;
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT solicitudes_vacaciones_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT sv_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
 ALTER TABLE public.empleado_superior_pendiente ADD CONSTRAINT empleado_superior_pendiente_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
@@ -1411,6 +1416,7 @@ CREATE UNIQUE INDEX ux_escala_global ON public.reglas_vacaciones_escala USING bt
 CREATE UNIQUE INDEX ux_tipos_ausencia_nombre_por_empresa ON public.tipos_ausencia USING btree (empresa_id, nombre) WHERE (empresa_id IS NOT NULL);
 CREATE UNIQUE INDEX ux_tipos_ausencia_nombre_global ON public.tipos_ausencia USING btree (nombre) WHERE (empresa_id IS NULL);
 CREATE INDEX idx_tipos_ausencia_empresa ON public.tipos_ausencia USING btree (empresa_id) WHERE (empresa_id IS NOT NULL);
+CREATE INDEX idx_tipos_ausencia_padre ON public.tipos_ausencia USING btree (padre_id) WHERE (padre_id IS NOT NULL);
 
 
 -- ============================================================================

@@ -41,6 +41,78 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-02 · Subtipos de ausencia: jerarquía de dos niveles · commits pendientes ×4
+
+**Qué cambió:** el catálogo de tipos de ausencia pasa a tener **dos niveles**
+("ENFERMEDAD FAMILIAR → Madre/padre", como vienen los archivos reales de RRHH), y el tipo
+**"Injustificada" se desactiva**. Cuatro commits: (1) divisiones previas del front, (2) migración
+088 + las dos guardas del modelo, (3) el filtro por familia, (4) panel de configuración y modal
+de carga.
+
+### 🔴 ORDEN DE DEPLOY
+
+1. **Correr `backend/migrations/088_tipos_ausencia_jerarquia.sql`.**
+2. Esperar a que `sofia-backend` deploye y dé 200 en `/health`.
+3. Recién entonces `sofia-front`.
+
+✅ **Las migraciones 086 y 087 YA ESTÁN CORRIDAS** (verificado contra el catálogo vivo el
+2/8/2026: existen `empleado_superior_pendiente`, `plantillas_mail`, `mail_enviado` y
+`usuario_integraciones.es_remitente_sistema`). **No se acumulan**: la 088 es la única pendiente.
+
+⚠️ Si el front sale antes que el backend, el select de tipos pierde el agrupamiento (los subtipos
+aparecerían planos) y el filtro por un padre devolvería solo sus filas directas. No rompe la
+pantalla, pero da resultados incompletos sin avisar.
+
+### Migraciones
+
+- **088 `tipos_ausencia_jerarquia`** — **NO destructiva**: una columna nullable
+  (`padre_id`, self-FK con `ON DELETE RESTRICT`), un CHECK de autorreferencia, un índice parcial,
+  y una **baja LÓGICA** (`UPDATE ... SET activo = false`) de "Injustificada". No borra ni
+  reescribe ninguna fila.
+- `db/schema.sql` **actualizado**: la columna, la FK, el CHECK y el índice.
+
+### 🔴 POR QUÉ ESTA MIGRACIÓN NO PUEDE ESPERAR
+
+`solicitudes_ausencia` tiene **CERO filas** en producción. Hoy esto es un `ALTER TABLE` y un
+`UPDATE` sobre 4 filas de catálogo. En cuanto RRHH cargue el histórico de ausencias —que está
+esperando la definición del parser de import— el mismo cambio se convierte en una **reasignación
+de `tipo_id` sobre filas vivas**: cada ausencia cargada como "Injustificada" habría que moverla a
+un tipo real adivinando cuál era, un dato que no existiría en ningún lado. La ventana se cierra
+sola y no vuelve a abrirse.
+
+### Qué pasa con "Injustificada" (y por qué se desactiva, no se borra)
+
+Mezclaba dos ejes que el modelo ya separa: la NATURALEZA de la ausencia (`tipo_id`) con su
+CALIFICACIÓN (`justificada`). Y `_reporte_ausentismo` **ya calcula el ausentismo injustificado
+leyendo `justificada`, no el tipo** — o sea que el eje correcto ya estaba en uso y este tipo solo
+podía contradecirlo. Se desactiva porque `solicitudes_ausencia.tipo_id` es una FK **sin
+ON DELETE**: borrarlo fallaría, y si no fallara se llevaría el historial.
+
+🚩 **"Otro" NO se toca todavía.** Es un anti-tipo (existe para que la carga no se trabe y su
+efecto real es que la información se pierde ahí adentro), pero sin el catálogo real cargado
+sacarlo trabaría la carga. **Se desactiva cuando RRHH cargue sus tipos propios.**
+
+### Variables de entorno · dependencias · Storage · endpoints · auth · dominios
+
+**Ninguno.** Sin variables nuevas, sin dependencias, sin buckets, sin endpoints nuevos (los de
+tipos ya existían y solo aceptan un campo más), sin cambios en el token, sin nada atado a una URL.
+
+### Procesos que no corren en serverless
+
+**Ninguno.** El filtro por familia resuelve los hijos en UNA query adicional, solo cuando hay
+filtro de tipo. Con profundidad garantizada en 2 no hay recursión.
+
+### Detalle que le sirve al dev de AWS
+
+**Se cerró un hueco en `tests/_postgrest_schema.py`**: no detectaba que un embed
+**self-referencial** por nombre de tabla es ambiguo. `entre(a, a)` cuenta UNA relación, pero
+PostgREST igual responde **PGRST201** porque esa única FK se recorre en los dos sentidos. Es la
+misma clase de bug que dejó 6 reportes en blanco en producción. Ahora lo atrapa, y el embed de
+producción desambigua por columna (`padre:padre_id`), siguiendo el precedente de
+`_empleado_row.manager:manager_id`.
+
+---
+
 ## 2026-08-02 · Envío de mails por Gmail con plantillas editables · commits pendientes ×6
 
 **Qué cambió:** el sistema pasa a **enviar mails**, cosa que hoy no hace (existía
