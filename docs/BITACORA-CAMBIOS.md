@@ -41,6 +41,86 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-02 · Alertas del dashboard: agregadas, bloqueos de módulo y href propio · commits pendientes ×4
+
+**Qué cambió:** el panel de alertas del dashboard dejó de ser "una línea por empleado sin email"
+y pasó a tener tres familias: **bloqueos de módulo** (una tabla vacía deja un módulo inutilizable),
+**alertas agregadas** de campo vacío con conteo y link al listado filtrado, y las informativas de
+KPIs. Se agregó el filtro `sin_manager` a empleados, que es a donde linkea la alerta agregada.
+Cuatro commits: (1) extracciones previas sin cambio funcional, (2a) divisiones de archivos sobre
+el límite, (2b) el filtro, (3) el mecanismo de alertas.
+
+### 🔴 Cambio de contrato en la respuesta de `GET /api/dashboard`
+
+`AlertaResponse.entidad_id` **se reemplazó por `href`** (ruta ya armada por el backend, o `null`).
+El front convertía SIEMPRE `entidad_id` en `/empleados/{id}`, así que la primera alerta de otro
+tipo con id habría llevado a una ficha de empleado inexistente. El molde de adjuntos
+(`entidad` + `entidad_id`) tampoco servía: una alerta agregada lleva a un **listado filtrado**
+(`/empleados?estado=activo&sin_manager=true`), que no es un par (entidad, id).
+**No hay consumidor externo** — el único cliente es nuestro front, que ya está migrado en el mismo
+lote. Si alguien tenía un script contra ese endpoint, el campo dejó de existir.
+
+### Endpoints tocados
+
+- `GET /api/empleados` y `GET /api/empleados/exportar` aceptan **`sin_manager`** (bool, tri-estado:
+  ausente = sin filtro · `true` = sin superior · `false` = con superior). Va en los DOS por la
+  invariante list↔export; `tests/test_paridad_list_export.py` lo habría exigido solo.
+- No hay endpoints nuevos, ninguno público, ninguno con rate limit distinto.
+
+### Lo que el dashboard consulta ahora (5 conteos más por request)
+
+`_dashboard_alertas.py` agrega un `select("id").limit(1)` por cada tabla de bloqueo
+(`costos_nomina`, `inventario_items`, `capacitaciones`, `presupuesto_areas`, `vacantes`) más un
+`count="exact"` sobre `empleados` por cada campo vigilado. **Las cinco tablas tienen `empresa_id`
+propio (verificado contra el catálogo), así que el filtro va en el WHERE (Forma A)** y ninguna
+necesita resolverse por join. Todo queda dentro del `_safe` por sección que ya existía: si un
+conteo falla, el resto del dashboard se devuelve igual.
+⚠️ Son 6-7 queries livianas más por carga de dashboard. Contra RDS no debería notarse; si el
+dashboard se vuelve un punto caliente, el candidato natural es cachear los bloqueos (cambian de
+estado una vez en la vida del sistema, no por request).
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin env vars, sin dependencias, sin
+Storage, sin procesos de fondo, sin cambios de auth. **La 085 sigue libre.**
+
+### Notas para el que porte a asyncpg
+
+- **Dos repos "nuevos" que en realidad son cortes:** `_empleado_lookup_repo.py` (los tres lookups
+  de una fila, sacados de `empleado_repo.py` que estaba en 98/100) sigue el nombre del molde
+  `migracionAWS/backend/repositories/empleado_lookup_repo_NEW.py` **a propósito**, para que el port
+  aterrice ahí. Dos diferencias con el molde, documentadas en el archivo: acá las dos bajas ya
+  viven en `_empleado_write_repo` y `find_by_id` sí entra al satélite.
+- `find_all` usa **`.not_.is_("manager_id", "null")`** para el complemento. En asyncpg es
+  `manager_id IS NOT NULL` — no traducirlo a `!= NULL`, que en SQL nunca es TRUE.
+- El conteo de la alerta agregada usa **`estado = 'activo'`**, no `<> 'baja'`. No es
+  intercambiable: tiene que ser el MISMO predicado que lleva el `href`, o el número del mensaje
+  deja de coincidir con lo que ve el usuario al hacer clic (ver abajo).
+
+### Lo que encontraron los tests, para que no se repita
+
+1. **La alerta agregada mentía.** Contaba `<> baja` (6) y su href llevaba a un listado sin filtro
+   de estado (7): el usuario leía 6, hacía clic y veía 7. El test que parsea el href y se lo pasa
+   al repo REAL de empleados fue el que lo detectó. Ahora los dos lados llevan `estado = activo`.
+2. **El mutation check sobrevivió a la primera.** Revertir el predicado a `<> baja` pasaba en verde
+   porque el padrón del fake no tenía **ningún empleado en licencia** — la única fila que separa
+   los dos predicados. Con esa fila agregada, la mutación mata 5 tests. Es la pregunta obligatoria
+   de la regla transversal contestada en el archivo.
+3. **`useFiltrosEmpleados.ts` estaba en 89/80 desde antes** y no figuraba en la lista de deuda de
+   `CLAUDE.md`. Ahora quedó en 67, partido en tres (estado · catálogos · campos).
+
+### ⚠️ Anotado, NO resuelto (fuera del alcance de esta sesión)
+
+- **El gate del catálogo de tipos de ausencia es `AUSENCIAS + WRITE`**, así que `mandos_medios`
+  puede crear tipos que son **globales** y afectan a todas las empresas. Con una sola empresa no se
+  nota; se vuelve visible el día que exista la segunda. Debería gatearse por configuración.
+- **`tipos_ausencia_service.create_tipo` disfraza cualquier excepción como `TIPO_DUPLICADO` (422)**:
+  un timeout o un constraint distinto le dicen al usuario "el tipo ya existe".
+- **La nota del "22 días hábiles"** (`_reporte_ausentismo.py:16`) tiene el número **tipeado dentro
+  del string**, no interpolado. El día que el valor salga de configuración, la nota miente.
+- **`CLAUDE.md` dice que las migraciones van por 081 y van por 084** (082/083/084 entraron con los
+  últimos tres commits). Además dice 143 tests de front en 10 archivos: son 159 en 11.
+
+---
+
 ## 2026-07-30 · Embed roto de sucesión + el validador de schema pasa a cubrir los repos · commits pendientes ×2
 
 **Qué cambió:** se arregló el embed que tenía `GET /api/sucesion/planes` en **500** desde meses, y

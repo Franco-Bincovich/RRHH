@@ -10,6 +10,7 @@ from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from schemas.dashboard import AlertaResponse, DashboardResponse, KPIResponse
+from services._dashboard_alertas import generar_alertas
 from services._dashboard_kpis import calcular_extras, calcular_headcount
 from utils.logger import logger
 
@@ -102,27 +103,8 @@ class DashboardService:
         )
 
     def _generar_alertas(self, kpis: KPIResponse, empresa_id: Optional[UUID] = None) -> List[AlertaResponse]:
-        """Alertas a partir de KPIs + una alerta por empleado activo sin email."""
-        alertas: List[AlertaResponse] = []
-        if kpis.vacantes_activas > 0:
-            alertas.append(AlertaResponse(tipo="vacantes", nivel="info",
-                mensaje=f"Hay {kpis.vacantes_activas} vacante(s) activa(s) en proceso de selección"))
-        if kpis.onboardings_activos > 0:
-            alertas.append(AlertaResponse(tipo="onboarding", nivel="info",
-                mensaje=f"Hay {kpis.onboardings_activos} proceso(s) de onboarding en curso"))
-        alertas.extend(self._alertas_sin_email(empresa_id))
-        return alertas
-
-    def _alertas_sin_email(self, empresa_id: Optional[UUID] = None) -> List[AlertaResponse]:
-        """Una alerta (warning) por empleado no-baja con email null; se auto-resuelve al cargarlo."""
-        q = (supabase_admin.table("empleados").select("id, nombre, apellido")
-             .is_("email_corporativo", "null").neq("estado", "baja"))
-        if empresa_id:
-            q = q.eq("empresa_id", str(empresa_id))
-        return [
-            AlertaResponse(
-                tipo="empleado_sin_email", nivel="warning", entidad_id=e["id"],
-                mensaje=f"{e['nombre']} {e['apellido']} no tiene email cargado",
-            )
-            for e in (q.execute().data or [])
-        ]
+        """Alertas del dashboard. Delegado a _dashboard_alertas.generar_alertas.
+        Se conserva como método —y no se llama a la función suelta desde get_dashboard— porque
+        ESTA es la costura: `_safe` la envuelve para el fail-safe por sección, y los tests la
+        parchean por instancia. Mover la implementación no debe mover el punto de corte."""
+        return generar_alertas(kpis, empresa_id)

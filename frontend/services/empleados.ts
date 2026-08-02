@@ -24,18 +24,25 @@ export interface EmpleadosFiltros {
   esLider?: boolean
   /** Empleados asignados a ese proyecto (semántica en el backend, _scope_filtros). */
   proyectoId?: string
+  /**
+   * Tri-estado como `esLider`: `undefined` = sin filtro, `true` = sin superior asignado,
+   * `false` = con superior. Es el destino al que linkea la alerta agregada del dashboard
+   * (`/empleados?sin_manager=true`), así que el nombre del query param es parte del contrato.
+   */
+  sinManager?: boolean
 }
 
 export async function fetchEmpleados(
   opts: EmpleadosFiltros & { page: number; pageSize: number },
 ): Promise<EmpleadoListResponse> {
-  const { page, pageSize, search, estado, empresaId, areaId, esLider, proyectoId } = opts
+  const { page, pageSize, search, estado, empresaId, areaId, esLider, proyectoId, sinManager } = opts
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
   if (search) params.set("search", search)
   if (estado) params.set("estado", estado)
   if (areaId) params.set("area_id", areaId)
   if (esLider !== undefined) params.set("es_lider", String(esLider))
   if (proyectoId) params.set("proyecto_id", proyectoId)
+  if (sinManager !== undefined) params.set("sin_manager", String(sinManager))
   return apiFetch<EmpleadoListResponse>(
     `/api/empleados?${params}`,
     empresaId ? { headers: { "X-Empresa-Id": empresaId } } : {},
@@ -46,7 +53,7 @@ export async function fetchEmpleados(
 export function exportarEmpleados(
   opts: EmpleadosFiltros & { formato: FormatoExport },
 ): Promise<void> {
-  const { formato, search, estado, empresaId, areaId, esLider, proyectoId } = opts
+  const { formato, search, estado, empresaId, areaId, esLider, proyectoId, sinManager } = opts
   const headers = empresaId ? { "X-Empresa-Id": empresaId } : undefined
   return descargarArchivo("/api/empleados/exportar", formato, "empleados", headers, {
     search,
@@ -54,6 +61,7 @@ export function exportarEmpleados(
     area_id: areaId,
     es_lider: esLider === undefined ? undefined : String(esLider),
     proyecto_id: proyectoId,
+    sin_manager: sinManager === undefined ? undefined : String(sinManager),
   })
 }
 

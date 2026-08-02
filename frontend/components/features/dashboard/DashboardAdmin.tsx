@@ -1,14 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
-import { AlertTriangle } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { Badge } from "@/components/ui/badge"
 import { fetchDashboard } from "@/services/dashboard"
 import type { DashboardData, HeadcountArea } from "@/services/dashboard"
-import { buildKpis, NIVEL_LABEL, NIVEL_VARIANT, type KpiCardData } from "./dashboardAdminData"
+import { AlertasPanel } from "./AlertasPanel"
+import { buildKpis, type KpiCardData } from "./dashboardAdminData"
 import { DashboardExtras } from "./DashboardExtras"
 
 function KpiCard({ kpi }: { kpi: KpiCardData }) {
@@ -100,31 +98,7 @@ export function DashboardAdmin() {
             )}
           </section>
 
-          <section className="rounded-xl border bg-card p-4 md:p-6" aria-label="Alertas activas">
-            <h2 className="mb-4 text-base font-semibold text-foreground">Alertas activas</h2>
-            {data.alertas.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin alertas activas.</p>
-            ) : (
-              <ul className="divide-y divide-border" role="list">
-                {data.alertas.map((alerta, i) => (
-                  <li key={i} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    {alerta.entidad_id ? (
-                      <Link
-                        href={`/empleados/${alerta.entidad_id}`}
-                        className="min-w-0 flex-1 text-sm text-foreground hover:underline"
-                      >
-                        {alerta.mensaje}
-                      </Link>
-                    ) : (
-                      <p className="min-w-0 flex-1 text-sm text-foreground">{alerta.mensaje}</p>
-                    )}
-                    <Badge variant={NIVEL_VARIANT[alerta.nivel]} className="shrink-0">{NIVEL_LABEL[alerta.nivel]}</Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <AlertasPanel alertas={data.alertas} />
         </div>
       )}
 

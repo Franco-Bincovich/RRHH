@@ -1,62 +1,50 @@
 /**
- * Estado de los filtros de empleados + carga de opciones (empresas, áreas) + armado del
- * array de FiltroCampo para <FiltersBar>. El search se DEBOUNCEA acá: `debouncedSearch` es
- * lo que la página usa para el fetch, y el reset de página (via `onFiltroChange`) se dispara
- * junto con el commit del debounce — mismo tick, un solo fetch, sin perder el reset.
- * Los demás filtros (empresa/área/estado) resetean página en su onChange inmediato.
+ * Estado de los filtros de empleados: qué eligió el usuario. El search se DEBOUNCEA acá:
+ * `debouncedSearch` es lo que la página usa para el fetch, y el reset de página (via
+ * `onFiltroChange`) se dispara junto con el commit del debounce — mismo tick, un solo fetch,
+ * sin perder el reset. Los demás filtros resetean página en su onChange inmediato.
+ *
+ * Las otras dos mitades viven aparte, y por el mismo motivo: eran lo que hacía crecer este
+ * archivo con cada filtro nuevo, y ya lo tenían sobre el límite de 80.
+ *   · _catalogosEmpleados.ts — carga de empresas/áreas/proyectos que llenan los selects.
+ *   · _camposEmpleados.ts    — la descripción de los controles para <FiltersBar>.
+ *
+ * 🔴 `sin_manager` se SIEMBRA desde la querystring: es el destino de la alerta agregada del
+ * dashboard, y sin la siembra el link aterrizaría en el listado completo — que es justo lo que
+ * la alerta viene a evitar. `useSearchParams` obliga a una barrera de Suspense arriba; el
+ * porqué está en la página (sin ella `next build` falla, y en dev no se nota).
  */
 import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 
-import { etiquetaArea } from "@/components/features/shared/filtros"
-import type { FiltroCampo } from "@/components/ui/FiltersBar"
-import { fetchAreas } from "@/services/areas"
-import { fetchEmpresas } from "@/services/empresas"
-import { fetchProyectos } from "@/services/proyectos"
-import type { Proyecto } from "@/types/proyecto"
-import { getEmpresaActivaId } from "@/services/empresaStore"
-import type { Area } from "@/types/area"
-import type { Empresa } from "@/types/empresa"
+import { useCatalogosEmpleados } from "./_catalogosEmpleados"
+import { construirCampos } from "./_camposEmpleados"
 
-const LIDER_OPCIONES = [
-  { value: "si", label: "Solo líderes" },
-  { value: "no", label: "Solo no líderes" },
-]
-
-const ESTADO_OPCIONES = [
-  { value: "activo", label: "Activo" },
-  { value: "baja", label: "Baja" },
-  { value: "licencia", label: "Licencia" },
-]
+/** "true"/"false" del query param → el "si"/"no"/"" que usa el select. Todo lo demás, "". */
+function semilla(valor: string | null): string {
+  return valor === "true" ? "si" : valor === "false" ? "no" : ""
+}
 
 export function useFiltrosEmpleados(onFiltroChange: () => void) {
-  const [empresaActivaId, setEmpresaActivaId] = useState<string | null>(null)
+  const searchParams = useSearchParams()
   const [proyectoFiltro, setProyectoFiltro] = useState("")
-  const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [empresaFiltro, setEmpresaFiltro] = useState("")
-  const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [areaFiltro, setAreaFiltro] = useState("")
-  const [areas, setAreas] = useState<Area[]>([])
-  const [estadoFiltro, setEstadoFiltro] = useState("")
+  // `estado` también se siembra: el href de la alerta agregada lleva estado=activo&sin_manager=true
+  // y los DOS filtros tienen que aterrizar puestos. Con solo `sin_manager` la pantalla mostraría
+  // más filas que las que anuncia la alerta — que es justo el desajuste que la alerta evita.
+  const [estadoFiltro, setEstadoFiltro] = useState(() => searchParams.get("estado") ?? "")
   // "" = sin filtro · "si"/"no" → true/false. Se guarda como texto porque el control es un
   // select; la traducción a booleano se hace una sola vez, abajo, al armar `esLider`.
   const [liderFiltro, setLiderFiltro] = useState("")
+  // Mismo tri-estado que liderFiltro. El inicializador de useState corre una sola vez: la
+  // querystring siembra el valor de arranque y a partir de ahí manda el select, así que
+  // cambiar el filtro a mano NO queda peleando contra la URL.
+  const [sinManagerFiltro, setSinManagerFiltro] = useState(() => semilla(searchParams.get("sin_manager")))
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
 
-  useEffect(() => {
-    const id = getEmpresaActivaId()
-    setEmpresaActivaId(id)
-    if (!id) fetchEmpresas().then((r) => setEmpresas(r.items.filter((e) => e.activa))).catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    const empId = empresaActivaId || empresaFiltro || undefined
-    fetchAreas(empId).then(setAreas).catch(() => setAreas([]))
-    // El selector no necesita etiquetaProyecto: hoy no hay nombres de proyecto repetidos
-    // entre empresas. Si algún día los hay, reusar el patrón de shared/filtros.ts.
-    fetchProyectos({ empresaIdOverride: empId })
-      .then((r) => setProyectos(r.items)).catch(() => setProyectos([]))
-  }, [empresaActivaId, empresaFiltro])
+  const { empresaActivaId, empresas, areas, proyectos } = useCatalogosEmpleados(empresaFiltro)
 
   // Debounce del search: commitea el valor y resetea la página en el mismo tick (un solo fetch).
   useEffect(() => {
@@ -64,26 +52,16 @@ export function useFiltrosEmpleados(onFiltroChange: () => void) {
     return () => clearTimeout(t)
   }, [search])  // eslint-disable-line react-hooks/exhaustive-deps
 
-
-  const campos: FiltroCampo[] = [
-    { tipo: "search" as const, label: "Buscar", value: search, placeholder: "Buscar por nombre...", onChange: setSearch },
-    ...(!empresaActivaId && empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: empresaFiltro, opcionTodos: "Todas las empresas",
-      onChange: (v: string) => { setEmpresaFiltro(v); setAreaFiltro(""); onFiltroChange() },
-      opciones: empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
-    ...(areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: areaFiltro, opcionTodos: "Todas las áreas",
-      onChange: (v: string) => { setAreaFiltro(v); onFiltroChange() },
-      opciones: areas.map((a) => ({ value: a.id, label: etiquetaArea(a, empresas, Boolean(empresaActivaId || empresaFiltro)) })) }] : []),
-    { tipo: "select" as const, label: "Estado", value: estadoFiltro, opcionTodos: "Todos los estados",
-      onChange: (v: string) => { setEstadoFiltro(v); onFiltroChange() }, opciones: ESTADO_OPCIONES },
-    { tipo: "select" as const, label: "Liderazgo", value: liderFiltro, opcionTodos: "Todos",
-      onChange: (v: string) => { setLiderFiltro(v); onFiltroChange() }, opciones: LIDER_OPCIONES },
-    ...(proyectos.length > 0 ? [{ tipo: "select" as const, label: "Proyecto", value: proyectoFiltro, opcionTodos: "Todos los proyectos",
-      onChange: (v: string) => { setProyectoFiltro(v); onFiltroChange() },
-      opciones: proyectos.map((p) => ({ value: p.id, label: p.nombre })) }] : []),
-  ]
+  const campos = construirCampos({
+    search, setSearch, empresaActivaId, empresas, empresaFiltro, setEmpresaFiltro,
+    areas, areaFiltro, setAreaFiltro, estadoFiltro, setEstadoFiltro,
+    liderFiltro, setLiderFiltro, sinManagerFiltro, setSinManagerFiltro,
+    proyectos, proyectoFiltro, setProyectoFiltro, onFiltroChange,
+  })
 
   const empresaOverride = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
   // `false` es un filtro válido (solo no-líderes), así que no se puede colapsar con `|| undefined`.
   const esLider = liderFiltro === "" ? undefined : liderFiltro === "si"
-  return { empresaActivaId, empresaOverride, areaFiltro, estadoFiltro, esLider, proyectoId: proyectoFiltro || undefined, debouncedSearch, campos }
+  const sinManager = sinManagerFiltro === "" ? undefined : sinManagerFiltro === "si"
+  return { empresaActivaId, empresaOverride, areaFiltro, estadoFiltro, esLider, sinManager, proyectoId: proyectoFiltro || undefined, debouncedSearch, campos }
 }

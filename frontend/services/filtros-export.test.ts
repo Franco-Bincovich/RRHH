@@ -220,6 +220,37 @@ describe("empleados — es_lider es un booleano de tres estados", () => {
   })
 })
 
+describe("empleados — sin_manager, el destino de la alerta agregada del dashboard", () => {
+  // Mismo tri-estado que es_lider, y el mismo modo de falla si alguien lo normalizara con
+  // `|| undefined`: "Con superior asignado" devolvería la lista entera.
+  // El nombre del param es parte del contrato: la alerta linkea a /empleados?sin_manager=true,
+  // y el hook de filtros siembra el select desde esa misma clave.
+  it("true se manda como 'true'", async () => {
+    await fetchEmpleados({ page: 1, pageSize: 20, sinManager: true })
+    expect(queryListado().get("sin_manager")).toBe("true")
+  })
+
+  it("false se manda como 'false', no se descarta", async () => {
+    await fetchEmpleados({ page: 1, pageSize: 20, sinManager: false })
+    expect(queryListado().get("sin_manager")).toBe("false")
+  })
+
+  it("undefined no manda el param", async () => {
+    await fetchEmpleados({ page: 1, pageSize: 20 })
+    expect(queryListado().has("sin_manager")).toBe(false)
+  })
+
+  it("el listado y el export traducen el mismo objeto a los mismos params", async () => {
+    const filtros = { sinManager: true, estado: "activo", areaId: "area-1" }
+    await fetchEmpleados({ page: 1, pageSize: 20, ...filtros })
+    await exportarEmpleados({ formato: "excel", ...filtros })
+    // page/page_size quedan fuera a propósito: el export NO se pagina (es la excepción
+    // declarada del invariante, la misma que exceptúa tests/test_paridad_list_export.py).
+    const { page: _p, page_size: _ps, ...listadoSinPaginado } = listadoComoObjeto()
+    expect(queryExport()).toEqual(listadoSinPaginado)
+  })
+})
+
 describe("inventario — asignaciones con área", () => {
   const filtros = { empresaIdOverride: "emp-2", empleadoId: "empleado-4", areaId: "area-7" }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { Suspense, useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Upload } from "lucide-react"
 
@@ -19,7 +19,21 @@ import type { Empleado, EmpleadoListResponse } from "@/types/empleado"
 
 const PAGE_SIZE = 20
 
+/**
+ * useFiltrosEmpleados llama a `useSearchParams` (siembra el filtro `sin_manager`, al que
+ * linkea la alerta del dashboard), y eso EXIGE una barrera de Suspense: sin ella `next build`
+ * falla con "Missing Suspense boundary with useSearchParams". En dev no se nota porque las
+ * rutas se renderizan on-demand — es exactamente el caso de tsc/build verde vs. dev feliz.
+ */
 export default function EmpleadosPage() {
+  return (
+    <Suspense fallback={<PageHeader title="Empleados" description="Cargando..." />}>
+      <EmpleadosListado />
+    </Suspense>
+  )
+}
+
+function EmpleadosListado() {
   const router = useRouter()
   const canWrite = useCanWrite()
 
@@ -30,7 +44,7 @@ export default function EmpleadosPage() {
   const [newOpen, setNewOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
-  const { empresaActivaId, empresaOverride, areaFiltro, estadoFiltro, esLider, proyectoId, debouncedSearch, campos } =
+  const { empresaActivaId, empresaOverride, areaFiltro, estadoFiltro, esLider, sinManager, proyectoId, debouncedSearch, campos } =
     useFiltrosEmpleados(() => setPage(1))
 
   const load = useCallback(async () => {
@@ -45,6 +59,7 @@ export default function EmpleadosPage() {
         empresaId: empresaOverride,
         areaId: areaFiltro || undefined,
         esLider,
+        sinManager,
         proyectoId,
       })
       setData(result)
@@ -53,7 +68,7 @@ export default function EmpleadosPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, debouncedSearch, estadoFiltro, areaFiltro, empresaOverride, esLider, proyectoId])
+  }, [page, debouncedSearch, estadoFiltro, areaFiltro, empresaOverride, esLider, sinManager, proyectoId])
 
   useEffect(() => { load() }, [load])
 
@@ -75,6 +90,7 @@ export default function EmpleadosPage() {
                 empresaId: empresaOverride,
                 areaId: areaFiltro || undefined,
                 esLider,
+                sinManager,
                 proyectoId,
               })} />
             )}

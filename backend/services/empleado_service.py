@@ -57,6 +57,7 @@ class EmpleadoService:
         search: Optional[str] = None,
         es_lider: Optional[bool] = None,
         proyecto_id: Optional[UUID] = None,
+        sin_manager: Optional[bool] = None,
     ) -> EmpleadoListResponse:
         """
         Retorna la lista paginada de empleados con filtros opcionales.
@@ -69,18 +70,20 @@ class EmpleadoService:
             estado: Filtro por estado (activo | baja | licencia).
             search: Búsqueda por nombre o apellido (case-insensitive).
             es_lider: Si se provee, filtra por el flag de liderazgo (selector de usuarios).
+            sin_manager: True = sin superior asignado · False = con superior · None = sin filtro.
+                Es el destino de la alerta agregada del dashboard, que linkea acá.
 
         Returns:
             EmpleadoListResponse con items, total y metadatos de paginación.
         """
         proyecto_ids = empleados_de_proyecto(proyecto_id) if proyecto_id else None
-        items, total = self._repo.find_all(page, page_size, empresa_id, area_id, estado, search, es_lider, proyecto_ids)
+        items, total = self._repo.find_all(page, page_size, empresa_id, area_id, estado, search, es_lider, proyecto_ids, sin_manager)
         total_pages = math.ceil(total / page_size) if page_size > 0 else 0
         return EmpleadoListResponse(items=items, total=total, page=page, page_size=page_size, total_pages=total_pages)
 
-    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[str] = None, estado: Optional[str] = None, search: Optional[str] = None, es_lider: Optional[bool] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[str] = None, estado: Optional[str] = None, search: Optional[str] = None, es_lider: Optional[bool] = None, proyecto_id: Optional[UUID] = None, sin_manager: Optional[bool] = None) -> Descarga:
         """Exporta empleados (columnas legibles del legajo, sin UUIDs) con los MISMOS filtros que el listado; sin paginar."""
-        pagina = self.get_empleados(1, LIMITE_FILAS_EXPORT, empresa_id, area_id, estado, search, es_lider, proyecto_id)
+        pagina = self.get_empleados(1, LIMITE_FILAS_EXPORT, empresa_id, area_id, estado, search, es_lider, proyecto_id, sin_manager)
         verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
         items = pagina.items
         return build_export(nombre="Empleados", datos={"Empleados": construir_filas_export(items)}, filename_base="empleados", formato=formato)

@@ -52,9 +52,10 @@ class _EmpleadoRepoEspia:
         self.args: dict = {}
 
     def find_all(self, page, page_size, empresa_id=None, area_id=None, estado=None,
-                 search=None, es_lider=None, proyecto_ids=None):
+                 search=None, es_lider=None, proyecto_ids=None, sin_manager=None):
         self.args = {"empresa_id": empresa_id, "area_id": area_id, "estado": estado,
-                     "search": search, "es_lider": es_lider, "proyecto_ids": proyecto_ids}
+                     "search": search, "es_lider": es_lider, "proyecto_ids": proyecto_ids,
+                     "sin_manager": sin_manager}
         return [], 0
 
 

@@ -19,7 +19,18 @@ class AlertaResponse(BaseModel):
     tipo: str
     mensaje: str
     nivel: Literal["info", "warning", "error"]
-    entidad_id: Optional[str] = None  # id del registro para linkear (ej. empleado → ficha)
+    # Ruta del front a la que lleva la alerta, o None si no lleva a ninguna parte.
+    #
+    # 🔴 Reemplaza al `entidad_id` anterior, que el front convertía SIEMPRE en
+    # `/empleados/{id}`: la primera alerta de otro tipo con id habría linkeado a una ficha de
+    # empleado inexistente. El molde de adjuntos (entidad + entidad_id) tampoco alcanzaba —
+    # una alerta agregada lleva a un LISTADO FILTRADO (`/empleados?sin_manager=true`), que no
+    # es un par (entidad, id).
+    #
+    # La ruta la arma el backend a propósito: quien sabe a dónde lleva una alerta es quien la
+    # genera. Un mapa `tipo → ruta` en el front sería otro espejo manual que puede divergir,
+    # como `permisos.ts` vs `permisos.py`.
+    href: Optional[str] = None
 
 
 class HeadcountAreaResponse(BaseModel):

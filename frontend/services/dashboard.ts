@@ -13,7 +13,14 @@ export interface AlertaDashboard {
   tipo: string
   mensaje: string
   nivel: "info" | "warning" | "error"
-  entidad_id?: string | null // id del registro (ej. empleado) para linkear a su ficha
+  /**
+   * Ruta a la que lleva la alerta, ya armada por el backend (o null si no lleva a ninguna).
+   * Reemplaza al `entidad_id` viejo, que acá se convertía SIEMPRE en `/empleados/{id}`: la
+   * primera alerta de otro tipo con id habría linkeado a una ficha inexistente.
+   * El front NO arma rutas de alertas: un mapa `tipo → ruta` de este lado sería un espejo
+   * manual más, y las agregadas linkean a listados filtrados que no son un par (entidad, id).
+   */
+  href?: string | null
 }
 
 export interface HeadcountArea {

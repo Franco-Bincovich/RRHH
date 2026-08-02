@@ -66,6 +66,7 @@ SIN_RESOLVER_DECLARADOS = {
     "repositories/dashboard_equipo_repo.py": (1, "tabla por parámetro, spec literal 'id' — sin embed"),
     # Counts genéricos con la tabla por parámetro y spec literal sin embed.
     "services/dashboard_service.py": (1, "_count(table, **filtros): select('id', count='exact') — sin embed"),
+    "services/_dashboard_alertas.py": (1, "_alerta_de_bloqueo(b): tabla del catálogo, spec literal 'id' — sin embed"),
     "services/procesos_service.py": (1, "count por (tabla, estado): select('id') — sin embed"),
     "services/reporte_anual.py": (1, "_count_rango(tabla, ...): select('id') — sin embed"),
     # 🔴 Los generadores de reportes SÍ arman embeds dinámicamente (f-strings que cambian según
