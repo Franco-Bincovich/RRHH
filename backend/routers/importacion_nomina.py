@@ -11,6 +11,7 @@ from schemas.importacion import (
     ImportacionNominaPreviewResponse,
 )
 from services.nomina_csv_service import parse_nomina_csv
+from services._import_csv import decodificar
 from utils.files import ALLOWED_TYPES_CSV, MAX_SIZE_CSV, validate_upload
 from utils.logger import logger
 from utils.permisos import Accion, Seccion, require_permission
@@ -34,10 +35,9 @@ async def preview_nomina(
     """Parsea el CSV de nómina: resuelve DNI→empleado y marca duplicados (anio, mes)."""
     content = await file.read()
     validate_upload(content, file.content_type, ALLOWED_TYPES_CSV, MAX_SIZE_CSV, "archivo CSV de nómina")
-    try:
-        text = content.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        text = content.decode("latin-1")
+    # El encoding lo resuelve el lector compartido (`services/_import_csv`), no el router:
+    # tenerlo acá era lo que lo mantenía duplicado, con el bug de UTF-16 en las dos copias.
+    text = decodificar(content)
     validas, errores = parse_nomina_csv(text, empresa_id)
     return ImportacionNominaPreviewResponse(filas_validas=validas, errores=errores)
 

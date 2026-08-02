@@ -68,9 +68,13 @@ def test_decodifica_utf16le_sin_bom():
 
 
 def test_detecta_utf16_le_be_y_no_utf8():
-    assert tx._detectar_utf16_sin_bom("ORGANISMO".encode("utf-16-le")) == "utf-16-le"
-    assert tx._detectar_utf16_sin_bom("ORGANISMO".encode("utf-16-be")) == "utf-16-be"
-    assert tx._detectar_utf16_sin_bom("ORGANISMO;GERENCIA".encode("utf-8")) is None
+    # La heurística se mudó al lector compartido (`_import_csv`) al unificar los dos
+    # decodificadores: es la MISMA función, solo cambió de módulo. Las aserciones no se tocaron.
+    from services._import_encoding import _detectar_utf16_sin_bom as _detectar
+
+    assert _detectar("ORGANISMO".encode("utf-16-le")) == "utf-16-le"
+    assert _detectar("ORGANISMO".encode("utf-16-be")) == "utf-16-be"
+    assert _detectar("ORGANISMO;GERENCIA".encode("utf-8")) is None
 
 
 # ── helpers puros ────────────────────────────────────────────────────────────

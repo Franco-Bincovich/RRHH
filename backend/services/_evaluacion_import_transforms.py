@@ -6,6 +6,9 @@ Sin I/O, sin estado, sin dependencias del proyecto. Testeable en aislamiento.
 import unicodedata
 from typing import List, Optional
 
+from services import _import_csv as _csv
+from services import _import_encoding as _enc
+
 # ── Vocabulario de columnas (nombres tal como vienen en los archivos, UPPER) ──
 
 IDENTIDAD: List[str] = [
@@ -44,45 +47,17 @@ TIPOS_LIDER = frozenset({"AUTOEVALUACION_LIDER", "SUPERIOR_INMEDIATO"})
 
 
 def decodificar(data: bytes) -> str:
-    """Decodifica por BOM EXPLÍCITO (UTF-16 LE/BE, UTF-8 BOM) y, sin BOM, UTF-8 estricto.
+    """Bytes → texto para los archivos de evaluaciones. Delegado a `_import_csv.decodificar`.
 
-    NUNCA cae a latin-1: latin-1 nunca falla y enmascara un UTF-16 como basura (el bug
-    silencioso de importacion_nomina). Si no es determinable -> ValueError claro, no adivina.
+    🔴 `permitir_latin1=False` A PROPÓSITO: los dos archivos de evaluaciones vienen en UTF-8 y
+    UTF-16, y este flujo prefiere fallar con un mensaje claro antes que adivinar. Es el
+    comportamiento que ya tenía —hay un test que lo fija— y NO cambia con la unificación.
+    El import de nómina sí permite latin-1, porque sus archivos reales lo son.
+
+    La detección (BOM UTF-16, heurística de UTF-16 sin BOM, utf-8-sig) vive en el módulo
+    compartido: era la única duplicación real entre los dos imports.
     """
-    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
-        return data.decode("utf-16")      # el codec 'utf-16' lee el BOM, elige endianness y lo quita
-    if data[:3] == b"\xef\xbb\xbf":
-        return data.decode("utf-8-sig")
-    utf16 = _detectar_utf16_sin_bom(data)  # el caso que se escapó: notas finales en UTF-16LE sin BOM
-    if utf16:
-        try:
-            return data.decode(utf16)
-        except UnicodeDecodeError:
-            pass                           # la heurística falló → seguí al fallback UTF-8
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ValueError(
-            "Encoding no reconocido: sin BOM y no es UTF-8 válido. "
-            "Guardá el archivo como UTF-8 o UTF-16."
-        ) from exc
-
-
-def _detectar_utf16_sin_bom(data: bytes) -> Optional[str]:
-    """Heurística para UTF-16 SIN BOM sobre texto casi-ASCII: la mitad de los bytes son 0x00.
-    LE → los 0x00 caen en posiciones IMPARES (byte alto del par); BE → en PARES. Umbral holgado
-    (>30%) porque el contenido es ASCII casi puro. None si no parece UTF-16."""
-    muestra = data[:2000]
-    if len(muestra) < 2:
-        return None
-    pares, impares = muestra[0::2], muestra[1::2]
-    ceros_pares = pares.count(0) / len(pares)
-    ceros_impares = impares.count(0) / len(impares)
-    if ceros_impares > 0.30 and ceros_impares > ceros_pares:
-        return "utf-16-le"
-    if ceros_pares > 0.30 and ceros_pares > ceros_impares:
-        return "utf-16-be"
-    return None
+    return _enc.decodificar(data, permitir_latin1=False)
 
 
 def _sin_acentos(s: str) -> str:
@@ -121,6 +96,9 @@ def normalizar_tipo(raw: Optional[str]) -> str:
 
 
 def headers_faltantes(fieldnames: Optional[List[str]], requeridas: List[str]) -> str:
-    """Devuelve las columnas requeridas ausentes (comparación trim+upper), como texto. '' = ok."""
-    presentes = {(f or "").strip().upper() for f in (fieldnames or [])}
-    return ", ".join(c for c in requeridas if c not in presentes)
+    """Columnas requeridas ausentes, como texto. '' = están todas. Delegado a `_import_csv`.
+
+    ⚠️ La comparación pasó de `strip().upper()` a la normalización compartida, que además colapsa
+    espacios internos. Es estrictamente MÁS TOLERANTE: acepta `"NOTA  FINAL"` con doble espacio,
+    que antes se rechazaba. No puede rechazar una cabecera que hoy pasa."""
+    return ", ".join(_csv.faltantes(fieldnames, requeridas))

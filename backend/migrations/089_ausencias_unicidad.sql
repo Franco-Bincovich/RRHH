@@ -1,0 +1,65 @@
+-- 089_ausencias_unicidad.sql
+--
+-- QUÉ HACE: índice ÚNICO sobre (empleado_id, fecha_desde, fecha_hasta, tipo_id) en
+-- solicitudes_ausencia. Es la clave de idempotencia del import mensual de novedades: subir el
+-- mismo archivo dos veces actualiza la fila en vez de duplicarla.
+--
+-- NO ES DESTRUCTIVA: crea un índice. No borra ni reescribe ninguna fila.
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 🔴 HAY QUE CORRERLA ANTES DE QUE SE CARGUE EL HISTÓRICO, Y ESTA VEZ ES LITERAL
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- `solicitudes_ausencia` tiene CERO filas en producción, y CERO duplicados por esa clave
+-- (verificado con un GROUP BY … HAVING count(*) > 1 contra el catálogo vivo el 2/8/2026).
+-- Crear el índice ahora no puede fallar.
+--
+-- Con el histórico ya cargado, si RRHH mandara la misma ausencia dos veces —que es
+-- exactamente lo que este índice existe para impedir— **CREATE UNIQUE INDEX FALLA** y hay que
+-- deduplicar a mano antes, decidiendo cuál de las dos filas sobrevive. Ese trabajo no existe hoy
+-- y va a existir en cuanto entre el primer archivo.
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- POR QUÉ ESA CLAVE, Y QUÉ SE ESTÁ DECLARANDO CON ELLA
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- Se está declarando que **una ausencia queda identificada por QUIÉN, CUÁNDO y DE QUÉ TIPO**.
+-- No es una invención de este índice: el resto del sistema ya lo trata así —
+-- `vacaciones_repo.find_overlapping` usa (empleado, tipo, rango) como la identidad de una
+-- licencia para decidir si dos se pisan.
+--
+-- ⚠️ EL CASO QUE ESTO PROHÍBE, dicho explícitamente para que nadie se sorprenda: dos filas con
+-- el MISMO empleado, MISMO tipo y EXACTAMENTE las mismas dos fechas, que difieran solo en
+-- `motivo` o en `justificada`. Eso pasa a ser imposible. Se evaluó y se aceptó: dos registros
+-- así no son dos ausencias, son la MISMA ausencia cargada dos veces con distinta anotación — que
+-- es justamente el duplicado que el import tiene que evitar. Si RRHH necesitara distinguirlas,
+-- el lugar es `motivo` de una sola fila, no dos filas.
+--
+-- ⚠️ Y NO hay concepto de media jornada en el modelo (`dias` se calcula del rango), así que "dos
+-- ausencias el mismo día" tampoco puede significar mañana/tarde.
+--
+-- 🔴 ESTO NO CONTRADICE "NO SE VALIDA SOLAPAMIENTO" (services/ausencias_service.py:8). Son dos
+-- reglas de distinto alcance: el solapamiento habla de rangos que se PISAN PARCIALMENTE y sigue
+-- permitido —dos ausencias de tipos distintos, o del mismo tipo en rangos que se superponen sin
+-- ser idénticos, entran igual—. Este índice solo prohíbe el duplicado EXACTO, que es un
+-- subconjunto estricto. Lo que era legal y tenía sentido, lo sigue siendo.
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- POR QUÉ UN ÍNDICE ÚNICO Y NO UN CHEQUEO EN EL SERVICE
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- Un SELECT previo tiene ventana de carrera: dos requests concurrentes con la misma fila pasan
+-- los dos el chequeo y escriben los dos. Es el mismo motivo por el que el alta de asignaciones a
+-- proyecto detecta el duplicado por la violación del UNIQUE y no por un chequeo
+-- (`asignaciones_service._asignar_uno`), y por el que el dedup del import de nómina se apoya en
+-- `empleados_legajo_empresa_key`.
+--
+-- Y hay un motivo más, específico del import: **PostgREST necesita una constraint única para
+-- `on_conflict`**. Sin ella, "actualizar si ya existe" no se puede expresar como un upsert y
+-- habría que hacer SELECT-y-después-UPDATE por cada fila del archivo.
+--
+-- Se crea como ÍNDICE y no como CONSTRAINT porque las cuatro columnas ya existen y un índice
+-- único cumple la misma función para `on_conflict`, sin tocar la definición de la tabla.
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ausencia_empleado_rango_tipo
+    ON public.solicitudes_ausencia (empleado_id, fecha_desde, fecha_hasta, tipo_id);
+
+COMMENT ON INDEX public.uq_ausencia_empleado_rango_tipo IS
+    'Identidad de una ausencia: quién, cuándo y de qué tipo. Sostiene la idempotencia del import mensual (on_conflict). NO prohíbe solapamientos parciales, solo el duplicado exacto. Ver migración 089.';

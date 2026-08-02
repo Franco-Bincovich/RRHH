@@ -34,16 +34,16 @@ async def importar_nomina_empleados(
     file: UploadFile = File(...),
 ) -> ImportacionNominaEmpleadosResult:
     """Sube el CSV de nómina, crea empleados/empresas/áreas y devuelve el reporte fila por fila.
-    Decodifica latin1 (fallback si no es UTF-8). El nombre del archivo se audita."""
+    El nombre del archivo se audita.
+
+    ⚠️ El router NO decodifica: pasa los BYTES. El encoding es una decisión del lector
+    (`services/_import_csv`), no de la capa HTTP — y tenerlo acá era lo que lo mantenía
+    duplicado en dos routers, con el bug de UTF-16 en los dos."""
     content = await file.read()
     validate_upload(content, file.content_type, ALLOWED_TYPES_CSV, MAX_SIZE_CSV, "archivo CSV de nómina")
-    try:
-        texto = content.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        texto = content.decode("latin-1")
     usuario_id = request.state.user.get("id", "system")
     service = NominaEmpleadosImportService(usuario_id)
-    return service.importar(texto, file.filename or "nomina.csv")
+    return service.importar(content, file.filename or "nomina.csv")
 
 
 @router.get(

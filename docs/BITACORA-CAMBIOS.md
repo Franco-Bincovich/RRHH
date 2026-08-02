@@ -41,6 +41,90 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-02 · Lector de CSV unificado y unicidad de ausencias · commits pendientes ×2
+
+**Qué cambió:** los tres imports (nómina de empleados, nómina de costos, evaluaciones) pasan a
+leer el CSV por un único lector, y `solicitudes_ausencia` gana la clave de identidad que va a
+sostener la idempotencia del import mensual de novedades. Dos commits: (1) el lector, (2) la
+migración 089.
+
+**Lo que NO se hizo, y es deliberado:** no se escribió el vocabulario de columnas del archivo de
+novedades. RRHH todavía no mandó la estructura definitiva, y un mapeo con nombres provisorios es
+documentación disfrazada de código. Queda una nota en `services/_import_csv.py` que dice dónde va
+a vivir cuando llegue y qué archivos históricos se vieron.
+
+### 🔴 ORDEN DE DEPLOY
+
+1. **Correr `backend/migrations/089_ausencias_unicidad.sql`.**
+2. `sofia-backend` deploya y da 200 en `/health`.
+3. El front no cambia en esta sesión.
+
+✅ **086, 087 y 088 están las tres corridas** (verificado contra el catálogo vivo). La 089 es la
+única pendiente.
+
+### Migración
+
+- **089 `ausencias_unicidad`** — **NO destructiva**: crea un índice único sobre
+  `solicitudes_ausencia (empleado_id, fecha_desde, fecha_hasta, tipo_id)`. Reflejada en
+  `db/schema.sql`.
+- 🔴 **Correrla ANTES de que se cargue el histórico de ausencias, y esta vez es literal.** Hoy la
+  tabla tiene **0 filas** y **0 duplicados** por esa clave (verificado con un
+  `GROUP BY … HAVING count(*) > 1` contra producción), así que no puede fallar. Con el histórico
+  cargado, si viniera la misma ausencia dos veces —justo lo que este índice existe para impedir—
+  **`CREATE UNIQUE INDEX` FALLA** y hay que deduplicar a mano decidiendo qué fila sobrevive.
+- ⚠️ **Qué prohíbe, dicho explícito:** dos filas con el mismo empleado, mismo tipo y exactamente
+  las mismas dos fechas, que difieran solo en `motivo` o `justificada`. Se evaluó y se aceptó: eso
+  no son dos ausencias, es la misma cargada dos veces. **NO prohíbe solapamientos parciales** —
+  `ausencias_service` documenta que no se validan, y sigue siendo así: el índice es un
+  subconjunto estricto.
+- `vacaciones_pendientes` **ya tenía** su `UNIQUE (empleado_id, periodo)` desde la 083: ese import
+  se apoya en ella sin trabajo nuevo.
+
+### 🔴 UN BUG REAL ARREGLADO: UTF-16 entraba como basura y el import lo cargaba
+
+Los dos routers de nómina hacían `try utf-8-sig / except → latin-1`. **`latin-1` nunca falla**:
+decodifica cualquier byte. Un CSV en UTF-16 entraba como `'ÿþA\x00p\x00e\x00l...'` y el import
+**se completaba**, cargando nombres ilegibles en la base. Verificado en vivo antes de tocar nada.
+
+Ahora la detección de UTF-16 (BOM y sin BOM) corre **antes**, así que latin-1 solo se alcanza
+cuando el archivo genuinamente lo es.
+
+⚠️ **Es un cambio de comportamiento en un flujo de producción**: un archivo UTF-16 que hoy se
+carga como basura pasa a leerse bien. Es el arreglo, no una regresión, y ningún test fijaba la
+basura. **La suite quedó en el mismo número que antes del cambio (1514) hasta que se sumaron los
+tests nuevos** — o sea, cero regresiones en los dos flujos existentes.
+
+### Sobre el BOM
+
+El paso de UTF-8 usa **`utf-8-sig`**, que consume el BOM si está y se comporta como `utf-8` si no.
+⚠️ Aclaración honesta, porque quedó anotado al revés en la conversación: **el BOM ya se manejaba
+bien en los dos flujos** (nómina usaba `utf-8-sig` y evaluaciones tenía su rama explícita).
+Verificado dos veces con archivos reales. Lo que se hizo es **blindarlo en un solo lugar**: con
+`utf-8` pelado el `\ufeff` queda pegado al primer header, `str.strip()` NO lo saca (no es
+whitespace en Python) y el error diría "falta la columna Apellido" con Apellido presente. Hay un
+test que lo fija para que nadie lo cambie por `utf-8` "simplificando".
+
+### 🔴 BLOQUEO PARA EL IMPORT DE VACACIONES PENDIENTES — es para RRHH, no de código
+
+El archivo histórico de vacaciones **solo trae LEGAJO**, y `legajo` está **0 de 19** en
+producción: RRHH nunca lo mandó, aunque el import de nómina ya sabe leerlo
+(`HEADERS_OPCIONALES`). **Ese import hoy no tendría con qué matchear a nadie.**
+
+Se resuelve de una de dos formas, las dos con RRHH:
+- que la nómina mensual traiga la columna **Legajo**, o
+- que el archivo de vacaciones traiga **DNI** (que es lo que hay que pedir ahora, mientras la
+  estructura se está definiendo).
+
+**No se implementó un fallback por nombre**: el archivo de vacaciones tampoco trae nombre. Queda
+escrito en `services/_import_csv.py` para quien reciba el archivo definitivo.
+
+### Variables de entorno · dependencias · Storage · endpoints · auth · dominios
+
+**Ninguno.** Sin variables, sin dependencias, sin buckets, sin endpoints nuevos (los routers
+existentes cambiaron por dentro: ya no decodifican, pasan bytes), sin cambios en el token.
+
+---
+
 ## 2026-08-02 · Asignar un ÁREA ENTERA a un proyecto · commits pendientes ×3
 
 **Qué cambió:** se puede sumar todos los empleados de un área a un proyecto de una vez, en vez de

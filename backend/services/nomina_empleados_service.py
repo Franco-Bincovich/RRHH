@@ -11,9 +11,7 @@ individual con diff por cada UPDATE. Ver `_audit_payloads_import.payload_importa
 un alta es una fotografía y el id alcanza para reconstruirla; un update responde "qué cambió"
 y eso no se puede reconstruir desde un id.
 """
-import csv
-import io
-from typing import Optional
+from typing import Optional, Union
 from uuid import UUID
 
 from repositories.empleado_repo import EmpleadoRepo
@@ -22,6 +20,7 @@ from schemas.importacion_nomina_empleados import (
 )
 from services import _nomina_empleados_transforms as tx
 from services._nomina_parsers import email_valido
+from services._import_csv import abrir
 from services._audit_payloads_import import payload_importacion_nomina
 from services._nomina_catalogos import NominaCatalogos
 from services._nomina_lote import LoteNomina, resultado_headers_invalidos
@@ -49,7 +48,7 @@ class NominaEmpleadosImportService:
         self._cesiones = NominaCesiones(usuario_id)  # cesión por Fecha Ingreso Reconocida
         self._superiores = NominaSuperiores()  # Apellido/Nombre Superior → manager_id (2ª pasada)
 
-    def importar(self, contenido: str, archivo: str,
+    def importar(self, contenido: Union[bytes, str], archivo: str,
                  presupuesto: Optional[float] = None) -> ImportacionNominaEmpleadosResult:
         """Procesa el CSV. Reporta cada fila en su grupo; no aborta por errores.
 
@@ -59,7 +58,13 @@ class NominaEmpleadosImportService:
 
         `presupuesto` en segundos; None → `settings.import_presupuesto_segundos`. Solo los tests
         lo pasan explícito."""
-        reader = csv.DictReader(io.StringIO(contenido), delimiter=";")
+        # 🔴 `permitir_latin1=True`: los archivos de RRHH son latin-1. La detección de UTF-16 va
+        # ANTES en el lector compartido, así que latin-1 ya no puede enmascarar un UTF-16 —que es
+        # lo que hacía el `except: latin-1` que estaba acá y en el otro router.
+        # Acepta `str` además de `bytes`: el router manda bytes (es lo que sube el usuario) y los
+        # tests arman el CSV como texto. La firma lo dice en vez de mentir con `bytes` a secas.
+        datos = contenido.encode("utf-8") if isinstance(contenido, str) else contenido
+        reader = abrir(datos, delimiter=";")
         error_headers = tx.validar_headers(reader.fieldnames)
         if error_headers:
             return resultado_headers_invalidos(error_headers)

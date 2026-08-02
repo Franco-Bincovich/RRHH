@@ -1396,6 +1396,9 @@ CREATE INDEX idx_sucesion_posiciones_empresa ON public.sucesion_posiciones USING
 CREATE INDEX idx_sucesion_titular ON public.sucesion_posiciones USING btree (titular_id);
 CREATE INDEX idx_vacantes_area ON public.vacantes USING btree (area_id);
 CREATE INDEX idx_esp_empresa ON public.empleado_superior_pendiente USING btree (empresa_id);
+-- Identidad de una ausencia (mig 089): sostiene la idempotencia del import mensual. NO prohíbe
+-- solapamientos parciales, solo el duplicado exacto.
+CREATE UNIQUE INDEX uq_ausencia_empleado_rango_tipo ON public.solicitudes_ausencia USING btree (empleado_id, fecha_desde, fecha_hasta, tipo_id);
 CREATE UNIQUE INDEX uq_integracion_remitente_sistema ON public.usuario_integraciones USING btree ((es_remitente_sistema)) WHERE es_remitente_sistema;
 CREATE UNIQUE INDEX uq_plantilla_empresa_clave ON public.plantillas_mail USING btree (empresa_id, clave) WHERE (empresa_id IS NOT NULL);
 CREATE UNIQUE INDEX uq_plantilla_global_clave ON public.plantillas_mail USING btree (clave) WHERE (empresa_id IS NULL);
