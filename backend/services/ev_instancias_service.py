@@ -21,6 +21,7 @@ from services._audit_payloads_ev import (
     payload_carga_resultado_evaluacion, payload_finalizar_evaluacion,
 )
 from services._evaluaciones_export import construir_filas_export
+from services._ev_instancia_crear import crear
 from services._ev_instancias_utils import calcular_puntaje_global
 from services.audit_service import AuditService
 from services._limite_export import verificar_limite_export
@@ -68,45 +69,8 @@ class EvInstanciasService:
         return row
 
     def create(self, data: InstanciaCreate) -> InstanciaDetalleResponse:
-        """
-        Crea una instancia de evaluación para un empleado en un ciclo.
-        hereda empresa_id del ciclo. Genera filas vacías de ev_resultados.
-
-        Raises:
-            AppError: CICLO_NOT_FOUND (404), CICLO_CERRADO (422),
-                      EMPRESA_MISMATCH (422), INSTANCIA_DUPLICADA (409).
-        """
-        from integrations.supabase_client import supabase_admin
-        ciclo = self._ciclos_repo.find_by_id(str(data.ciclo_id))
-        if not ciclo:
-            raise AppError("Ciclo no encontrado", "CICLO_NOT_FOUND", 404)
-        if ciclo.estado == "cerrado":
-            raise AppError("No se puede asignar empleados a un ciclo cerrado", "CICLO_CERRADO", 422)
-        emp = supabase_admin.table("empleados").select("empresa_id").eq(
-            "id", str(data.empleado_id)).maybe_single().execute()
-        if not (emp and emp.data):
-            raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
-        if emp.data["empresa_id"] != str(ciclo.empresa_id):
-            raise AppError("El empleado y el ciclo no pertenecen a la misma empresa", "EMPRESA_MISMATCH", 422)
-        plantilla = self._plantillas_repo.find_by_id(str(ciclo.plantilla_id))
-        if not plantilla:
-            raise AppError("Plantilla del ciclo no encontrada", "PLANTILLA_NOT_FOUND", 404)
-        if self._repo.exists(str(data.ciclo_id), str(data.empleado_id)):
-            raise AppError(
-                "Este empleado ya tiene una evaluación en este ciclo", "INSTANCIA_DUPLICADA", 409,
-            )
-        criterios = [{"id": str(c.id)} for c in plantilla.criterios]
-        evaluador_id = str(data.evaluador_id) if data.evaluador_id else None
-        instancia = self._repo.create(
-            str(data.ciclo_id), str(data.empleado_id), evaluador_id,
-            str(ciclo.empresa_id), criterios,
-        )
-        if not instancia:
-            raise AppError("Error al crear la instancia", "DB_ERROR", 500)
-        logger.info("Instancia de evaluación creada", extra={
-            "empleado_id": str(data.empleado_id), "ciclo_id": str(data.ciclo_id),
-        })
-        return instancia
+        """Crea una instancia de evaluación. Ver services/_ev_instancia_crear.crear."""
+        return crear(self._repo, self._ciclos_repo, self._plantillas_repo, data)
 
     def update_resultado(self, instancia_id: UUID, criterio_id: UUID, data: ResultadoUpdate,
                          empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> InstanciaDetalleResponse:

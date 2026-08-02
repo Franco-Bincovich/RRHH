@@ -2,12 +2,14 @@
 Generador del informe anual consolidado de RRHH.
 Calcula métricas del año filtradas por empresa. Retorna estructura _sheets para
 export multi-hoja Excel + datos planos como fallback para PDF.
-Módulo auxiliar — invocado desde ReporteService.
+Módulo auxiliar — invocado desde ReporteService. Las mediciones que no pasan por `_count_rango`
+viven en `_reporte_anual_metricas.py` (este archivo estaba en 154 líneas contra el límite de 150).
 """
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from services._reporte_anual_metricas import actividad, headcount_por_area, movimientos
 
 
 def _eid(empresa_id: Optional[UUID]) -> Optional[str]:
@@ -50,38 +52,10 @@ def generate_anual_consolidado(anio: int, empresa_id: Optional[UUID] = None) -> 
     fin_ts = f"{fin}T23:59:59"
 
     # ── 1. Movimientos de personal ─────────────────────────────────────────────
-    ing_q = supabase_admin.table("empleados").select("id", count="exact").gte("fecha_ingreso", ini).lte("fecha_ingreso", fin)
-    if eid:
-        ing_q = ing_q.eq("empresa_id", eid)
-    ingresos = ing_q.execute().count or 0
-
-    egr_q = supabase_admin.table("offboarding_instancias").select("id", count="exact").gte("created_at", ini_ts).lte("created_at", fin_ts)
-    if eid:
-        egr_q = egr_q.eq("empresa_id", eid)
-    egresos = egr_q.execute().count or 0
+    ingresos, egresos = movimientos(eid, ini, fin, ini_ts, fin_ts)
 
     # ── 2. Headcount actual por área ───────────────────────────────────────────
-    areas_q = supabase_admin.table("areas").select("id, nombre").eq("activo", True)
-    if eid:
-        areas_q = areas_q.eq("empresa_id", eid)
-    area_map: dict[str, str] = {a["id"]: a["nombre"] for a in (areas_q.execute().data or [])}
-
-    emp_q = supabase_admin.table("empleados").select("area_id").eq("estado", "activo")
-    if eid:
-        emp_q = emp_q.eq("empresa_id", eid)
-    emp_rows = emp_q.execute().data or []
-    total_activos = len(emp_rows)
-
-    conteo: dict[str, int] = {}
-    for r in emp_rows:
-        aid = r.get("area_id")
-        if aid and aid in area_map:
-            conteo[aid] = conteo.get(aid, 0) + 1
-    headcount_list: List[dict] = sorted(
-        [{"area": area_map[k], "total": v} for k, v in conteo.items()],
-        key=lambda x: x["total"],
-        reverse=True,
-    )
+    total_activos, headcount_list = headcount_por_area(eid)
 
     # ── 3. Procesos del año ────────────────────────────────────────────────────
     onb_iniciados = _count_rango("onboarding_instancias", eid, ini_ts, fin_ts)
@@ -89,28 +63,12 @@ def generate_anual_consolidado(anio: int, empresa_id: Optional[UUID] = None) -> 
     vacantes_cerradas = _count_rango("vacantes", eid, ini_ts, fin_ts, estado="cerrada")
 
     # ── 4. Actividad del año ───────────────────────────────────────────────────
-    vac_q = supabase_admin.table("solicitudes_vacaciones").select("dias").eq("tipo", "vacaciones").eq("cancelada", False).gte("fecha_desde", ini).lte("fecha_desde", fin)
-    if eid:
-        vac_q = vac_q.eq("empresa_id", eid)
-    vac_data = vac_q.execute().data or []
-    solicitudes_vacaciones = len(vac_data)
-    dias_vacaciones = sum(int(r.get("dias") or 0) for r in vac_data)
-
-    cap_q = supabase_admin.table("empleado_capacitacion").select("id", count="exact").eq("estado", "completado").gte("fecha_completado", ini).lte("fecha_completado", fin)
-    if eid:
-        cap_q = cap_q.eq("empresa_id", eid)
-    cap_completadas = cap_q.execute().count or 0
-
-    obj_q = supabase_admin.table("objetivos").select("id", count="exact").eq("estado", "terminado").gte("updated_at", ini_ts).lte("updated_at", fin_ts)
-    if eid:
-        obj_q = obj_q.eq("empresa_id", eid)
-    obj_terminados = obj_q.execute().count or 0
-
-    # ev_instancias.fecha_evaluacion: date asignada en finalizar(); NULL si no finalizó aún
-    ev_q = supabase_admin.table("ev_instancias").select("id", count="exact").eq("estado", "finalizada").gte("fecha_evaluacion", ini).lte("fecha_evaluacion", fin)
-    if eid:
-        ev_q = ev_q.eq("empresa_id", eid)
-    ev_finalizadas = ev_q.execute().count or 0
+    act = actividad(eid, ini, fin, ini_ts, fin_ts)
+    solicitudes_vacaciones = act["solicitudes_vacaciones"]
+    dias_vacaciones = act["dias_vacaciones"]
+    cap_completadas = act["cap_completadas"]
+    obj_terminados = act["obj_terminados"]
+    ev_finalizadas = act["ev_finalizadas"]
 
     # ── Estructura de retorno ──────────────────────────────────────────────────
     return {

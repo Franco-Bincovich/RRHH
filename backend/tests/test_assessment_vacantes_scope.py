@@ -3,9 +3,10 @@ Barrera de empresa en assessment (2) y en las integraciones externas de vacantes
 
   · assessment  POST /campanas/{campana_id}/links y GET /resultados/{resultado_id}.
                 El 404 lo lanza el propio repo, así que el filtro va ahí y el mensaje no cambia.
-                ⚠️ NO es código muerto: el legacy sin callers es repositories/assessment_repo.py,
-                pero el router está montado (main.py:112) y usa assessment_campanas_repo /
-                assessment_resultados_repo, que sí están vivos.
+                ⚠️ NO es código muerto: el router está montado (condicionado por
+                ASSESSMENT_ENABLED) y usa assessment_campanas_repo / assessment_resultados_repo,
+                que están vivos. El legacy sin callers era repositories/assessment_repo.py, que
+                se BORRÓ el 2/8/2026 — apagado por flag no es lo mismo que muerto.
   · vacantes    publicar-linkedin, emails-candidatos y candidatos-desde-email delegaban en
                 Zernio/Gmail con el id de vacante crudo. Es la fuga con peor consecuencia del
                 lote: el dato sale del sistema hacia un tercero.

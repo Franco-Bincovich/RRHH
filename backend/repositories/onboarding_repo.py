@@ -15,7 +15,7 @@ from repositories._onboarding_row import (
     EXCLUIDOS, INSTANCIAS, JOIN_EMPLEADO, PROGRESO, TAREAS, TEMPLATES,
     instancia_row, tarea_progreso_row, with_empresa,
 )
-from repositories._onboarding_templates_row import with_visibilidad
+from repositories._onboarding_templates_filtros import with_visibilidad
 from schemas.onboarding import InstanciaDetalleResponse, InstanciaResponse, TemplateResponse
 from utils.errors import AppError
 
@@ -74,7 +74,7 @@ class OnboardingRepo:
         onboardear gente de todo el equipo —basta con que sea la primera activa—, y "privada"
         no habría significado nada en el flujo principal del módulo.
 
-        Reusa `with_visibilidad` de _onboarding_templates_row: la regla vive en un solo lugar,
+        Reusa `with_visibilidad` de _onboarding_templates_filtros: la regla vive en un solo lugar,
         y este camino no pasa por el repo de templates ni por su service.
         """
         q = supabase_admin.table(TEMPLATES).select("id,empresa_id,nombre,descripcion").eq("activo", True).limit(1)

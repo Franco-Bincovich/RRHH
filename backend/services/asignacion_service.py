@@ -51,17 +51,19 @@ class AsignacionService:
     def create(self, data: AsignacionCreate, created_by: str) -> AsignacionResponse:
         """
         Asigna un curso a un empleado. Hereda empresa_id del empleado.
-        Valida que empleado y curso sean de la misma empresa.
-        Raises: EMPLEADO_NOT_FOUND (404), CAPACITACION_NOT_FOUND (404), EMPRESA_MISMATCH (422), YA_ASIGNADO (409).
+
+        🔴 LA CAPACITACIÓN SE BUSCA ACOTADA A LA EMPRESA DEL EMPLEADO, y por eso ya no existe un
+        EMPRESA_MISMATCH (422). Antes el lookup no acotaba y el desajuste salía con status propio:
+        el id de un curso de otra empresa devolvía 422 y uno inventado 404, y esa diferencia
+        confirmaba que el curso existe. Mismo cierre que services/_onboarding_iniciar.py.
+
+        Raises: EMPLEADO_NOT_FOUND (404), CAPACITACION_NOT_FOUND (404), YA_ASIGNADO (409).
         """
         empresa_id = self._repo.find_empresa_for_empleado(str(data.empleado_id))
         if not empresa_id:
             raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
-        cap_empresa = self._cap_repo.find_empresa_for(str(data.capacitacion_id))
-        if not cap_empresa:
+        if not self._cap_repo.find_empresa_for(str(data.capacitacion_id), empresa_id):
             raise AppError("Capacitación no encontrada", "CAPACITACION_NOT_FOUND", 404)
-        if empresa_id != cap_empresa:
-            raise AppError("El empleado y la capacitación deben pertenecer a la misma empresa", "EMPRESA_MISMATCH", 422)
         try:
             row = self._repo.save(str(data.capacitacion_id), str(data.empleado_id), empresa_id, data.fecha_asignacion, data.fecha_limite)
         except AppError:

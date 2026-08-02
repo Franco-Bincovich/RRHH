@@ -12,7 +12,7 @@ migración original y nunca se habían expuesto. No hace falta migración: solo 
 from typing import Optional
 from uuid import UUID
 
-from services._audit_payloads import payload_entrevista_salida
+from services._audit_payloads_offboarding import payload_entrevista_salida
 from utils.errors import AppError
 
 

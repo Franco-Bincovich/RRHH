@@ -188,7 +188,7 @@ No figura en los documentos del directorio. Es lo único que agrega producto en 
 | # | Trabajo | Prioridad | Dificultad | Ses. | Nota |
 |---|---|---|---|---|---|
 | **G1** | **Divergencia `permisos.ts` ↔ `permisos.py`** | 🟠 Alta | Baja | 1 | Espejo manual: si alguien toca uno y no el otro, el front muestra botones que el back rechaza. **Recomendación: test comparativo ahora** (avisa el mismo día), **generación automática cuando exista CI** (hace imposible la divergencia) |
-| **G2** | **Verificación de código muerto** | 🟡 Media | Baja | 1 | Confirmar antes de borrar: `assessment_repo.py` (130, sin callers), `costo_repo.py` (135, sin callers), `EliminarLoteButton.tsx`, y las tablas huérfanas. **Estar oculto no es estar muerto** — la verificación es por callers, no por visibilidad |
+| **G2** | ✅ **Verificación de código muerto — HECHO 2/8/2026** | — | — | — | Los tres se verificaron por callers y se **borraron**: `assessment_repo.py`, `costo_repo.py`, `EliminarLoteButton.tsx`. **Estar oculto no es estar muerto** quedó confirmado: de 5 sospechosos, 3 estaban vivos (`ev_*`, assessment, sucesión). **Las 6 tablas huérfanas siguen en pie**: se limpian en el cutover a AWS |
 | **G3** | **Divisiones pendientes de archivos over-limit** | 🟡 Media | Media | 2 | Los que no arrastre ningún ítem del plan: `empleado_repo.py` 174/100, `reporte_anual` 154/150, `ev_instancias_repo` 146/100 |
 | **G4** | **`objetivos.responsable_id` → FK a `empleados`** | 🟠 Alta | Baja | 1 | ⚠️ **Ventana que se cierra:** con 0 filas es una migración trivial; con datos cargados es migración + backfill + resolver los que no tengan usuario. Destraba el filtro por área y el import de objetivos. **No incluye subobjetivos** |
 

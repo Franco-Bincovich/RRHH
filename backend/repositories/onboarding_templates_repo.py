@@ -3,8 +3,8 @@ Repositorio de templates de onboarding — CRUD de templates y tareas.
 Interfaz: get_templates · get_template · create_template · update_template
           delete_template · add_tarea · update_tarea · delete_tarea
 
-Las primitivas compartidas (tablas, SELECT con joins, filtros, payloads y mappers) viven en
-_onboarding_templates_row.py. Las lecturas componen `with_empresa` y `with_visibilidad` sobre
+Las primitivas compartidas viven en tres satélites: `_row` (tablas, SELECT y mappers),
+`_filtros` (empresa y visibilidad) y `_write` (las filas que se insertan). Las lecturas componen `with_empresa` y `with_visibilidad` sobre
 la misma query, empresa primero; la regla de cada uno está escrita en su función y no se repite
 acá, para que no puedan divergir.
 """
@@ -12,11 +12,9 @@ from typing import Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
-from repositories._onboarding_templates_row import (
-    INSTANCIAS, SELECT_DETALLE, SELECT_LISTA, TAREAS, TEMPLATES,
-    payload_tarea, payload_tarea_update, payload_template, tarea, template,
-    with_empresa, with_visibilidad,
-)
+from repositories._onboarding_templates_filtros import with_empresa, with_visibilidad
+from repositories._onboarding_templates_row import INSTANCIAS, SELECT_DETALLE, SELECT_LISTA, TAREAS, TEMPLATES, tarea, template
+from repositories._onboarding_templates_write import payload_tarea, payload_tarea_update, payload_template
 from schemas.onboarding import TareaResponse, TemplateResponse
 from utils.errors import AppError
 

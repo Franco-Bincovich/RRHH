@@ -9,7 +9,7 @@ from uuid import UUID
 from repositories.empleado_repo import EmpleadoRepo
 from repositories.offboarding_repo import OffboardingRepo
 from schemas.offboarding import OffboardingCreate, OffboardingResponse
-from services._audit_payloads import payload_devolucion_activo, payload_inicio_offboarding
+from services._audit_payloads_offboarding import payload_devolucion_activo, payload_inicio_offboarding
 from services._empleado_scope import ensure_empleado_de_empresa
 from services._offboarding_entrevista import registrar as _registrar_entrevista
 from services.audit_service import AuditService

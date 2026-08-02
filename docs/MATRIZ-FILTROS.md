@@ -537,7 +537,7 @@ Mi lectura, ordenada por **valor / esfuerzo**. El criterio es cuántos cortes de
 | Archivo | Líneas | Necesario para |
 |---|---|---|
 | `repositories/empleado_repo.py` | **174** 🔴 | ya over-limit |
-| `repositories/ev_instancias_repo.py` 146 · `assessment_repo.py` 130 (0 callers) · `costo_repo.py` 135 (0 callers) | 🔴 | ya over-limit |
+| ✅ ~~`ev_instancias_repo.py` 146 · `assessment_repo.py` 130 · `costo_repo.py` 135~~ | ✅ | **CERRADO 2/8/2026**: el primero se partió (→98), los otros dos se borraron por 0 callers. Ver `docs/DEUDA-TECNICA.md` |
 | `repositories/nomina_repo.py` | **107** 🔴 | filtros de costos |
 | `repositories/proyectos_repo.py` | **104** 🔴 | filtros de proyectos |
 | `repositories/onboarding_repo.py` 100 · `evaluacion_repo.py` 100 | al límite | histórico de onboarding |
@@ -702,3 +702,21 @@ este registro" que navegue a `/auditoria?registro_id=<id>` + leer el query param
   de `<select>`.
 - **Qué cortes pide RRHH efectivamente.** La Parte 5 razona desde el modelo de datos y desde qué
   reportes existen. Conviene contrastarla con ellos antes de fijar el orden de las tandas.
+
+---
+
+## Addendum 2/8/2026 — filtro por familia de tipos de ausencia (mig 088)
+
+Los tipos de ausencia pasaron a tener **dos niveles** (`padre_id`). El filtro por tipo del módulo
+de ausencias cambió de comportamiento:
+
+| Capa | Antes | Ahora |
+|---|---|---|
+| repo | `.eq("tipo_id", X)` | `.in_("tipo_id", [X, *hijos])` |
+| service | pasaba el id tal cual | resuelve la familia con `TiposAusenciaRepo.ids_de_familia` |
+| router / UI | sin cambios | el select agrupa padre › subtipo |
+| **export** | ✅ mismo filtro | ✅ **mismo filtro** — delega en `get_all`, una sola implementación |
+
+🔴 **Elegir un tipo PADRE trae también las ausencias de sus hijos.** Con el `.eq()` viejo un
+filtro por padre habría devuelto CERO filas: las ausencias apuntan a la hoja, nunca al padre.
+Elegir un HIJO trae solo las suyas (un hijo no tiene hijos: la profundidad está limitada a 2).

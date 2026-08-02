@@ -11,8 +11,9 @@ Sin IO: solo transforma datos en memoria. Los `datos_anteriores`/`datos_nuevos` 
 entregan JSON-serializable (vía `_diff`/`_jsonable` de AuditService); los escalares
 (`registro_id`, `empresa_id`) los normaliza `registrar()` como red de seguridad.
 
-Si este archivo supera ~150 líneas al crecer en 18.4c, partirlo por módulo
-(p. ej. `_audit_payloads_rrhh.py`, `_audit_payloads_costos.py`).
+Si este archivo supera ~150 líneas al crecer, partirlo POR MÓDULO. Ya se hizo seis veces:
+`_rrhh`, `_costos`, `_usuarios`, `_ev`, `_cesion` y `_offboarding`. Acá quedan vacaciones y
+ausencias, más `sin_derivados`, que los hermanos IMPORTAN de este archivo.
 
 Nota de diseño: el diff se reusa de `AuditService._diff` (no se reimplementa) para no
 duplicar la lógica de comparación campo-a-campo.
@@ -45,7 +46,6 @@ Por eso los diffs excluyen (`sin_derivados`) en vez de enumerar: una columna nue
 auditada sola, y lo único que hay que declarar es lo que NO es una columna.
 """
 from typing import Optional
-from uuid import UUID
 
 from services.audit_service import AuditService, _jsonable
 
@@ -53,7 +53,6 @@ from services.audit_service import AuditService, _jsonable
 _CAMPOS_AUSENCIA = (
     "empleado_id", "tipo_id", "fecha_desde", "fecha_hasta", "dias", "justificada", "motivo",
 )
-_CAMPOS_OFFBOARDING = ("empleado_id", "motivo", "estado", "fecha_inicio")
 # Lo que NO es columna en cada *Response. Ni solicitudes_vacaciones ni solicitudes_ausencia
 # tienen `area_id`: llega resuelto desde el empleado, igual que los nombres. `estado` se
 # calcula contra la fecha de hoy — planificada→tomada ocurre sola, sin que nadie edite nada.
@@ -117,51 +116,4 @@ def payload_baja_ausencia(prior, usuario_id: Optional[str], empresa_id: Optional
         "usuario_id": usuario_id, "entidad": "ausencia", "registro_id": prior.id,
         "accion": "DELETE", "evento": "baja_ausencia", "empresa_id": empresa_id,
         "datos_anteriores": _subset(prior, _CAMPOS_AUSENCIA), "datos_nuevos": None,
-    }
-
-
-def payload_inicio_offboarding(row, usuario_id: Optional[str], empresa_id: Optional[str]) -> dict:
-    """Evento INSERT de inicio de offboarding."""
-    return {
-        "usuario_id": usuario_id, "entidad": "offboarding", "registro_id": str(row.id),
-        "accion": "INSERT", "evento": "inicio_offboarding", "empresa_id": empresa_id,
-        "datos_anteriores": None, "datos_nuevos": _subset(row, _CAMPOS_OFFBOARDING),
-    }
-
-
-def payload_entrevista_salida(
-    instancia_id: UUID, entrevista_salida: bool, notas: Optional[str],
-    usuario_id: Optional[str], empresa_id: Optional[str],
-) -> dict:
-    """Evento UPDATE del registro de la entrevista de salida.
-
-    Guarda si hay notas y su largo, NO el texto: una entrevista de salida puede contener
-    apreciaciones sobre terceros, y la auditoría la lee gente que no es la que la tomó.
-    El texto vive en la instancia, que es donde corresponde consultarlo."""
-    return {
-        "usuario_id": usuario_id, "entidad": "offboarding", "registro_id": str(instancia_id),
-        "accion": "UPDATE", "evento": "entrevista_salida", "empresa_id": empresa_id,
-        "datos_anteriores": None,
-        "datos_nuevos": {
-            "entrevista_salida": entrevista_salida,
-            "notas_cargadas": bool(notas), "notas_largo": len(notas or ""),
-        },
-    }
-
-
-def payload_devolucion_activo(
-    instancia_id: UUID, activo_id: UUID, devuelto: bool,
-    usuario_id: Optional[str], empresa_id: Optional[str],
-) -> dict:
-    """Evento UPDATE de devolución/reversión de un activo dentro de un offboarding.
-
-    El service solo togglea un bool (no hay row completo), así que el diff se arma a
-    mano: prior=!devuelto → nuevo=devuelto, identificando el activo afectado.
-    registro_id = instancia de offboarding (entidad auditada)."""
-    activo = str(activo_id)
-    return {
-        "usuario_id": usuario_id, "entidad": "offboarding", "registro_id": str(instancia_id),
-        "accion": "UPDATE", "evento": "devolucion_activo", "empresa_id": empresa_id,
-        "datos_anteriores": {"activo_id": activo, "devuelto": not devuelto},
-        "datos_nuevos": {"activo_id": activo, "devuelto": devuelto},
     }

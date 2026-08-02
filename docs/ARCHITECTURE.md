@@ -2,7 +2,7 @@
 
 ## Stack elegido y por qué
 
-- **Next.js 15 (App Router)** sobre otras opciones React: App Router con Server Components optimiza el tiempo de carga inicial. El equipo de desarrollo usa Claude Code que conoce muy bien este stack.
+- **Next.js 16 (App Router)** sobre otras opciones React: App Router con Server Components optimiza el tiempo de carga inicial. El equipo de desarrollo usa Claude Code que conoce muy bien este stack.
 - **FastAPI sobre Django/Flask**: proyecto con scope definido, necesitamos velocidad de desarrollo y tipado estricto con Pydantic. Django agrega demasiado overhead para este caso.
 - **Supabase sobre RDS propio**: RLS nativo en PostgreSQL, Auth integrado, Storage incluido, menos infraestructura a mantener para un solo developer.
 - **Vercel para frontend y backend**: deployment simplificado, preview environments automáticos, integración directa con GitHub.
@@ -28,3 +28,19 @@ _(se completa a medida que avanza el desarrollo)_
 | Fecha | Descripción | Prioridad |
 |-------|-------------|-----------|
 | — | — | — |
+
+## Decisiones de arquitectura tomadas después (2026)
+
+- **Multiempresa app-level, sin RLS.** El filtro de empresa va en el WHERE de cada query
+  (`services/_empleado_scope.py`, `_with_empresa`), no en políticas de base. En el destino AWS
+  **no habrá RLS**: la seguridad es app-level y definitiva. Un recurso de otra empresa devuelve
+  el **mismo 404** que uno inexistente — nunca un 403, que sería un oráculo de enumeración.
+- **Una excepción, y una sola:** para el rol `mandos_medios` el `manager_id` reemplaza al filtro
+  de empresa. Está concentrada en `services/_alcance_mandos.py` con su porqué.
+- **Auditoría app-level, no por triggers.** Los triggers de auditoría se dropearon en la
+  migración 058: la captura la hace `AuditService`, que traga sus propios errores para no tumbar
+  la operación de negocio.
+- **Un punto de salida único por integración externa:** `services/export/` para archivos,
+  `services/mailer/` para correo. Cambiar de proveedor es un archivo y una entrada en un dict.
+- **Límites de líneas por tipo de archivo** (router 80, service 150, repo 100, componente 150,
+  hook 80), medidos y sostenidos. Ver [`ORDEN-Y-LEGIBILIDAD.md`](ORDEN-Y-LEGIBILIDAD.md).

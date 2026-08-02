@@ -1,5 +1,10 @@
 <!-- Generado por backend/scripts/smoke_test.py — no editar a mano las tablas -->
 
+> ⚠️ **ESTA CORRIDA ES DEL 30/7/2026 Y ESTÁ VIEJA.** Desde entonces se agregaron ~25 endpoints
+> (plantillas de mail, superiores pendientes, asignación por área, configuración) que **no
+> aparecen acá**, y los 4 ROTO que reporta no se volvieron a verificar.
+> **Volvé a correr el script antes de usar estos números:** `python backend/scripts/smoke_test.py`.
+
 _Corrida: 2026-07-30 01:39 UTC · base `https://sofia-backend-pi.vercel.app` · 199 rutas enumeradas_
 
 **4 ROTO · 2 SOSPECHOSO · 62 NO PROBADO · 290 OK**

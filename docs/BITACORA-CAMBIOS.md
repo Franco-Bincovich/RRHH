@@ -8,8 +8,8 @@ o requieren acción del lado del deploy.
 **Para quién:** el dev que está montando la infraestructura en AWS en paralelo. La idea es
 que se entere de todo lo que le afecta **sin tener que leer los commits ni el código**.
 
-**No reemplaza a [`CHANGELOG.md`](CHANGELOG.md)**, que es por versión y orientado al producto.
-Este documento es por sesión y orientado al impacto operativo. Los dos conviven.
+**Es el único historial de cambios del repo.** (`CHANGELOG.md` se borró el 2/8/2026: estaba
+congelado en 14 líneas mientras esto tenía 1700, así que no cumplía ninguna función.)
 
 ## Regla de actualización
 
@@ -38,6 +38,157 @@ entrada, la sesión no terminó.
   que superen 60s
 - **Cambios en el modelo de autenticación** o en los claims del token
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
+
+---
+
+## 2026-08-02 · Limpieza de código: oráculo cerrado, dead code borrado, cero over-limit · commits pendientes ×5
+
+**Qué cambió:** cinco commits de limpieza sobre `docs/DEUDA-TECNICA.md`. Uno solo cambia
+comportamiento observable (el 404 de dos altas); el resto son borrados, cortes de archivo,
+documentación y un test nuevo.
+
+**Impacto en infraestructura:** **Ninguna migración, env var, dependencia, bucket ni endpoint
+nuevo.** Ninguna ruta cambió de path ni de método. **La 089 sigue siendo la única migración
+pendiente de correr** y esta sesión no la tocó.
+
+### 🔴 Lo único que cambia el CONTRATO de la API (commit 1)
+
+Dos altas devolvían **422 `EMPRESA_MISMATCH`** cuando el recurso existía en OTRA empresa, y 404
+cuando no existía. Esa diferencia de status **confirma que el recurso ajeno existe** — el oráculo
+de enumeración que la Fase 2 cerró en 92 endpoints y que acá quedó suelto porque estos dos no
+responden a un id del path sino al cruce de DOS entidades.
+
+- `POST /api/capacitaciones/asignaciones` — la capacitación ahora se busca **acotada a la empresa
+  del empleado**; si no aparece, **404 `CAPACITACION_NOT_FOUND`**, idéntico a "no existe".
+- `POST /api/evaluaciones/instancias` — el empleado se busca **acotado a la empresa del ciclo**;
+  si no aparece, **404 `EMPLEADO_NOT_FOUND`**.
+
+El filtro va **en el WHERE** (Forma A), no comparando después de traer la fila: el caller ya no
+puede distinguir los dos casos aunque quiera. **`EMPRESA_MISMATCH` ya no existe en el código.**
+Verificado antes de tocar nada: ningún test y ninguna línea del front esperaban ese 422.
+
+> ⚠️ **Para quien monitoree la API:** un cliente que hoy trate el 422 de estos dos endpoints como
+> caso especial va a ver un 404. No hay ninguno — se buscó.
+
+### Lo que se borró (commit 2), y cómo se verificó
+
+`repositories/costo_repo.py` (135) · `repositories/assessment_repo.py` (131) ·
+`components/features/evaluaciones/EliminarLoteButton.tsx` (74). **Cero callers los tres**,
+reverificados uno por uno con grep sobre `services/`, `routers/`, `repositories/`, `tests/` y
+`main.py` antes de borrar cada archivo.
+
+🔴 **`ev_*` y assessment NO se tocaron, y no son lo mismo:** sus routers **están montados y
+responden**. "Apagado por flag" u "oculto en la UI" **no es** "muerto" — de los 5 sospechosos del
+relevamiento, 3 estaban vivos. Las 6 tablas huérfanas siguen en pie: se limpian en el cutover.
+
+> Para el porteo a AWS: **`costo_repo` y `assessment_repo` eran 2 de los 5 "casos pesados"**
+> (embeds anidados de 2 niveles) que `migracionAWS/MIGRACION_A_RDS.md` listaba. **No hay que
+> portarlos.** Ya está anotado en ese documento.
+
+### Cortes de archivo (commit 4) — el backend quedó en CERO over-limit
+
+Primera vez que pasa. Ocho archivos: `_onboarding_templates_row` 159→87 (partido en tres) ·
+`_audit_payloads` 167→119 · `ev_instancias_repo` 146→98 · `ev_plantillas_repo` 129→93 ·
+`reporte_anual` 154→112 · `usuario_service` 149→77 · `ev_instancias_service` 149→113.
+**Refactor puro: ninguna aserción de test cambió** (una sola línea de `import` se reapuntó, en
+`test_onboarding_template_visibilidad.py`, porque el símbolo cambió de módulo).
+
+🔴 **El aprendizaje que importa más que los cortes:** dos satélites tenían escrito *"acá el límite
+es 200"* en su docstring, y por eso uno llegó a **159 sin que nadie lo notara**. Un `_*.py` dentro
+de `repositories/` **es un repositorio y su límite es 100**. Partir un archivo para respetar un
+límite es correcto; redefinir el límite del archivo nuevo, no.
+
+### Tests nuevos (commits 1 y 5)
+
+- **`tests/test_empresa_mismatch_cerrado.py`** (10) — fija que los dos 404 sean indistinguibles
+  (status, code y mensaje) **y** que la empresa viaje en la query, con un espía del cliente de
+  Supabase. Mutation check: con el bug reinstalado caen 6 de 10.
+- **`tests/test_espejo_permisos.py`** (10) — 🔴 **cierra el último espejo manual sin red**:
+  `frontend/services/permisos.ts` contra `backend/utils/permisos.py` (secciones, acciones, roles,
+  `MANDOS_MEDIOS_SECCIONES`, fail-closed). Hoy coinciden, así que **nació en verde**: era el
+  momento más barato. Con guarda de mínimo por extracción — si el regex deja de matchear, falla en
+  vez de comparar conjuntos vacíos. Mutation check: las tres mutaciones probadas lo hacen fallar.
+
+Con estos, **el repo tiene cinco barridos estructurales**, todos con guarda de mínimo.
+
+### Documentación (commit 3)
+
+`CLAUDE.md` tenía **10 números falsos** (975 tests → 1551 · 61 archivos de test → 89 · migración
+081 → 089 · 54 repos → 69 · 52 tablas → 58 · 113 services → 129 · 180 gates → 190 …) y la sección
+de líneas entera obsoleta. Se sumó además **todo lo de las últimas ~15 sesiones que no estaba
+escrito**: el mailer y las plantillas, los subtipos de ausencia, el ownership cruzado
+(`_alcance_mandos.py`), el lector de CSV unificado, los superiores del import y las vacaciones
+pendientes.
+
+🔴 **Y se reescribió la lista de "código muerto candidato a borrar", que fue lo que indujo el
+error del propio relevamiento.** El criterio ahora está escrito: **callers reales, no visibilidad
+en la UI**, con una tabla explícita de qué NO está muerto (`ev_*`, assessment, sucesión) y por qué.
+
+**Suite: 1551 verdes · `tsc` 0 · `next build` OK · `npm test` 214 verdes.**
+
+---
+
+## 2026-08-02 · Limpieza de `docs/`: 28 → 17 archivos · commits pendientes ×5
+
+**Qué cambió:** solo documentación — **cero líneas de código de producción**, salvo un comentario
+en `repositories/_empleado_write_repo.py:80` que citaba un documento borrado. Se agregaron dos
+documentos que no existían (`DEPLOY.md` y `DECISIONES.md`), se corrigieron seis que mentían, y se
+borraron catorce que ya no describían nada real.
+
+**Impacto en infraestructura:** 🟢 **positivo y directo — `docs/DEPLOY.md` es para el dev de AWS.**
+Es el hueco que faltaba: hasta hoy **no había ningún documento que dijera cómo levantar el sistema
+de cero**. Trae las 5 env vars obligatorias (verificadas contra `config/settings.py`, no contra la
+doc), todas las opcionales con su default, el orden de deploy de los dos proyectos de Vercel, los
+techos de plataforma que no se pueden subir por configuración (300 s `maxDuration`, 4,5 MB de
+payload rechazados **antes** de que el código los vea, 30 s de timeout httpx, ~8 s de
+`statement_timeout`) y qué cambia en AWS. **Ninguna migración, env var, dependencia, bucket ni
+endpoint nuevo:** esta sesión no tocó nada de eso.
+
+### 🔴 `MODELO_DATOS.md` — por qué se borró, y no es lo mismo que los otros trece
+
+**Se declaraba "la fuente de verdad única del modelo de datos" y describía un schema que no
+existe.** No estaba desactualizado en los bordes: describía **13 tablas que nunca se crearon con
+esa forma** — los catálogos `seniorities`, `roles`, `equipos`, `tipos_licencia`, `motivos_baja`, y
+`horas_proyecto` con columnas (`costo_hora_snapshot`, `fecha_carga`, `origen`) que la tabla real no
+tiene. Un dev que lo tomara literalmente escribiría queries contra tablas inexistentes.
+
+Un documento así **es peor que no tener documentación**: no tener nada obliga a leer el schema;
+tener esto invita a no leerlo. Ya estaba marcado como obsoleto en `CLAUDE.md`, y la marca no
+alcanzó — seguía en `docs/`, con el título intacto, y su comentario había llegado al código.
+
+**Queda en el historial de git** y hay una lápida en `CLAUDE.md:10` para que nadie lo busque ni lo
+recree. **La única fuente de verdad del schema es `backend/db/schema.sql`**, contrastado contra el
+catálogo vivo de producción.
+
+### Los otros trece borrados, y el motivo de cada grupo
+
+| Qué | Cuántos | Por qué |
+|---|---|---|
+| `DIAGNOSTICO-*.md` (5) + `Resultado_import.md` + `Resultado_nomina_batch.md` | 7 | Diagnósticos de sesión, 2.363 líneas describiendo código **ya implementado** — el código lo cuenta mejor y sin poder divergir. **Lo único que no se podía recuperar del código —las opciones descartadas y por qué— se fusionó en `docs/DECISIONES.md`.** El razonamiento completo sigue en git. |
+| `AUDITORIA_TECNICA_HRKARSTEC.md` + `AUDITORIA_HR_KARSTEC.md` | 2 | Fotos del 29/5/2026. Sus hallazgos vigentes ya están en `DEUDA-TECNICA.md`, verificados contra el código actual; el resto describía problemas resueltos hace meses. |
+| `EXTRACCION_NEXIO_PARA_PORTAR.md` | 1 | Guía de portación de otro proyecto. La portación se hizo. |
+| `INVESTIGACION_ROLES.md` | 1 | El modelo de roles quedó cerrado y documentado en `CLAUDE.md` + `utils/permisos.py`. |
+| `CHANGELOG.md` | 1 | Congelado en 14 líneas mientras `BITACORA-CAMBIOS.md` tenía 1.700. Dos historiales, uno abandonado. |
+| `INVENTARIO-DOCS.md` | 1 | El diagnóstico que ordenó esta limpieza. Se ejecutó entero; conservarlo sería un TODO ya hecho. |
+
+**Verificado con grep, no de memoria:** ningún archivo del repo apunta a un documento borrado. Las
+tres menciones que quedan son deliberadas — la lápida de `CLAUDE.md:10`, esta entrada, y
+`BASES-DE-DESARROLLO.md`, que nombra "CHANGELOG.md" como norma general de la agencia, no como
+archivo de este repo.
+
+### Lo que se corrigió (no se borró)
+
+`docs/README.md` decía que **el backend no arranca sin la API key de Resend** — es falso, tiene
+default, y era la clase de error que hace perder una tarde montando un entorno. Además contaba
+migraciones hasta la 074 cuando van 89. `ARCHITECTURE.md` decía Next.js 15 (es 16).
+`backend/db/README.md` tenía los tres números del schema mal (47/310/220 → 58/364/151).
+`ESTADO-VS-COMPROMISO.md` y `MATRIZ-FILTROS.md` no incluían nada de las últimas ~15 sesiones.
+`SMOKE-TEST-RESULTADOS.md` conserva la corrida del 30/7 pero ahora avisa que es vieja.
+
+> ⚠️ **`docs/` quedó en 17 archivos, no en 15.** Los dos de diferencia son
+> `PLAN_DESARROLLO_AHORA.md` y `PLAN_DESARROLLO_DESPUES.md`, que **se conservan a propósito** como
+> registro de la intención original de producto (así estaba previsto en el inventario). Son los
+> únicos dos documentos del repo que se leen como historia y nunca como instrucción.
 
 ---
 
@@ -839,7 +990,7 @@ con gerencia cuesta **3**.
 chunks, upsert, mapa fila→resultado— **batchear las cesiones sale mucho más barato y baja de 8 a
 4**. Recién ahí el batch tiene que justificarse contra ~4 por fila, no contra los 13 originales.
 El diagnóstico completo (incluido por qué el batch es "batch" y no "batch + replicar
-validaciones") está en `docs/Resultado_nomina_batch.md`.
+validaciones") quedó en el historial de git (`docs/Resultado_nomina_batch.md`, borrado el 2/8/2026).
 
 **El conteo está FIJADO POR TESTS**: `tests/test_nomina_fix_chico.py::TestRoundTripsPorFila`
 asserta 2 para un alta, 2 para un update y 3 para un alta con legajo, contando invocaciones de
@@ -962,7 +1113,7 @@ soporta el parcial si RRHH lo confirma, sin otra migración.
   razones están escritas en `services/vacaciones_pendientes_service.py`. Revisar cuando RRHH
   cierre un período de verdad Y se defina la acumulación.
 - **El import queda pendiente**: no hay ancla de matcheo (`legajo` está 0/19 y el CSV de nómina
-  ni siquiera trae esa columna — ver `docs/Resultado_import.md`).
+  ni siquiera trae esa columna — ver `docs/DECISIONES.md`).
 
 **Corrección al `CLAUDE.md`:** decía "79 archivos SQL, backend va por 081". Eran **80** y iba
 por **082**; con esta sesión son **81** y va por **083**.

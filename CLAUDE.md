@@ -7,7 +7,7 @@
 **Fuente de verdad del SCHEMA, en este orden:**
 1. **El catálogo vivo de producción** (proyecto Supabase `grmdiwxcvcjorlohpwji`, "HR Karstec"). Producción driftea; el catálogo no miente.
 2. **`backend/db/schema.sql`** — fuente de reconstrucción, y lo que `tests/_postgrest_schema.py` valida contra las queries. Hoy coincide con producción en tablas y constraints.
-3. ⚠️ **`docs/MODELO_DATOS.md` — DESACTUALIZADO, ya NO es "la fuente de verdad única".** Describe tablas que no existen con esa forma (p. ej. `horas_proyecto` con `costo_hora_snapshot`/`fecha_carga`/`origen`, que la tabla real no tiene) y catálogos (`seniorities`, `roles`, `equipos`, `tipos_licencia`, `motivos_baja`) que nunca se crearon. Sirve como **intención de diseño**, no como descripción del schema. Ante contradicción **gana el catálogo vivo**.
+3. 🔴 **`docs/MODELO_DATOS.md` SE BORRÓ el 2/8/2026 — no lo busques ni lo recrees.** Se declaraba "fuente de verdad única del schema" y describía **13 tablas que no existen** (`equipos`, `empleado_proyecto`, `presupuesto_proyecto`, `seniorities`, `roles`, `skills`, `acceso_empresa`…) y **6 columnas inventadas solo en `horas_proyecto`**. **La única fuente de verdad del schema es `backend/db/schema.sql`**, que se lee del catálogo de Postgres y tiene un validador automático (`tests/_postgrest_schema.py`). Un segundo documento que lo describa en prosa vuelve a divergir: por eso no se reemplazó por nada.
 
 **Fuente de verdad del TRABAJO:**
 - **`docs/Plan de trabajo`** (v2, 27/7/2026 — el archivo no tiene extensión) — **supersede a `PLAN_DESARROLLO_AHORA.md` y `PLAN_DESARROLLO_DESPUES.md`**. 7 bloques (A–G), decisiones cerradas, pedidos a RRHH. Es el que manda para "qué se hace ahora".
@@ -198,10 +198,10 @@ La purga de vencidos corre en el camino que **crea** states (el que genera las f
 ## Estructura (backend)
 ```
 backend/
-├── main.py              ← entrada, registro de routers, middleware (163 líneas)
+├── main.py              ← entrada, registro de routers, middleware (171 líneas)
 ├── config/settings.py   ← única fuente de config y env (Settings() se instancia en import)
-├── routers/             ← 48 endpoints, sin lógica (límite 80 líneas)
-├── services/            ← 113 archivos de lógica de negocio (límite 150)
+├── routers/             ← 52 archivos, 208 rutas montadas, sin lógica (límite 80 líneas)
+├── services/            ← 129 archivos de lógica de negocio (límite 150)
 │   ├── _empleado_scope.py     ← barrera de empresa/ownership sobre el empleado target (Fase 2)
 │   ├── _adjunto_padres.py     ← resolver de la entidad padre de un adjunto (Fase 2)
 │   ├── _empleados_write.py    ← altas/ediciones de empleado, extraído por límite
@@ -212,33 +212,43 @@ backend/
 │   ├── _oauth_state.py        ← nonces del flujo OAuth, sin nada de Google (A4)
 │   ├── _google_oauth.py       ← lo específico de Google (A4)
 │   ├── _offboarding_entrevista.py ← entrevista de salida (C3)
+│   ├── _alcance_mandos.py     ← 🔴 LA ÚNICA excepción a la barrera de empresa (ownership cruzado)
+│   ├── _import_csv.py, _import_encoding.py ← lector de CSV único de los 3 imports
+│   ├── _tipos_jerarquia.py    ← guarda de profundidad de los subtipos de ausencia (mig 088)
+│   ├── _nomina_superiores.py, _superiores_matcher.py ← 2ª pasada del import (mig 086)
+│   ├── _usuario_alta.py, _ev_instancia_crear.py ← altas extraídas por límite
+│   ├── _reporte_anual_metricas.py, _audit_payloads_offboarding.py ← extraídos por límite
+│   ├── mailer/                ← punto de salida ÚNICO de mails; expone solo enviar_mail
+│   ├── export/                ← punto de salida ÚNICO de exports; expone build_export
 │   └── reportes/              ← un submódulo por familia + _common.py
-├── repositories/        ← 54 archivos, único acceso a DB (límite 100)
+├── repositories/        ← 69 archivos, único acceso a DB (límite 100, satélites incluidos)
 │   ├── _scope_filtros.py      ← "qué empleados caen bajo área/proyecto" (B3/B4, era _area_scope.py)
 │   ├── _rango_fechas.py       ← filtro por período con semántica de SOLAPAMIENTO (B5)
 │   ├── _empleado_write_repo.py, _empleado_row.py, _nomina_row.py, _offboarding_row.py
+│   ├── _onboarding_templates_{row,filtros,write}.py ← SELECT+mappers · visibilidad · payloads
+│   ├── _ev_instancias_row.py, _ev_plantillas_row.py ← mappers + enrich por lotes (anti-N+1)
 │   └── oauth_state_repo.py    ← crear · consumir · purgar_vencidos (A4)
 ├── integrations/        ← wrappers externos (supabase_client, anthropic)
 ├── schemas/             ← Pydantic in/out (+ empleado_out.py y _provincias.py)
 ├── utils/               ← permisos.py, errors.py, logger.py, rate_limit.py, empresas_cache.py
-├── db/schema.sql        ← FUENTE DE RECONSTRUCCIÓN (52 tablas, 331 constraints, 132 CREATE INDEX)
-├── migrations/          ← 79 archivos SQL; backend va por 081 (075–077 viven en migracionAWS/)
+├── db/schema.sql        ← FUENTE DE RECONSTRUCCIÓN (58 tablas, 364 constraints, 151 índices)
+├── migrations/          ← 87 archivos SQL; backend va por 089 (075–077 viven en migracionAWS/)
 ├── ruff.toml            ← config de ruff (reemplazó pyproject.toml, por Vercel)
 ├── pytest.ini           ← config de pytest (asyncio_mode=auto, testpaths=tests)
-└── tests/               ← 61 archivos test_*.py + _postgrest_schema.py (helper)
+└── tests/               ← 89 archivos test_*.py + _postgrest_schema.py (helper)
 ```
 
 **Env vars obligatorias** (sin default → rompen el import si faltan): `supabase_url`, `supabase_anon_key`, `supabase_service_key`, `jwt_secret`, `anthropic_api_key`, `resend_api_key`. Con default: `assessment_enabled`, `trusted_proxy_hops`, `rate_limit_storage_uri`, `supabase_timeout` (30 s), Google OAuth, `frontend_url`, `allowed_origins`. La migración a AWS agrega `database_url`.
 
-**Migraciones y salud de base.** La última del backend es **081** (`add_domicilio_desglosado`); **080 y 081 están CORRIDAS en producción** (verificado contra el catálogo: `oauth_states` existe, `empleados` tiene los 6 `domicilio_*`). Las 072/073/074 corrigieron drift. `000_run_all.sql` **deprecado con guard que aborta**.
+**Migraciones y salud de base.** La última del backend es **089** (`ausencias_unicidad`), 87 archivos SQL en total. **082–088 están CORRIDAS en producción; la 089 NO** — es la única pendiente, y hay que correrla **antes de que se cargue el histórico de ausencias** (con la tabla en 0 filas no puede fallar; con duplicados reales, sí). Las 072/073/074 corrigieron drift. **La 084 es la única destructiva** (`DROP COLUMN modalidad_contratacion` y `nivel`). `000_run_all.sql` **deprecado con guard que aborta**. Detalle de reconstrucción desde cero en **`docs/DEPLOY.md`**.
 
 **Contraste schema.sql ↔ catálogo vivo (28/7/2026):**
 
 | | `db/schema.sql` | Producción | |
 |---|---|---|---|
-| Tablas | 52 | 52 | ✅ |
-| Constraints | 331 | 331 | ✅ |
-| Índices | 132 `CREATE INDEX` | 234 `pg_indexes` | ✅ la diferencia son los índices que Postgres crea solo por PK/UNIQUE |
+| Tablas | 58 | 58 | ✅ |
+| Constraints | 364 | 364 | ✅ |
+| Índices | 151 declarados | más en `pg_indexes` | ✅ la diferencia son los índices que Postgres crea solo por PK/UNIQUE |
 | Triggers `updated_at` | **0** | **36** | 🔴 `schema.sql` NO los trae — se recrean aparte (mig 077, en `migracionAWS/`) |
 
 > En producción hay **45 triggers** no internos: los 36 de `updated_at` + 9 `trg_emp_*` (defaults de `empresa_id` del retrofit multiempresa).
@@ -268,7 +278,7 @@ backend/
 11. Preferir commits por sub-sesión sobre commits por tarea entera.
 12. Cortar sub-tareas por módulo cuando hay división de archivos de por medio.
 13. Diagnóstico pedido → devolver SOLO diagnóstico (read-only). Implementación pedida → escribir código, no otro diagnóstico.
-14. **Cada repo nuevo es un repo más a portar a asyncpg** (hoy son **54**). Priorizar wires sobre repos existentes; repo nuevo → moldearlo sobre `migracionAWS/empleado_repo_NEW`.
+14. **Cada repo nuevo es un repo más a portar a asyncpg** (hoy son **69** archivos en `repositories/`). Priorizar wires sobre repos existentes; repo nuevo → moldearlo sobre `migracionAWS/empleado_repo_NEW`.
 15. **Toda sesión que cambia algo escribe su entrada en `docs/BITACORA-CAMBIOS.md` ANTES de terminar.** Si la sesión termina sin su entrada, la sesión no terminó.
 
 ---
@@ -280,7 +290,7 @@ Tres roles en `utils/permisos.py`:
 - **mandos_medios** — lectura + escritura solo en VACACIONES y AUSENCIAS; sin acceso al resto.
 - Rol desconocido / None → **fail-closed**.
 
-Núcleo: `puede(rol, seccion, accion)`, `require_permission(seccion, accion)` (dependency factory → `AppError(..., "FORBIDDEN", 403)`). Enum `Seccion` (26 valores). `MANDOS_MEDIOS_SECCIONES = frozenset({VACACIONES, AUSENCIAS})`. **180 gates `Depends(require_permission(...))` en 45 routers.** Espejo front en `frontend/services/permisos.ts`. Sidebar filtra `NAV_GROUPS` por permiso, AuthGuard gatea por ruta, `useCanWrite` oculta botones de escritura.
+Núcleo: `puede(rol, seccion, accion)`, `require_permission(seccion, accion)` (dependency factory → `AppError(..., "FORBIDDEN", 403)`). Enum `Seccion` (26 valores). `MANDOS_MEDIOS_SECCIONES = frozenset({VACACIONES, AUSENCIAS})`. **190 gates `Depends(require_permission(...))` en 50 routers.** Espejo front en `frontend/services/permisos.ts`, **hoy verificado por `tests/test_espejo_permisos.py`** (secciones, acciones, roles y `MANDOS_MEDIOS_SECCIONES`, con guarda de mínimo). Sidebar filtra `NAV_GROUPS` por permiso, AuthGuard gatea por ruta, `useCanWrite` oculta botones de escritura.
 
 ✅ **La divergencia sidebar ↔ guard de ruta ya NO es manual-y-a-ciegas:** `components/layout/nav-config.test.ts` compara `NAV_GROUPS` entero contra `seccionDeRuta` de `permisos.ts`, con guarda de mínimo. Un ítem nuevo del menú sin su mapeo de ruta (o al revés) rompe el test. **Lo que sigue siendo espejo manual es `permisos.ts` ↔ `permisos.py`** — eso no tiene test.
 
@@ -313,6 +323,26 @@ Núcleo: `puede(rol, seccion, accion)`, `require_permission(seccion, accion)` (d
   - `ensure_empleado_visible(repo, ownership_repo, empleado_id, empresa_id, user_id, rol)` → **empresa ∩ ownership**, en ese orden. Los dos fallos dan el mismo 404.
 - **`services/_empleados_utils.py::empleado_or_404`** → el literal canónico del 404.
 - **`services/_adjunto_padres.py::ensure_padre_de_empresa`** → molde para recursos polimórficos: valida el padre y **devuelve SU `empresa_id`** para etiquetar la hija.
+
+### 🔴 LA ÚNICA EXCEPCIÓN A ESTA REGLA — `services/_alcance_mandos.py`
+
+**Decisión de producto (2/8/2026): un empleado puede tener superior de OTRA empresa del grupo, y
+para `mandos_medios` el `manager_id` REEMPLAZA al filtro de empresa** — en lectura Y en escritura.
+Lo justifica que el `manager_id` es un vínculo más fuerte que la empresa: la empresa dice de qué
+sociedad cobra alguien, el `manager_id` dice quién responde ante quién, que es la pregunta que el
+ownership contesta.
+
+**Está concentrada en UN módulo con nombre propio para que se lea como excepción y no como patrón
+a copiar.** `empresa_efectiva(empresa_id, rol)` devuelve `None` para `mandos_medios`; y **la misma
+función que suelta la empresa verifica la invariante de la que eso depende**, fail-closed: para
+`mandos_medios` el ownership NUNCA puede resolver a "sin restricción". Antes, un fallo ahí quedaba
+contenido por el `.eq("empresa_id")`; sin ese filtro, `(None, False)` significaría **la tabla
+entera de todas las empresas**. Soltar la empresa y chequear la invariante viven juntas por eso.
+
+⚠️ **NO toca `_ownership_filter.py`** (del que dependen 13 endpoints) ni su contrato de tupla
+`(ids, vacio)`: la intersección nunca ocurrió ahí adentro, ocurre en el WHERE como dos predicados
+independientes, y `ids_subordinados` ya era ciego a la empresa. Alcanzó con no pasarle el
+`empresa_id` al repo.
 
 ### Ownership ≠ empresa (y solo aplica en dos secciones)
 Son **dos ejes independientes que se componen por INTERSECCIÓN** — el ownership nunca reemplaza la empresa.
@@ -485,7 +515,7 @@ Tab **"Importaciones"** en `/evaluaciones` con lista de todos los lotes, multi-s
 
 **Frontend:** Tab solo `canWrite`. `HistorialImportaciones.tsx` (orquestador) + `HistorialTable.tsx` (presentacional) + `useHistorialImportaciones.ts`. **El borrado NO depende del selector de empresa del sidebar**: usa `fetchLotesHistorial()` que fuerza `X-Empresa-Id: "todas"`.
 
-⚠️ **`EliminarLoteButton.tsx` (74 líneas) sigue huérfano** — 0 callers, verificado. Candidato a borrar con el resto del dead code.
+✅ **`EliminarLoteButton.tsx` se BORRÓ el 2/8/2026** (74 líneas, 0 callers verificados en todo el front). El borrado real de un lote lo hace `HistorialImportaciones`.
 
 ✅ **Fuga entre empresas — CERRADA (Fase 2, commit `bd95e98`).** Los 7 endpoints del módulo que reciben `lote_id` validan por **ownership del lote**: la empresa sale de `lote.empresa_id`, no del header.
 
@@ -542,11 +572,59 @@ Ausencias activas hoy, % ausentismo del mes (base de días hábiles configurable
 ---
 
 ## Otros módulos (referencia rápida)
-- **Vacantes + Candidatos:** `routers/vacantes.py` + `candidatos.py` (+ `_candidato_form.py` público sin auth), `vacante_service.py`, `candidato_service.py`, `cv_service.py`. Integraciones: `zernio_service.py`, `gmail_service.py`. **Vacantes es el patrón canónico de borrado con confirmación** (router DELETE + service con snapshot-antes-de-borrar + fetch crudo por el 204 + `EliminarVacanteButton.tsx` + `ConfirmDialog`). Copiar de acá.
+- **Vacantes + Candidatos:** `routers/vacantes.py` + `candidatos.py` (+ `_candidato_form.py` público sin auth), `vacante_service.py`, `candidato_service.py`, `cv_service.py`. Integraciones: `zernio_service.py`, `gmail_service.py` (**recepción** de mails de candidatos, 122 líneas). **Vacantes es el patrón canónico de borrado con confirmación** (router DELETE + service con snapshot-antes-de-borrar + fetch crudo por el 204 + `EliminarVacanteButton.tsx` + `ConfirmDialog`). Copiar de acá.
 - **Historial salarial (C1):** `costo_service.get_historial_salarial`. 🔑 **La serie de `costos_nomina` ES el historial** — no hace falta el log de cambios: la tabla tiene `UNIQUE (empleado_id, anio, mes)`, o sea una fila por mes. Con auditoría, el caso más común —sueldos importados por CSV y nunca editados a mano— daría **historial vacío teniendo los sueldos cargados**. **DOS barreras, las dos necesarias y distintas:** la de SECCIÓN (`Seccion.COSTOS + READ`, la aplica el router: quién puede ver sueldos) y la de EMPRESA (se aplica en el service, sobre el EMPLEADO objetivo — el `empresa_id` del repo sale del header y no valida a qué empleado apuntás). El front no renderiza la sección sin permiso de costos: una sección que aparece y falla es peor que una que no aparece.
 - **Entrevista de salida (C3):** `services/_offboarding_entrevista.py`. Las columnas `entrevista_salida` y `notas_entrevista` existían en DB y estaban **muertas**; ahora se escriben y se leen.
 - **Domicilio desglosado (C4, mig 081):** 6 columnas nuevas en `empleados` (`domicilio_calle`, `_numero`, `_piso_depto`, `_localidad`, `_provincia`, `_cp`). **Se conserva el `domicilio` crudo** además de las estructuradas, porque el import de nómina lo trae como texto libre. **`provincia` es una lista cerrada servida por endpoint** (`schemas/_provincias.py` + `routers/empleados_catalogos.py`): el front no la hardcodea.
 - **Cesiones** (mig 066): hija de empleado, en la ficha. Gateada por `Seccion.EMPLEADOS`.
+- **Mails con plantillas editables (mig 087):** `services/mailer/` es el **punto de salida único**
+  — `__init__.py` exporta solo `enviar_mail`; `engine`, `_gmail`, `_markdown`, `_render` y
+  `_variables` son internos y **un test estructural verifica que nadie de afuera los importe**
+  (molde: `services/export/`). Tres decisiones cerradas: (a) sale de una **casilla del sistema**
+  designada, no de la cuenta del que aprieta el botón —un proceso automático no tiene `user_id` que
+  aportar, y así el circuito de prueba y el real son el MISMO—; (b) RRHH escribe **Markdown, no
+  HTML**: el HTML que llega al buzón lo genera nuestro código, así la superficie de inyección no se
+  acota, desaparece (el repo no tiene ninguna dependencia de sanitización); (c) las variables son
+  **allowlist, jamás "todo menos"** — con "todo menos", cada columna nueva de `empleados` se
+  volvería variable de mail sin que nadie lo decida. Fuera con motivo: sueldo, documento, fecha de
+  nacimiento, domicilio, contacto personal y `potencial`/`desempeno`. El envío masivo usa el
+  **presupuesto de tiempo** de `_lote_mails.py`. Ver `docs/DECISIONES.md`.
+- **Subtipos de ausencia (mig 088):** self-FK `padre_id` en `tipos_ausencia`, **profundidad máxima
+  2**. El agrupamiento de reportes va por ID, no por texto: aplanar habría dejado "cuántos días de
+  enfermedad familiar" dependiendo de un `LIKE` sobre un nombre **que RRHH edita desde la UI**.
+  🔑 **`cuenta_ausentismo` vive en el HIJO**, no en el padre ni en los dos: dentro de "Licencia"
+  puede haber subtipos que computan y otros que no. El padre conserva la columna solo como valor
+  por defecto al crear un hijo — ahorro de tipeo, **no herencia**. ⚠️ El CHECK no puede consultar
+  otra fila, así que **la guarda contra un nieto vive en `services/_tipos_jerarquia.py`**: por SQL
+  directo se puede crear. "Injustificada" se **desactivó** (mezclaba el eje *calificación* con el
+  eje *naturaleza*, y `_reporte_ausentismo` ya leía `justificada`, no el tipo).
+- **Lector de CSV único** (`services/_import_csv.py` + `_import_encoding.py`): los tres imports
+  (nómina de empleados, nómina de costos, evaluaciones) leen por acá. 🔴 **Detecta UTF-16 ANTES de
+  caer a latin-1**, que es el bug que cerró: los routers hacían `except → latin-1` y **latin-1
+  NUNCA falla**, así que un CSV en UTF-16 entraba como `'ÿþA\x00p\x00e\x00l…'` y el import se
+  completaba con nombres ilegibles. `utf-8-sig` primero: `str.strip()` NO saca el BOM (no es
+  whitespace), así que un CSV de Excel reportaba "falta la columna Apellido" con Apellido presente.
+  ⚠️ **`permitir_latin1` es una política POR FLUJO, no un descuido**: evaluaciones prefiere fallar,
+  nómina tiene que aceptar latin-1 porque es el formato real de RRHH. **La duplicación real era la
+  DETECCIÓN; la política difiere.** El vocabulario de columnas del archivo de novedades **NO se
+  escribió**: RRHH no mandó la estructura definitiva.
+- **Superior desde el import de nómina (mig 086):** el superior se resuelve en una **SEGUNDA
+  PASADA**, no dentro del loop — el jefe puede estar en una fila posterior (en el archivo real está
+  en la fila 11 con 13 subordinados, 10 de ellos procesados antes), y resolver fila por fila daría
+  **un resultado que depende del orden del Excel**. Lo que no matchea va a
+  `empleado_superior_pendiente` para revisión humana. No se reusó `ResolutorIdentidad` de
+  evaluaciones: ahí el desempate ES el superior, y acá el superior es la incógnita — sería circular.
+- **Vacaciones pendientes (mig 083):** tabla **propia**, no filas de `solicitudes_vacaciones` con
+  fechas en NULL. Esa opción rompía **15 lugares, 9 EN SILENCIO**: un predicado sobre NULL da NULL,
+  que no es TRUE, así que la fila se cae del WHERE — y como el count viaja en la misma query, **se
+  cae también del total**. Un día no tomado no tiene fechas porque nadie faltó ningún día: es un
+  saldo, no un hecho del calendario.
+- **Unicidad de ausencias (mig 089, 🔴 PENDIENTE EN PRODUCCIÓN):** índice único
+  `(empleado_id, fecha_desde, fecha_hasta, tipo_id)`. Sostiene la idempotencia del import mensual
+  (`on_conflict` de PostgREST **exige** una constraint única). **NO prohíbe solapamientos
+  parciales**, solo el duplicado exacto. 🔴 **Correrla ANTES de que se cargue el histórico**: hoy la
+  tabla tiene 0 filas y no puede fallar; con datos, un duplicado real hace fallar el
+  `CREATE UNIQUE INDEX` y hay que deduplicar a mano.
 - **Proyectos:** asignación single (`proyecto_asignaciones.py`) + bulk multi-selección
   (`POST /{id}/asignaciones/bulk`) + **alta de un ÁREA ENTERA** (`POST /{id}/asignaciones/area`).
   Los tres comparten la clasificación en **tres grupos**: `asignados` · `ya_asignados` · `errores`
@@ -594,7 +672,7 @@ Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. C�
 `ruff.toml` declara `line-length=100` + `[format]`, pero el código está en **estilo compacto de línea larga**. Los límites documentados se midieron sobre ese estilo. **Correr `ruff format` reflowea archivos enteros** (en una prueba: `ausencias_service.py` 149→253). **NO correr `ruff format` dentro de una sesión de feature/bugfix.** Adoptar ruff repo-wide es tarea propia con re-medición de límites. ⚠️ Confirmar si `pre-commit` está instalado — mina para la migración AWS.
 
 ### `tsc` en 0 y `next build` verde
-`next dev` con Turbopack transpila sin type-check → errores de tipo pasan desapercibidos pero **`next build` falla**. `vitest` cubre hoy 143 tests en 10 archivos, pero **la mayor parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Regla: `node_modules/.bin/tsc --noEmit` tiene que dar 0. Si aparece un error, es tuyo.**
+`next dev` con Turbopack transpila sin type-check → errores de tipo pasan desapercibidos pero **`next build` falla**. `vitest` cubre hoy 214 tests en 16 archivos, pero **la mayor parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Regla: `node_modules/.bin/tsc --noEmit` tiene que dar 0. Si aparece un error, es tuyo.**
 > ⚠️ vitest corre con `environment: "node"` y **sin jsdom**: los tests de componentes usan `renderToStaticMarkup` y verifican el **markup**, no la interacción — y **no ejecutan `useEffect`**. Ver el caso #4 de "Un test solo prueba lo que el fake puede desmentir".
 
 ### 🚨 Módulos desactivados (assessment y sucesión)
@@ -654,47 +732,85 @@ Hay **dos módulos apagados a propósito**. En los dos el código está **entero
 - ✅ **`state` de OAuth adivinable — RESUELTO (A4).** Nonce de un solo uso.
 - ✅ **Assessment expuesto sin auth — RESUELTO (A1).** Router desmontado + regex gateada.
 
-### Líneas — **REMEDIDO contra el código el 28/7/2026** (`-LiteralPath`, `.Count`)
+### Líneas — **REMEDIDO contra el código el 2/8/2026**
 
-> **Hubo ~15 divisiones esta semana.** Ya NO están over-limit: `empleado_repo.py` (174 → **98**) · `integracion_service.py` (201 → **110**) · `_audit_payloads_rrhh.py` (189 → **149**) · `nomina_repo.py` (107 → **98**) · `offboarding_repo.py` (**87**) · `costo_service.py` (150 → **141**) · `vacaciones_service.py` (150 → **116**) · `proyectos_repo.py` (104 → **74**) · `routers/evaluaciones_resultados.py` (80 → **69**) · `routers/costos.py` (**76**) · `routers/vacaciones.py` (**72**) · `reportes/page.tsx` (539 → **35**) · `proyectos/page.tsx` y `empleados/[id]/page.tsx` (ya no superan 150).
+> 🟢 **BACKEND: CERO archivos sobre su límite.** Es la primera vez. Los 7 que estaban se cerraron
+> el 2/8: 2 se **borraron** (`costo_repo`, `assessment_repo` — ver "Código muerto") y 5 se
+> **partieron** (`_onboarding_templates_row` 159→87 · `_audit_payloads` 167→119 ·
+> `ev_instancias_repo` 146→98 · `ev_plantillas_repo` 129→93 · `reporte_anual` 154→112), más
+> `usuario_service` 149→77 y `ev_instancias_service` 149→113 que estaban en el techo.
 
-**Frontend — 38 archivos > 150** (sin contar los `.test.*`):
-`costos/page.tsx` **624** · `vacantes/[id]/page.tsx` **577** · `onboarding/templates/[id]/page.tsx` 412 · `onboarding/page.tsx` 410 · `configuracion/page.tsx` 390 · `ImportarNominaCSVModal.tsx` 377 · `offboarding/page.tsx` 307 · `onboarding/templates/page.tsx` 290 · `NominaModal.tsx` 287 · `areas/page.tsx` 261 · `evaluacion/[token]/page.tsx` 258 · `VacanteModal.tsx` 251 · `AIPanel.tsx` 249 · `assessment/page.tsx` 233 · `empresas/[id]/page.tsx` 230 · `EmpresaModal.tsx` 226 · `vacantes/page.tsx` 217 · `CampanaModal.tsx` 208 · `AreaModal.tsx` 207 · `EmpresaAreasTab.tsx` 206 · `empresas/page.tsx` 204 · `login/page.tsx` 201 · `NineBox.tsx` 198 · `auditLabels.ts` 198 · `AsignacionModal.tsx` 192 · `CapacitacionModal.tsx` 192 · `assessment/[id]/page.tsx` 192 · `OnboardingChecklist.tsx` 186 · `CandidatoModal.tsx` 181 · `empleados/modal/_constants.ts` 175 · `ArbolProyecto.tsx` 170 · `ItemModal.tsx` 161 · `ObjetivoModal.tsx` 156 · `CatalogoTab.tsx` 153 · `MapaVacaciones.tsx` 152 · `ItemsTab.tsx` 152.
-> Dos de los 38 son primitivos generados de **shadcn/ui**, no código nuestro: `dropdown-menu.tsx` 268 y `dialog.tsx` 160. **No cuentan como deuda.** Los dos objetivos grandes siguen siendo `costos/page.tsx` (624) y `vacantes/[id]/page.tsx` (577) — copiar el corte de `components/features/sucesion/`.
+> 🔴 **UN SATÉLITE NO TIENE LÍMITE PROPIO DE 200 POR VIVIR EN `repositories/`.** Dos archivos
+> `_row` tenían escrito "acá el límite es 200" y uno llegó a **159**. Un `_*.py` dentro de
+> `repositories/` **es un repositorio y su límite es 100**; dentro de `services/`, 150. Partir un
+> archivo para respetar un límite es correcto; redefinir el límite del archivo nuevo, no.
 
-**Backend over-limit:**
-- **Services (>150):** `_audit_payloads.py` **167** · `reporte_anual.py` **154**.
-- **Repos (>100):** `ev_instancias_repo.py` **146** · `costo_repo.py` **135** · `assessment_repo.py` **130** · `ev_plantillas_repo.py` **129**.
-- **Routers: ninguno over-limit** (el máximo es 80/80).
-> `costo_repo` (135) y `assessment_repo` (130) siguen siendo **legacy con CERO callers** — verificado: solo aparecen en su propio archivo, en `db/schema.sql` y en un comentario de `test_assessment_vacantes_scope.py` que dice explícitamente que son el código muerto. `costo_service` usa `nomina_repo`/`periodo_repo`/`presupuesto_repo`. Candidatos a borrar, junto con `EliminarLoteButton.tsx` (74, 0 callers).
+**Backend — nadie over-limit. En/al límite EXACTO (el próximo cambio EXIGE dividir primero):**
+- **Services 150/150:** `assessment_service.py`. **A 149:** `vacante_service` · `offboarding_service` · `adjunto_service` · `_nomina_lote`.
+- **Repos 100/100:** `planes_carrera_repo` · `inventario_asignaciones_repo` · `evaluacion_repo`. **A 98-99:** `objetivo_repo` · `vacante_repo` · `onboarding_templates_repo` · `nomina_repo` · `inventario_items_repo` · `ev_instancias_repo` · `empresa_repo` · `capacitacion_repo`.
+- **Routers 80/80:** `vacantes.py` · `adjuntos.py`. **A 79:** `vacaciones.py` · `objetivos.py` · `inventario_items.py` · `asignaciones_capacitacion.py`.
+> ⚠️ **`gmail_service.py` ya NO está en el techo** (150 → **122**): el manejo del token se fue a `_google_token.py`, compartido con el envío. Quedó solo con la recepción de mails de candidatos.
 
-**En/al límite EXACTO (el próximo cambio EXIGE dividir primero):**
-- **Services 150/150:** `gmail_service.py` · `assessment_service.py`. **A 149:** `_audit_payloads_rrhh.py` · `vacante_service.py` · `usuario_service.py` · `adjunto_service.py` · `ev_instancias_service.py` · `offboarding_service.py`.
-- **Repos 100/100:** `vacaciones_repo.py` · `onboarding_repo.py` · `evaluacion_repo.py` · `inventario_asignaciones_repo.py`. **A 99:** `objetivo_repo.py` · `planes_carrera_repo.py`.
-- **Routers 80/80:** `vacantes.py` · `adjuntos.py`. **A 79:** `objetivos.py` · `inventario_items.py` · `asignaciones_capacitacion.py`.
+**Frontend — 33 archivos > 150** (sin contar `.test.*`), y **2 hooks > 80**:
+`costos/page.tsx` **624** · `vacantes/[id]/page.tsx` **577** · `onboarding/page.tsx` 410 ·
+`ImportarNominaCSVModal.tsx` 377 · `offboarding/page.tsx` 307 · `NominaModal.tsx` 287 ·
+`areas/page.tsx` 261 · `evaluacion/[token]/page.tsx` 258 · `VacanteModal.tsx` 251 ·
+`AIPanel.tsx` 249 · `assessment/page.tsx` 233 · `empresas/[id]/page.tsx` 230 ·
+`EmpresaModal.tsx` 226 · `vacantes/page.tsx` 217 · +19 más entre 152 y 208.
+- **Hooks sobre 80:** `useFiltrosVacaciones.ts` **95** · `useFiltrosAsignacionesCap.ts` **89**. Molde para cortarlos: `useOpcionesAusencias` (partir la carga de opciones del estado del filtro).
+- ⬜ **No cuentan como deuda:** `dropdown-menu.tsx` 268 y `dialog.tsx` 160 son primitivos generados de shadcn/ui.
+- ✅ Ya cortados: `configuracion/page.tsx` (390 → **81**) · `onboarding/templates/[id]/page.tsx` (412 → **136**) · `onboarding/templates/page.tsx` (290 → **120**).
+> Los dos objetivos grandes siguen siendo `costos/page.tsx` (624) y `vacantes/[id]/page.tsx` (577) — copiar el corte de `components/features/sucesion/` (855 → 85).
 
 **Cortes ya identificados (para no re-diagnosticar):**
-- `gmail_service.py` → extraer el parseo a **`_gmail_parseo.py`** (va con el Bloque E1).
 - `objetivos.py` e `inventario_items.py` (79) → al dividirlos, **agregarles `shared_limit("30/hour", scope="export")`**; hay un test que lo recuerda.
 - `evaluacion_repo.py` (100) y su router → los pide el Bloque D1 (estadísticas cross-lote).
-- ✅ Ya hecho: `vacaciones_service.py` → `_vacaciones_write.py` (77), simétrico con `_ausencias_write.py` (110).
+
+### 🔴 Código muerto — el criterio es CALLERS REALES, no visibilidad en la UI
+
+**"Está oculto en la UI" ≠ "está muerto".** En el relevamiento del 2/8, de 5 sospechosos **3
+estaban vivos**, y la lista vieja de este archivo fue lo que indujo el error. La verificación es
+siempre la misma y no se salta: grep del nombre del módulo Y de su clase en `services/`,
+`routers/`, `repositories/`, `tests/` y `main.py`.
+
+**Ya borrado el 2/8/2026 (0 callers, verificado uno por uno):** `repositories/costo_repo.py` ·
+`repositories/assessment_repo.py` · `components/features/evaluaciones/EliminarLoteButton.tsx`.
+`costo_service` usa `nomina_repo`/`periodo_repo`/`presupuesto_repo`, no `costo_repo`.
+> Los 8 casos parametrizados que `test_selects_repos` tenía sobre esos dos repos desaparecieron
+> con ellos: es esperado, el barrido descubre por introspección.
+
+🔴 **LO QUE NO ESTÁ MUERTO Y NO SE BORRA, aunque no se vea en la UI:**
+
+| Qué | Por qué |
+|---|---|
+| **`ev_*` entero** (`ev_ciclos`, `ev_plantillas`, `ev_instancias` — repos, services y routers) | **Los 3 routers están MONTADOS** en `main.py` y los repos tienen callers. Las tablas están vacías en producción, pero **la API existe y responde**: borrarlos rompe endpoints publicados. Se limpian en el cutover a AWS, con el resto de las huérfanas. |
+| **Assessment** (services, schemas, tests) | Apagado por FLAG (`ASSESSMENT_ENABLED`), no muerto. Encenderlo es una variable de entorno y cero código. Solo `assessment_repo` estaba huérfano, y ya se borró. |
+| **Sucesión** (todo el backend, y los 11 componentes del front) | Apagado por dos flags en el front. El backend está intacto y montado. |
+
+**Tablas huérfanas** (`assessment_reportes`, `configuracion_empresa`, `documentos_empleado`,
+`notificaciones`, `notificaciones_config`, `sucesion_posiciones`): 0 filas las 6. **Se limpian
+después del cutover a AWS**, como ya estaba decidido — no ahora.
 
 ### Al margen por decisión (NO tocar)
 - **S6 / DROP de `cargo` y `rol`** → no se borra nada (decisión de producto). Fallbacks `roles[0] ?? cargo` quedan.
 - **Campo `equipo`** (texto libre): sin tabla `equipos`, "asignar/importar por equipo" no existe.
-- **Tablas huérfanas** (`assessment_reportes`, `configuracion_empresa`, `documentos_empleado`, `notificaciones`, `notificaciones_config`, `sucesion_posiciones`): se limpian **después del cutover a AWS**.
 - **"Compatibilidad con una posición"** (sucesión): feature nunca construida, no deuda técnica. El ranking es por assessment genérico. Cuando RRHH la reclame, definir qué significa compatibilidad antes de improvisar.
 
 ### Tests
-- **Backend: 975 passed** en **61 archivos `test_*.py`** (+ `tests/_postgrest_schema.py`, que es helper, no test). `pytest -q` desde `backend/` con `venv`.
-- **Front: `npm test` (= `vitest run`) — 143 tests en 10 archivos**: `services/filtros-export.test.ts` 31 · `components/layout/nav-config.test.ts` 25 · `components/features/auditoria/auditLabels.test.ts` 18 · `components/ui/FiltersBar.test.tsx` 18 · `components/features/shared/filtros.test.ts` 12 · `hooks/useCanWrite.test.ts` 10 · `components/features/empleados/ficha/_domicilio.test.ts` 9 · `services/empleados.test.ts` 8 · `HistorialSalarialSection.test.tsx` 7 · `components/features/export/ExportMenu.test.ts` 5. **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta.
-- **Los tres barridos estructurales** (paridad list↔export, límite de export, nav↔permisos) cubren automáticamente lo que se agregue. **Todos llevan guarda de mínimo.**
+- **Backend: 1551 passed** en **89 archivos `test_*.py`** (+ `tests/_postgrest_schema.py`, que es helper, no test). `pytest -q` desde `backend/` con `venv`.
+- **Front: `npm test` (= `vitest run`) — 214 tests en 16 archivos.** **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Los CINCO barridos estructurales** — cada uno cubre automáticamente lo que se agregue después, y **todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una extracción rota devolvería 0 elementos y pasaría en el vacío:
+  1. `tests/test_paridad_list_export.py` — el export acepta los mismos Query que el listado.
+  2. `tests/test_limite_export.py::TestTodosLosExportsChequean` — todo export llama a `verificar_limite_export`.
+  3. `tests/test_selects_repos.py` — **todo** `select` con embed del repo, validado con AST contra `db/schema.sql`. Descubrimiento por introspección, nunca una lista.
+  4. `tests/test_espejo_permisos.py` — `frontend/services/permisos.ts` contra `utils/permisos.py`: secciones, acciones, roles y `MANDOS_MEDIOS_SECCIONES`. **Cierra el último espejo manual que no tenía red.**
+  5. `frontend/components/layout/nav-config.test.ts` — `NAV_GROUPS` contra `seccionDeRuta`.
 - Adjuntos: 11 tests unit con `_FakeRepo` + storage monkeypatcheado. **E2E real nunca se ejecutó** (`_BUCKET="documentos"` hardcodeado apunta a prod). Decisión: E2E automatizado en el cutover a AWS/S3.
 - 🚨 **Antes de dar un test por bueno, contestar: ¿qué tendría que ser distinto en el fake para que pueda fallar?** Ver la sección "Un test solo prueba lo que el fake puede desmentir".
 
 ### En pausa
 - **Link público de carga de horas** (E4) — mockup HTML aprobado. Bloqueado: requiere la reunión de definición.
-- **Limpieza general del repo** (Bloque G): dead code (`costo_repo`, `assessment_repo`, `EliminarLoteButton.tsx`), los tres duplicados de la raíz, y el filtro `empresa` duplicado 8× entre repos. No urgente.
+- **Limpieza general del repo** (Bloque G): lo que queda es el filtro `empresa` duplicado 8× entre repos y el presupuesto de tiempo duplicado entre `_nomina_lote` y `_lote_mails`. **El dead code y los duplicados de la raíz YA SE BORRARON** (2/8/2026). No urgente.
 
 ---
 

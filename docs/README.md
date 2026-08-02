@@ -19,9 +19,12 @@ el repo; el estado de las features vive en [`CLAUDE.md`](../CLAUDE.md).
 - Python 3.11+
 - Node.js 20+
 - Cuenta en Supabase, con los buckets de Storage `documentos`, `cvs` y `avatars`
-- API key de Anthropic
-- API key de Resend — el backend **no arranca sin ella**: `resend_api_key` es un campo
-  requerido en `config/settings.py`, aunque hoy ningún módulo envíe mails
+- API key de Anthropic — **obligatoria**: el backend no arranca sin ella
+
+> 🔴 **`RESEND_API_KEY` ya NO se necesita.** Se sacó el 2/8/2026: los mails salen por Gmail,
+> reusando el OAuth que ya existe. Era obligatoria y ningún service la importaba.
+> **El inventario completo de variables está en [`DEPLOY.md`](DEPLOY.md)** — es el único
+> lugar donde se mantiene, para que no vuelva a estar partido en tres.
 
 ## Instalación
 
@@ -99,12 +102,13 @@ contra una base limpia y ya incluye todo. **No** correr las migraciones encima.
 psql "$DATABASE_URL" -f backend/db/schema.sql
 ```
 
-- `backend/migrations/` (001 → 074) es **historial**, no bootstrap: documenta cómo se
-  llegó hasta acá. Correrlas en orden contra una base vacía no reproduce producción de
-  forma confiable. Cada cambio nuevo al schema se sigue versionando ahí.
+- `backend/migrations/` (001 → 089, 87 archivos) es **historial**, no bootstrap: documenta
+  cómo se llegó hasta acá. Correrlas en orden contra una base vacía no reproduce producción
+  de forma confiable. Cada cambio nuevo al schema se sigue versionando ahí.
 - `backend/migrations/000_run_all.sql` está **deprecado**: tiene un guard que aborta la
   ejecución. Se conserva solo como historial.
-- Detalle completo del procedimiento y sus límites: [`backend/db/README.md`](../backend/db/README.md).
+- ⚠️ `schema.sql` **no trae los 36 triggers de `updated_at`**: se recrean aparte. Ese y los
+  demás detalles del rebuild, en [`DEPLOY.md`](DEPLOY.md) §2.
 
 ## Estructura
 
@@ -132,17 +136,29 @@ RRHH/
 └── vercel.json
 ```
 
-## Documentación interna
+## Índice de `docs/` — qué responde cada documento
 
-- [`CLAUDE.md`](../CLAUDE.md) — contexto del proyecto y estado de las features
-- [`MODELO_DATOS.md`](MODELO_DATOS.md) — fuente de verdad del modelo de datos
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — decisiones de arquitectura
-- [`CHANGELOG.md`](CHANGELOG.md) — historial de cambios
-- [`backend/db/README.md`](../backend/db/README.md) — reconstrucción de la base
+**Si vas a montar infraestructura, empezá por `DEPLOY.md`.**
 
-Convenciones de código:
+| Documento | Responde |
+|---|---|
+| [`DEPLOY.md`](DEPLOY.md) | Variables de entorno, cómo reconstruir la base, migraciones, techos de plataforma y orden de deploy |
+| [`BITACORA-CAMBIOS.md`](BITACORA-CAMBIOS.md) | Qué cambió en cada sesión y qué tiene que hacer infraestructura al respecto |
+| [`SMOKE-TEST.md`](SMOKE-TEST.md) | Cómo correr el test de humo contra el backend real · resultados en [`SMOKE-TEST-RESULTADOS.md`](SMOKE-TEST-RESULTADOS.md) |
+| [`DECISIONES.md`](DECISIONES.md) | Por qué se decidió cada cosa — y sobre todo, qué se descartó y por qué |
+| [`Plan de trabajo`](<Plan de trabajo>) | Qué se hace ahora (v2, el vigente) |
+| [`DEUDA-TECNICA.md`](DEUDA-TECNICA.md) | Qué hay que limpiar, con gravedad y esfuerzo |
+| [`MATRIZ-FILTROS.md`](MATRIZ-FILTROS.md) | Qué corte de información puede sacar RRHH sin pedir nada |
+| [`ESTADO-VS-COMPROMISO.md`](ESTADO-VS-COMPROMISO.md) | Qué se comprometió con el directorio y qué existe de verdad |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Por qué este stack y no otro |
+| [`CLAUDE.md`](../CLAUDE.md) | Contexto del proyecto y estado de las features (vive en la raíz) |
+| `backend/db/schema.sql` | 🔴 **El schema. Única fuente de verdad** — se lee del catálogo de Postgres, no del historial de migraciones |
 
-- [`BASES-DE-DESARROLLO.md`](BASES-DE-DESARROLLO.md) — bases de desarrollo
-- [`ORDEN-Y-LEGIBILIDAD.md`](ORDEN-Y-LEGIBILIDAD.md) — orden y legibilidad
-- [`SEGURIDAD-PENTEST.md`](SEGURIDAD-PENTEST.md) — seguridad y vulnerabilidades
-- [`UX-UI.md`](UX-UI.md) — diseño de interfaces
+**Normas de la agencia** (obligatorias, no descriptivas):
+[`BASES-DE-DESARROLLO.md`](BASES-DE-DESARROLLO.md) ·
+[`ORDEN-Y-LEGIBILIDAD.md`](ORDEN-Y-LEGIBILIDAD.md) ·
+[`SEGURIDAD-PENTEST.md`](SEGURIDAD-PENTEST.md) ·
+[`UX-UI.md`](UX-UI.md)
+
+**Registro histórico** (obsoletos como plan, se conservan como intención original del producto):
+`PLAN_DESARROLLO_AHORA.md` · `PLAN_DESARROLLO_DESPUES.md`

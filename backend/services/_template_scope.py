@@ -26,7 +26,7 @@ La visibilidad NUNCA reemplaza a la empresa: ser el autor de una plantilla no ab
 otra empresa.
 
 ⚠️ `gerencia_lectura` NO ES UNA EXCEPCIÓN — ve todo, incluidas las privadas de los demás. El
-bypass está en `_onboarding_templates_row.with_visibilidad` (por eso este helper recibe `rol`
+bypass está en `_onboarding_templates_filtros.with_visibilidad` (por eso este helper recibe `rol`
 además de `user_id`, igual que `_empleado_scope.ensure_empleado_visible`). Es una decisión de
 producto: "privada" acá significa privacidad ENTRE PARES DE RRHH (un borrador que no quiero
 que aparezca en la lista de mis compañeros), no confidencialidad. Ocultárselas a gerencia sería

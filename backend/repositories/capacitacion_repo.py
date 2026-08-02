@@ -82,7 +82,17 @@ class CapacitacionRepo:
         res = supabase_admin.table("empleado_capacitacion").select("id").eq("capacitacion_id", id).limit(1).execute()
         return bool(res.data)
 
-    def find_empresa_for(self, id: str) -> Optional[str]:
-        """Retorna el empresa_id de la capacitación, o None si no existe."""
-        res = supabase_admin.table(_T).select("empresa_id").eq("id", id).maybe_single().execute()
+    def find_empresa_for(self, id: str, empresa_id: Optional[str] = None) -> Optional[str]:
+        """
+        Retorna el empresa_id de la capacitación, o None si no existe.
+
+        Con `empresa_id`, el filtro va EN EL WHERE (Forma A) y devuelve None también cuando la
+        capacitación existe pero es de OTRA empresa: el caller no puede distinguir los dos casos
+        aunque quiera. Es lo que permite que el service responda un 404 único en vez del
+        EMPRESA_MISMATCH (422) que confirmaba la existencia del recurso ajeno.
+        """
+        q = supabase_admin.table(_T).select("empresa_id").eq("id", id)
+        if empresa_id:
+            q = q.eq("empresa_id", empresa_id)
+        res = q.maybe_single().execute()
         return str(res.data["empresa_id"]) if res.data else None

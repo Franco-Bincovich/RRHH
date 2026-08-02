@@ -133,7 +133,10 @@ extraídos de las migraciones 001–066. Correrlo en el rebuild, **después** de
 Casos pesados: los **5 embeds anidados de 2 niveles** son JOIN de 3 tablas —
 `costo_repo:17`, `nomina_repo:17`, `onboarding_repo:15`, `assessment_repo:16`,
 `assessment_resultados_repo:17`. El **único self-join real** (`manager:manager_id`) ya está
-resuelto en el molde. `0` RPC en todo el código: no hay lógica escondida en funciones de PG.
+resuelto en el molde.
+> ⚠️ **`costo_repo.py` y `assessment_repo.py` se borraron el 2/8/2026** — eran legacy con cero
+> callers (`costo_service` usa `nomina_repo`/`periodo_repo`/`presupuesto_repo`). **No hay que
+> portarlos:** son 2 de los 5 "casos pesados" de esta lista y desaparecieron sin reemplazo. `0` RPC en todo el código: no hay lógica escondida en funciones de PG.
 
 **~60 queries sueltas en services** (violan la arquitectura router→service→repo; no están en
 repos, así que un plan que cuente solo los 44 archivos de `repositories/` subestima ~18%):

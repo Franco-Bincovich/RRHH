@@ -44,7 +44,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from repositories import onboarding_repo as onb_repo_mod
-from repositories._onboarding_templates_row import ROL_VE_TODO, with_visibilidad
+from repositories._onboarding_templates_filtros import ROL_VE_TODO, with_visibilidad
 from schemas.onboarding import TareaCreate, TareaResponse, TareaUpdate, TemplateResponse, TemplateUpdate
 from services._onboarding_iniciar import iniciar
 from services.onboarding_templates_service import OnboardingTemplatesService

@@ -77,7 +77,8 @@ def dar_de_baja(empleado_id: str, fecha_egreso: date, empresa_id: Optional[UUID]
     """Da de baja a un empleado: setea estado='baja' y fecha_egreso en un solo UPDATE.
 
     Usado al iniciar un offboarding. A diferencia de baja_logica, registra también
-    la fecha de egreso, como exige MODELO_DATOS.md (baja = estado + fecha_egreso).
+    la fecha de egreso: la baja es lógica (estado + fecha_egreso), nunca física — así el histórico
+    de costos sigue incluyendo a los que ya no están.
 
     Args:
         empleado_id: UUID (str) del empleado a dar de baja.

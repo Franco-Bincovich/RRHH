@@ -7,7 +7,7 @@ real de la base de producción, leído directamente del catálogo de Postgres
 (`information_schema` / `pg_catalog`), no derivado del historial de migraciones.
 
 Correrlo contra un Postgres limpio reconstruye el esquema `public` completo:
-**47 tablas, 310 constraints y 220 índices** (PK, FK, UNIQUE y CHECK, incluidas las
+**58 tablas, 364 constraints y 151 índices declarados** (PK, FK, UNIQUE y CHECK, incluidas las
 constraints compuestas del modelo multiempresa).
 
 Contiene solo estructura: **no incluye datos**, ni los objetos de los esquemas internos de
@@ -24,7 +24,7 @@ Supabase real.
 
 ## `migrations/` es historial, no bootstrap
 
-`backend/migrations/` (001 → 074) documenta **cómo se llegó hasta acá**. No es un mecanismo
+`backend/migrations/` (001 → 089, 87 archivos) documenta **cómo se llegó hasta acá**. No es un mecanismo
 de bootstrap y correrlas en orden contra una base vacía no reconstruye producción de forma
 confiable: hay dependencias de orden rotas, operaciones no idempotentes, y parte del modelo
 multiempresa se aplicó a mano en producción (drift) y se versionó retroactivamente de forma
@@ -39,8 +39,14 @@ hay que regenerarlo desde el catálogo de la base para que siga siendo fuente de
 ## `000_run_all.sql` está DEPRECADO
 
 `backend/migrations/000_run_all.sql` era el consolidado viejo. Declaraba cubrir el orden
-001 → 024, quedó ~50 migraciones desactualizado, y reintroduce triggers de auditoría que
+001 → 024, quedó ~65 migraciones desactualizado, y reintroduce triggers de auditoría que
 fueron dropeados (la captura hoy es app-level).
 
 Tiene un guard al principio (`RAISE EXCEPTION`) que **aborta la ejecución** antes de correr
 cualquier sentencia. Se conserva únicamente como historial.
+
+## Lo que este archivo NO cubre
+
+El inventario de variables de entorno, los techos de la plataforma y el orden de deploy viven en
+[`docs/DEPLOY.md`](../../docs/DEPLOY.md), que es el documento único para eso. Acá queda solo el
+procedimiento de reconstrucción del schema.

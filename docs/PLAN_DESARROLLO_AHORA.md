@@ -50,7 +50,7 @@ HR Karstec hoy es **mono-empresa** (no existe tabla `empresas` ni columna `empre
 
 ## 3. FASE 1 — Módulos portados de Nexio
 
-Cada módulo: SQL (con `empresa_id`) → backend → frontend. Vista única de RRHH (no hay "vista empleado"). El código real de referencia está en la extracción de Nexio (`EXTRACCION_NEXIO_PARA_PORTAR.md`).
+Cada módulo: SQL (con `empresa_id`) → backend → frontend. Vista única de RRHH (no hay "vista empleado"). El código real de referencia estaba en la extracción de Nexio, borrada el 2/8/2026 una vez terminado el port (queda en el historial de git).
 
 ### 3.1 Vacaciones + Mapa
 - Tabla `solicitudes_vacaciones (id, empresa_id, empleado_id, fecha_desde, fecha_hasta, dias, comentario, estado, created_at)`. `estado` = `cancelada` opcional; planificada/tomada se **derivan por fecha**.

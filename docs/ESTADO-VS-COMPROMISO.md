@@ -249,7 +249,7 @@ Verificado contra los archivos fuente. En todos los casos gana el código.
 2. **Gate de assessment.** `CLAUDE.md` dice que los dos módulos apagados usan `useState(false)` y que "no hay que convertir el flag en `const`". Cierto para `assessment/[id]/page.tsx:75` y para sucesión. **Falso para el listado**: `app/(dashboard)/assessment/page.tsx:74-75` tiene un `router.replace()` incondicional + `return null` y el cuerpo entero detrás de un `eslint-disable no-unreachable`. No hay flag ahí.
 3. **La ficha del empleado tiene 6 secciones** (datos, adjuntos, inventario, historial de cambios, vacaciones, cesiones — `empleados/[id]/page.tsx:99-104`) y `CLAUDE.md` no las documenta en ningún lado. Tres de esas seis son ítems comprometidos con el directorio (3, 4 y 5 de este documento).
 4. ~~**`Plan de trabajo` (raíz) está desactualizado en su ítem 1.4**~~ — **CERRADO, ya no aplica.** El hallazgo era doble y las dos mitades se resolvieron: (a) el defecto de comparar "contra la fecha de hoy" ya estaba corregido — el código compara **por solapamiento con el rango del registro** (`services/_periodo_utils.py:31-60`); (b) el `rol=None` que el call de costos pasaba también se cerró — `routers/costos_escrituras.py:39` pasa `u.get("rol")` y `costo_service.cargar_nomina` lo reenvía a `verificar_periodo_abierto`. Además el documento que originaba el hallazgo (la v1 de `Plan de trabajo`, en la raíz) **se borró al consolidar la doc**; el vigente es [`Plan de trabajo`](<Plan de trabajo>) v2. Se deja la entrada en vez de renumerar, para no romper las referencias a los ítems 1–5.
-5. **`CLAUDE.md` dice que `docs/AUDITORIA_HR_KARSTEC.md` marca offboarding como hecho y que eso es falso** — confirmado: offboarding es el básico, y las columnas de entrevista de salida están muertas.
+5. **La auditoría del 29/5 marcaba offboarding como hecho y era falso** — confirmado: offboarding era el básico y las columnas de entrevista de salida estaban muertas. (Esa auditoría se borró el 2/8/2026; queda en git. Las columnas se activaron después, en C3.)
 
 ---
 
@@ -257,3 +257,27 @@ Verificado contra los archivos fuente. En todos los casos gana el código.
 
 - **Se actualiza al cerrar cada ítem**, no al final de una fase: se cambia el estado de esa fila, se reemplaza la evidencia por la del código nuevo y se vacía "Qué falta". Si el ítem se cerró de una forma distinta a la comprometida, además se agrega o se corrige su entrada en la sección 3.
 - **La evidencia es siempre `archivo:línea` o el nombre del objeto de DB** (tabla, columna, endpoint). Nunca "según CLAUDE.md" ni "según el auto-reporte". Lo de base se verifica contra el catálogo real por MCP, no contra las migraciones.
+
+---
+
+## Addendum — lo construido después del 28/7/2026
+
+No estaba en el compromiso original con el directorio: salió del `Plan de trabajo` y de pedidos
+de RRHH durante el desarrollo. Se lista para que el contraste quede completo.
+
+| Ítem | Estado | Evidencia |
+|---|---|---|
+| **Configuración de reglas de negocio** — la base de días hábiles y la escala de vacaciones dejan de estar hardcodeadas | ✅ HECHO | mig 085 · `/configuracion` |
+| **Alertas del dashboard** (campos vacíos, módulo bloqueado) | ✅ HECHO | `_dashboard_alertas_catalogo.py` |
+| **Historial salarial en la ficha** | ⚠️ HECHO, **sale vacío**: `costos_nomina` tiene 0 filas | `costo_service.get_historial_salarial` |
+| **`manager_id` desde el import de nómina** | ⚠️ HECHO, **sin datos**: `manager_id` sigue 0/19 porque RRHH no reimportó | `_nomina_superiores.py` |
+| **Superior de otra empresa del grupo** (ownership cruzado) | ✅ HECHO | `_alcance_mandos.py` |
+| **Envío de mails por Gmail + plantillas editables** | ✅ HECHO, **sin usar**: falta designar la casilla del sistema y reconectar con el scope de envío | mig 087 · `services/mailer/` |
+| **Subtipos de ausencia** (dos niveles) | ✅ HECHO | mig 088 |
+| **Asignar un área entera a un proyecto** | ✅ HECHO | `_asignaciones_bulk.asignar_area` |
+| **Lector de CSV unificado** (arregla UTF-16 leído como basura) | ✅ HECHO | `_import_encoding.py` |
+| **Import de novedades (ausencias/vacaciones)** | 🔴 **BLOQUEADO**: RRHH no definió la estructura del archivo, y el de vacaciones solo trae legajo — que está 0/19 | `_import_csv.py` |
+
+🔴 **El patrón que se repite: la feature está entera y el dato no existe.** Historial salarial,
+`manager_id`, mails y reportes están construidos y salen vacíos o sin usar. **No es deuda
+técnica: es un bloqueante de adopción**, y la acción es de RRHH, no de desarrollo.
