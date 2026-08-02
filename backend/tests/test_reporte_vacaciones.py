@@ -117,39 +117,100 @@ def test_saldos_cancelados_no_restan_y_sin_asignar(monkeypatch):
 
 # ── R10 ausentismo por área ─────────────────────────────────────────────────────
 
-def _aus_db():
+# 🔴 LA BASE SE CONFIGURA EN 20, NO EN 22, A PROPÓSITO.
+#
+# Antes el 22 era una constante del módulo y el test lo repetía a los dos lados de la
+# igualdad, así que la aserción se cumplía sola: volver a hardcodear el número no la habría
+# roto. Desde la migración 085 la base sale de parametros_empresa, y con un valor distinto del
+# viejo, reintroducir el 22 —en el cálculo o en el texto de la nota— rojea.
+_BASE_TEST = 20
+
+
+def _sin_config(monkeypatch, base: int = _BASE_TEST):
+    """La base sale de otra tabla vía ConfiguracionService, que tiene su propio cliente de
+    Supabase. Acá se stubea la lectura entera: estos tests son sobre la MATEMÁTICA de la tasa,
+    no sobre de dónde sale el número — eso lo cubre test_configuracion_reglas."""
+    monkeypatch.setattr(aus, "base_dias_habiles", lambda empresa_id=None: base)
+
+
+def _aus_db(cuenta_maternidad: bool = True):
+    # `tipos_ausencia` viaja embebido en cada ausencia: es lo que decide si la fila ENTRA en la
+    # cuenta. El fake lo modela por fila, no global, para que un tipo que no computa pueda
+    # convivir con otros que sí — si devolviera lo mismo para todas, el filtro no se probaría.
     return _FakeDB({
         "empleados": [
             {"id": "e1", "estado": "activo", "area_id": "A", "areas": {"nombre": "Tec"}},
             {"id": "e2", "estado": "activo", "area_id": "B", "areas": {"nombre": "Ventas"}},
         ],
         "solicitudes_ausencia": [
-            {"dias": 11, "justificada": True, "fecha_desde": "2026-03-05", "empleados": {"area_id": "A", "areas": {"nombre": "Tec"}}},
-            {"dias": 4, "justificada": False, "fecha_desde": "2026-03-06", "empleados": {"area_id": "A", "areas": {"nombre": "Tec"}}},
-            {"dias": 2, "justificada": False, "fecha_desde": "2026-03-07", "empleados": {"area_id": "B", "areas": {"nombre": "Ventas"}}},
+            {"dias": 11, "justificada": True, "fecha_desde": "2026-03-05", "tipos_ausencia": {"cuenta_ausentismo": True}, "empleados": {"area_id": "A", "areas": {"nombre": "Tec"}}},
+            {"dias": 4, "justificada": False, "fecha_desde": "2026-03-06", "tipos_ausencia": {"cuenta_ausentismo": True}, "empleados": {"area_id": "A", "areas": {"nombre": "Tec"}}},
+            {"dias": 2, "justificada": False, "fecha_desde": "2026-03-07", "tipos_ausencia": {"cuenta_ausentismo": True}, "empleados": {"area_id": "B", "areas": {"nombre": "Ventas"}}},
+            {"dias": 90, "justificada": True, "fecha_desde": "2026-03-09", "tipos_ausencia": {"cuenta_ausentismo": cuenta_maternidad}, "empleados": {"area_id": "A", "areas": {"nombre": "Tec"}}},
         ],
     })
 
 
 def test_ausentismo_metricas_y_tasa(monkeypatch):
-    monkeypatch.setattr(aus, "supabase_admin", _aus_db())
+    monkeypatch.setattr(aus, "supabase_admin", _aus_db(cuenta_maternidad=False))
+    _sin_config(monkeypatch)
     r = aus.generate_ausentismo(3, 2026, empresa_id=None, area_id=None, vista="ambos")
     por = {f["area"]: f for f in r["ausentismo"]}
     assert por["Tec"]["dias_totales"] == 15 and por["Tec"]["dias_injustificados"] == 4
-    assert por["Tec"]["tasa_total_pct"] == round(15 / 22 * 100, 2)          # headcount Tec = 1 → base 22
-    assert por["Tec"]["tasa_injustificada_pct"] == round(4 / 22 * 100, 2)
+    assert por["Tec"]["tasa_total_pct"] == round(15 / 20 * 100, 2)          # headcount Tec = 1 → base 20
+    assert por["Tec"]["tasa_injustificada_pct"] == round(4 / 20 * 100, 2)
     assert por["Ventas"]["dias_totales"] == 2 and por["Ventas"]["dias_injustificados"] == 2
-    assert "22 días hábiles" in r["nota"]
+
+
+def test_la_nota_dice_la_base_configurada(monkeypatch):
+    monkeypatch.setattr(aus, "supabase_admin", _aus_db(cuenta_maternidad=False))
+    _sin_config(monkeypatch)
+    r = aus.generate_ausentismo(3, 2026, empresa_id=None, area_id=None, vista="ambos")
+    assert "20 días hábiles" in r["nota"] and "22" not in r["nota"]
+
+
+def test_un_tipo_que_no_cuenta_como_ausentismo_queda_afuera(monkeypatch):
+    """`cuenta_ausentismo` (política del TIPO) y `justificada` (hecho de la AUSENCIA) son
+    ortogonales: los 90 días de abajo están justificados y aun así no computan."""
+    monkeypatch.setattr(aus, "supabase_admin", _aus_db(cuenta_maternidad=False))
+    _sin_config(monkeypatch)
+    por = {f["area"]: f for f in aus.generate_ausentismo(3, 2026)["ausentismo"]}
+    assert por["Tec"]["dias_totales"] == 15, "los 90 días del tipo que no computa entraron igual"
+
+
+def test_el_mismo_tipo_contando_si_suma(monkeypatch):
+    # La contracara: si el fake devolviera siempre lo mismo, el test de arriba no probaría el
+    # filtro sino la ausencia de esa fila. Acá cambia SOLO el flag y el total se mueve.
+    monkeypatch.setattr(aus, "supabase_admin", _aus_db(cuenta_maternidad=True))
+    _sin_config(monkeypatch)
+    por = {f["area"]: f for f in aus.generate_ausentismo(3, 2026)["ausentismo"]}
+    assert por["Tec"]["dias_totales"] == 105
+
+
+def test_una_ausencia_sin_tipo_resuelto_se_cuenta(monkeypatch):
+    """Sin fila de tipo (dato viejo o embed no resuelto) se CUENTA: es el comportamiento previo
+    a la 085 y el default de la columna. Descartar por defecto haría desaparecer ausencias
+    reales de la tasa sin que nadie lo pida."""
+    monkeypatch.setattr(aus, "supabase_admin", _FakeDB({
+        "empleados": [{"id": "e1", "estado": "activo", "area_id": "A", "areas": {"nombre": "Tec"}}],
+        "solicitudes_ausencia": [
+            {"dias": 5, "justificada": False, "fecha_desde": "2026-03-05", "empleados": {"area_id": "A", "areas": {"nombre": "Tec"}}},
+        ],
+    }))
+    _sin_config(monkeypatch)
+    assert aus.generate_ausentismo(3, 2026)["ausentismo"][0]["dias_totales"] == 5
 
 
 def test_ausentismo_filtro_area_excluye_otra(monkeypatch):
     monkeypatch.setattr(aus, "supabase_admin", _aus_db())
+    _sin_config(monkeypatch)
     r = aus.generate_ausentismo(3, 2026, empresa_id=None, area_id="A", vista="ambos")
     assert {f["area"] for f in r["ausentismo"]} == {"Tec"}                  # Ventas excluida por el join
 
 
 def test_ausentismo_vista_injustificado_solo_esa_columna(monkeypatch):
     monkeypatch.setattr(aus, "supabase_admin", _aus_db())
+    _sin_config(monkeypatch)
     r = aus.generate_ausentismo(3, 2026, empresa_id=None, area_id=None, vista="injustificado")
     fila = r["ausentismo"][0]
     assert "dias_injustificados" in fila and "tasa_injustificada_pct" in fila

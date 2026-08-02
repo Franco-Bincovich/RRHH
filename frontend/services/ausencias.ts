@@ -7,16 +7,43 @@ import type {
   AusenciaUpdate,
   TipoAusencia,
   TipoAusenciaListResponse,
+  TipoAusenciaUpdate,
 } from "@/types/ausencias"
 
-export async function fetchTiposAusencia(): Promise<TipoAusenciaListResponse> {
-  return apiFetch<TipoAusenciaListResponse>("/api/ausencias/tipos")
+/**
+ * Tipos visibles para la empresa activa: los globales más los suyos.
+ *
+ * `incluirInactivos` lo usa SOLO la pantalla de configuración, que necesita verlos para poder
+ * reactivarlos. El select del formulario de ausencias no debe ofrecer un tipo dado de baja.
+ */
+export async function fetchTiposAusencia(
+  incluirInactivos = false,
+): Promise<TipoAusenciaListResponse> {
+  const qs = incluirInactivos ? "?incluir_inactivos=true" : ""
+  return apiFetch<TipoAusenciaListResponse>(`/api/ausencias/tipos${qs}`)
 }
 
 export async function createTipoAusencia(nombre: string): Promise<TipoAusencia> {
   return apiFetch<TipoAusencia>("/api/ausencias/tipos", {
     method: "POST",
     body: JSON.stringify({ nombre }),
+  })
+}
+
+/**
+ * Edita un tipo: nombre, alta/baja lógica y si computa como ausentismo.
+ *
+ * 🔴 NO EXISTE UN `deleteTipoAusencia`, y no es un olvido. `solicitudes_ausencia.tipo_id` es
+ * una FK sin ON DELETE: borrar un tipo en uso falla, y si no fallara se llevaría el historial.
+ * La baja es `{ activo: false }` — lo saca de los selects y deja las ausencias viejas intactas.
+ */
+export async function updateTipoAusencia(
+  id: string,
+  cambios: TipoAusenciaUpdate,
+): Promise<TipoAusencia> {
+  return apiFetch<TipoAusencia>(`/api/ausencias/tipos/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(cambios),
   })
 }
 

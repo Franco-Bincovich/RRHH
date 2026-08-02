@@ -84,7 +84,7 @@ export const REPORTES_ESTANDAR: ReporteEstandar[] = [
     id: "ausentismo",
     titulo: "Ausentismo por área",
     descripcion:
-      "Días de ausencia totales e injustificados por área, con sus tasas % sobre 22 días hábiles/mes. Elegí qué métrica ver.",
+      "Días de ausencia totales e injustificados por área, con sus tasas % sobre los días hábiles por mes que estén configurados. Elegí qué métrica ver.",
     icon: CalendarOff,
     usaPeriodo: true,
     usaVista: true,

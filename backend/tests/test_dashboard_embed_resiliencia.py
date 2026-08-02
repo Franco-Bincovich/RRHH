@@ -93,11 +93,30 @@ def test_calcular_extras_un_kpi_roto_no_tumba_el_resto(monkeypatch):
     monkeypatch.setattr(dk, "generate_costos", _boom)  # masa salarial revienta
     monkeypatch.setattr(dk, "generate_distribucion", lambda *a, **k: {"por_seniority": [], "por_modalidad": []})
     monkeypatch.setattr(dk, "supabase_admin", _FakeDB())
+    monkeypatch.setattr(dk, "base_dias_habiles", lambda empresa_id=None: 22)
     r = dk.calcular_extras(date(2026, 3, 15), None)
     assert "masa_salarial" in r.errores                # el KPI fallido queda marcado
     assert r.masa_salarial_actual == 0.0               # y en estado vacío
     assert r.ausencias_activas_hoy == 0                # los demás se devuelven igual (sin propagar)
     assert r.ausentismo_nota                            # la respuesta es válida, no una excepción
+
+
+def test_si_la_configuracion_no_se_puede_leer_solo_cae_el_ausentismo(monkeypatch):
+    """Desde la migración 085 el ausentismo depende de parametros_empresa, o sea de OTRA
+    lectura que puede fallar sola. El fail-safe por KPI tiene que cubrirla igual que al resto.
+
+    Y cuando cae, la nota sale VACÍA en vez de decir "22": un fallback al viejo literal
+    mostraría una tasa calculada con una base que quizás ya nadie configuró, que es peor que
+    no mostrar nada. La tasa y la nota caen juntas porque salen del mismo cálculo.
+    """
+    monkeypatch.setattr(dk, "generate_costos", lambda *a, **k: {"total_nomina": 0})
+    monkeypatch.setattr(dk, "generate_distribucion", lambda *a, **k: {"por_seniority": [], "por_modalidad": []})
+    monkeypatch.setattr(dk, "supabase_admin", _FakeDB())
+    monkeypatch.setattr(dk, "base_dias_habiles", _boom)
+    r = dk.calcular_extras(date(2026, 3, 15), None)
+    assert r.errores == ["ausentismo_mes"]
+    assert r.ausentismo_mes_pct == 0.0 and r.ausentismo_nota == ""
+    assert r.ausencias_activas_hoy == 0                # el resto de la respuesta sigue siendo válida
 
 
 # ── Resiliencia por sección en get_dashboard ──────────────────────────────────────

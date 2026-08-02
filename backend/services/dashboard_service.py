@@ -11,7 +11,8 @@ from uuid import UUID
 from integrations.supabase_client import supabase_admin
 from schemas.dashboard import AlertaResponse, DashboardResponse, KPIResponse
 from services._dashboard_alertas import generar_alertas
-from services._dashboard_kpis import calcular_extras, calcular_headcount
+from services._dashboard_headcount import calcular_headcount
+from services._dashboard_kpis import calcular_extras
 from utils.logger import logger
 
 _KPIS_VACIOS = KPIResponse(empleados_activos=0, ingresos_mes=0, bajas_mes=0,

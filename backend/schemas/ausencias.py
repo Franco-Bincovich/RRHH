@@ -20,6 +20,12 @@ class TipoAusenciaResponse(BaseModel):
     nombre: str
     es_base: bool
     activo: bool
+    # Migración 085. `empresa_id` None = tipo global (las 4 filas base lo son).
+    # `cuenta_ausentismo` es POLÍTICA del tipo y no reemplaza a AusenciaResponse.justificada,
+    # que es un HECHO de la instancia: una licencia por maternidad puede estar justificada y
+    # aun así no computar como ausentismo.
+    empresa_id: Optional[str] = None
+    cuenta_ausentismo: bool = True
 
 
 class TipoAusenciaListResponse(BaseModel):

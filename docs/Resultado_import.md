@@ -369,7 +369,9 @@ Los datos traen dos niveles reales: `ENFERMEDAD FAMILIAR → Madre/padre` · `FR
 **No son colapsables:** una ausencia puede estar *justificada pero rechazada*, o *aprobada sin justificar*. Meter los tres valores en el boolean pierde información de forma irreversible.
 
 **Cuál alimenta el reporte de ausentismo:** `justificada`, y **solo por su negación**.
-`services/reportes/_reporte_ausentismo.py:45` selecciona `dias, justificada, ...`; `:59` → `if not a.get("justificada"): injust[...] += dias`. Salen dos métricas: `tasa_total_pct` (todos los días) y `tasa_injustificada_pct` (los de `justificada=false`), ambas sobre base 22 días hábiles (`_tasa`, :19; `_NOTA`, :16).
+`services/reportes/_reporte_ausentismo.py` selecciona `dias, justificada, tipos_ausencia(cuenta_ausentismo), ...`; luego → `if not a.get("justificada"): injust[...] += dias`. Salen dos métricas: `tasa_total_pct` (todos los días) y `tasa_injustificada_pct` (los de `justificada=false`), ambas sobre la base de días hábiles **configurada** (`_tasa` + `base_dias_habiles`, que desde la migración 085 lee `parametros_empresa`; antes era la constante `_BASE_DIAS_HABILES = 22`).
+
+> ⚠️ Desde la 085 hay **dos** filtros distintos y no hay que confundirlos: `cuenta_ausentismo` (política del **TIPO**) decide si la ausencia entra en la cuenta; `justificada` (hecho de la **AUSENCIA**) parte lo que entró en total vs injustificado. Una licencia por maternidad puede estar justificada y aun así no computar.
 
 🔴 **El default de `justificada` es `false`.** Si el import no mapea explícitamente el eje 1, **toda la historia entra como injustificada** y la tasa de ausentismo injustificado sale inflada al 100%. **Error silencioso: no falla nada, solo miente el reporte.**
 

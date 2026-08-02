@@ -46,6 +46,9 @@ SCHEMA = cargar_schema()
 # el que se parchea es el repo.
 MODULOS = [
     "repositories.audit_repo",
+    # Desde la migración 085 el ausentismo lee su base de días hábiles de parametros_empresa,
+    # así que este repo también toca Supabase durante un generador y su select entra al barrido.
+    "repositories.configuracion_repo",
     "services.reportes._reporte_ausentismo",
     "services.reportes._reporte_capacitacion",
     "services.reportes._reporte_costos",
@@ -54,6 +57,7 @@ MODULOS = [
     "services.reportes._reporte_movimientos",
     "services.reportes._reporte_seleccion",
     "services.reportes._reporte_vacaciones",
+    "services._dashboard_headcount",
     "services._dashboard_kpis",
 ]
 
@@ -63,7 +67,8 @@ MES, ANIO = 7, 2026
 def _generadores():
     """(id, callable) por generador, en las dos variantes: consolidado y con área."""
     import services.reporte_generators as g
-    from services._dashboard_kpis import calcular_extras, calcular_headcount
+    from services._dashboard_headcount import calcular_headcount
+    from services._dashboard_kpis import calcular_extras
 
     eid, aid = uuid4(), uuid4()
     con_periodo = [
@@ -88,6 +93,20 @@ def _generadores():
     return casos
 
 
+# Única tabla que el fake NO devuelve vacía, y por un motivo distinto al resto: la fila de
+# parametros_empresa no es un dato REPORTADO, es una PRECONDICIÓN del cálculo — sin ella el
+# generador de ausentismo no puede correr y el barrido moriría con un error de configuración
+# en vez de decir algo sobre los nombres de columnas, que es lo que vino a verificar.
+# Los valores son los que siembra la migración 085.
+_PRECONDICIONES = {
+    "parametros_empresa": {
+        "base_dias_habiles": 22, "corte_antiguedad_mes": 10,
+        "periodo_vacacional_desde_mes": 10, "periodo_vacacional_hasta_mes": 4,
+        "primer_anio_mes_corte": 7, "primer_anio_dias": 5, "vencimiento_anios": 4,
+    },
+}
+
+
 class _Query:
     """Query de Supabase que valida el spec y devuelve vacío. Los filtros son no-ops: acá lo
     que se verifica son los NOMBRES, que es lo único que el fake común no puede ver."""
@@ -103,7 +122,8 @@ class _Query:
         return lambda *a, **k: self
 
     def execute(self):
-        return SimpleNamespace(data=[], count=0)
+        fila = _PRECONDICIONES.get(self._tabla)
+        return SimpleNamespace(data=fila if fila else [], count=0)
 
 
 class _Cliente:

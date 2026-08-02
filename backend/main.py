@@ -37,6 +37,7 @@ from routers.sucesion import router as sucesion_router
 from routers.candidatos import router as candidatos_router
 from routers.ausencias import router as ausencias_router
 from routers.ausencias_tipos import router as ausencias_tipos_router
+from routers.configuracion import router as configuracion_router
 from routers.vacaciones import router as vacaciones_router
 from routers.vacaciones_empleado import router as vacaciones_empleado_router
 from routers.vacaciones_pendientes import router as vacaciones_pendientes_router
@@ -145,6 +146,7 @@ app.include_router(reportes_router, prefix="/api/reportes", tags=["reportes"])
 app.include_router(importacion_nomina_empleados_router, prefix="/api/importacion", tags=["importacion"])
 app.include_router(importacion_nomina_router, prefix="/api/importacion", tags=["importacion"])
 app.include_router(integraciones_router, prefix="/api/integraciones", tags=["integraciones"])
+app.include_router(configuracion_router, prefix="/api/configuracion", tags=["configuracion"])
 app.include_router(capacitaciones_router, prefix="/api/capacitaciones", tags=["capacitaciones"])
 app.include_router(asignaciones_cap_router, prefix="/api/capacitaciones/asignaciones", tags=["capacitaciones"])
 app.include_router(ev_plantillas_router, prefix="/api/evaluaciones/plantillas", tags=["evaluaciones"])

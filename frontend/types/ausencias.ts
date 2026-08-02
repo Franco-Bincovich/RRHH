@@ -1,8 +1,28 @@
 export interface TipoAusencia {
   id: string
   nombre: string
+  /** Los 4 tipos base no se pueden dar de baja: son el vocabulario mínimo del histórico. */
   es_base: boolean
   activo: boolean
+  /** Migración 085. null = tipo global, disponible para todas las empresas. */
+  empresa_id: string | null
+  /**
+   * Si las ausencias de este tipo entran en la tasa de ausentismo.
+   *
+   * NO reemplaza a `Ausencia.justificada`: son preguntas distintas. `justificada` es un HECHO
+   * de la instancia ("¿esta vez trajo certificado?"); esto es una POLÍTICA del tipo
+   * ("¿maternidad computa como ausentismo?"). Una licencia puede estar justificada y aun así
+   * no computar.
+   */
+  cuenta_ausentismo: boolean
+}
+
+/** Campos editables de un tipo. Todo opcional: es un PATCH, se manda solo lo que cambia. */
+export interface TipoAusenciaUpdate {
+  nombre?: string
+  /** `false` es la BAJA. No hay borrado: rompería la FK de las ausencias históricas. */
+  activo?: boolean
+  cuenta_ausentismo?: boolean
 }
 
 export interface TipoAusenciaListResponse {

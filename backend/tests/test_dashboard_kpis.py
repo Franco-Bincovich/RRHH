@@ -3,7 +3,7 @@ Tests SINTÉTICOS de los 5 KPIs nuevos del dashboard (Sesión 5). Datos casi vac
 esta es la verificación real. El fake de supabase aplica de verdad eq/gte/lte, así que los rangos
 de fecha y el filtro de empresa se ejercitan de verdad.
 - KPI 23: ausencias que cruzan hoy (fecha_desde ≤ hoy ≤ fecha_hasta).
-- KPI 26: % ausentismo del mes con base 22 (reusa _tasa de R10).
+- KPI 26: % ausentismo del mes sobre la base CONFIGURADA (reusa _tasa y base_dias_habiles de R10).
 - KPI 27: masa salarial mes actual vs anterior + variación %.
 - KPI 28: distribución con nulos en "Sin especificar".
 - KPI 30: cumpleaños/aniversarios detectados por MES de la fecha.
@@ -93,19 +93,54 @@ def test_ausencias_activas_hoy_cruza(monkeypatch):
     assert dk._ausencias_activas_hoy(_HOY, None) == 1
 
 
-# ── KPI 26 — % ausentismo del mes (base 22) ───────────────────────────────────────
+# ── KPI 26 — % ausentismo del mes (base CONFIGURADA) ──────────────────────────────
+#
+# 🔴 Estos tests configuran la base en 20, NO en 22, a propósito.
+#
+# Antes el 22 era una constante del módulo y el test lo repetía: con el literal a los dos
+# lados, la aserción se cumplía sola y volver a hardcodear el número no la habría roto. Con
+# una base distinta de la vieja, si alguien reintroduce el 22 —en el cálculo o en el texto de
+# la nota— el resultado deja de dar y el test rojea.
 
-def test_ausentismo_mes_pct_base_22(monkeypatch):
+def _con_base(monkeypatch, base: int) -> None:
+    """Configura la base de días hábiles que el KPI debe usar."""
+    monkeypatch.setattr(dk, "base_dias_habiles", lambda empresa_id=None: base)
+
+
+def _db_ausentismo(monkeypatch) -> None:
     monkeypatch.setattr(dk, "supabase_admin", _FakeDB({
         "solicitudes_ausencia": [
             {"dias": 6, "fecha_desde": "2026-03-04"},
             {"dias": 5, "fecha_desde": "2026-03-08"},
             {"dias": 3, "fecha_desde": "2026-02-27"},  # fuera del mes → no cuenta
         ],
-        "empleados": [{"id": "e1", "estado": "activo"}, {"id": "e2", "estado": "activo"}],  # headcount = 2 → base 44
+        "empleados": [{"id": "e1", "estado": "activo"}, {"id": "e2", "estado": "activo"}],
     }))
-    # (6 + 5) / (22 * 2) * 100 = 25.0
-    assert dk._ausentismo_mes_pct(2026, 3, None) == 25.0
+
+
+def test_ausentismo_mes_usa_la_base_configurada(monkeypatch):
+    _db_ausentismo(monkeypatch)
+    _con_base(monkeypatch, 20)
+    # headcount = 2 → base 40. (6 + 5) / 40 * 100 = 27.5 (con el viejo 22 daría 25.0)
+    pct, _ = dk._ausentismo(2026, 3, None, None)
+    assert pct == 27.5
+
+
+def test_la_nota_dice_la_base_configurada_y_no_el_22(monkeypatch):
+    _db_ausentismo(monkeypatch)
+    _con_base(monkeypatch, 20)
+    _, nota = dk._ausentismo(2026, 3, None, None)
+    assert "20 días hábiles" in nota
+    assert "22" not in nota
+
+
+def test_cambiar_la_base_mueve_la_tasa_Y_la_nota_juntas(monkeypatch):
+    """Se devuelven del mismo cálculo justamente para que no puedan discrepar: una tasa
+    dividida por 22 con un texto que dice 20 es peor que cualquiera de las dos sola."""
+    _db_ausentismo(monkeypatch)
+    _con_base(monkeypatch, 11)
+    pct, nota = dk._ausentismo(2026, 3, None, None)
+    assert pct == 50.0 and "11 días hábiles" in nota
 
 
 # ── KPI 27 — masa salarial mes actual vs anterior + variación ─────────────────────

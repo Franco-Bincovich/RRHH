@@ -582,6 +582,21 @@ CREATE TABLE public.onboarding_templates (
     empresa_id uuid NOT NULL,
     es_publica boolean NOT NULL DEFAULT true
 );
+-- Reglas escalares configurables. empresa_id NULL = fila global; la lectura resuelve
+-- COALESCE(fila de mi empresa, fila global). Ver migracion 085.
+CREATE TABLE public.parametros_empresa (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    empresa_id uuid,
+    base_dias_habiles smallint NOT NULL DEFAULT 22,
+    corte_antiguedad_mes smallint NOT NULL DEFAULT 10,
+    periodo_vacacional_desde_mes smallint NOT NULL DEFAULT 10,
+    periodo_vacacional_hasta_mes smallint NOT NULL DEFAULT 4,
+    primer_anio_mes_corte smallint NOT NULL DEFAULT 7,
+    primer_anio_dias smallint NOT NULL DEFAULT 5,
+    vencimiento_anios smallint NOT NULL DEFAULT 4,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
 CREATE TABLE public.periodos_cerrados (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     empresa_id uuid NOT NULL,
@@ -663,6 +678,16 @@ CREATE TABLE public.proyectos (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
+-- Escala de dias de vacaciones por antiguedad: una LISTA de tramos (por eso no vive en
+-- parametros_empresa). empresa_id NULL = tramo de la escala global. Ver migracion 085.
+CREATE TABLE public.reglas_vacaciones_escala (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    empresa_id uuid,
+    antiguedad_anios smallint NOT NULL,
+    dias smallint NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
 CREATE TABLE public.reportes_generados (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     nombre character varying(200) NOT NULL,
@@ -731,13 +756,17 @@ CREATE TABLE public.sucesion_posiciones (
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
     empresa_id uuid NOT NULL
 );
+-- empresa_id NULL = tipo global (las 4 filas base lo son). cuenta_ausentismo es POLITICA del
+-- tipo y NO reemplaza a solicitudes_ausencia.justificada, que es un HECHO de la instancia.
 CREATE TABLE public.tipos_ausencia (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     nombre text NOT NULL,
     es_base boolean NOT NULL DEFAULT false,
     activo boolean NOT NULL DEFAULT true,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now()
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    empresa_id uuid,
+    cuenta_ausentismo boolean NOT NULL DEFAULT true
 );
 CREATE TABLE public.users (
     id uuid NOT NULL,
@@ -843,12 +872,14 @@ ALTER TABLE public.onboarding_instancias ADD CONSTRAINT onboarding_instancias_pk
 ALTER TABLE public.onboarding_progreso ADD CONSTRAINT onboarding_progreso_pkey PRIMARY KEY (id);
 ALTER TABLE public.onboarding_tareas ADD CONSTRAINT onboarding_tareas_pkey PRIMARY KEY (id);
 ALTER TABLE public.onboarding_templates ADD CONSTRAINT onboarding_templates_pkey PRIMARY KEY (id);
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT parametros_empresa_pkey PRIMARY KEY (id);
 ALTER TABLE public.periodos_cerrados ADD CONSTRAINT periodos_cerrados_pkey PRIMARY KEY (id);
 ALTER TABLE public.planes_carrera ADD CONSTRAINT planes_carrera_pkey PRIMARY KEY (id);
 ALTER TABLE public.planes_carrera_hitos ADD CONSTRAINT planes_carrera_hitos_pkey PRIMARY KEY (id);
 ALTER TABLE public.presupuesto_areas ADD CONSTRAINT presupuesto_areas_pkey PRIMARY KEY (id);
 ALTER TABLE public.proyecto_asignaciones ADD CONSTRAINT proyecto_asignaciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.proyectos ADD CONSTRAINT proyectos_pkey PRIMARY KEY (id);
+ALTER TABLE public.reglas_vacaciones_escala ADD CONSTRAINT reglas_vacaciones_escala_pkey PRIMARY KEY (id);
 ALTER TABLE public.reportes_generados ADD CONSTRAINT reportes_generados_pkey PRIMARY KEY (id);
 ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_pkey PRIMARY KEY (id);
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT solicitudes_vacaciones_pkey PRIMARY KEY (id);
@@ -904,7 +935,9 @@ ALTER TABLE public.presupuesto_areas ADD CONSTRAINT presupuesto_areas_area_id_an
 ALTER TABLE public.presupuesto_areas ADD CONSTRAINT presupuesto_areas_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.proyecto_asignaciones ADD CONSTRAINT uq_proyecto_empleado UNIQUE (proyecto_id, empleado_id);
 ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_id_empresa_uq UNIQUE (id, empresa_id);
-ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_nombre_key UNIQUE (nombre);
+-- tipos_ausencia_nombre_key (UNIQUE global sobre `nombre`) fue DROPEADA en la migracion 085:
+-- con empresa_id nullable prohibia que dos empresas tuvieran cada una su "Licencia especial".
+-- La reemplazan los dos indices unicos parciales de la seccion INDICES.
 ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE (email);
 ALTER TABLE public.users ADD CONSTRAINT users_username_key UNIQUE (username);
 ALTER TABLE public.usuario_integraciones ADD CONSTRAINT usuario_integraciones_user_id_tipo_key UNIQUE (user_id, tipo);
@@ -1004,6 +1037,15 @@ ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_prioridad_check CHECK (((pri
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_rango_salarial_max_check CHECK ((rango_salarial_max >= (0)::numeric));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_rango_salarial_min_check CHECK ((rango_salarial_min >= (0)::numeric));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_tipo_contrato_check CHECK (((tipo_contrato)::text = ANY ((ARRAY['efectivo'::character varying, 'plazo_fijo'::character varying, 'contratado'::character varying, 'pasantia'::character varying])::text[])));
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_base_dias_check CHECK (((base_dias_habiles >= 1) AND (base_dias_habiles <= 31)));
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_corte_mes_check CHECK (((corte_antiguedad_mes >= 1) AND (corte_antiguedad_mes <= 12)));
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_vac_desde_check CHECK (((periodo_vacacional_desde_mes >= 1) AND (periodo_vacacional_desde_mes <= 12)));
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_vac_hasta_check CHECK (((periodo_vacacional_hasta_mes >= 1) AND (periodo_vacacional_hasta_mes <= 12)));
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_primer_anio_mes_check CHECK (((primer_anio_mes_corte >= 1) AND (primer_anio_mes_corte <= 12)));
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_primer_anio_dias_check CHECK ((primer_anio_dias >= 0));
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_vencimiento_check CHECK ((vencimiento_anios > 0));
+ALTER TABLE public.reglas_vacaciones_escala ADD CONSTRAINT rve_antiguedad_check CHECK (((antiguedad_anios >= 0) AND (antiguedad_anios <= 60)));
+ALTER TABLE public.reglas_vacaciones_escala ADD CONSTRAINT rve_dias_check CHECK (((dias > 0) AND (dias <= 365)));
 ALTER TABLE public.adjuntos ADD CONSTRAINT adjuntos_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.adjuntos ADD CONSTRAINT adjuntos_subido_por_fkey FOREIGN KEY (subido_por) REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE public.areas ADD CONSTRAINT areas_area_padre_id_fkey FOREIGN KEY (area_padre_id) REFERENCES areas(id) ON DELETE RESTRICT;
@@ -1148,6 +1190,9 @@ ALTER TABLE public.usuario_integraciones ADD CONSTRAINT usuario_integraciones_us
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE RESTRICT;
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_responsable_id_fkey FOREIGN KEY (responsable_id) REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT parametros_empresa_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
+ALTER TABLE public.reglas_vacaciones_escala ADD CONSTRAINT reglas_vacaciones_escala_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
+ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
 
 
 -- ============================================================================
@@ -1290,6 +1335,18 @@ CREATE INDEX idx_vacantes_area ON public.vacantes USING btree (area_id);
 CREATE INDEX idx_vacantes_empresa ON public.vacantes USING btree (empresa_id);
 CREATE INDEX idx_vacantes_estado ON public.vacantes USING btree (estado);
 CREATE INDEX idx_vacantes_responsable ON public.vacantes USING btree (responsable_id);
+-- Migracion 085. Los indices son PARCIALES porque en SQL NULL <> NULL: un UNIQUE comun sobre
+-- empresa_id dejaria entrar varias filas globales y la lectura elegiria una al azar.
+-- El de parametros_empresa indexa la CONSTANTE (empresa_id IS NULL) = TRUE, asi que solo
+-- admite UNA global. El de la escala indexa antiguedad_anios: la escala global son VARIAS
+-- filas y lo que no puede repetirse es el punto de corte.
+CREATE UNIQUE INDEX ux_parametros_empresa_por_empresa ON public.parametros_empresa USING btree (empresa_id) WHERE (empresa_id IS NOT NULL);
+CREATE UNIQUE INDEX ux_parametros_empresa_global ON public.parametros_empresa USING btree (((empresa_id IS NULL))) WHERE (empresa_id IS NULL);
+CREATE UNIQUE INDEX ux_escala_por_empresa ON public.reglas_vacaciones_escala USING btree (empresa_id, antiguedad_anios) WHERE (empresa_id IS NOT NULL);
+CREATE UNIQUE INDEX ux_escala_global ON public.reglas_vacaciones_escala USING btree (antiguedad_anios) WHERE (empresa_id IS NULL);
+CREATE UNIQUE INDEX ux_tipos_ausencia_nombre_por_empresa ON public.tipos_ausencia USING btree (empresa_id, nombre) WHERE (empresa_id IS NOT NULL);
+CREATE UNIQUE INDEX ux_tipos_ausencia_nombre_global ON public.tipos_ausencia USING btree (nombre) WHERE (empresa_id IS NULL);
+CREATE INDEX idx_tipos_ausencia_empresa ON public.tipos_ausencia USING btree (empresa_id) WHERE (empresa_id IS NOT NULL);
 
 
 -- ============================================================================

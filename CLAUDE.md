@@ -522,17 +522,17 @@ Arreglar las siete instancias no cerraba nada: el próximo reporte nacía con el
 
 ### Detalle de los reportes
 Dotación: headcount, altas/bajas (con listado nominal), distribución por seniority/modalidad/turno (nulos → "Sin especificar"), rotación por motivo.
-Vac/aus: listado combinado, ausentismo por área (total + injustificado, tasa sobre 22 días hábiles con nota visible), saldos de vacaciones (asignados − tomados con `cancelada=false`; solo `tipo="vacaciones"` resta saldo; saldo negativo → flag `excedido`, no se oculta).
+Vac/aus: listado combinado, ausentismo por área (total + injustificado, tasa sobre la base de días hábiles configurada —migración 085—, con nota visible que dice el valor usado), saldos de vacaciones (asignados − tomados con `cancelada=false`; solo `tipo="vacaciones"` resta saldo; saldo negativo → flag `excedido`, no se oculta).
 Costos/otros: masa salarial, presupuesto vs real (desvío + % ejecución), capacitación por área, auditoría/trazabilidad (resumen legible, NO vuelca el JSONB crudo).
 
 Todos: filtro período + empresa + área (empresa/área del FORM). El área se filtra por join a empleados donde la tabla no tiene `area_id`. `anual_consolidado` no lleva área (transversal por diseño). El motor `build_export` es genérico.
 
 ### KPIs de dashboard (9)
-Ausencias activas hoy, % ausentismo del mes (base 22 días, nota visible), masa salarial + variación vs mes anterior, distribución por seniority/modalidad, cumpleaños/aniversarios del mes, y los 4 previos. El dashboard RESPETA el sidebar de empresa (es vista).
+Ausencias activas hoy, % ausentismo del mes (base de días hábiles configurable, nota visible con el valor usado), masa salarial + variación vs mes anterior, distribución por seniority/modalidad, cumpleaños/aniversarios del mes, y los 4 previos. El dashboard RESPETA el sidebar de empresa (es vista).
 
 ### Estructura
 - `services/reportes/` — un submódulo por familia (`_reporte_dotacion` 124, `_reporte_costos` 128, `_reporte_vacaciones` 125, `_reporte_seleccion` 96, `_reporte_ausentismo` 82, `_reporte_movimientos` 63, `_reporte_auditoria` 60, `_reporte_capacitacion` 58, `_reporte_distribucion` 49) + `reporte_generators.py` como dispatcher/re-export (**27 líneas**) + `_common.py` (evita el ciclo dispatcher↔submódulos).
-- `services/_kpi_helpers.py` / `_dashboard_kpis.py` — **cálculos compartidos entre KPIs y reportes** (base 22 días, distribución con "Sin especificar"). Un solo lugar, no duplicar.
+- `services/_kpi_helpers.py` / `_dashboard_kpis.py` — **cálculos compartidos entre KPIs y reportes** (base de días hábiles, que desde la mig 085 sale de `parametros_empresa`; distribución con "Sin especificar"). Un solo lugar, no duplicar.
 - Front: `components/features/reportes/` (catálogo + card + selectores) y `components/features/dashboard/`. `reportes/page.tsx` quedó en **35 líneas**.
 - El reporte adhoc con IA (`reporte_adhoc.py`, `claude-sonnet-4-6`) está OCULTO del catálogo (no borrado — patrón AIPanel). Reactivable en una línea. Su endpoint lleva rate limit propio (20/hora): cada request cuesta plata.
 

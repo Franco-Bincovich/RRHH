@@ -62,6 +62,11 @@ class Seccion(str, Enum):
     PROYECTOS = "proyectos"
     AUDITORIA = "auditoria"
     PERIODOS = "periodos"
+    # Reglas de negocio configurables (escala de vacaciones, base de días hábiles, tipos de
+    # ausencia). Sección PROPIA a propósito: NO se reusa VACACIONES ni AUSENCIAS porque
+    # mandos_medios tiene WRITE en las dos, y cargar una vacación no es lo mismo que cambiar
+    # la regla con la que se calculan todas.
+    CONFIGURACION = "configuracion"
 
 
 # mandos_medios solo opera (R+W) sobre estas secciones; en el resto no puede nada.

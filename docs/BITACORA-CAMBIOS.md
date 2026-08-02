@@ -41,6 +41,96 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-02 · Configuración de reglas de negocio: dos tablas nuevas y el "22" sale de código · commits pendientes ×5
+
+**Qué cambió:** las reglas de vacaciones y ausentismo dejaron de estar hardcodeadas y pasaron a
+`parametros_empresa` y `reglas_vacaciones_escala` (migración **085**), las dos con `empresa_id NULL`
+= fila global y lectura por `COALESCE(mi empresa, global)`. Se agregó `Seccion.CONFIGURACION`,
+un router propio `/api/configuracion`, y a `tipos_ausencia` dos columnas: `empresa_id` nullable y
+`cuenta_ausentismo`. La pantalla `/configuracion` se dividió (era 390/150) y ahora es un acordeón
+con tres bloques nuevos. Cinco commits: (1) división de la pantalla sin cambio funcional,
+(2) el gate por bloque, (3) migración + backend, (4) el 22 configurable, (5) la UI.
+
+### 🔴 ORDEN DE DEPLOY — la migración 085 va PRIMERO, y no es opcional
+
+1. **Correr `backend/migrations/085_configuracion_reglas.sql`** en producción.
+2. Esperar a que `sofia-backend` deploye el commit nuevo y dé 200 en `/health`.
+3. Recién entonces `sofia-front`.
+
+**Por qué importa acá más que de costumbre:** el cálculo del ausentismo pasó a LEER la base de
+días hábiles de `parametros_empresa`. Si el backend sale antes que la migración, el reporte R10
+y el KPI 26 del dashboard fallan con `CONFIG_GLOBAL_FALTANTE` (500) — el dashboard lo absorbe con
+su fail-safe por KPI y lo muestra vacío + anotado en `errores`, pero **el reporte de ausentismo
+descargable falla entero**. El resto de la app no se ve afectado.
+
+**Impacto en infraestructura:**
+
+- **Migración 085 (`085_configuracion_reglas.sql`) — NO CORRIDA, la corre Franco.** Crea
+  `parametros_empresa` y `reglas_vacaciones_escala`, siembra su fila global, y altera
+  `tipos_ausencia`. **Es aditiva salvo por UN paso:** dropea la constraint
+  `tipos_ausencia_nombre_key` (`UNIQUE (nombre)`) y la reemplaza por dos índices únicos
+  parciales. No puede perder datos —solo afloja una restricción— pero un rollback exige
+  reponerla a mano. Idempotente (`IF NOT EXISTS` / `ON CONFLICT DO NOTHING`).
+  - ⚠️ **No pudo verificarse por ejecución:** no hay Postgres en el entorno de desarrollo y no
+    se ejecuta DDL contra producción desde acá. Revisada a mano contra el catálogo vivo.
+  - 🔴 Los índices únicos son **parciales** a propósito. Un `UNIQUE (empresa_id)` común NO
+    restringe las filas globales, porque en SQL `NULL <> NULL`: dejaría entrar filas globales
+    duplicadas y la lectura elegiría una al azar, cambiando las reglas de todas las empresas
+    según el plan de la query. Hay un test que lo custodia.
+- **Endpoints nuevos** — `GET /api/configuracion`, `PUT /api/configuracion/parametros`,
+  `PUT /api/configuracion/escala`, `PATCH /api/ausencias/tipos/{tipo_id}`. **Ninguno es
+  público**: los tres primeros van con `Seccion.CONFIGURACION`, el PATCH también.
+  `GET /api/ausencias/tipos` acepta ahora `?incluir_inactivos=true`.
+- **Variables de entorno:** ninguna nueva.
+- **Dependencias:** ninguna nueva. El acordeón usa `@base-ui/react`, que ya estaba.
+- **Storage, jobs, auth, CORS:** sin cambios.
+- **Un repo más a portar a asyncpg** (`configuracion_repo.py`) → van **55**.
+
+**Decisiones que conviene conocer antes de tocar esto:**
+
+- 🔴 **El PERÍODO VACACIONAL ("octubre a abril") es un concepto NUEVO y hoy SOLO se guarda.**
+  No es cuándo se ganan los días ni cómo se mide la antigüedad: es cuándo se pueden TOMAR.
+  **NO existe ninguna validación que impida cargar una licencia fuera de esa ventana**, y no la
+  va a haber hasta que se defina si BLOQUEA o solo AVISA — las dos opciones tienen consecuencias
+  opuestas sobre los imports históricos. La pantalla lo dice en un aviso explícito. Lo mismo vale
+  para la escala, el corte de antigüedad, el primer año y el vencimiento: se guardan y se
+  muestran, y **ningún cálculo los consume todavía**. El único valor cableado es
+  `base_dias_habiles`.
+- **`cuenta_ausentismo` NO reemplaza a `solicitudes_ausencia.justificada`** — es aditivo. Son
+  preguntas distintas: `justificada` es un HECHO de la instancia ("¿esta vez trajo
+  certificado?"), `cuenta_ausentismo` es una POLÍTICA del tipo ("¿maternidad computa?"). Las
+  cuatro combinaciones son reales. `DEFAULT TRUE` = comportamiento idéntico al previo a 085.
+- **`Seccion.CONFIGURACION` es propia y NO reusa VACACIONES ni AUSENCIAS**, porque
+  `mandos_medios` tiene WRITE en esas dos y no debe poder cambiar la escala de toda la empresa
+  desde la pantalla en la que carga una licencia.
+- **`/configuracion` sigue sin gate de RUTA** (`permisos.ts` la deja fuera de `RUTA_SECCION`):
+  ahí vive el cambio de contraseña, que todo usuario necesita. El gate va **por bloque**, con
+  dos criterios distintos: integraciones se OCULTAN (son formularios de escritura, no hay nada
+  que leer), reglas y tipos se muestran en SOLO LECTURA (el valor es información, y
+  `gerencia_lectura` lee todos los reportes). Los tres gates se deciden **en la página**, no
+  dentro de cada componente, porque el fetch vive en hooks y los hooks corren igual.
+- **`_dashboard_kpis.py` se pasó de 150 al cablear la configuración** → se extrajo
+  `calcular_headcount` a **`services/_dashboard_headcount.py`** (movido verbatim). Quien
+  importe `calcular_headcount` desde `_dashboard_kpis` ahora rompe.
+
+**Desprolijidades encontradas, no introducidas por esta sesión:**
+
+- **`CLAUDE.md` decía que la última migración era la 081; van por la 084** (082 `es_publica` en
+  onboarding_templates, 083 período de vacaciones, 084 drop de `modalidad_contratacion`). Con
+  esta sesión, **085**. También declara **975 tests** cuando la suite corre **1299**. Los dos
+  números quedan desactualizados en el doc; **no se tocaron en esta sesión más allá de las
+  líneas del "22"**, porque corregir el estado general de CLAUDE.md excede el alcance y merece
+  su propia pasada.
+- **`CLAUDE.md` referencia `services/_kpi_helpers.py`, que NO EXISTE.** Los cálculos compartidos
+  viven en `_dashboard_kpis.py` y en los submódulos de `reportes/`.
+- **En la Mac aparecen archivos duplicados `* 2.ts` dentro de `.next/`** (`routes.d 2.ts`,
+  `cache-life.d 2.ts`, …), probablemente por sincronización de iCloud. **Rompen `tsc --noEmit`
+  con TS6200/TS2300 y no son código del repo** — `.next/` está gitignoreado. Se regeneran
+  después de cada `npm run build`. Fix: `find .next -name "* 2.*" -delete`. **Si aparece un
+  error de tsc en esos archivos, no es tuyo.**
+
+---
+
 ## 2026-08-02 · Alertas del dashboard: agregadas, bloqueos de módulo y href propio · commits pendientes ×4
 
 **Qué cambió:** el panel de alertas del dashboard dejó de ser "una línea por empleado sin email"

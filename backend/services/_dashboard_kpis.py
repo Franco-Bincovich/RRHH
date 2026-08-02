@@ -1,9 +1,13 @@
 """
-Cálculos del dashboard extraídos de dashboard_service (que estaba en su límite):
-- calcular_headcount: headcount de activos por área (movido verbatim).
-- calcular_extras: los 5 KPIs de Sesión 5 (23/26/27/28/30). Reusan los cálculos de los reportes
-  (ausentismo/costos/distribución) — no duplican el "22" ni la lógica de distribución.
-Todo filtra por empresa_id del contexto (header X-Empresa-Id: el dashboard es vista, respeta el sidebar).
+calcular_extras: los 5 KPIs de Sesión 5 del dashboard (23/26/27/28/30). Reusan los cálculos de
+los reportes (ausentismo/costos/distribución) — no duplican ni la base de días hábiles (que
+desde la migración 085 sale de parametros_empresa, no de una constante) ni la lógica de
+distribución.
+Filtra por empresa_id del contexto (header X-Empresa-Id: el dashboard es vista, respeta el sidebar).
+
+`calcular_headcount` vivía acá y se mudó a `_dashboard_headcount` al pasarse este archivo de
+su límite: son dos cosas distintas (5 escalares con fail-safe compartido vs una lista por área
+que dashboard_service pide por separado).
 """
 import calendar
 from datetime import date
@@ -11,34 +15,11 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
-from schemas.dashboard import DistribItem, HeadcountAreaResponse, KPIsExtraResponse, PersonaFecha
-from services.reportes._reporte_ausentismo import _NOTA, _tasa
+from schemas.dashboard import DistribItem, KPIsExtraResponse, PersonaFecha
+from services.reportes._reporte_ausentismo import _tasa, base_dias_habiles, nota
 from services.reportes._reporte_costos import generate_costos
 from services.reportes._reporte_distribucion import generate_distribucion
 from utils.logger import logger
-
-
-def calcular_headcount(empresa_id: Optional[UUID] = None) -> List[HeadcountAreaResponse]:
-    """Headcount de activos agrupado por área, filtrado por empresa."""
-    eid = str(empresa_id) if empresa_id else None
-
-    areas_q = supabase_admin.table("areas").select("id, nombre").eq("activo", True)
-    if eid:
-        areas_q = areas_q.eq("empresa_id", eid)
-    area_nombres: dict[str, str] = {a["id"]: a["nombre"] for a in areas_q.execute().data}
-
-    emp_q = supabase_admin.table("empleados").select("area_id").eq("estado", "activo")
-    if eid:
-        emp_q = emp_q.eq("empresa_id", eid)
-    conteo: dict[str, int] = {}
-    for emp in emp_q.execute().data:
-        aid = emp.get("area_id")
-        if aid and aid in area_nombres:
-            conteo[aid] = conteo.get(aid, 0) + 1
-    return sorted(
-        [HeadcountAreaResponse(area_id=k, area=area_nombres[k], total=v) for k, v in conteo.items()],
-        key=lambda x: x.total, reverse=True,
-    )
 
 
 def _mes_anterior(anio: int, mes: int) -> Tuple[int, int]:
@@ -55,8 +36,17 @@ def _ausencias_activas_hoy(hoy: date, eid: Optional[str]) -> int:
     return q.execute().count or 0
 
 
-def _ausentismo_mes_pct(anio: int, mes: int, eid: Optional[str]) -> float:
-    """% ausentismo del mes = días de ausencia / (22 * headcount) * 100. Reusa _tasa de R10 (KPI 26)."""
+def _ausentismo(anio: int, mes: int, eid: Optional[str],
+                empresa_id: Optional[UUID]) -> Tuple[float, str]:
+    """
+    % ausentismo del mes = días de ausencia / (base * headcount) * 100, y su nota (KPI 26).
+    Reusa _tasa y la base configurada de R10 — no duplica ni el cálculo ni el número.
+
+    Devuelve el porcentaje y la nota JUNTOS a propósito: los dos dependen de la misma base, y
+    calculados por separado podrían salir de dos lecturas distintas de la configuración y
+    mostrar en pantalla una tasa dividida por 22 con un texto que dice 20.
+    """
+    base = base_dias_habiles(empresa_id)
     ini = date(anio, mes, 1).isoformat()
     fin = date(anio, mes, calendar.monthrange(anio, mes)[1]).isoformat()
     aus_q = (supabase_admin.table("solicitudes_ausencia").select("dias")
@@ -67,7 +57,7 @@ def _ausentismo_mes_pct(anio: int, mes: int, eid: Optional[str]) -> float:
     hc_q = supabase_admin.table("empleados").select("id", count="exact").eq("estado", "activo")
     if eid:
         hc_q = hc_q.eq("empresa_id", eid)
-    return _tasa(dias, hc_q.execute().count or 0)
+    return _tasa(dias, hc_q.execute().count or 0, base), nota(base)
 
 
 def _cumple_aniversario(hoy: date, eid: Optional[str]) -> Tuple[List[PersonaFecha], List[PersonaFecha]]:
@@ -118,14 +108,18 @@ def calcular_extras(hoy: date, empresa_id: Optional[UUID] = None) -> KPIsExtraRe
             errores.append(nombre)
             return default
 
+    # La tasa y su nota salen del MISMO _safe: si la configuración no se puede leer, el KPI
+    # entero queda en 0 y sin nota, y aparece en `errores`. Un fallback al viejo 22 mostraría
+    # una tasa calculada con una base que quizás ya nadie configuró.
+    aus_pct, aus_nota = _safe(lambda: _ausentismo(anio, mes, eid, empresa_id), (0.0, ""), "ausentismo_mes")
     masa = _safe(lambda: _masa_salarial(anio, mes, empresa_id), (0.0, 0.0, 0.0), "masa_salarial")
     seniority, modalidad = _safe(lambda: _distribucion(empresa_id), ([], []), "distribucion")
     cumples, aniversarios = _safe(lambda: _cumple_aniversario(hoy, eid), ([], []), "cumpleanos_aniversarios")
 
     return KPIsExtraResponse(
         ausencias_activas_hoy=_safe(lambda: _ausencias_activas_hoy(hoy, eid), 0, "ausencias_activas_hoy"),
-        ausentismo_mes_pct=_safe(lambda: _ausentismo_mes_pct(anio, mes, eid), 0.0, "ausentismo_mes"),
-        ausentismo_nota=_NOTA,
+        ausentismo_mes_pct=aus_pct,
+        ausentismo_nota=aus_nota,
         masa_salarial_actual=masa[0],
         masa_salarial_anterior=masa[1],
         masa_salarial_variacion_pct=masa[2],

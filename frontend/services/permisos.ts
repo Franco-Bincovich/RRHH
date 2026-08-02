@@ -16,7 +16,7 @@ export type Seccion =
   | "assessment" | "organigrama" | "dashboard" | "empresa" | "reportes"
   | "importacion" | "integraciones" | "capacitaciones" | "evaluaciones"
   | "inventario" | "objetivos" | "usuarios" | "procesos" | "proyectos"
-  | "auditoria" | "periodos"
+  | "auditoria" | "periodos" | "configuracion"
 
 const MANDOS_MEDIOS_SECCIONES: ReadonlySet<Seccion> = new Set<Seccion>([
   "vacaciones",
@@ -39,6 +39,11 @@ export function getRol(): UserRol | null {
 /**
  * Mapa del primer segmento de la ruta → Seccion. Las rutas no listadas
  * (p. ej. /dashboard, /configuracion) devuelven null = siempre accesibles, no gateadas.
+ *
+ * ⚠️ /configuracion queda FUERA a propósito, aunque exista la sección "configuracion": esa
+ * pantalla mezcla reglas de negocio (gateadas) con el cambio de contraseña y "Mi perfil", que
+ * todo usuario necesita sea cual sea su rol. Gatear la RUTA entera dejaría a gerencia_lectura
+ * y a mandos_medios sin poder cambiar su propia contraseña. El gate va POR BLOQUE, adentro.
  */
 const RUTA_SECCION: Readonly<Record<string, Seccion>> = {
   empleados: "empleados",
