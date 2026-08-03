@@ -87,11 +87,18 @@ class _VacRepo:
     def __init__(self) -> None:
         self.empresas_recibidas: list = []
 
-    def find_dias_asignados(self, empleado_id, empresa_id=None):
+    def find_datos_para_saldo(self, empleado_id, empresa_id=None):
+        """Reemplazó a `find_dias_asignados` (una columna) al pasar el cupo a salir de la
+        antigüedad: ahora el saldo necesita también las dos fechas de ingreso.
+
+        `dias_vacaciones_asignados` va en None a propósito, que desde la migración 090 es el
+        caso NORMAL —no "falta el dato"—: así el fake ejercita la regla por antigüedad y no la
+        rama del override, que es la excepción."""
         self.empresas_recibidas.append(empresa_id)
         if empresa_id and str(empresa_id) != str(EMPRESA_A):
             return None          # el empleado no es de esa empresa
-        return 14
+        return {"fecha_ingreso": "2020-01-15", "fecha_ingreso_reconocida": None,
+                "dias_vacaciones_asignados": None}
 
     def find_vacaciones_empleado(self, empleado_id, empresa_id=None):
         self.empresas_recibidas.append(empresa_id)
@@ -110,9 +117,25 @@ class _Ownership:
         return [str(SUBORDINADO)] if str(emp_id) == str(PROPIO) else []
 
 
+class _PendientesRepo:
+    """HONRA empresa_id, igual que los otros dos fakes de este archivo.
+
+    Sin este doble el service construía el `VacacionesPendientesRepo` REAL y el saldo salía a
+    la red: los 7 tests de este archivo fallaban con un getaddrinfo y no con una aserción. Un
+    fake que devolviera `[]` ignorando la empresa taparía eso pero también taparía el eje que
+    el archivo entero viene a probar — sería el fake permisivo del caso #1 del manual."""
+
+    def __init__(self) -> None:
+        self.empresas_recibidas: list = []
+
+    def find_by_empleado(self, empleado_id, empresa_id=None):
+        self.empresas_recibidas.append(empresa_id)
+        return []
+
+
 def _svc(vac_repo=None, emp_repo=None):
     return VacacionesService(repo=vac_repo or _VacRepo(), empleado_repo=emp_repo or _EmpleadoRepo(),
-                             ownership_repo=_Ownership())
+                             ownership_repo=_Ownership(), pendientes_repo=_PendientesRepo())
 
 
 def _error(fn) -> AppError:
@@ -147,8 +170,26 @@ def test_empleado_ajeno_indistinguible_del_inexistente(llamar):
 
 
 def test_saldo_empleado_propio_camino_feliz():
+    """🔴 LOS NÚMEROS DE ESTE TEST CAMBIARON, Y EL CAMBIO ES EL PUNTO.
+
+    Antes afirmaba `asignados == 14`, que era el valor CRUDO de la columna
+    `dias_vacaciones_asignados`. Desde la migración 090 esa columna es un OVERRIDE opcional y el
+    fake la devuelve en None (el caso normal), así que `asignados` pasó a ser el cupo CALCULADO:
+    la suma de los períodos no vencidos según la antigüedad.
+
+    Con ingreso 2020-01-15 son 5 períodos vivos y la escala 14/21 los parte en 14+14+14+21+21.
+    Los 21 aparecen desde el período en que la persona cumple 5 años medidos al 1/10 — que es la
+    regla de `anios_antiguedad`, no una constante de este archivo.
+
+    NO se hardcodea 84: se deriva del desglose que devuelve la misma llamada. Un número pegado
+    acá empezaría a mentir el 1/1 del año que viene, cuando la ventana corra un período, y el
+    test pasaría a probar el calendario en vez de la barrera de empresa que es lo suyo."""
     out = _saldo(_svc(), PROPIO)
-    assert out.asignados == 14 and out.gozados == 5 and out.disponibles == 9
+    vivos = [p for p in out.por_periodo if not p.vencido]
+    assert len(vivos) >= 2, "sin varios períodos vivos, sumar cupos no prueba nada"
+    assert out.asignados == sum(p.cupo for p in vivos)
+    assert {p.cupo for p in vivos} == {14, 21}, "la escala por antigüedad no se aplicó"
+    assert out.gozados == 5 and out.disponibles == out.asignados - 5
 
 
 def test_historial_empleado_propio_camino_feliz():

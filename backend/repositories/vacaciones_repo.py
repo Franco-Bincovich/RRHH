@@ -56,14 +56,21 @@ class VacacionesRepo:
         res = supabase_admin.table("empleados").select("empresa_id").eq("id", empleado_id).maybe_single().execute()
         return str(res.data["empresa_id"]) if res.data else None
 
-    def find_dias_asignados(self, empleado_id: str, empresa_id: Optional[UUID] = None) -> Optional[int]:
-        """dias_vacaciones_asignados del empleado, o None si no existe o es de otra empresa
-        (empresa_id None = consolidado, no restringe)."""
-        q = supabase_admin.table("empleados").select("dias_vacaciones_asignados").eq("id", empleado_id)
+    def find_datos_para_saldo(self, empleado_id: str, empresa_id: Optional[UUID] = None) -> Optional[dict]:
+        """Los TRES campos del empleado que entran al cálculo del saldo, o None si no existe o
+        es de otra empresa (empresa_id None = consolidado, no restringe).
+
+        Reemplazó a `find_dias_asignados`, que traía una sola columna: desde que el cupo sale de
+        la antigüedad, el saldo necesita además las dos fechas de ingreso. Se traen en la MISMA
+        query a propósito — dos lecturas de la misma fila podrían caer a los dos lados de un
+        UPDATE y calcular la antigüedad contra un override que ya no es el de esa fila."""
+        q = (supabase_admin.table("empleados")
+             .select("fecha_ingreso, fecha_ingreso_reconocida, dias_vacaciones_asignados")
+             .eq("id", empleado_id))
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         res = q.maybe_single().execute()
-        return res.data["dias_vacaciones_asignados"] if res.data else None
+        return res.data if res.data else None
 
     def find_vacaciones_empleado(self, empleado_id: str, empresa_id: Optional[UUID] = None) -> List[SolicitudVacacionesResponse]:
         """Solicitudes tipo='vacaciones' no canceladas del empleado (para cálculo de saldo).

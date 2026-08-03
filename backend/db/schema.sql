@@ -274,7 +274,7 @@ CREATE TABLE public.empleados (
     rol character varying(100),
     empresa_id uuid NOT NULL,
     dni character varying(20),
-    dias_vacaciones_asignados integer NOT NULL DEFAULT 14,
+    dias_vacaciones_asignados integer,
     roles text[] NOT NULL,
     tipo_documento text,
     sexo text,

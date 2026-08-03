@@ -22,36 +22,34 @@ from uuid import UUID
 from repositories.empleado_ownership_repo import EmpleadoOwnershipRepo
 from repositories.empleado_repo import EmpleadoRepo
 from repositories.periodo_repo import PeriodoRepo
+from repositories.vacaciones_pendientes_repo import VacacionesPendientesRepo
 from repositories.vacaciones_repo import VacacionesRepo
 from schemas.vacaciones import (
     SaldoVacacionesResponse, SolicitudVacacionesCreate,
     SolicitudVacacionesListResponse, SolicitudVacacionesResponse, SolicitudVacacionesUpdate,
 )
-from services._audit_payloads import payload_cancelacion_vacacion
-from services._audit_payloads_vacaciones import payload_update_vacacion
 from services._alcance_mandos import alcance_listado, empresa_efectiva
 from services._empleado_scope import ensure_empleado_visible
 from repositories._scope_filtros import empleados_de_proyecto
-from services._periodo_utils import verificar_periodo_abierto
 from services._vacaciones_export import construir_filas_export
 from services._vacaciones_saldo import calcular_saldo
 from services._vacaciones_utils import derive_estado
-from services._vacaciones_write import crear
+from services._vacaciones_write import actualizar, cancel, crear
 from services.audit_service import AuditService
 from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
 from services.export import Descarga, build_export
 from services.ownership import puede_gestionar_empleado
 from utils.errors import AppError
-from utils.logger import logger
 
 
 class VacacionesService:
-    def __init__(self, repo: Optional[VacacionesRepo] = None, audit: Optional[AuditService] = None, periodo_repo: Optional[PeriodoRepo] = None, ownership_repo: Optional[EmpleadoOwnershipRepo] = None, empleado_repo: Optional[EmpleadoRepo] = None) -> None:
+    def __init__(self, repo: Optional[VacacionesRepo] = None, audit: Optional[AuditService] = None, periodo_repo: Optional[PeriodoRepo] = None, ownership_repo: Optional[EmpleadoOwnershipRepo] = None, empleado_repo: Optional[EmpleadoRepo] = None, pendientes_repo: Optional[VacacionesPendientesRepo] = None) -> None:
         self._repo = repo or VacacionesRepo()
         self._audit = audit or AuditService()
         self._periodos = periodo_repo or PeriodoRepo()
         self._ownership = ownership_repo or EmpleadoOwnershipRepo()
         self._empleados = empleado_repo or EmpleadoRepo()
+        self._pendientes = pendientes_repo or VacacionesPendientesRepo()
 
     def get_all(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None, area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, estado: Optional[str] = None, page: int = 1, page_size: int = 20, fecha_desde: Optional[date] = None, fecha_hasta: Optional[date] = None, proyecto_id: Optional[UUID] = None) -> SolicitudVacacionesListResponse:
         """Página de solicitudes (estado derivado) filtrada por empresa/área/empleado/estado y ownership. vacio → devuelve vacío sin consultar.
@@ -95,51 +93,24 @@ class VacacionesService:
         return crear(self._repo, self._periodos, self._ownership, data, created_by, rol)
 
     def cancel(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None, rol: Optional[str] = None) -> SolicitudVacacionesResponse:
-        """
-        Cancela una solicitud seteando cancelada=True (no borra la fila — preserva historial).
-        Registra el evento de auditoría tras la cancelación exitosa (usuario_id = operador).
-
-        Ownership: un registro ajeno a un mando responde 404 (igual que inexistente), para no
-        confirmar la existencia de solicitudes de empleados que no gestiona.
-
-        Raises:
-            AppError: VACACION_NOT_FOUND (404) si el ID no existe o no es gestionable por el rol.
-            AppError: YA_CANCELADA (422) si ya estaba cancelada.
-        """
-        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
-        row = self._repo.find_by_id(str(id), empresa_id)
-        if not row or not puede_gestionar_empleado(usuario_id, rol, row.empleado_id, self._ownership):
-            raise AppError("Solicitud de vacaciones no encontrada", "VACACION_NOT_FOUND", 404)
-        verificar_periodo_abierto(row.empresa_id, "vacaciones", rol, desde=row.fecha_desde, hasta=row.fecha_hasta, repo=self._periodos)
-        if row.cancelada:
-            raise AppError("La solicitud ya está cancelada", "YA_CANCELADA", 422)
-        updated = self._repo.cancel(str(id), empresa_id)
-        self._audit.registrar(**payload_cancelacion_vacacion(row, updated, usuario_id, row.empresa_id))
-        logger.info("Vacaciones canceladas", extra={"solicitud_id": str(id)})
-        return derive_estado(updated, date.today())  # type: ignore[arg-type]
+        """Cancela una solicitud (cancelada=True, no borra). Delegado a _vacaciones_write.cancel."""
+        return cancel(self._repo, self._periodos, self._ownership, self._audit, id,
+                      empresa_efectiva(empresa_id, rol), usuario_id, rol)
 
     def actualizar(self, id: UUID, data: SolicitudVacacionesUpdate, empresa_id: Optional[UUID] = None,
                    usuario_id: Optional[str] = None, rol: Optional[str] = None) -> SolicitudVacacionesResponse:
-        """Edita una solicitud (hoy: período, días liquidados, comentario y tipo). NO toca fechas:
-        cambiarlas movería `dias` y el solapamiento, que es otra operación.
-        Mismo gate empresa ∩ ownership y mismo 404 único que get_by_id/cancel."""
-        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
-        row = self._repo.find_by_id(str(id), empresa_id)
-        if not row or not puede_gestionar_empleado(usuario_id, rol, row.empleado_id, self._ownership):
-            raise AppError("Solicitud de vacaciones no encontrada", "VACACION_NOT_FOUND", 404)
-        patch = data.model_dump(exclude_unset=True, exclude_none=True)
-        if patch.get("dias_liquidados", 0) > row.dias:
-            raise AppError("Los días liquidados no pueden superar los días de la licencia",
-                           "DIAS_LIQUIDADOS_INVALIDOS", 422)
-        nuevo = self._repo.update(str(id), patch, empresa_id)
-        if not nuevo:
-            raise AppError("Solicitud de vacaciones no encontrada", "VACACION_NOT_FOUND", 404)
-        self._audit.registrar(**payload_update_vacacion(row, nuevo, usuario_id))
-        return derive_estado(nuevo, date.today())
+        """Edición parcial de una solicitud. Delegado a _vacaciones_write.actualizar."""
+        return actualizar(self._repo, self._ownership, self._audit, id, data,
+                          empresa_efectiva(empresa_id, rol), usuario_id, rol)
 
     def get_saldo(self, empleado_id: UUID, user_id: Optional[str] = None, rol: Optional[str] = None, empresa_id: Optional[UUID] = None) -> SaldoVacacionesResponse:
-        """Saldo anual de vacaciones pagas. Gate empresa ∩ ownership antes de calcular; delegado a
-        calcular_saldo (helper). Raises EMPLEADO_NOT_FOUND (404) —mismo 404 para ajeno e inexistente—."""
+        """Saldo de vacaciones por período, con vencimiento. Gate empresa ∩ ownership antes de
+        calcular; delegado a calcular_saldo (helper). Raises EMPLEADO_NOT_FOUND (404) —mismo 404
+        para ajeno e inexistente—.
+
+        Los pendientes entran al cálculo porque sus días LIQUIDADOS consumen cupo (mig 083). El
+        repo viaja como parámetro, no se instancia adentro del helper: el helper es la costura
+        que testea test_saldo_service_vs_r11 y necesita poder recibir un doble."""
         empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
         ensure_empleado_visible(self._empleados, self._ownership, empleado_id, empresa_id, user_id, rol)
-        return calcular_saldo(self._repo, empleado_id, empresa_id)
+        return calcular_saldo(self._repo, empleado_id, empresa_id, self._pendientes)

@@ -41,6 +41,59 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-03 · Rearmado del saldo de vacaciones por período + triggers updated_at · 4 commits pendientes
+
+**Qué cambió:** se rearmaron dos sesiones del 30/7 que nunca se commitearon y que un
+`reset --hard` dejó a medias (los archivos nuevos sobrevivieron por untracked; los que esas
+sesiones MODIFICARON se perdieron). Van en 4 commits, cada uno con la suite verde:
+
+- **C0 · entorno.** `test_selects_repos` fallaba 3 tests SOLO EN WINDOWS: la clave se armaba con
+  `str(Path)` (backslash) contra excepciones declaradas con `/`. Ahora `.as_posix()`.
+- **C1 · triggers `updated_at`.** La `077` de `migracionAWS/` pasó de 36 a **41** triggers.
+- **C2 · núcleo puro del saldo.** `config/reglas_vacaciones.py` + `services/_vacaciones_cupos.py`
+  + `_vacaciones_fifo.py`: cupo por antigüedad (14/21/28), acumulación 4 años, vencimiento e
+  imputación FIFO. Sin repos ni ids: solo datos.
+- **C3 · cableado.** El saldo pasa a calcularse por PERÍODO y el reporte R11 usa EL MISMO núcleo
+  que la pantalla (antes divergían en cuatro cosas, todas en silencio). R11 se mudó a
+  `services/reportes/_reporte_saldos.py`. `vacaciones_service` bajó a 116 líneas partiendo
+  `cancel`/`actualizar` a `_vacaciones_write.py`.
+
+**Impacto en infraestructura:** **DOS MIGRACIONES NUEVAS, las dos PENDIENTES de correr.**
+
+- 🔴 **`090_dias_vacaciones_nullable.sql`** — `empleados.dias_vacaciones_asignados` pasa a
+  nullable, pierde el `DEFAULT 14` y se backfillea a NULL. **NACIÓ NUMERADA 085 y se renumeró**:
+  el 085 lo ocupa `085_configuracion_reglas.sql`, que YA CORRIÓ. Nada lo detectó — el registro de
+  migraciones de Supabase tiene UNA fila (la 081), o sea que no es un ledger y el único juez es
+  el catálogo. Verificado el 3/8: los 31 empleados están en 14, así que el backfill no pisa
+  ningún override real.
+  > 🔴 **ORDEN DE DEPLOY QUE NO SE PUEDE INVERTIR: EL CÓDIGO VA ANTES QUE LA MIGRACIÓN.**
+  > `schemas/empleado_out.py` declaraba `dias_vacaciones_asignados: int = 14`, NO Optional. Con
+  > la columna ya nullable y ese schema viejo, un NULL levanta `ValidationError` → **500 en TODA
+  > lectura de empleado**: listado, ficha, export y dashboard, no solo vacaciones. Con el código
+  > de C3 desplegado el NULL es un valor esperado y la migración no rompe nada.
+- **`091_triggers_updated_at_faltantes.sql`** — crea el trigger `updated_at` de
+  `usuario_integraciones` y `plantillas_mail`. **No es deuda de AWS: es un bug vivo en Supabase
+  hoy.** Las dos tablas tienen la columna con `DEFAULT now()` y ningún trigger, así que el dato
+  se pobla en el alta y NO SE MUEVE NUNCA — en `usuario_integraciones`, que es la tabla del token
+  de Google que se reescribe en cada refresh, dice exactamente lo contrario de la verdad.
+  Verificado contra `pg_trigger`. No es retroactiva: las filas viejas conservan su fecha
+  congelada (escribir `now()` en todas sería una segunda mentira encima de la primera).
+- **Orden entre ellas: son independientes.** La 089 sigue pendiente y sigue teniendo que correr
+  ANTES de que se cargue el histórico de ausencias.
+- Sin env vars, dependencias, buckets ni endpoints nuevos. Sin cambios de auth.
+
+> ⚠️ **Para el que monta AWS:** la `077` ahora crea **41** triggers, no 36. Las 5 que faltaban
+> (`usuario_integraciones`, `vacaciones_pendientes`, `parametros_empresa`,
+> `reglas_vacaciones_escala`, `plantillas_mail`) quedaban afuera porque la lista está
+> hardcodeada. `backend/tests/test_triggers_updated_at.py` compara el schema contra ese archivo
+> y rojea si nace una tabla nueva sin su trigger — no le bajes los mínimos.
+
+> ⚠️ **`backend/.env` local (NO versionado, hay que hacerlo en cada máquina, Mac incluida):**
+> sacarle la línea `RESEND_API_KEY`. El commit `ea69bae` (2/8) borró ese campo de `settings.py`
+> y pydantic-settings rechaza las claves EXTRA que vienen del `.env` → **ningún archivo de test
+> del backend se colectaba**. Solo afecta al `.env`: una env var del sistema que no matchee un
+> campo no rompe, y por eso Vercel nunca lo notó.
+
 ## 2026-08-03 · Cards del dashboard plegables + contador de alertas · commit pendiente
 
 **Qué cambió:** solo front. Las tres cards del dashboard cuyas listas crecen sin techo

@@ -92,27 +92,17 @@ class _FakeDB:
 
 
 # ── R11 saldos de vacaciones ────────────────────────────────────────────────────
-
-def test_saldos_cancelados_no_restan_y_sin_asignar(monkeypatch):
-    monkeypatch.setattr(vac, "supabase_admin", _FakeDB({
-        "empleados": [
-            {"id": "e1", "estado": "activo", "area_id": "A", "nombre": "Ana", "apellido": "G",
-             "dias_vacaciones_asignados": 20, "areas": {"nombre": "Tec"}},
-            {"id": "e2", "estado": "activo", "area_id": "A", "nombre": "Beto", "apellido": "R",
-             "dias_vacaciones_asignados": None, "areas": {"nombre": "Tec"}},
-        ],
-        "solicitudes_vacaciones": [
-            {"empleado_id": "e1", "dias": 5, "cancelada": False, "fecha_desde": "2026-03-05"},
-            {"empleado_id": "e1", "dias": 3, "cancelada": True, "fecha_desde": "2026-03-10"},
-        ],
-    }))
-    r = vac.generate_saldos_vacaciones(3, 2026, empresa_id=None, area_id=None)
-    filas = {f["empleado"]: f for f in r["saldos"]}
-    assert filas["G, Ana"]["asignados"] == 20
-    assert filas["G, Ana"]["tomados"] == 5              # los 3 días cancelados NO restan
-    assert filas["G, Ana"]["saldo"] == 15
-    assert filas["R, Beto"]["asignados"] == "Sin asignar"
-    assert filas["R, Beto"]["tomados"] == 0 and filas["R, Beto"]["saldo"] == 0
+#
+# 🔴 EL TEST DE R11 NO ESTÁ ACÁ: SE MUDÓ, NO SE BORRÓ. Vive en
+# `tests/test_saldo_service_vs_r11.py`, que además lo compara contra el service — que es la
+# única propiedad que importa de R11 desde que los dos usan el mismo núcleo.
+#
+# El que estaba acá afirmaba el contrato VIEJO —`asignados` − `tomados` = `saldo`, con
+# "Sin asignar" cuando la columna venía en NULL— y ese contrato ya no existe: `asignados` pasó
+# a ser el cupo CALCULADO por antigüedad, `tomados` se partió en gozados/pedidos, y NULL dejó
+# de significar "falta el dato" para significar "aplicá la regla general" (migración 090). Si
+# se hubiera dejado, habría seguido en verde probando una función borrada hasta que alguien
+# leyera por qué.
 
 
 # ── R10 ausentismo por área ─────────────────────────────────────────────────────

@@ -436,27 +436,50 @@ class TestLaTablaNuevaNoTocaLoQueYaFuncionaba:
         assert derive_estado(futura, hoy).estado == "planificada"
         assert derive_estado(pasada, hoy).estado == "tomada"
 
-    def test_el_saldo_no_mira_la_tabla_de_pendientes(self):
-        """El cálculo del saldo quedó EXPLÍCITAMENTE fuera de alcance hasta definirlo con RRHH.
+    def test_el_saldo_SI_mira_los_pendientes_y_solo_lo_liquidado(self):
+        """🔴 ESTE TEST SE DIO VUELTA. Decía lo contrario —"el saldo NO mira la tabla de
+        pendientes"— porque el enganche estaba explícitamente fuera de alcance hasta definirlo
+        con RRHH. La definición llegó y quedó escrita en el docstring de
+        `_vacaciones_fifo.Consumo`: un pendiente NO es una licencia tomada, así que lo único
+        que consume cupo de él son sus `dias_liquidados`; los días sin liquidar siguen enteros.
 
-        Para que falle: que alguien enganche los pendientes al saldo antes de esa definición.
-        Se mira el código fuente porque el punto es que la dependencia no exista, no que
-        devuelva cierto número."""
+        Se invierte en vez de borrarse. Un test que cierra un pendiente no se saca de la lista:
+        se MUEVE al que verifica lo contrario, si no la aserción restante se queda sin nada que
+        mirar y el guard desaparece sin dejar rastro de que existió.
+
+        Para que falle: desenganchar los pendientes del saldo (vuelve al estado anterior), o
+        —el error real que esto vigila— consumir `dias` en vez de `dias_liquidados`, que le
+        descontaría a la persona días que nadie tomó ni pagó."""
         from services import _vacaciones_saldo
         fuente = inspect.getsource(_vacaciones_saldo)
-        assert "pendiente" not in fuente.lower()
+        assert "pendientes" in fuente, "el saldo dejó de mirar los pendientes"
+        assert "dias_liquidados" in fuente, "consume el campo equivocado"
+        assert "p.dias" not in fuente.replace("p.dias_liquidados", ""), \
+            "consume los días del pendiente, no solo los liquidados"
 
-    def test_los_reportes_y_el_export_no_miran_la_tabla_de_pendientes(self):
-        """R9/R11 y el export de vacaciones siguen leyendo SOLO solicitudes_vacaciones.
+    def test_R11_tambien_los_mira_y_el_export_no(self):
+        """El corte quedó donde tiene que estar, y no es el mismo para los tres módulos.
 
-        Guarda de mínimo incluida: si el barrido dejara de encontrar módulos, pasaría sin
-        haber comparado nada."""
+        · R11 (`_reporte_saldos`) SÍ los mira: es el mismo saldo que la pantalla, y si mirara
+          otra cosa volveríamos al bug que la unificación cerró (dos números para la misma
+          persona, ninguno con error).
+        · R9 (`_reporte_vacaciones`) y el export NO: son listados de SOLICITUDES, fila por fila.
+          Un pendiente no es una solicitud —no tiene fechas, justamente porque nadie faltó
+          ningún día— así que ahí no tiene ninguna fila que ocupar.
+
+        ⚠️ Antes de dar esto por bueno: la mitad negativa de este test se volvió VACUA cuando
+        R11 se mudó de `_reporte_vacaciones` a `_reporte_saldos`. Seguía diciendo "R9/R11 no
+        miran pendientes" mientras barría una lista donde R11 ya no estaba — pasaba en verde
+        sin poder desmentir nada. Por eso la parte positiva se afirma explícita: es lo único
+        que hace que la lista de módulos no pueda mentir por omisión otra vez."""
         from services import _vacaciones_export
-        from services.reportes import _reporte_vacaciones
+        from services.reportes import _reporte_saldos, _reporte_vacaciones
 
-        modulos = [_reporte_vacaciones, _vacaciones_export]
-        assert len(modulos) >= 2
-        for mod in modulos:
+        assert "vacaciones_pendientes" in inspect.getsource(_reporte_saldos), \
+            "R11 dejó de mirar los pendientes y ya no da lo mismo que la pantalla"
+        sin_pendientes = [_reporte_vacaciones, _vacaciones_export]
+        assert len(sin_pendientes) >= 2
+        for mod in sin_pendientes:
             assert "vacaciones_pendientes" not in inspect.getsource(mod), mod.__name__
 
     def test_el_repo_de_pendientes_lleva_la_empresa_en_la_query(self):

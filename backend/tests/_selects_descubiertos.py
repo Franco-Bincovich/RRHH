@@ -133,7 +133,14 @@ def descubrir(*directorios: str) -> List[Select]:
                         and n.func.attr == "select"):
                     continue
                 out.append(Select(
-                    archivo=str(ruta.relative_to(_RAIZ)), linea=n.lineno,
+                    # 🔴 `.as_posix()`, NO `str()`: en Windows `str(Path)` devuelve
+                    # `repositories\x.py` con backslash, y las excepciones de
+                    # `SIN_RESOLVER_DECLARADOS` están escritas con `/`. Con `str()` el barrido
+                    # daba 3 tests en rojo EN WINDOWS Y EN VERDE EN LA MAC, sobre el mismo
+                    # código — los 15 archivos descubiertos y los 15 declarados eran el mismo
+                    # conjunto módulo separador. Un test que depende del sistema operativo es
+                    # peor que no tenerlo: obliga a adivinar si el rojo es tuyo o de la máquina.
+                    archivo=ruta.relative_to(_RAIZ).as_posix(), linea=n.lineno,
                     tabla=_tabla_de_la_cadena(n.func.value, consts),
                     spec=_resolver(n.args[0], consts) if n.args else None))
     return out

@@ -1,79 +1,29 @@
 """
-Reportes del dominio vacaciones/ausencias:
-- R11 saldos_vacaciones: por empleado, asignados − tomados = saldo (cancelada=false no resta).
-- R9  listado_vac_aus: listado plano de vacaciones + ausencias del período (reporte "crudo").
+R9 listado_vac_aus: listado plano de vacaciones + ausencias del período (reporte "crudo").
+
 El área vive en empleados (las solicitudes no la tienen) → filtro de área por JOIN inner por
 empleado (empleados!inner(area_id)), igual que rotacion/onboarding. Con tablas vacías las listas
 salen vacías y los totales en 0 (empty state coherente, no error).
+
+⚠️ R11 (saldos_vacaciones) VIVÍA ACÁ y se mudó a `_reporte_saldos.py`. No fue por líneas: pasó
+a calcularse con el mismo núcleo que la pantalla de vacaciones y dejó de parecerse a esto. Lo
+único que compartían de verdad —`_nombre` y `_area`— está ahora en `_common.py`. Si volvés a
+necesitar un "saldo" acá, importalo de `_reporte_saldos`: una segunda definición de saldo es
+exactamente el bug que la unificación vino a cerrar (RRHH veía un número en la ficha y otro en
+el reporte, y ninguno de los dos daba error).
 """
 from typing import Any, Dict, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from services.reportes._common import EMBED_AREA_DE_EMPLEADO as _AREA
-from services.reportes._common import _eid, periodo_str, rango_mes
+from services.reportes._common import _area, _eid, _nombre, periodo_str, rango_mes
 
 
 def _fecha(s) -> str:
     """ISO 'YYYY-MM-DD' → 'DD/MM/YYYY'; '' si es None/vacío. Supabase devuelve fechas como string."""
     p = str(s)[:10].split("-") if s else []
     return f"{p[2]}/{p[1]}/{p[0]}" if len(p) == 3 else (str(s) if s else "")
-
-
-def _nombre(emp: dict) -> str:
-    return f"{emp.get('apellido', '')}, {emp.get('nombre', '')}".strip(", ").strip()
-
-
-def _area(emp: dict) -> str:
-    return (emp.get("areas") or {}).get("nombre") or "Sin área"
-
-
-def generate_saldos_vacaciones(mes: int, anio: int, empresa_id: Optional[UUID] = None,
-                               area_id: Optional[UUID] = None) -> Dict[str, Any]:
-    """Saldo de vacaciones por empleado activo: asignados − tomados (solo cancelada=false cuenta).
-    Filtra por empresa_id y/o area_id (empleados.area_id directo). Empleado sin asignados (null) →
-    asignados 0 con marca 'Sin asignar'."""
-    ini, fin = rango_mes(mes, anio)
-    eid, aid = _eid(empresa_id), _eid(area_id)
-    db = supabase_admin
-
-    emp_q = (db.table("empleados")
-             .select(f"id, nombre, apellido, dias_vacaciones_asignados, {_AREA}")
-             .eq("estado", "activo"))
-    if eid:
-        emp_q = emp_q.eq("empresa_id", eid)
-    if aid:
-        emp_q = emp_q.eq("area_id", aid)
-    empleados = emp_q.execute().data or []
-
-    vac_q = (db.table("solicitudes_vacaciones").select("empleado_id, dias")
-             .eq("cancelada", False).gte("fecha_desde", ini).lte("fecha_desde", fin))
-    if eid:
-        vac_q = vac_q.eq("empresa_id", eid)
-    tomados: dict[str, int] = {}
-    for v in (vac_q.execute().data or []):
-        tomados[v.get("empleado_id")] = tomados.get(v.get("empleado_id"), 0) + int(v.get("dias") or 0)
-
-    filas = []
-    for emp in empleados:
-        crudo = emp.get("dias_vacaciones_asignados")
-        sin_asignar = crudo is None
-        asignados = int(crudo or 0)
-        tom = tomados.get(emp["id"], 0)
-        filas.append({
-            "empleado": _nombre(emp),
-            "area": _area(emp),
-            "asignados": "Sin asignar" if sin_asignar else asignados,
-            "tomados": tom,
-            "saldo": asignados - tom,
-        })
-
-    return {
-        "titulo": f"Saldos de vacaciones — {periodo_str(mes, anio)}",
-        "periodo": {"mes": mes, "anio": anio},
-        "total_empleados": len(filas),
-        "saldos": sorted(filas, key=lambda x: x["empleado"]),
-    }
 
 
 def generate_listado_vac_aus(mes: int, anio: int, empresa_id: Optional[UUID] = None,

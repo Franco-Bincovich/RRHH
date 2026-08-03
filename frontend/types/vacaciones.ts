@@ -79,10 +79,29 @@ export interface SolicitudVacacionesListResponse {
   total: number
 }
 
+export interface SaldoPeriodo {
+  periodo: number
+  cupo: number
+  gozados: number
+  pedidos: number
+  disponibles: number
+  /** ISO "YYYY-MM-DD". Se formatea partiendo el string, NUNCA con `new Date()`: esa fecha se
+   *  parsea en UTC y en Argentina (UTC−3) se muestra un día antes — el 31/12 se ve como 30/12,
+   *  que en un vencimiento es el día que importa. */
+  vence: string
+  vencido: boolean
+}
+
 export interface SaldoVacaciones {
   empleado_id: string
+  /** Cupo calculado de los períodos NO vencidos — no es la columna `dias_vacaciones_asignados`,
+   *  que desde la migración 090 es un override opcional. */
   asignados: number
   gozados: number
   pedidos: number
   disponibles: number
+  vencidos: number
+  /** Opcional en el TIPO a propósito: un backend viejo (o un 200 cacheado) no lo manda, y el
+   *  componente tiene que seguir mostrando los cuatro totales en vez de romper. */
+  por_periodo?: SaldoPeriodo[]
 }

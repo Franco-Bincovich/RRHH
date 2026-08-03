@@ -13,10 +13,8 @@ from services.reportes._reporte_distribucion import generate_distribucion
 from services.reportes._reporte_dotacion import generate_headcount, generate_rotacion
 from services.reportes._reporte_movimientos import generate_altas_bajas
 from services.reportes._reporte_seleccion import generate_onboarding, generate_vacantes
-from services.reportes._reporte_vacaciones import (
-    generate_listado_vac_aus,
-    generate_saldos_vacaciones,
-)
+from services.reportes._reporte_saldos import generate_saldos_vacaciones
+from services.reportes._reporte_vacaciones import generate_listado_vac_aus
 
 __all__ = [
     "periodo_str", "rango_mes",

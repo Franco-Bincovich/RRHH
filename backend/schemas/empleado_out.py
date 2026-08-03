@@ -40,7 +40,14 @@ class EmpleadoResponse(BaseModel):
     cargo: Optional[str] = None       # DEPRECADO (se dropea en S6)
     rol: Optional[str] = None         # DEPRECADO (se dropea en S6)
     estado: str
-    dias_vacaciones_asignados: int = 14
+    # 🔴 Optional DESDE LA MIGRACIÓN 090, y el orden de deploy NO se puede invertir: este
+    # Optional va ANTES de correr la migración. Era `int = 14` (no opcional), así que un NULL
+    # contra este tipo levanta ValidationError → 500 del handler global, y NO solo en
+    # vacaciones: este schema es el de salida de TODA lectura de empleado (listado, ficha,
+    # export, dashboard). Con el código nuevo desplegado el NULL es un valor esperado.
+    # NULL = se aplica la regla por antigüedad (config/reglas_vacaciones.py) · un entero =
+    # override permanente de esa persona, que gana sobre la regla.
+    dias_vacaciones_asignados: Optional[int] = None
     # Legajo ampliado (A1.1, migración 060) — todos opcionales.
     email_personal: Optional[str] = None
     tipo_documento: Optional[str] = None

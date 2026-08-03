@@ -36,3 +36,18 @@ def rango_mes(mes: int, anio: int) -> tuple[str, str]:
 
 def _eid(empresa_id: Optional[UUID]) -> Optional[str]:
     return str(empresa_id) if empresa_id else None
+
+
+def _nombre(emp: dict) -> str:
+    """'Apellido, Nombre' de una fila de empleados (o de un embed hacia ella).
+
+    Subió acá desde `_reporte_vacaciones.py` cuando R11 se mudó a `_reporte_saldos.py`: los dos
+    ordenan sus filas por este string, así que dos copias que se separaran ordenarían distinto
+    el mismo listado. Es también la clave con la que se cruzan a mano el reporte y la pantalla.
+    """
+    return f"{emp.get('apellido', '')}, {emp.get('nombre', '')}".strip(", ").strip()
+
+
+def _area(emp: dict) -> str:
+    """Nombre del área embebida, o 'Sin área'. Nunca None: es texto de una celda."""
+    return (emp.get("areas") or {}).get("nombre") or "Sin área"

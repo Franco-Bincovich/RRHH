@@ -85,9 +85,29 @@ class SolicitudVacacionesListResponse(BaseModel):
     total: int
 
 
+class SaldoPeriodoResponse(BaseModel):
+    """Una fila del desglose. Espeja `services._vacaciones_fifo.SaldoPeriodo` 1:1."""
+    periodo: int
+    cupo: int
+    gozados: int
+    pedidos: int
+    disponibles: int
+    vence: date       # 31/12 de periodo + años de acumulación
+    vencido: bool
+
+
 class SaldoVacacionesResponse(BaseModel):
+    """🔴 LOS CUATRO TOTALES NO SON UNA SUMA DE TODO: `asignados` y `disponibles` cuentan SOLO
+    los períodos NO vencidos, mientras `gozados` y `pedidos` cuentan todos. No es un descuido:
+    un período vencido deja de aportar saldo utilizable, pero los días que sí se gozaron
+    siguen habiendo pasado — la historia no se reescribe al vencer.
+
+    Por eso `por_periodo` NO es decoración: sin el desglose, `asignados − gozados − pedidos`
+    no da `disponibles` y el número se vuelve imposible de explicar frente a un empleado."""
     empleado_id: str
-    asignados: int
-    gozados: int   # tomadas (estado="tomada", tipo="vacaciones")
-    pedidos: int   # planificadas (estado="planificada", tipo="vacaciones")
-    disponibles: int  # asignados − gozados − pedidos
+    asignados: int    # suma de cupos de los períodos NO vencidos
+    gozados: int      # tomadas (estado="tomada", tipo="vacaciones"), de TODOS los períodos
+    pedidos: int      # planificadas (estado="planificada"), de TODOS los períodos
+    disponibles: int  # lo utilizable hoy: solo períodos no vencidos
+    vencidos: int     # días que se perdieron por no gozarse a tiempo
+    por_periodo: List[SaldoPeriodoResponse] = []

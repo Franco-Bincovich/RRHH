@@ -56,6 +56,11 @@ MODULOS = [
     "services.reportes._reporte_dotacion",
     "services.reportes._reporte_movimientos",
     "services.reportes._reporte_seleccion",
+    # R11 se mudó de _reporte_vacaciones a _reporte_saldos al pasar a calcularse con el núcleo
+    # compartido. La entrada NUEVA no es opcional: sin ella el generador quedaba hablando con la
+    # base REAL durante el test (el fallo fue un getaddrinfo, no una aserción) y sus tres selects
+    # —empleados, solicitudes y pendientes— no los validaba nadie.
+    "services.reportes._reporte_saldos",
     "services.reportes._reporte_vacaciones",
     "services._dashboard_headcount",
     "services._dashboard_kpis",
