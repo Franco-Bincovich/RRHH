@@ -41,6 +41,51 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-03 · Modales que entran en pantalla + aviso de modo consolidado · 3 commits pendientes
+
+**Qué cambió:** solo front.
+
+- **C1 · `components/ui/dialog.tsx` (el primitivo, los 35 modales).** El popup se centra con
+  `-translate-y-1/2` y no tenía techo de altura, así que un modal largo se desbordaba por arriba
+  Y por abajo a la vez: se perdían el título y los botones juntos. Pasaba en **20 de los 35**
+  modales. Ahora `DialogContent` reparte sus hijos por tipo (`partirHijos`), fija encabezado y
+  pie, y scrollea solo el medio, con `max-h-[calc(100dvh-2rem)]` (`dvh` y no `vh`: en mobile
+  `vh` cuenta la barra de direcciones aunque esté desplegada).
+  **Los 15 modales que ya traían `max-h-[90vh] overflow-y-auto` siguen andando** — su clase pisa
+  al `max-h` del primitivo vía tailwind-merge, verificado por test; lo que ganan es que ahora su
+  encabezado y sus botones también quedan fijos.
+- **C2 · división de `PlantillaModal`** (142/150, sin margen): los campos del formulario salieron
+  a `PlantillaCampos.tsx`. El modal quedó en 109.
+- **C3 · aviso de modo consolidado.** Guardar una plantilla con el sidebar en "Todas las
+  empresas" devolvía **el mensaje crudo del backend** *"empresa_id requerido para esta
+  operación"* (`utils/empresa.py:29`, `EMPRESA_ID_REQUIRED`) al apretar Guardar. Ahora el botón
+  está deshabilitado desde que se abre el modal, con el motivo al lado: *"Para guardar, elegí
+  una empresa en el selector de arriba a la izquierda"*. **Previsualizar sigue habilitado** — en
+  consolidado el render funciona igual y es la mitad útil de la pantalla.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, env vars, dependencias, buckets,
+endpoints ni cambios de auth. Backend intacto. No quedan migraciones pendientes de correr.
+
+> ⚠️ **`DialogHeader` y `DialogFooter` tienen que ser hijos DIRECTOS de `DialogContent`.** El
+> reparto es por tipo de elemento; envolver el pie en un componente propio lo manda al cuerpo
+> scrollable y los botones vuelven a irse con el scroll. Verificado que hoy los 35 cumplen. Está
+> escrito en `partirHijos` y en el punto donde `PlantillaModal` arma su pie.
+
+> 🚩 **Anotado, fuera de alcance de esta tanda:**
+> 1. **40 mensajes de backend llegan crudos al front**, en 37 archivos (`e instanceof Error ?
+>    e.message`). No todos son un bug: el 422 de variable inválida de plantillas es el mensaje
+>    más útil del formulario y se muestra a propósito. **No hay forma hoy de distinguir un
+>    `AppError` redactado para el usuario de uno que es jerga interna** — resolverlo es una tanda
+>    propia.
+> 2. **Las plantillas globales nunca se ejercitaron.** `plantillas_mail.empresa_id` es nullable =
+>    plantilla global, con dos índices únicos parciales que lo sostienen (mig 087), el service
+>    las lee y el modal ya avisa *"estás editando la general"*. Pero **la 087 no siembra ninguna**
+>    y producción tiene **0 plantillas**, así que el mecanismo entero está sin usar. Definir qué
+>    plantillas base trae el sistema.
+> 3. **No existe botón de Borrar plantilla en la UI.** El endpoint `DELETE /api/plantillas/{id}`
+>    y `borrarPlantilla()` en el front existen, pero **nadie los llama** — por eso el fallo en
+>    consolidado "no se veía". No se agregó nada: si el borrado tiene que existir, es su tanda.
+
 ## 2026-08-03 · Cards del dashboard que no se estiran + "SIN DATOS" deja de ser una categoría · 2 commits pendientes
 
 **Qué cambió:**

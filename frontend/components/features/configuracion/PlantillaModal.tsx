@@ -2,13 +2,11 @@
 
 import { useEffect, useState } from "react"
 
-import { Button } from "@/components/ui/button"
+import { AccionesDelPie } from "@/components/features/configuracion/PlantillaAcciones"
+import { PlantillaCampos, type CampoPlantilla } from "@/components/features/configuracion/PlantillaCampos"
 import { PlantillaPreview } from "@/components/features/configuracion/PlantillaPreview"
-import { PlantillaVariables } from "@/components/features/configuracion/PlantillaVariables"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { getEmpresaActivaId } from "@/services/empresaStore"
 import { guardarPlantilla, previewPlantilla } from "@/services/plantillas"
 import type { Plantilla, PreviewResponse } from "@/types/plantillas"
 
@@ -36,6 +34,7 @@ export function PlantillaModal({ open, plantilla, contextos, onClose, onSuccess 
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [guardando, setGuardando] = useState(false)
+  const [sinEmpresa, setSinEmpresa] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -45,11 +44,14 @@ export function PlantillaModal({ open, plantilla, contextos, onClose, onSuccess 
     setCuerpo(plantilla?.cuerpo ?? "")
     setPreview(null)
     setError(null)
+    // Se lee AL ABRIR y no al montar: el modal vive montado con `open=false` y el usuario puede
+    // cambiar el selector del sidebar entre una apertura y la siguiente.
+    setSinEmpresa(getEmpresaActivaId() === null)
   }, [open, plantilla])
 
-  function insertar(variable: string) {
-    setCuerpo((actual) => `${actual}{{${variable}}}`)
-  }
+  const valores = { clave, contexto, asunto, cuerpo }
+  const setters: Record<CampoPlantilla, (v: string) => void> =
+    { clave: setClave, contexto: setContexto, asunto: setAsunto, cuerpo: setCuerpo }
 
   async function verPreview() {
     setError(null)
@@ -89,52 +91,26 @@ export function PlantillaModal({ open, plantilla, contextos, onClose, onSuccess 
           </p>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="pl-clave">Nombre interno</Label>
-            <Input id="pl-clave" value={clave} onChange={(e) => setClave(e.target.value)}
-                   placeholder="bienvenida_empleado" disabled={!!plantilla} />
-          </div>
-          <div>
-            <Label htmlFor="pl-ctx">Tipo de mail</Label>
-            <select id="pl-ctx" value={contexto} onChange={(e) => setContexto(e.target.value)}
-                    disabled={!!plantilla}
-                    className="h-9 w-full rounded-md border bg-background px-3 text-sm">
-              {Object.keys(contextos).map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <Label htmlFor="pl-asunto">Asunto</Label>
-          <Input id="pl-asunto" value={asunto} onChange={(e) => setAsunto(e.target.value)} />
-        </div>
-
-        <div>
-          <Label htmlFor="pl-cuerpo">Mensaje</Label>
-          <Textarea id="pl-cuerpo" rows={10} value={cuerpo}
-                    onChange={(e) => setCuerpo(e.target.value)}
-                    placeholder="Hola {{nombre_empleado}}, ..." />
-          <p className="mt-1 text-xs text-muted-foreground">
-            Podés usar <strong>**negrita**</strong>, *itálica*, listas con “- ” y links
-            [texto](https://…).
-          </p>
-        </div>
-
-        <div>
-          <Label>Variables disponibles</Label>
-          <PlantillaVariables variables={contextos[contexto] ?? []} onInsertar={insertar} />
-        </div>
+        <PlantillaCampos
+          valores={valores}
+          onCambio={(campo, valor) => setters[campo](valor)}
+          contextos={contextos}
+          bloqueada={!!plantilla}
+        />
 
         {preview && <PlantillaPreview preview={preview} />}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={verPreview}>Previsualizar</Button>
-          <Button onClick={guardar} disabled={guardando || !clave || !asunto || !cuerpo}>
-            {guardando ? "Guardando…" : "Guardar"}
-          </Button>
+        {/* ⚠️ El `<DialogFooter>` tiene que quedar como hijo LITERAL de `DialogContent`: el
+            diálogo reparte los hijos por tipo para fijar los extremos, y envolverlo en un
+            componente propio lo mandaría al cuerpo scrollable (ver `partirHijos` en ui/dialog).
+            Por eso lo que se extrajo es el CONTENIDO del pie, no el pie. */}
+        <DialogFooter className={sinEmpresa ? "sm:justify-between" : undefined}>
+          <AccionesDelPie
+            sinEmpresa={sinEmpresa} guardando={guardando} valores={valores}
+            onGuardar={guardar} onPreview={verPreview}
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>
