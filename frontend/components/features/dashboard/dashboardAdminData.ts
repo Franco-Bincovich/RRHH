@@ -23,6 +23,24 @@ export const NIVEL_LABEL: Record<AlertaDashboard["nivel"], string> = {
   error:   "Urgente",
 }
 
+/**
+ * Cuántos ítems se ven antes del corte en las listas del dashboard que crecen con la plantilla:
+ * áreas, cumpleaños y aniversarios. Ninguna de las tres tiene techo (el backend devuelve una
+ * fila por área y una por empleado que cumple en el mes), así que con 500 empleados las cards
+ * empujan todo lo demás fuera de la pantalla.
+ *
+ * 6 y no 5 ni 10: una barra de headcount ocupa ~52px (nombre+número, la barra, y su gap), así
+ * que 6 filas dejan la card de Headcount a la altura de la de Alertas que tiene al lado en la
+ * grilla de 2 columnas — que es el alto que ya ocupa hoy sin empujar nada. Con las 12 áreas
+ * cargadas el corte esconde la mitad, que es exactamente el punto.
+ */
+export const CORTE_LISTA = 6
+
+/** Parte una lista en lo que se ve siempre y lo que queda detrás del desplegable. */
+export function partirLista<T>(items: T[], corte: number = CORTE_LISTA): { visibles: T[]; resto: T[] } {
+  return { visibles: items.slice(0, corte), resto: items.slice(corte) }
+}
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("es-AR", {
     style: "currency", currency: "ARS", maximumFractionDigits: 0,

@@ -41,6 +41,22 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-03 · Cards del dashboard plegables + contador de alertas · commit pendiente
+
+**Qué cambió:** solo front. Las tres cards del dashboard cuyas listas crecen sin techo
+—headcount por área, alertas activas, y cumpleaños/aniversarios— pasaron a ser plegables y
+llevan un contador en el encabezado. Con la segunda empresa cargada ya son 12 áreas y 7
+alertas; con 500 empleados serían decenas, y hoy empujaban todo lo demás fuera de la pantalla.
+Se reusó `ConfigSection.tsx` (el acordeón de /configuracion) en vez de construir un segundo
+desplegable: se le agregaron tres props opcionales —`icon` pasó a opcional, más `preview` y
+`disabled`— y /configuracion lo sigue usando exactamente igual. `HeadcountBar` salió de
+`DashboardAdmin.tsx` a un `HeadcountPanel.tsx` propio (109 → 80 líneas). El estado
+abierto/cerrado **no se persiste** y los contadores salen de los datos que ya llegaban.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, env vars, dependencias, buckets,
+endpoints ni cambios de auth. **El backend no se tocó** — cero requests nuevos: el dashboard
+pide lo mismo que antes y el corte y los contadores se calculan sobre esa misma respuesta.
+
 ## 2026-08-03 · Una baja de usuario ahora saca a la persona del sistema · commits pendientes ×5
 
 **Qué cambió:** hasta hoy, dar de baja a alguien **no lo sacaba**. `users.activo` existía en el

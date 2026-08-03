@@ -4,10 +4,11 @@ import { useEffect, useState } from "react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { fetchDashboard } from "@/services/dashboard"
-import type { DashboardData, HeadcountArea } from "@/services/dashboard"
+import type { DashboardData } from "@/services/dashboard"
 import { AlertasPanel } from "./AlertasPanel"
 import { buildKpis, type KpiCardData } from "./dashboardAdminData"
 import { DashboardExtras } from "./DashboardExtras"
+import { HeadcountPanel } from "./HeadcountPanel"
 
 function KpiCard({ kpi }: { kpi: KpiCardData }) {
   const Icon = kpi.icon
@@ -21,23 +22,6 @@ function KpiCard({ kpi }: { kpi: KpiCardData }) {
       </div>
       <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">{kpi.value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{kpi.description}</p>
-    </div>
-  )
-}
-
-function HeadcountBar({ area, total, max }: HeadcountArea & { max: number }) {
-  const pct = max > 0 ? Math.round((total / max) * 100) : 0
-  return (
-    // Layout apilado: el nombre ocupa todo el ancho (trunca con tooltip si es muy largo),
-    // el número queda arriba a la derecha y la barra va full-width debajo, siempre alineados.
-    <div className="space-y-1.5">
-      <div className="flex items-baseline gap-3">
-        <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground" title={area}>{area}</span>
-        <span className="shrink-0 text-sm font-medium text-foreground">{total}</span>
-      </div>
-      <div className="h-2.5 overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-      </div>
     </div>
   )
 }
@@ -63,7 +47,6 @@ export function DashboardAdmin() {
   }, [])
 
   const kpis = data ? buildKpis(data) : []
-  const maxHeadcount = data ? Math.max(...data.headcount_por_area.map((h) => h.total), 1) : 1
 
   return (
     <div className="space-y-6">
@@ -82,22 +65,10 @@ export function DashboardAdmin() {
         )}
       </section>
 
-      {/* Headcount + Alertas */}
+      {/* Headcount + Alertas — las dos plegables: sus listas crecen con la plantilla. */}
       {data && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <section className="rounded-xl border bg-card p-4 md:p-6" aria-label="Headcount por área">
-            <h2 className="mb-5 text-base font-semibold text-foreground">Headcount por área</h2>
-            {data.headcount_por_area.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin datos de headcount.</p>
-            ) : (
-              <div className="space-y-4">
-                {data.headcount_por_area.map((row) => (
-                  <HeadcountBar key={row.area_id} {...row} max={maxHeadcount} />
-                ))}
-              </div>
-            )}
-          </section>
-
+          <HeadcountPanel areas={data.headcount_por_area} />
           <AlertasPanel alertas={data.alertas} />
         </div>
       )}
