@@ -181,6 +181,34 @@ def test_distribucion_nulos_sin_especificar(monkeypatch):
     assert modalidad.get("Full time") == 1 and modalidad.get("Sin especificar") == 1
 
 
+def test_el_KPI_y_el_reporte_R4_cuentan_IGUAL(monkeypatch):
+    """🔴 EL KPI DEL DASHBOARD Y EL REPORTE R4 TIENEN QUE DAR EL MISMO NÚMERO.
+
+    Hoy no pueden divergir porque `_dashboard_kpis._distribucion` LLAMA a
+    `generate_distribucion` en vez de reimplementar el agrupado — no hay dos agrupadores. Este
+    test es lo que vigila que siga siendo así: el día que alguien copie la lógica al KPI "para
+    no depender del reporte", el conteo se separa y esto rojea.
+
+    Para que falle: reimplementar el agrupado en `_dashboard_kpis`, o cambiar uno de los dos
+    criterios de vacío. Las filas del fake incluyen las tres formas de vacío justamente para
+    que una divergencia en ESE criterio —que es la más fácil de introducir— se vea acá."""
+    import services.reportes._reporte_distribucion as rd
+    filas = [
+        {"estado": "activo", "seniority": "Senior", "tipo_contrato": "Full time", "turno": None},
+        {"estado": "activo", "seniority": "SIN DATOS", "tipo_contrato": None, "turno": None},
+        {"estado": "activo", "seniority": None, "tipo_contrato": None, "turno": None},
+        {"estado": "activo", "seniority": "  ", "tipo_contrato": None, "turno": None},
+    ]
+    monkeypatch.setattr(dk, "generate_costos", lambda *a, **k: {"total_nomina": 0.0})
+    monkeypatch.setattr(dk, "supabase_admin", _FakeDB({}))
+    monkeypatch.setattr(rd, "supabase_admin", _FakeDB({"empleados": filas}))
+
+    kpi = {d.categoria: d.total for d in dk.calcular_extras(_HOY, None).distribucion_seniority}
+    reporte = {d["categoria"]: d["total"] for d in rd.generate_distribucion(None)["por_seniority"]}
+    assert kpi == reporte, f"el KPI y R4 divergen: {kpi} vs {reporte}"
+    assert kpi.get("Sin especificar") == 3, "las tres formas de vacío tienen que ser UNA categoría"
+
+
 # ── KPI 30 — cumpleaños / aniversarios del mes ────────────────────────────────────
 
 def test_cumpleanos_aniversarios_por_mes(monkeypatch):

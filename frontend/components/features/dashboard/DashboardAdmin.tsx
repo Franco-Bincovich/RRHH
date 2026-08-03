@@ -65,9 +65,16 @@ export function DashboardAdmin() {
         )}
       </section>
 
-      {/* Headcount + Alertas — las dos plegables: sus listas crecen con la plantilla. */}
+      {/* Headcount + Alertas — las dos plegables: sus listas crecen con la plantilla.
+          🔴 `items-start` (grid estira por defecto): sin él, plegar una card NO le baja el alto
+          —se estira a la de su vecina— y el acordeón queda sin efecto, que es lo único que
+          hace. Con Headcount abierta en 12 áreas, Alertas plegada quedaba como un rectángulo
+          vacío de ~850px con el título arriba. El precio asumido es que con las dos abiertas y
+          largos distintos dejan de verse parejas.
+          ⚠️ NO se lo pongas a la grilla de KPIs de arriba: esas SÍ necesitan el stretch, porque
+          su `description` es de largo variable y sin él las 3 de cada fila quedan desparejas. */}
       {data && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           <HeadcountPanel areas={data.headcount_por_area} />
           <AlertasPanel alertas={data.alertas} />
         </div>

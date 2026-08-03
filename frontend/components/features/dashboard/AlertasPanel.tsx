@@ -32,8 +32,8 @@ import { NIVEL_LABEL, NIVEL_VARIANT } from "./dashboardAdminData"
  */
 export function AlertasPanel({ alertas }: { alertas: AlertaDashboard[] }) {
   return (
-    // `contents`: ver el comentario del Root en HeadcountPanel.
-    <Accordion.Root defaultValue={["alertas"]} className="contents">
+    // Sin `className="contents"`: ver el comentario del Root en HeadcountPanel.
+    <Accordion.Root defaultValue={["alertas"]}>
       <ConfigSection
         value="alertas"
         title="Alertas activas"

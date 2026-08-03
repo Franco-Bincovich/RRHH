@@ -66,7 +66,11 @@ export function DashboardExtras({ data }: { data: KpisExtra }) {
   const total = data.cumpleanos_mes.length + data.aniversarios_mes.length
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    // `items-start` por el mismo motivo que la grilla de Headcount/Alertas (ver DashboardAdmin):
+    // sin él, plegar Cumpleaños no le baja el alto porque se estira a la de Distribución, que no
+    // es plegable. Una plegable al lado de una fija tiene exactamente el mismo problema que dos
+    // plegables — el stretch de grid no distingue.
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
       <section className="rounded-xl border bg-card p-4 md:p-6" aria-label="Distribución de plantilla">
         <h2 className="mb-5 text-base font-semibold text-foreground">Distribución de plantilla</h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -79,7 +83,7 @@ export function DashboardExtras({ data }: { data: KpisExtra }) {
           plegada queda solo el título con el contador. El contador suma las dos columnas — es
           "cuánta gente festeja este mes", que es la pregunta de la card; separarlo por columna
           repetiría lo que ya dicen los encabezados de adentro. */}
-      <Accordion.Root className="contents">
+      <Accordion.Root>
         <ConfigSection
           value="fechas"
           title="Cumpleaños y aniversarios del mes"

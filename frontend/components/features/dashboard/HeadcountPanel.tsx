@@ -43,10 +43,12 @@ export function HeadcountPanel({ areas }: { areas: HeadcountArea[] }) {
 
   return (
     // Sin `defaultValue`: arranca PLEGADA. Un headcount es contexto, no algo pendiente de hacer.
-    // `contents` deja que la card sea la celda de la grilla del dashboard y estire a la altura
-    // de la fila, como cuando era un <section> suelto. El Root envuelve una sola sección, así
-    // que no hace falta `multiple`.
-    <Accordion.Root className="contents">
+    // El Root envuelve una sola sección, así que no hace falta `multiple`.
+    // (Tuvo `className="contents"` para que la card fuera la celda de la grilla y estirara a la
+    // altura de la fila. Desde que la grilla lleva `items-start` no hay estiramiento que heredar,
+    // así que el `contents` no hacía nada y se sacó: un `display:contents` que no se usa es un
+    // mecanismo activo que el próximo que lo lea va a tener que descartar a mano.)
+    <Accordion.Root>
       <ConfigSection
         value="headcount"
         title="Headcount por área"

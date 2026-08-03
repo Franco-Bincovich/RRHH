@@ -22,7 +22,18 @@ from datetime import date, datetime
 from typing import Optional
 
 # Textos que en el CSV significan "no hay dato". Se comparan en MAYÚSCULAS.
-_VACIOS = {"", "NO APLICA", "N/A", "NA", "-", "--"}
+#
+# 🔴 ES LA DEFINICIÓN ÚNICA DE "VACÍO" DEL SISTEMA, y se IMPORTA desde los dos lados que la
+# necesitan: `limpiar()` acá (que lo aplica al ESCRIBIR, en los 15 campos de texto del import) y
+# `services/reportes/_reporte_distribucion._agrupar` (que lo aplica al LEER, para las filas que
+# ya se cargaron antes de que un literal entrara a esta lista). Dos copias que se separen darían
+# dos respuestas distintas a la misma pregunta sobre la misma columna.
+#
+# "SIN DATOS" se sumó el 3/8/2026: venía en el CSV real de RRHH, no lo escribe nuestro código,
+# y como no estaba acá entraba tal cual a `empleados.seniority`. Resultado: el reporte de
+# distribución contaba "Sin especificar" (24) y "SIN DATOS" (4) como DOS categorías, sobre 31
+# empleados — o sea que el 90% de la plantilla sin seniority se mostraba partido en dos.
+VACIOS = {"", "NO APLICA", "N/A", "NA", "-", "--", "SIN DATOS", "SIN DATO"}
 
 
 def _norm(s: Optional[str]) -> str:
@@ -36,9 +47,9 @@ def normalizar_nombre(s: str) -> str:
 
 
 def limpiar(v: Optional[str]) -> Optional[str]:
-    """Texto libre: trim; '' o 'NO APLICA' (y variantes) -> None."""
+    """Texto libre: trim; '' o 'NO APLICA'/'SIN DATOS' (y variantes) -> None. Ver `VACIOS`."""
     t = (v or "").strip()
-    return None if t.upper() in _VACIOS else t
+    return None if t.upper() in VACIOS else t
 
 
 def parse_fecha(v: Optional[str]) -> Optional[date]:

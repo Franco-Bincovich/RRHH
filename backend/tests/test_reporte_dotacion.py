@@ -140,3 +140,49 @@ def test_distribucion_agrupa_y_nulos_van_a_sin_especificar(monkeypatch):
     assert {x["categoria"]: x["total"] for x in r["por_modalidad"]} == {"efectivo": 2, "Sin especificar": 1}
     assert {x["categoria"]: x["total"] for x in r["por_turno"]} == {"mañana": 1, "tarde": 1, "Sin especificar": 1}
     assert r["por_seniority"][-1]["categoria"] == "Sin especificar"  # siempre al final
+
+
+def test_los_literales_de_vacio_del_csv_son_UNA_categoria(monkeypatch):
+    """🔴 'SIN DATOS' es lo mismo que vacío, que NULL y que '   '.
+
+    En producción (3/8/2026) `empleados.seniority` tenía 24 filas en NULL y 4 en el literal
+    'SIN DATOS', sobre 31 empleados: el 90% de la plantilla sin seniority se mostraba PARTIDO
+    en dos categorías, y la card no dejaba ver que era el mismo agujero de datos. El literal no
+    lo escribe nuestro código —viene en el CSV de RRHH— y entraba tal cual porque no estaba en
+    la lista de textos-vacíos del import.
+
+    Para que falle: sacar 'SIN DATOS' de `_nomina_parsers.VACIOS`, o que `_agrupar` deje de
+    consultar esa lista y vuelva a chequear solo NULL/''."""
+    def resolver(_table, _gte):
+        return [
+            {"seniority": "Senior", "tipo_contrato": None, "turno": None},
+            {"seniority": "SIN DATOS", "tipo_contrato": None, "turno": None},
+            {"seniority": "sin datos", "tipo_contrato": None, "turno": None},  # el case no importa
+            {"seniority": None, "tipo_contrato": None, "turno": None},
+            {"seniority": "   ", "tipo_contrato": None, "turno": None},
+        ]
+    monkeypatch.setattr(dist, "supabase_admin", _FakeSupa(resolver))
+    por_seniority = {x["categoria"]: x["total"]
+                     for x in dist.generate_distribucion(None)["por_seniority"]}
+    assert por_seniority == {"Senior": 1, "Sin especificar": 4}
+    assert "SIN DATOS" not in por_seniority
+
+
+def test_el_agrupador_NO_tiene_su_propia_lista_de_vacios():
+    """La lista canónica vive en `_nomina_parsers.VACIOS` y el reporte la IMPORTA.
+
+    Es la parte que importa del fix: el import la aplica al ESCRIBIR y el reporte al LEER, pero
+    la definición es UNA. Con dos copias, agregar un literal nuevo al CSV arreglaría los datos
+    nuevos y dejaría el reporte contando aparte los viejos — que es exactamente el estado del
+    que este fix viene a salir.
+
+    Para que falle: copiar el set adentro de `_reporte_distribucion` en vez de importarlo.
+
+    Se compara por IDENTIDAD (`is`), no por contenido ni por texto del módulo: dos sets con los
+    mismos elementos hoy son `==` y divergen mañana sin que nada avise, y un `in
+    inspect.getsource(...)` matchea también los comentarios —de hecho la primera versión de este
+    test se rojeó a sí misma cazando la palabra dentro del docstring de `_agrupar`."""
+    from services._nomina_parsers import VACIOS
+
+    assert dist.VACIOS is VACIOS, "el reporte tiene su propia lista de vacíos, no la compartida"
+    assert "SIN DATOS" in VACIOS and "NO APLICA" in VACIOS

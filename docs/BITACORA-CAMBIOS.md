@@ -41,6 +41,45 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-03 · Cards del dashboard que no se estiran + "SIN DATOS" deja de ser una categoría · 2 commits pendientes
+
+**Qué cambió:**
+
+- **C1 · layout (solo front).** Las dos grillas de cards con lista llevan `items-start`. CSS Grid
+  estira por defecto, así que plegar una card NO le bajaba el alto —se estiraba a la de su
+  vecina— y el acordeón quedaba sin efecto: con Headcount abierta en 12 áreas, Alertas plegada
+  era un rectángulo vacío de ~850px. Aplica también a Cumpleaños contra Distribución, que ni
+  siquiera es plegable: el stretch no distingue. **La grilla de KPIs NO se tocó** — esas nueve SÍ
+  necesitan el stretch porque su `description` es de largo variable. Se sacó el
+  `className="contents"` de los tres `Accordion.Root`: sin estiramiento que heredar ya no hacía
+  nada, y un `display:contents` inerte es un mecanismo que el próximo lector tiene que descartar
+  a mano.
+- **C2 · `SIN DATOS` (backend).** El reporte de distribución (R4) y su KPI contaban
+  `Sin especificar` (24) y `SIN DATOS` (4) como DOS categorías sobre 31 empleados. El literal
+  **no lo escribe nuestro código**: viene en el CSV de RRHH y entraba tal cual porque no estaba
+  en `_nomina_parsers.VACIOS`, que es la lista canónica de textos que significan "no hay dato".
+  Se sumó ahí (`SIN DATOS`/`SIN DATO`) y `_reporte_distribucion._agrupar` pasó a **importar** esa
+  lista en vez de chequear solo NULL/`''`. Una sola definición, dos puntos de aplicación: el
+  import al ESCRIBIR, el reporte al LEER.
+
+**Impacto en infraestructura:** **UNA MIGRACIÓN NUEVA, pendiente de correr.** Sin env vars,
+dependencias, buckets, endpoints ni cambios de auth. Las otras pendientes no cambian: **089**,
+**090** y **091**.
+
+- **`092_seniority_sin_datos_a_null.sql`** — `UPDATE empleados SET seniority = NULL WHERE
+  seniority = 'SIN DATOS'`. **4 filas**, verificado contra el catálogo (3/8/2026), sin variantes
+  de mayúsculas ni espacios, y el literal aparece **solo en esa columna** (se barrieron todas
+  las de `empleados`). No borra filas ni columnas, pero **sí pisa datos** — lo que pisa es la
+  ausencia de información escrita con otras letras. **No es reversible**: después no se puede
+  distinguir cuáles de las 28 filas en NULL decían 'SIN DATOS'.
+  > 🔴 **Va DESPUÉS del código, y no por una dependencia técnica.** Corrida antes no rompe nada
+  > (la columna ya es nullable y el agrupador nuevo da lo mismo con el literal o sin él), pero
+  > el próximo import con el código viejo vuelve a escribirlo y hay que correrla otra vez. Con
+  > el código desplegado, el import ya lo convierte a NULL en la entrada y la limpieza queda
+  > firme.
+  > **`db/schema.sql` NO cambia**: toca datos, no estructura — la columna ya está declarada
+  > `seniority text` nullable, sin default ni check. Tampoco lleva `NOTIFY pgrst`.
+
 ## 2026-08-03 · Rearmado del saldo de vacaciones por período + triggers updated_at · 4 commits pendientes
 
 **Qué cambió:** se rearmaron dos sesiones del 30/7 que nunca se commitearon y que un
