@@ -3,8 +3,10 @@ Servicio de autenticación. Lógica de login, refresh y logout usando Supabase A
 """
 from schemas.auth import LoginResponse, RefreshResponse, UserInfo
 from integrations.supabase_client import supabase_admin, supabase_client
+from repositories.usuario_repo import UsuarioRepo
 from utils.errors import AppError
 from utils.logger import logger
+from utils.usuario_estado import invalidar_estado
 
 
 class AuthService:
@@ -54,6 +56,20 @@ class AuthService:
             raise AppError("Usuario o contraseña incorrectos", "INVALID_CREDENTIALS", 401)
 
         session = auth_resp.session
+
+        # 🔴 Sellar acá NO es cosmética: sin esto, alguien que estuvo 9 horas sin entrar se
+        # loguearía bien y el PRIMER request de su sesión nueva moriría con SESION_EXPIRADA,
+        # porque el middleware compara contra un `ultimo_acceso` de ayer. Quedaría en un loop
+        # de login → 401 → login sin ninguna forma de salir. `/api/auth/login` es pública y no
+        # pasa por el middleware, así que este es el único lugar donde puede pasar.
+        # Best-effort: un fallo de esta escritura no puede tumbar un login válido.
+        try:
+            UsuarioRepo().tocar_ultimo_acceso(profile["id"])
+            invalidar_estado(profile["id"])
+        except Exception:
+            logger.warning("No se pudo sellar ultimo_acceso en el login",
+                           extra={"user_id": profile["id"]})
+
         logger.info("Login exitoso", extra={"user_id": profile["id"], "username": username})
 
         return LoginResponse(

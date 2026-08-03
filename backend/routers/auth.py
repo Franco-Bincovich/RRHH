@@ -5,7 +5,13 @@ así que son la superficie de fuerza bruta del sistema. El limiter vive en utils
 """
 from fastapi import APIRouter, Depends, Request
 
-from schemas.auth import LoginRequest, LoginResponse, RefreshRequest, RefreshResponse
+from schemas.auth import (
+    LoginRequest,
+    LoginResponse,
+    RefreshRequest,
+    RefreshResponse,
+    UsuarioVigenteResponse,
+)
 from services.auth_service import AuthService
 from utils.errors import AppError
 from utils.rate_limit import limiter
@@ -28,6 +34,18 @@ async def login(
     service: AuthService = Depends(AuthService),
 ) -> LoginResponse:
     return service.login(body.username, body.password)
+
+
+# NO es pública: pasa por el middleware, y eso es todo lo que hace. Su valor está en las dos
+# cosas que el middleware ya resolvió para cualquier request: el rol VIGENTE (del caché, no del
+# localStorage del front) y el 403 USUARIO_INACTIVO si al usuario lo dieron de baja. Por eso no
+# toca la base: responder con `request.state.user` no cuesta ninguna query.
+@router.get("/me", response_model=UsuarioVigenteResponse)
+async def usuario_vigente(request: Request) -> UsuarioVigenteResponse:
+    """Estado vigente del usuario autenticado, para que el front no gobierne con el rol que
+    guardó al loguearse. Sin gate de rol: cualquiera consulta LO SUYO, y el id sale del token."""
+    u = request.state.user
+    return UsuarioVigenteResponse(id=u["id"], rol=u.get("rol"))
 
 
 @router.post("/logout", status_code=204)

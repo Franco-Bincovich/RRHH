@@ -42,16 +42,26 @@ class _FakeAudit:
 
 
 class _FakeAuthAdmin:
-    def __init__(self) -> None:
+    def __init__(self, *, update_falla=False) -> None:
         self.creado: dict | None = None
         self.borrado: str | None = None
+        self.actualizado: tuple | None = None
+        self._update_falla = update_falla
 
     def create_user(self, attrs):
         self.creado = attrs
         return SimpleNamespace(user=SimpleNamespace(id=_UID))
 
+    # Se CONSERVA aunque la baja ya no borre: es lo que permite afirmar que no se llama.
+    # Un fake sin este método haría pasar el test por AttributeError inexistente, no por
+    # comportamiento.
     def delete_user(self, uid):
         self.borrado = uid
+
+    def update_user_by_id(self, uid, attrs):
+        if self._update_falla:
+            raise Exception("gotrue caído")
+        self.actualizado = (uid, attrs)
 
 
 class _FakeRepo:
@@ -266,48 +276,121 @@ def test_schema_rechaza_nueva_corta():
         CambiarPasswordRequest(password_actual="vieja123", password_nueva="corta")
 
 
-# --- Eliminación de usuarios (admin-only) -----------------------------------
+# --- Baja de usuarios (admin-only) — BLANDA: ban + activo=false --------------
 
 class _FakeDelRepo:
+    """Modela la fila de `users` Y el vínculo `empleados.user_id`, con la semántica REAL de la
+    FK de producción (`ON DELETE SET NULL`).
+
+    🚨 ¿QUÉ TENDRÍA QUE SER DISTINTO EN ESTE FAKE PARA QUE LOS TESTS PUEDAN FALLAR?
+
+    Que borrar la fila NO arrastrara el vínculo. Un fake que solo guardara un booleano `activo`
+    haría pasar "conserva el vínculo" incluso con la baja dura puesta, porque no habría vínculo
+    que perder: el test estaría afirmando algo sobre un campo que el fake no modela. Acá borrar
+    arrastra, igual que la FK, y `borrar_fila` sigue existiendo —aunque el service ya no lo
+    llame— para que el camino viejo siga siendo EXPRESABLE y se pueda demostrar que rojea.
+    """
+
     def __init__(self, *, existe=True) -> None:
-        self._existe = existe
+        self.fila: dict | None = (
+            {"id": _UID, "username": "alopez", "rol": "mandos_medios", "activo": True} if existe else None
+        )
+        self.empleado_user_id: str | None = _UID  # empleados.user_id apuntando a este usuario
 
     def get_perfil(self, user_id):
-        return {"id": user_id, "username": "alopez", "rol": "mandos_medios"} if self._existe else None
+        return dict(self.fila) if self.fila else None
+
+    def set_activo(self, user_id, activo):
+        assert self.fila is not None, "se intentó desactivar una fila inexistente"
+        self.fila["activo"] = activo
+
+    def borrar_fila(self) -> None:
+        """Lo que hacía la baja DURA: el CASCADE se lleva la fila, el SET NULL el vínculo."""
+        self.fila = None
+        self.empleado_user_id = None
 
 
 @pytest.fixture
 def del_auth(monkeypatch):
-    """Monkeypatchea auth.admin.delete_user; registra el uid borrado."""
-    fake = _FakeAuthAdmin()
-    monkeypatch.setattr(usuario_service.supabase_admin, "auth", SimpleNamespace(admin=fake), raising=False)
-    return fake
+    """Monkeypatchea auth.admin; registra tanto el ban como el borrado (que ya no debe ocurrir)."""
+    def _apply(*, update_falla=False):
+        fake = _FakeAuthAdmin(update_falla=update_falla)
+        monkeypatch.setattr(usuario_service.supabase_admin, "auth", SimpleNamespace(admin=fake), raising=False)
+        return fake
+    return _apply
 
 
 _OTRO_UID = "22222222-2222-2222-2222-222222222222"
+_BAN = usuario_service._BAN_PERMANENTE
 
 
-def test_elimina_usuario_ok_borra_auth_y_audita(del_auth):
-    repo, aud = _FakeDelRepo(), _FakeAudit()
+def test_baja_desactiva_banea_y_audita(del_auth):
+    auth, repo, aud = del_auth(), _FakeDelRepo(), _FakeAudit()
     UsuarioService(repo=repo, audit=aud).eliminar_usuario(_UID, _OTRO_UID)
-    assert del_auth.borrado == _UID  # se borró la identidad (CASCADE limpia public.users)
+    assert repo.fila["activo"] is False                       # lo que hace regir la baja
+    assert auth.actualizado == (_UID, {"ban_duration": _BAN})  # y lo que corta el refresh
     assert [c["evento"] for c in aud.calls] == ["baja_usuario"]
-    assert aud.calls[0]["accion"] == "DELETE" and aud.calls[0]["registro_id"] == _UID
+    assert aud.calls[0]["registro_id"] == _UID
+
+
+def test_la_baja_no_borra_la_identidad(del_auth):
+    """La mitad que cambió: antes acá había un delete_user y el CASCADE se llevaba todo."""
+    auth, repo = del_auth(), _FakeDelRepo()
+    UsuarioService(repo=repo, audit=_FakeAudit()).eliminar_usuario(_UID, _OTRO_UID)
+    assert auth.borrado is None
+
+
+def test_la_baja_conserva_la_fila_y_el_vinculo_con_el_empleado(del_auth):
+    """El motivo de que sea blanda: el empleado no puede quedar sin su usuario, y la auditoría
+    vieja tiene que seguir resolviendo el id a un nombre."""
+    del_auth()
+    repo = _FakeDelRepo()
+    UsuarioService(repo=repo, audit=_FakeAudit()).eliminar_usuario(_UID, _OTRO_UID)
+    assert repo.fila is not None and repo.fila["username"] == "alopez"
+    assert repo.empleado_user_id == _UID
+
+
+def test_la_baja_dura_habria_roto_el_vinculo():
+    """Guarda de regresión: demuestra que el fake modela el daño y no da verde de arriba."""
+    repo = _FakeDelRepo()
+    repo.borrar_fila()
+    assert repo.empleado_user_id is None
+
+
+def test_la_baja_invalida_el_cache_para_que_rija_en_el_acto(del_auth, monkeypatch):
+    """Sin esto la baja tardaría hasta el TTL (60s) en regir en el proceso que la ejecutó."""
+    del_auth()
+    invalidados: list[str] = []
+    monkeypatch.setattr(usuario_service, "invalidar_estado", invalidados.append)
+    UsuarioService(repo=_FakeDelRepo(), audit=_FakeAudit()).eliminar_usuario(_UID, _OTRO_UID)
+    assert invalidados == [_UID]
+
+
+def test_si_falla_el_ban_la_baja_queda_aplicada_y_avisa(del_auth):
+    """El orden importa: la baja en nuestra base es la que corta, así que se aplica primero y
+    NO se revierte. Revertir para dejar consistencia dejaría al usuario adentro."""
+    auth, repo, aud = del_auth(update_falla=True), _FakeDelRepo(), _FakeAudit()
+    with pytest.raises(AppError) as e:
+        UsuarioService(repo=repo, audit=aud).eliminar_usuario(_UID, _OTRO_UID)
+    assert e.value.code == "USUARIO_DELETE_ERROR" and e.value.status_code == 502
+    assert repo.fila["activo"] is False            # la baja quedó puesta
+    assert [c["evento"] for c in aud.calls] == ["baja_usuario"]  # y quedó registrada
+    assert auth.borrado is None
 
 
 def test_no_permite_autoeliminacion_400(del_auth):
-    repo, aud = _FakeDelRepo(), _FakeAudit()
+    auth, repo, aud = del_auth(), _FakeDelRepo(), _FakeAudit()
     with pytest.raises(AppError) as e:
         UsuarioService(repo=repo, audit=aud).eliminar_usuario(_UID, _UID)  # ejecutor == objetivo
     assert e.value.code == "AUTOELIMINACION" and e.value.status_code == 400
-    assert del_auth.borrado is None  # no se tocó Auth
+    assert repo.fila["activo"] is True and auth.actualizado is None  # no se tocó nada
     assert aud.calls == []
 
 
-def test_elimina_usuario_inexistente_404(del_auth):
-    repo, aud = _FakeDelRepo(existe=False), _FakeAudit()
+def test_baja_usuario_inexistente_404(del_auth):
+    auth, repo, aud = del_auth(), _FakeDelRepo(existe=False), _FakeAudit()
     with pytest.raises(AppError) as e:
         UsuarioService(repo=repo, audit=aud).eliminar_usuario(_UID, _OTRO_UID)
     assert e.value.code == "USUARIO_NOT_FOUND" and e.value.status_code == 404
-    assert del_auth.borrado is None  # no se intentó borrar identidad inexistente
+    assert auth.actualizado is None and auth.borrado is None
     assert aud.calls == []

@@ -32,7 +32,7 @@ from uuid import uuid4
 import pytest
 
 import utils.empresas_cache as cache_mod
-from middleware.auth import _resolver_empresa_id
+from middleware._empresa_header import resolver_empresa_id as _resolver_empresa_id
 from schemas.costo import PresupuestoCreate, PresupuestoResponse
 from services.costo_service import CostoService
 from utils.empresas_cache import _EmpresasCache

@@ -1,4 +1,5 @@
 import { AuthGuard } from "@/components/layout/AuthGuard"
+import { AvisoInactividad } from "@/components/layout/AvisoInactividad"
 import { Sidebar } from "@/components/layout/Sidebar"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -10,6 +11,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+      <AvisoInactividad />
     </AuthGuard>
   )
 }

@@ -3,7 +3,8 @@
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 
-import { clearSession, getSession } from "@/services/api"
+import { ApiError, clearSession, getSession, saveSession } from "@/services/api"
+import { fetchUsuarioVigente, rolDesactualizado } from "@/services/auth"
 import { primeraRutaPermitida, puede, seccionDeRuta } from "@/services/permisos"
 
 /**
@@ -39,6 +40,37 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         router.replace("/login")
       }
     }
+  }, [router, pathname])
+
+  // Segundo efecto, a propósito separado del de arriba: aquel gatea con lo que hay guardado y
+  // corre síncrono; este PREGUNTA. El de arriba no puede esperar a la red — dejaría ver por un
+  // instante una pantalla que el rol no tiene permitida.
+  useEffect(() => {
+    const session = getSession()
+    if (!session) return
+    let cancelado = false
+
+    fetchUsuarioVigente()
+      .then((vigente) => {
+        if (cancelado || !rolDesactualizado(session.user.rol, vigente.rol)) return
+        saveSession({ ...session, user: { ...session.user, rol: vigente.rol! } })
+        // Recarga entera y no un setState: el rol lo leen al montar el sidebar, el menú de
+        // usuario y cada botón de escritura. Refrescar solo este componente dejaría la mitad
+        // de la pantalla mostrando permisos viejos, que es el bug que esto viene a cerrar.
+        // No hay loop: después de recargar, el guardado y el vigente ya coinciden.
+        window.location.reload()
+      })
+      .catch((e) => {
+        // 403 = USUARIO_INACTIVO (el 401 lo maneja el interceptor de refresh). La sesión ya no
+        // vale para nada: se limpia acá en vez de dejarlo dando vueltas por una app que le
+        // responde 403 en cada pantalla.
+        if (e instanceof ApiError && e.status === 403) {
+          clearSession()
+          router.replace("/login")
+        }
+      })
+
+    return () => { cancelado = true }
   }, [router, pathname])
 
   return <>{children}</>

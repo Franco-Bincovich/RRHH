@@ -18,9 +18,29 @@ responde**. No hay degradación parcial.
 |---|---|
 | `SUPABASE_URL` | Proyecto Supabase |
 | `SUPABASE_ANON_KEY` | Cliente público |
-| `SUPABASE_SERVICE_KEY` | Cliente admin — **todo el backend lo usa**; RLS no aplica a este rol |
+| `SUPABASE_SERVICE_KEY` | Cliente admin — **todo el backend lo usa**; RLS no aplica a este rol. También habilita la **Admin API de Auth** (ver abajo) |
 | `JWT_SECRET` | Firma/verificación de sesión |
 | `ANTHROPIC_API_KEY` | Reportes con IA. **Obligatoria aunque el reporte adhoc esté oculto** |
+
+> 🔑 **La service key tiene que poder llamar a la Admin API de Auth (`/auth/v1/admin/*`).**
+> **Verificado el 3/8/2026: no hay nada que habilitar.** En Supabase, `service_role` ya tiene
+> esa capacidad por definición — es la clave que la Admin API espera— y el backend la viene
+> usando desde antes: `create_user` y `delete_user` en el alta de usuarios
+> (`services/_usuario_alta.py:35,70`), `update_user_by_id` en el cambio de contraseña
+> (`services/usuario_service.py:58`) y `sign_out` en el logout (`services/auth_service.py:128`).
+> **La baja blanda no agrega un permiso nuevo: usa `update_user_by_id`, la MISMA llamada que ya
+> corría** (`usuario_service.py:100`), solo que con `ban_duration` en vez de `password`.
+>
+> **Lo que sí hay que revisar el día del cutover a AWS:** si la identidad deja de vivir en
+> Supabase Auth, `ban_duration` no existe del otro lado. El equivalente hay que construirlo —
+> revocar los refresh tokens de `refresh_tokens` (mig 076). Mientras tanto, **la mitad que
+> corta de verdad es `users.activo`, que es una columna nuestra y sobrevive a la mudanza**; el
+> ban solo cierra la canilla de tokens nuevos.
+>
+> 🔧 **Revertir una baja (a mano, no hay endpoint):** `UPDATE users SET activo = true WHERE id = ...`
+> **y** `update_user_by_id(id, {"ban_duration": "none"})` desde el dashboard o un script con la
+> service key. **Hacen falta las dos:** solo la primera lo deja entrar pero sin poder renovar el
+> token cuando expire; solo la segunda no lo deja entrar (el middleware sigue viendo `activo=false`).
 
 > ⚠️ **`RESEND_API_KEY` YA NO EXISTE.** Se sacó el 2/8/2026 (los mails salen por Gmail). Era
 > obligatoria y ningún service la importaba: lo único que podía hacer era tumbar el arranque.

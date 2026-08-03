@@ -41,6 +41,88 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-03 · Una baja de usuario ahora saca a la persona del sistema · commits pendientes ×5
+
+**Qué cambió:** hasta hoy, dar de baja a alguien **no lo sacaba**. `users.activo` existía en el
+schema y **no lo leía nadie**: el middleware solo miraba el rol, y el JWT no sabe nada de una
+baja (la firma y el `exp` siguen siendo válidos). Además el rol se resolvía con **una query por
+request**, el front gobernaba con el rol que guardó en el login, y una sesión **no vencía
+nunca**. Cinco commits: dos cortes de archivo, el caché, el corte por `activo` + la baja blanda,
+el rol vigente en el front, y la inactividad.
+
+**Impacto en infraestructura:** **Ninguna migración, env var, dependencia, bucket ni tabla
+nueva.** **La 089 sigue siendo la única migración pendiente de correr.** Un endpoint nuevo,
+`GET /api/auth/me`, **autenticado** (no público). Las columnas `users.activo` y
+`users.ultimo_acceso` ya existían: esta tanda las pone a trabajar, no las crea.
+
+> 🔑 **Permiso del ban — verificado, no hay nada que habilitar.** El ban usa
+> `update_user_by_id`, la MISMA llamada de la Admin API que el cambio de contraseña ya hacía
+> con la `SUPABASE_SERVICE_KEY`. Escrito en `docs/DEPLOY.md` junto con el procedimiento de
+> reversión y con lo que hay que rehacer el día del cutover a AWS (allá `ban_duration` no
+> existe; el equivalente es revocar `refresh_tokens`, mig 076).
+
+### 🔴 Lo que va a notar un usuario logueado cuando esto salga
+
+1. **Si está activo y usando la app, nada.**
+2. **Un cambio de rol o una baja tardan hasta 60 s en regir** (TTL del caché). La baja hecha
+   desde la app rige en el acto en el proceso que la ejecutó (se invalida la entrada), pero en
+   serverless hay N procesos: **el techo real es el TTL**.
+3. **A quien le cambien el rol con la sesión abierta, se le recarga la pestaña una vez.** Es el
+   precio de que el sidebar, el menú y los botones de escritura lean el rol al montar. Después
+   de esa recarga no vuelve a pasar.
+4. **A quien den de baja cae en `/login`** con la sesión limpiada, en la primera navegación.
+5. 🔴 **A las 8 h sin usar la app hay que volver a loguearse.** Hoy la sesión no vencía nunca:
+   **es el cambio que más se va a notar.** A las 7 h 45 min aparece un banner con "Seguir
+   conectado". La primera vez, el front hace un intento de refresh inútil antes de mandar al
+   login — un parpadeo, no un error.
+6. **El primer request de cada usuario escribe `ultimo_acceso`** (hoy está NULL en las 3 filas).
+
+### Commits 1 y 2 — dos cortes de archivo, refactor puro
+
+`utils/_sesion_inactividad.py` (la política: 8 h, 5 min) sale de `utils/usuario_estado.py`
+(212 → 174); `middleware/_empresa_header.py` (`resolver_empresa_id`) sale de `middleware/auth.py`
+(209 → 167). **Suite idéntica y sin tests nuevos**; lo único que cambió en tests es **una línea
+de import**. El corte de la política no es por tamaño: el caché es infraestructura y las 8 h son
+una decisión de producto que se va a discutir con RRHH.
+
+### Commit 3 — el caché de estado de usuario
+
+`utils/usuario_estado.py`, molde de `utils/empresas_cache.py`, TTL 60 s. 🔴 **Acá es
+fail-CLOSED, al revés que aquel**: allá descartar el header **ensancha** (`None` = consolidado),
+acá el rol **es** la autorización. **Y es la política que ya regía** —el `try/except` del
+middleware dejaba `rol=None` → 403—, así que se conserva, no se cambia. Ni el fallo se cachea
+(un blip de 1 s se volvería 60 s de gente afuera) ni una entrada vencida se sigue sirviendo
+(sería fail-open con otro nombre).
+
+### Commit 4 — `activo` rige, y el DELETE pasa a baja blanda
+
+`rol` y `activo` viajan en la **misma fila y la misma query**. `activo=false` → **403
+`USUARIO_INACTIVO`** desde el middleware, antes de cualquier handler. La otra mitad es el **ban
+en Supabase Auth**: `/api/auth/refresh` es **pública** y no pasa por el middleware, así que sin
+el ban un usuario desactivado renovaría tokens para siempre.
+
+🔴 **El DELETE ya no borra.** Antes borraba `auth.users` y el CASCADE se llevaba `public.users`,
+con dos costos: el `ON DELETE SET NULL` de `empleados.user_id` **desvinculaba al empleado**, y la
+auditoría vieja quedaba apuntando a un id que no resolvía a ningún nombre. Ahora es
+`activo=false` + ban, **reversible**. El orden importa y está comentado en el código: primero la
+baja en nuestra base (la que corta), después el ban; si el ban falla se avisa con 502 pero **no
+se revierte**, porque revertir dejaría al usuario adentro.
+
+### Commit 5 — rol vigente en el front + inactividad de 8 h
+
+`GET /api/auth/me` no toca la base: responde con lo que el middleware ya resolvió. El `AuthGuard`
+lo consulta en cada navegación. La inactividad se mide con `ultimo_acceso`, que se escribe
+**throttleado a 5 min y mirando el VALOR, no un marcador local** — así N procesos no escriben N
+series. 🔴 **El chequeo va antes del sellado**: al revés, el propio request renovaría el reloj y
+la sesión no vencería jamás. Y **el login sella `ultimo_acceso`**: sin eso, alguien que estuvo
+9 h afuera se logueaba bien y su primer request moría con `SESION_EXPIRADA`, en loop.
+
+**Tests: backend 1551 → 1599 · front 285 → 298.** Mutation checks corridos en los cinco puntos
+que sostienen esto (middleware ignorando `activo`, `select` sin `activo`, baja dura restaurada,
+sellado antes del chequeo, throttle borrado): **los cinco rojean**.
+
+---
+
 ## 2026-08-02 · La pantalla de Proyectos no terminaba de cargar nunca · commit pendiente
 
 **Qué cambió:** el listado `/proyectos` quedaba en skeleton para siempre, con el endpoint

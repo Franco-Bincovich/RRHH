@@ -2,6 +2,7 @@
  * Refresh de sesión y política de reintento ante 401.
  * Importa solo de session.ts: así api.ts puede importar de acá sin ciclo de módulos.
  */
+import { marcarActividad } from "@/services/actividad"
 import { API_BASE, clearSession, getSession, saveSession } from "@/services/session"
 
 /** Refresh en vuelo. Mientras no sea null, los 401 concurrentes esperan ESTA promesa. */
@@ -57,6 +58,10 @@ function irALogin(): void {
  */
 export async function conRefresh(construir: () => Promise<Response>): Promise<Response> {
   const res = await construir()
+  // Cualquier respuesta cuenta como actividad, incluso un 403: lo que importa es que el
+  // backend VIO el request, que es exactamente cuándo sella `ultimo_acceso`. Va acá y no en
+  // apiFetch para que también cuenten las subidas y las descargas, que no pasan por ahí.
+  marcarActividad()
   if (res.status !== 401) return res
 
   const ok = await refreshUnaVez()

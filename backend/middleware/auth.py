@@ -3,11 +3,10 @@ Middleware de autenticación JWT.
 Verifica la firma del token de Supabase contra el JWKS público del proyecto (ES256)
 y expone el user_id, rol y empresa_id en request.state para los handlers.
 empresa_id proviene del header X-Empresa-Id: queda None si viene "todas", ausente, malformado
-o apuntando a una empresa que no existe (ver _resolver_empresa_id). None = vista consolidada.
+o apuntando a una empresa que no existe (ver middleware/_empresa_header.py). None = vista consolidada.
 """
 import re
 from typing import Optional
-from uuid import UUID
 
 import jwt
 from fastapi.responses import JSONResponse
@@ -16,9 +15,10 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from config.settings import settings
-from integrations.supabase_client import supabase_admin
-from utils.empresas_cache import empresa_existe
+from middleware._empresa_header import resolver_empresa_id
+from utils._sesion_inactividad import sesion_expirada
 from utils.logger import logger
+from utils.usuario_estado import estado_usuario, registrar_actividad
 
 PUBLIC_ROUTES = frozenset([
     "/health",
@@ -62,48 +62,6 @@ def _is_public(path: str) -> bool:
     if path in PUBLIC_ROUTES:
         return True
     return settings.assessment_enabled and bool(_ASSESSMENT_API_RE.match(path))
-
-
-def _resolver_empresa_id(header: str, path: str) -> Optional[str]:
-    """Resuelve el empresa_id del request a partir del header X-Empresa-Id.
-
-    None significa "todas las empresas" (vista consolidada) y es el resultado de TRES casos que
-    a propósito se tratan igual: header ausente, header "todas", y header que no supera la
-    validación. Antes solo se validaba el FORMATO, así que un UUID sintácticamente correcto de
-    una empresa inexistente entraba igual y viajaba aguas abajo: los listados salían vacíos,
-    pero además ese id llegaba a columnas con FK a `empresas` —`auditoria.empresa_id` entre
-    ellas— y hacía fallar el INSERT del evento de auditoría, que AuditService se traga por
-    diseño. La operación de negocio se completaba y el registro desaparecía sin rastro.
-
-    Un id inexistente se DESCARTA en silencio, sin status propio: no hace falta uno. Un UUID
-    falso apunta a menos que None (que es la vista más amplia), así que no es escalación de
-    privilegios y un 400 no compraría seguridad — solo agregaría el oráculo de enumeración de
-    empresas que la Fase 2 se ocupó de cerrar. Sí se loguea a WARNING: un UUID bien formado que
-    no existe no sale del uso normal del producto.
-
-    La existencia se consulta contra un caché por proceso, no contra la base (ver
-    utils/empresas_cache.py, que además explica por qué es fail-open).
-
-    Args:
-        header: Valor crudo de X-Empresa-Id, ya sin espacios.
-        path: Ruta del request, solo para trazabilidad en el log.
-
-    Returns:
-        El UUID en texto si es una empresa real; None en cualquier otro caso.
-    """
-    if not header or header == "todas":
-        return None
-    try:
-        UUID(header)
-    except ValueError:
-        return None
-    if empresa_existe(header):
-        return header
-    logger.warning(
-        "X-Empresa-Id descartado: la empresa no existe",
-        extra={"path": path, "empresa_id": header},
-    )
-    return None
 
 
 def _extract_token(request: Request) -> Optional[str]:
@@ -172,21 +130,37 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 content={"error": True, "message": "No autorizado", "code": "INVALID_TOKEN"},
             )
 
-        try:
-            row = (
-                supabase_admin.table("users")
-                .select("rol")
-                .eq("id", user_id)
-                .single()
-                .execute()
+        # El rol y el activo salen de un caché por proceso (TTL 60s), no de una query por
+        # request. Es fail-closed: si no se puede resolver, viene rol=None y permisos.py niega
+        # todo — exactamente lo que hacía el try/except que vivía acá. Ver utils/usuario_estado.
+        estado = estado_usuario(user_id)
+
+        # Un usuario dado de baja tiene un JWT que sigue siendo válido —la firma y el exp no
+        # saben nada de esto— así que el corte tiene que estar acá. Se chequea ANTES de armar
+        # request.state: no hay endpoint, gateado o no, que deba correr para alguien de baja.
+        # `resuelto` evita que un blip de base se le presente al usuario como "te dieron de
+        # baja": en ese caso rol=None y decide permisos.py, igual que antes de este cambio.
+        if estado.resuelto and not estado.activo:
+            logger.warning("Request de usuario inactivo", extra={"user_id": user_id, "path": request.url.path})
+            return JSONResponse(
+                status_code=403,
+                content={"error": True, "message": "Tu usuario fue desactivado", "code": "USUARIO_INACTIVO"},
             )
-            rol = row.data.get("rol") if row.data else None
-        except Exception:
-            rol = None
 
-        request.state.user = {"id": user_id, "rol": rol}
+        # 🔴 El chequeo va ANTES de registrar la actividad, y el orden es todo: al revés, este
+        # mismo request sellaría `ultimo_acceso` y la sesión no vencería NUNCA.
+        if sesion_expirada(estado):
+            logger.info("Sesión vencida por inactividad", extra={"user_id": user_id})
+            return JSONResponse(
+                status_code=401,
+                content={"error": True, "message": "Tu sesión venció por inactividad",
+                         "code": "SESION_EXPIRADA"},
+            )
+        registrar_actividad(user_id)
 
-        request.state.empresa_id = _resolver_empresa_id(
+        request.state.user = {"id": user_id, "rol": estado.rol}
+
+        request.state.empresa_id = resolver_empresa_id(
             request.headers.get("X-Empresa-Id", "").strip(), request.url.path
         )
 

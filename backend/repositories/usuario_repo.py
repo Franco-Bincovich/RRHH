@@ -3,6 +3,7 @@ Repositorio de escritura de usuarios del sistema (perfil espejo en public.users)
 La identidad/credencial vive en auth.users (Supabase Auth) — eso lo maneja el service.
 Acceso con supabase_admin. Chequeos de unicidad dirigidos (limit 1, sin full-scan).
 """
+from datetime import datetime, timezone
 from typing import Optional
 
 from integrations.supabase_client import supabase_admin
@@ -44,6 +45,41 @@ class UsuarioRepo:
         """Baja must_change_password a false tras un cambio de contraseña exitoso
         (idempotente: dejarlo en false si ya lo estaba no rompe nada)."""
         supabase_admin.table(_USERS).update({"must_change_password": False}).eq("id", user_id).execute()
+
+    def tocar_ultimo_acceso(self, user_id: str) -> str:
+        """Sella `users.ultimo_acceso` con la hora actual y devuelve el sello escrito.
+
+        Devolverlo (en vez de un None) es lo que le permite al caché actualizar su copia en
+        memoria sin volver a leer: sin eso, el próximo chequeo de inactividad usaría el valor
+        viejo hasta que venza el TTL.
+
+        El sello lo pone la app, no `now()` de Postgres: así el valor que se guarda y el que
+        queda en memoria son EL MISMO, y un desfasaje de reloj no puede hacer que una sesión
+        recién sellada se vea vencida."""
+        sello = datetime.now(timezone.utc).isoformat()
+        supabase_admin.table(_USERS).update({"ultimo_acceso": sello}).eq("id", user_id).execute()
+        return sello
+
+    def get_estado(self, user_id: str) -> Optional[dict]:
+        """Estado de autorización del usuario (rol + activo + ultimo_acceso), para el caché del
+        middleware.
+
+        Los tres campos salen de la MISMA fila y la misma query: sumarlos no cuesta un request
+        más.
+
+        `limit(1)` y no `.single()`: `.single()` LANZA con 0 filas, y acá "el usuario no existe"
+        es una respuesta legítima que el caller convierte en negación, no un error de base.
+        None si no existe."""
+        res = supabase_admin.table(_USERS).select("rol, activo, ultimo_acceso").eq("id", user_id).limit(1).execute()
+        return res.data[0] if res.data else None
+
+    def set_activo(self, user_id: str, activo: bool) -> None:
+        """Baja/alta BLANDA del perfil: mueve `activo` sin borrar la fila.
+
+        Que la fila sobreviva es el punto: `empleados.user_id` tiene FK con ON DELETE SET NULL,
+        así que borrarla desvincula al empleado de su usuario y la auditoría vieja queda
+        apuntando a un id que ya no resuelve a ningún nombre."""
+        supabase_admin.table(_USERS).update({"activo": activo}).eq("id", user_id).execute()
 
     def get_perfil(self, user_id: str) -> Optional[dict]:
         """Perfil mínimo (id, username, rol) para la baja y su auditoría. None si no existe."""

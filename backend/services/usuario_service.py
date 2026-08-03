@@ -13,6 +13,10 @@ from services._usuario_alta import crear as _crear_usuario
 from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
+from utils.usuario_estado import invalidar_estado
+
+# 100 años. GoTrue no tiene "ban para siempre": toma una duración, y "none" la levanta.
+_BAN_PERMANENTE = "876000h"
 
 
 class UsuarioService:
@@ -60,18 +64,44 @@ class UsuarioService:
         logger.info("Cambio de contraseña", extra={"user_id": user_id})
 
     def eliminar_usuario(self, user_id: str, ejecutor_id: Optional[str]) -> None:
-        """Elimina un usuario: borra auth.users (admin API); el CASCADE limpia public.users
-        y el SET NULL desvincula empleados.user_id. Bloquea la auto-eliminación. Audita
-        baja_usuario sin datos sensibles.
-        Raises: AppError AUTOELIMINACION (400), USUARIO_NOT_FOUND (404), USUARIO_DELETE_ERROR (502)."""
+        """Da de baja un usuario. Es una baja BLANDA y REVERSIBLE, no un DELETE.
+
+        Antes borraba `auth.users` y el CASCADE se llevaba `public.users`. Eso tenía dos costos
+        que no se pagan más: el `ON DELETE SET NULL` de `empleados.user_id` **desvinculaba al
+        empleado** de su usuario, y la auditoría vieja quedaba apuntando a un id que ya no
+        resolvía a ningún nombre. La identidad se conserva; lo que se corta es el acceso.
+
+        Las dos mitades hacen falta y son distintas:
+          1. `activo=false` — lo hace regir. El middleware lo lee en cada request y responde 403.
+          2. el ban en Supabase Auth — `/api/auth/refresh` es PÚBLICA y no pasa por el
+             middleware, así que sin el ban el usuario sigue renovando tokens para siempre.
+
+        El orden no es casual: primero la baja en nuestra base, que es la que corta de verdad, y
+        recién después el ban. Si fallara el ban, el usuario ya está afuera de la API y lo único
+        pendiente es dejar de emitirle tokens que no le sirven para nada; al revés, un ban
+        exitoso con la baja fallida lo dejaría con acceso pleno hasta que expire su token.
+
+        Reversión (a mano, ver docs/DEPLOY.md): `activo=true` + `ban_duration: "none"`.
+
+        Raises: AppError AUTOELIMINACION (400), USUARIO_NOT_FOUND (404), USUARIO_DELETE_ERROR (502).
+        """
         if ejecutor_id and str(ejecutor_id) == str(user_id):
             raise AppError("No podés eliminar tu propio usuario", "AUTOELIMINACION", 400)
         perfil = self._repo.get_perfil(user_id)
         if not perfil:
             raise AppError("Usuario no encontrado", "USUARIO_NOT_FOUND", 404)
-        try:
-            supabase_admin.auth.admin.delete_user(user_id)
-        except Exception as exc:
-            raise AppError("No se pudo eliminar el usuario", "USUARIO_DELETE_ERROR", 502) from exc
+
+        self._repo.set_activo(user_id, False)
+        invalidar_estado(user_id)  # que rija en el acto, sin esperar el TTL
         self._audit.registrar(**payload_baja_usuario(user_id, perfil.get("username"), ejecutor_id))
-        logger.info("Usuario eliminado", extra={"user_id": user_id, "eliminado_por": ejecutor_id})
+        logger.info("Usuario dado de baja", extra={"user_id": user_id, "eliminado_por": ejecutor_id})
+
+        try:
+            supabase_admin.auth.admin.update_user_by_id(user_id, {"ban_duration": _BAN_PERMANENTE})
+        except Exception as exc:
+            # La baja YA rige (el 403 sale del middleware). Lo que queda sin cerrar es la
+            # canilla de tokens nuevos, así que se avisa fuerte para reintentar, pero no se
+            # revierte nada: revertir dejaría al usuario adentro, que es peor.
+            logger.error("Baja aplicada pero el ban de Auth falló", extra={"user_id": user_id})
+            raise AppError("El usuario quedó desactivado, pero no se pudo revocar su sesión. Reintentá.",
+                           "USUARIO_DELETE_ERROR", 502) from exc
