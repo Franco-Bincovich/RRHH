@@ -8,6 +8,7 @@ import { ConfigSection } from "./ConfigSection"
  * ConfigSection es la ÚNICA shell plegable del sistema: la usan /configuracion y las tres
  * cards del dashboard que listan cosas que crecen sin techo. Lo que se verifica acá es el
  * mecanismo —qué se ve plegada y qué desplegada— una sola vez, en el componente compartido.
+ * Plegada: título + badge y nada más. Desplegada: eso, más el panel.
  *
  * 🚨 ¿QUÉ TENDRÍA QUE SER DISTINTO PARA QUE ESTOS TESTS PUEDAN FALLAR?
  *
@@ -24,17 +25,11 @@ import { ConfigSection } from "./ConfigSection"
  */
 
 const CONTENIDO = "contenido-del-panel"
-const PREVIEW = "contenido-del-preview"
 
-function render(abierta: boolean, props: { preview?: string; disabled?: boolean } = {}): string {
+function render(abierta: boolean): string {
   return renderToStaticMarkup(
     <Accordion.Root defaultValue={abierta ? ["s"] : []}>
-      <ConfigSection
-        value="s"
-        title="Una sección"
-        preview={props.preview ? <p>{props.preview}</p> : undefined}
-        disabled={props.disabled}
-      >
+      <ConfigSection value="s" title="Una sección" badge={<span>7</span>}>
         <p>{CONTENIDO}</p>
       </ConfigSection>
     </Accordion.Root>,
@@ -56,33 +51,20 @@ describe("desplegar y colapsar", () => {
   })
 })
 
-describe("preview — lo que se ve siempre", () => {
-  it("está plegada y desplegada; solo la cola aparece y desaparece", () => {
-    const plegada = render(false, { preview: PREVIEW })
-    const abierta = render(true, { preview: PREVIEW })
-    expect(plegada).toContain(PREVIEW)
+describe("plegada no asoma nada del contenido", () => {
+  /**
+   * Es la propiedad que define a esta shell y la razón por la que se sacó el prop `preview`:
+   * plegada tiene que medir SIEMPRE lo mismo, sea cual sea el largo de lo que esconde. Si
+   * volviera a haber una forma de dejar filas asomando, la card plegada volvería a ocupar casi
+   * lo que ocupa abierta y el acordeón dejaría de servir para lo único que sirve.
+   *
+   * Se afirma sobre el markup entero, no sobre un slot: así cubre también a un `preview` nuevo
+   * que alguien agregue con otro nombre.
+   */
+  it("lo único que sale además del título es el badge", () => {
+    const plegada = render(false)
+    expect(plegada).toContain("Una sección")
+    expect(plegada).toContain("7")
     expect(plegada).not.toContain(CONTENIDO)
-    expect(abierta).toContain(PREVIEW)
-    expect(abierta).toContain(CONTENIDO)
-  })
-})
-
-describe("disabled — sin nada que plegar", () => {
-  // El chevron promete que hay algo atrás. Si no lo hay, no va: se identifica por la clase
-  // que le pone la rotación, que es propia de ese icono y de ningún otro de la shell.
-  const chevron = (html: string) => html.includes("group-data-panel-open:rotate-180")
-
-  it("sin disabled hay chevron", () => {
-    expect(chevron(render(false))).toBe(true)
-  })
-
-  it("con disabled no hay chevron", () => {
-    expect(chevron(render(false, { disabled: true }))).toBe(false)
-  })
-
-  it("el trigger queda inoperable, no solo sin flechita", () => {
-    // Si solo se escondiera el chevron, el <button> seguiría plegando al Enter y la card
-    // se cerraría sin manera visible de volver a abrirla.
-    expect(render(false, { disabled: true })).toContain("disabled=\"\"")
   })
 })

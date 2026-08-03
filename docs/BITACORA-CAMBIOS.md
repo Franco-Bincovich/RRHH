@@ -101,10 +101,17 @@ sesiones MODIFICARON se perdieron). Van en 4 commits, cada uno con la suite verd
 llevan un contador en el encabezado. Con la segunda empresa cargada ya son 12 áreas y 7
 alertas; con 500 empleados serían decenas, y hoy empujaban todo lo demás fuera de la pantalla.
 Se reusó `ConfigSection.tsx` (el acordeón de /configuracion) en vez de construir un segundo
-desplegable: se le agregaron tres props opcionales —`icon` pasó a opcional, más `preview` y
-`disabled`— y /configuracion lo sigue usando exactamente igual. `HeadcountBar` salió de
-`DashboardAdmin.tsx` a un `HeadcountPanel.tsx` propio (109 → 80 líneas). El estado
-abierto/cerrado **no se persiste** y los contadores salen de los datos que ya llegaban.
+desplegable: lo único que hizo falta agregarle es que `icon` pasara a ser opcional, y
+/configuracion lo sigue usando exactamente igual. `HeadcountBar` salió de `DashboardAdmin.tsx`
+a un `HeadcountPanel.tsx` propio (109 → 80 líneas). El estado abierto/cerrado **no se
+persiste** y los contadores salen de los datos que ya llegaban.
+
+> 🔑 **Plegada, una card muestra SOLO el título y el contador — ni una fila asomando.** Hubo
+> una versión intermedia con un prop `preview` que dejaba las 6 primeras a la vista, y se
+> sacó: con 6 barras la card ocupa casi lo mismo que con 12, o sea que se pagaba la
+> complejidad del acordeón sin recuperar pantalla, que era todo el punto. Con el asomo se
+> fueron también `preview` y `disabled` de `ConfigSection` (0 callers) y el
+> `CORTE_LISTA`/`partirLista` de `dashboardAdminData.ts`.
 
 **Impacto en infraestructura:** **Ninguno.** Sin migraciones, env vars, dependencias, buckets,
 endpoints ni cambios de auth. **El backend no se tocó** — cero requests nuevos: el dashboard

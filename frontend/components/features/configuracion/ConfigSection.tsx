@@ -27,17 +27,6 @@ export interface ConfigSectionProps {
   description?: string
   /** Chip a la derecha del título: estado ("Conectado") o contador de lo que hay adentro. */
   badge?: ReactNode
-  /**
-   * Contenido SIEMPRE visible, plegada o no. Es lo que habilita "mostrar los primeros y
-   * desplegar el resto": el corte va acá y la cola en `children`.
-   */
-  preview?: ReactNode
-  /**
-   * Cuando no hay NADA detrás del desplegable (lista vacía, o entera dentro del `preview`):
-   * el trigger deja de ser operable y el chevron desaparece. Un chevron que abre un panel
-   * vacío promete contenido que no existe.
-   */
-  disabled?: boolean
   children: ReactNode
 }
 
@@ -51,6 +40,13 @@ export interface ConfigSectionProps {
  *
  * El estado abierto/cerrado lo tiene el <Accordion.Root> del que cuelga y NO se persiste: es
  * una preferencia de sesión, no un dato del usuario.
+ *
+ * ⚠️ PLEGADA NO MUESTRA NADA DEL CONTENIDO — ni un asomo, ni las primeras filas. Hubo un prop
+ * `preview` para eso y se sacó: en las cards del dashboard dejaba 6 filas a la vista y la card
+ * plegada terminaba ocupando casi lo mismo que abierta, o sea que se pagaba la complejidad del
+ * acordeón sin recuperar la pantalla. Lo que resume el contenido va en `badge` (un contador),
+ * que ocupa una línea compartida con el título. Si algún día hace falta un asomo de verdad,
+ * es otro componente: la gracia de éste es que plegado mide siempre lo mismo.
  */
 export function ConfigSection({
   value,
@@ -59,19 +55,12 @@ export function ConfigSection({
   title,
   description,
   badge,
-  preview,
-  disabled,
   children,
 }: ConfigSectionProps) {
   return (
-    <Accordion.Item value={value} disabled={disabled} className="rounded-xl border bg-card">
+    <Accordion.Item value={value} className="rounded-xl border bg-card">
       <Accordion.Header>
-        <Accordion.Trigger
-          className={cn(
-            "group flex w-full items-start gap-3 p-5 text-left",
-            disabled ? "cursor-default" : "cursor-pointer",
-          )}
-        >
+        <Accordion.Trigger className="group flex w-full cursor-pointer items-start gap-3 p-5 text-left">
           {icon && (
             <div
               className={cn(
@@ -91,24 +80,12 @@ export function ConfigSection({
               <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
             )}
           </div>
-          {!disabled && (
-            <ChevronDown className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-data-panel-open:rotate-180" />
-          )}
+          <ChevronDown className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-data-panel-open:rotate-180" />
         </Accordion.Trigger>
       </Accordion.Header>
 
-      {/* El pb-5 del preview es lo que le da fondo a la card cuando está plegada. Abierta, deja
-          20px contra el primer ítem del panel (que no lleva padding arriba): 4px más que el
-          space-y-4 con el que se listan adentro, o sea nada a la vista. */}
-      {preview && (
-        <div className="px-5 pb-5">
-          <Separator className="mb-4" />
-          {preview}
-        </div>
-      )}
-
       <Accordion.Panel className="overflow-hidden px-5 pb-5">
-        {!preview && <Separator className="mb-4" />}
+        <Separator className="mb-4" />
         {children}
       </Accordion.Panel>
     </Accordion.Item>

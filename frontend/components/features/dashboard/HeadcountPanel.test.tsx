@@ -2,26 +2,25 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
 import type { HeadcountArea } from "@/services/dashboard"
-import { CORTE_LISTA, partirLista } from "./dashboardAdminData"
 import { HeadcountPanel } from "./HeadcountPanel"
 
 /**
- * La card de headcount: las primeras CORTE_LISTA áreas siempre a la vista, el resto detrás del
- * desplegable y PLEGADO al entrar.
+ * La card de headcount: PLEGADA al entrar, y plegada no muestra ni una fila — solo el título y
+ * el contador con el total de áreas.
  *
  * 🚨 ¿QUÉ TENDRÍA QUE SER DISTINTO PARA QUE ESTOS TESTS PUEDAN FALLAR?
  *
- * 1. El acordeón real no monta el panel plegado, así que "el resto está escondido" se afirma
- *    por AUSENCIA en el markup. Con un acordeón mockeado que renderice sus children siempre,
- *    las 12 áreas saldrían en el markup y el corte podría estar borrado sin que nada rojee.
- * 2. Los nombres van con dos dígitos ("Área 01"): con "Área 1", buscar la 1 encontraría la 10
- *    y la aserción de "no está" pasaría a ser imposible de fallar en un sentido y falsa en el
- *    otro. Los totales son distintos entre sí para que ningún número se cruce.
- * 3. Los casos NO hardcodean 6: recorren CORTE_LISTA. Si mañana el corte pasa a 8, el test
- *    sigue verificando la misma regla en vez de mentir sobre un número viejo.
+ * 1. El acordeón real no monta el panel plegado, así que "no asoma ninguna área" se afirma por
+ *    AUSENCIA de los nombres en el markup. Con un acordeón mockeado que renderice sus children
+ *    siempre, las 12 áreas saldrían y el plegado podría estar borrado sin que nada rojee.
+ * 2. Los nombres van con dos dígitos ("Área 01"): con "Área 1", buscar la 1 encontraría la 10 y
+ *    la aserción de ausencia sería imposible de fallar en un sentido y falsa en el otro.
+ * 3. El contador NO se busca como número suelto en el markup —cualquier clase de Tailwind trae
+ *    dígitos—: se extrae del chip pegado al <h2> y el helper devuelve null si esa estructura
+ *    deja de existir, cosa que cada test afirma antes de comparar.
  *
- * La otra mitad del despliegue —que abierta SÍ muestre la cola— vive en ConfigSection.test.tsx:
- * acá el Root no es parametrizable y sin jsdom no hay click.
+ * La mitad "desplegada SÍ muestra todo" vive en ConfigSection.test.tsx, que es donde está el
+ * mecanismo: acá el Root no es parametrizable y sin jsdom no hay click.
  */
 
 function areas(n: number): HeadcountArea[] {
@@ -39,46 +38,56 @@ function contador(html: string): string | null {
   return m ? m[1] : null
 }
 
-describe("corte de la lista", () => {
-  it(`muestra las primeras ${CORTE_LISTA} y esconde el resto`, () => {
+describe("plegada al entrar", () => {
+  it("no asoma NINGUNA área, ni la primera", () => {
+    // Es el cambio que motivó sacar el preview: con 6 filas asomando la card ocupaba casi lo
+    // mismo plegada que abierta, así que el acordeón no recuperaba nada de pantalla.
     const html = render(12)
-    const { visibles, resto } = partirLista(areas(12))
-    expect(visibles).toHaveLength(CORTE_LISTA)
-    expect(resto.length).toBeGreaterThan(0) // guarda: sin esto el forEach de abajo no compara nada
-    visibles.forEach((a) => expect(html).toContain(a.area))
-    resto.forEach((a) => expect(html).not.toContain(a.area))
+    const todas = areas(12)
+    expect(todas.length).toBeGreaterThan(0) // guarda: sin áreas el forEach no compara nada
+    todas.forEach((a) => expect(html).not.toContain(a.area))
   })
 
-  it("si entran todas no esconde ninguna ni ofrece desplegar", () => {
-    const html = render(CORTE_LISTA)
-    areas(CORTE_LISTA).forEach((a) => expect(html).toContain(a.area))
-    expect(html).not.toContain("group-data-panel-open:rotate-180")
+  it("pero sí el título y el contador", () => {
+    const html = render(12)
+    expect(html).toContain("Headcount por área")
+    expect(contador(html)).toBe("12")
   })
 
-  it("si sobra aunque sea una, ofrece desplegar", () => {
-    expect(render(CORTE_LISTA + 1)).toContain("group-data-panel-open:rotate-180")
+  it("y ofrece desplegar", () => {
+    expect(render(12)).toContain("group-data-panel-open:rotate-180")
   })
 })
 
 describe("contador", () => {
-  it("dice el TOTAL de áreas, no cuántas se ven", () => {
-    // Es la razón por la que la card no miente estando cortada: se ven 6, el chip dice 12.
+  it("es el total de áreas, que es lo único que se ve sin abrir", () => {
     expect(contador(render(12))).toBe("12")
     expect(contador(render(3))).toBe("3")
   })
-})
 
-describe("card vacía", () => {
-  it("sigue diciendo 'Sin datos de headcount.'", () => {
-    expect(render(0)).toContain("Sin datos de headcount.")
+  it("con cero áreas muestra 0, no se esconde", () => {
     expect(contador(render(0))).toBe("0")
   })
 })
 
-describe("escala de las barras", () => {
-  it("el 100% sale del máximo de TODAS las áreas, no de las visibles", () => {
-    // Si la escala se recalculara con el corte, desplegar el resto reescalaría las barras de
-    // arriba y el gráfico cambiaría de forma al abrirlo. El área 01 (total 100) es el máximo.
-    expect(render(12)).toContain("width:100%")
+describe("card vacía", () => {
+  /**
+   * ⚠️ EL "Sin datos de headcount." NO SE VERIFICA ACÁ, Y NO SE FINGE QUE SÍ.
+   *
+   * Vive en el panel, esta card arranca plegada, y el panel plegado no se monta — así que en
+   * el markup no está. Un `not.toContain(...)` pasaría trivialmente y un `toContain(...)`
+   * fallaría siempre: ninguna de las dos afirma que el mensaje siga existiendo. Y no se puede
+   * abrir desde afuera porque el <Accordion.Root> lo pone el propio componente.
+   *
+   * Lo que sí queda cubierto: que el panel muestre su empty state cuando está abierto se
+   * verifica en AlertasPanel.test.tsx —misma shell, mismo patrón, y esa card SÍ arranca
+   * abierta—, y que el panel cerrado esconde su contenido, en ConfigSection.test.tsx.
+   * Lo único propio de este caso es lo de abajo.
+   */
+  it("con cero áreas la card sigue entera: título, contador en 0 y desplegable", () => {
+    const html = render(0)
+    expect(html).toContain("Headcount por área")
+    expect(contador(html)).toBe("0")
+    expect(html).toContain("group-data-panel-open:rotate-180")
   })
 })

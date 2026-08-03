@@ -6,7 +6,6 @@ import { Cake, PartyPopper } from "lucide-react"
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
 import { Badge } from "@/components/ui/badge"
 import type { DistribItem, KpisExtra, PersonaFecha } from "@/services/dashboard"
-import { partirLista } from "./dashboardAdminData"
 
 // Paneles de KPIs 28 (distribución) y 30 (cumpleaños/aniversarios). Se suman al layout del
 // dashboard admin sin rediseñarlo. Empty state coherente en cada bloque.
@@ -36,7 +35,8 @@ function DistribLista({ titulo, items }: { titulo: string; items: DistribItem[] 
   )
 }
 
-/** Solo la lista. El empty state es del llamador: la cola de un corte vacía no muestra nada. */
+/** Solo el <ul>. El empty state lo pone `FechasColumna`, que es la que tiene el encabezado al
+ *  que ese mensaje contesta. */
 function FechasLista({ items, icon: Icon }: { items: PersonaFecha[]; icon: typeof Cake }) {
   return (
     <ul className="divide-y divide-border" role="list">
@@ -63,9 +63,6 @@ function FechasColumna({ titulo, items, icon, vacio }: { titulo: string; items: 
 }
 
 export function DashboardExtras({ data }: { data: KpisExtra }) {
-  const cumples = partirLista(data.cumpleanos_mes)
-  const aniversarios = partirLista(data.aniversarios_mes)
-  const ocultos = cumples.resto.length + aniversarios.resto.length
   const total = data.cumpleanos_mes.length + data.aniversarios_mes.length
 
   return (
@@ -78,30 +75,20 @@ export function DashboardExtras({ data }: { data: KpisExtra }) {
         </div>
       </section>
 
-      {/* Plegada al entrar (sin `defaultValue`): son efemérides, no algo pendiente de hacer.
-          El contador suma las dos columnas — es "cuánta gente festeja este mes", que es la
-          pregunta de la card; separarlo por columna repetiría lo que ya dicen los encabezados. */}
+      {/* Plegada al entrar (sin `defaultValue`): son efemérides, no algo pendiente de hacer, y
+          plegada queda solo el título con el contador. El contador suma las dos columnas — es
+          "cuánta gente festeja este mes", que es la pregunta de la card; separarlo por columna
+          repetiría lo que ya dicen los encabezados de adentro. */}
       <Accordion.Root className="contents">
         <ConfigSection
           value="fechas"
           title="Cumpleaños y aniversarios del mes"
           badge={<Badge variant="secondary">{total}</Badge>}
-          disabled={ocultos === 0}
-          preview={
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <FechasColumna titulo="Cumpleaños" items={cumples.visibles} icon={Cake} vacio="Sin cumpleaños este mes." />
-              <FechasColumna titulo="Aniversarios de ingreso" items={aniversarios.visibles} icon={PartyPopper} vacio="Sin aniversarios este mes." />
-            </div>
-          }
         >
-          {/* La cola repite la grilla para que cada resto caiga bajo SU columna. Sin encabezados
-              ni empty state: los del preview, que está justo arriba, siguen a la vista. */}
-          {ocultos > 0 ? (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div>{cumples.resto.length > 0 && <FechasLista items={cumples.resto} icon={Cake} />}</div>
-              <div>{aniversarios.resto.length > 0 && <FechasLista items={aniversarios.resto} icon={PartyPopper} />}</div>
-            </div>
-          ) : null}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <FechasColumna titulo="Cumpleaños" items={data.cumpleanos_mes} icon={Cake} vacio="Sin cumpleaños este mes." />
+            <FechasColumna titulo="Aniversarios de ingreso" items={data.aniversarios_mes} icon={PartyPopper} vacio="Sin aniversarios este mes." />
+          </div>
         </ConfigSection>
       </Accordion.Root>
     </div>

@@ -72,11 +72,15 @@ describe("contador de alertas", () => {
 
 describe("card vacía", () => {
   it("sigue diciendo 'Sin alertas activas.'", () => {
+    // Se ve porque esta card arranca ABIERTA. El mensaje vive en el panel como el resto del
+    // contenido — ya no hay un slot aparte que lo muestre plegada.
     expect(render(0)).toContain("Sin alertas activas.")
   })
 
-  it("y no ofrece desplegar nada", () => {
-    expect(render(0)).not.toContain("group-data-panel-open:rotate-180")
+  it("y se puede plegar igual, como cualquier otra", () => {
+    // El chevron está siempre: plegar una card con "Sin alertas activas." no es útil, pero un
+    // chevron que a veces está y a veces no obliga al usuario a descubrir la regla.
+    expect(render(0)).toContain("group-data-panel-open:rotate-180")
   })
 })
 

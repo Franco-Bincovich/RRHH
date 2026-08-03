@@ -19,7 +19,9 @@ import { NIVEL_LABEL, NIVEL_VARIANT } from "./dashboardAdminData"
  *
  * ARRANCA ABIERTA (`defaultValue`), a diferencia del headcount: una alerta es accionable y el
  * punto de la card es que se vea. Se puede plegar para recuperar la pantalla cuando son muchas,
- * y el contador del encabezado sigue diciendo cuántas hay estando plegada.
+ * y plegada queda SOLO el título y el contador — ninguna alerta asomando. Un asomo no serviría
+ * de nada acá: las alertas vienen ordenadas por accionabilidad, así que las primeras son
+ * justamente las que hay que leer enteras, no de reojo.
  *
  * 🔑 El contador es SIEMPRE `alertas.length`, sin desglose por nivel y sin ocultarse en cero:
  * "0" es una respuesta legítima a "cuántas alertas tengo". Sale de los datos que ya llegan, no
@@ -36,14 +38,10 @@ export function AlertasPanel({ alertas }: { alertas: AlertaDashboard[] }) {
         value="alertas"
         title="Alertas activas"
         badge={<Badge variant="secondary">{alertas.length}</Badge>}
-        disabled={alertas.length === 0}
-        preview={
-          alertas.length === 0
-            ? <p className="text-sm text-muted-foreground">Sin alertas activas.</p>
-            : undefined
-        }
       >
-        {alertas.length === 0 ? null : (
+        {alertas.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Sin alertas activas.</p>
+        ) : (
           <ul className="divide-y divide-border" role="list">
             {alertas.map((alerta, i) => (
               <li key={i} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
