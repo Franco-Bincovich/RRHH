@@ -41,6 +41,48 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-02 · La pantalla de Proyectos no terminaba de cargar nunca · commit pendiente
+
+**Qué cambió:** el listado `/proyectos` quedaba en skeleton para siempre, con el endpoint
+respondiendo **200**. La causa es de front y de una sola línea: `load()` en
+`app/(dashboard)/proyectos/page.tsx` prendía el loading y **no lo apagaba** — el
+`finally { setLoading(false) }` se perdió en el commit **`e3df1f9`** (27/7, "dividir
+proyectos_repo, proyectos/page.tsx y AsignacionesTab"), donde era la línea contigua al array de
+dependencias del `useCallback` y el hunk se llevó las dos. No fue la sesión de asignación por
+área (`5e1e464` no tocó ese archivo). Afectaba **los tres caminos** —éxito, error y lista
+vacía—, no solo el error: los datos llegaban y se guardaban, pero la grilla corta en el
+`if (loading)` antes de mirarlos. Solo el **listado**; el detalle y las tabs de equipo y horas
+siempre tuvieron su `finally`.
+
+La carga se movió a `components/features/proyectos/cargarProyectos.ts` (41 líneas), que apaga el
+loading en un `finally` y **se puede testear sin renderizar** — vitest corre sin jsdom, así que
+dentro del componente esto no se podía verificar de ninguna forma. La página quedó en 69/150.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, env vars, dependencias, buckets ni
+endpoints nuevos. Cero cambios de backend: ninguna ruta cambió de path, método ni contrato. **La
+089 sigue siendo la única migración pendiente de correr.** Es un fix de front puro — alcanza con
+que salga el deploy de `sofia-front`; el backend no necesita salir primero.
+
+### El barrido estructural nuevo (lo que importa más que el fix)
+
+Esto pasó una división de componentes y 214 tests sin que nadie lo notara, y era una pantalla
+completa caída en producción. Ningún test del front podía verlo: sin jsdom los efectos no
+corren, y un render a string muestra el skeleton inicial igual con el bug que sin él.
+
+Se agregó **`components/features/shared/loadingSeApaga.test.ts`**, sexto barrido estructural del
+repo y primero del front que cubre una clase de falla de runtime: descubre por filesystem todo
+`set*Loading(true)` / `set*Cargando(true)` de `app/`, `components/` y `hooks/` y exige que un
+`finally` lo apague, aceptando los dos idiomas que el repo usa (`try/finally` y
+`.finally(() => …)`). **61 pares hoy, guarda de mínimo en 55.** Corrido contra el código roto
+señalaba `proyectos/page.tsx` y **nada más** — el resto del front ya estaba sano.
+
+⚠️ Verifica la **forma**, no el comportamiento: un `finally` que apague el loading equivocado
+pasa igual. Cubre "alguien borró el apagado", que es lo que se llevó puesta la pantalla. El
+comportamiento de la carga concreta lo prueban los 8 tests de `cargarProyectos.test.ts` (éxito,
+error de red, lista vacía, 200 sin `items`, orden de las llamadas). **Front: 214 → 285 tests.**
+
+---
+
 ## 2026-08-02 · Limpieza de código: oráculo cerrado, dead code borrado, cero over-limit · commits pendientes ×5
 
 **Qué cambió:** cinco commits de limpieza sobre `docs/DEUDA-TECNICA.md`. Uno solo cambia
