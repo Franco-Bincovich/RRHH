@@ -1,283 +1,295 @@
 # Estado real del sistema vs. lo comprometido con el directorio
 
-**Proyecto:** HR Karstec (RRHH) · **Última verificación:** 27 de julio de 2026
+**HR Karstec (RRHH)** · **Verificado el 5 de agosto de 2026**
 
 ---
 
-## 1. Qué es este documento
+## Cómo se lee este documento
 
-Contraste **ítem por ítem** entre lo que los documentos entregados al directorio en **junio de 2026** comprometen (el *plan de implementación* y el *documento ejecutivo*) y lo que el código y la base de datos **realmente hacen hoy**.
+Contraste ítem por ítem entre lo que se comprometió con el directorio en **junio de 2026**
+(plan de implementación + documento ejecutivo) y lo que el sistema **realmente hace hoy**.
 
-**Contra qué se contrastó:**
-- Los dos documentos del directorio (junio 2026): plan de implementación y documento ejecutivo — ninguno de los dos vive en el repo. El inventario de ítems se reconstruyó desde la **v1 de `Plan de trabajo`**, que es el instrumento interno derivado de ellos y enumera Entrega 2, Entrega 3 y el frente AWS. Esa v1 vivía en la raíz del repo y **ya no existe como archivo**: quedó consolidada en [`Plan de trabajo`](<Plan de trabajo>) (v2, el único vigente). Para consultar la v1 tal como se la leyó, está en el historial de git (commit `1c5dd30`, última forma en `e9df215`).
-- **El código del repo** (`backend/`, `frontend/`, `migracionAWS/`), leído en modo read-only.
-- **El catálogo real de la base de producción** vía MCP de Supabase (proyecto `grmdiwxcvcjorlohpwji`, "HR Karstec"), no las migraciones — producción driftea.
+**Todo se verificó de nuevo**, contra el código fuente y contra la base de datos de producción
+consultada en vivo. Nada se arrastró de versiones anteriores de este documento.
 
-**Metodología y sus límites:**
-- La evidencia es siempre `archivo:línea` o el nombre del objeto de DB. Donde no hay evidencia verificable, el ítem dice **NO DETERMINADO**, no una suposición.
-- `CLAUDE.md` **no** se usó como fuente. Donde `CLAUDE.md` contradice al código, gana el código; las divergencias detectadas están en la sección 6.
-- No se verificó comportamiento en runtime contra el sitio productivo. Todo es verificación estática de código + catálogo de DB.
-- Los estimados originales en horas los completa Franco: la columna va con `—`.
+### Los tres estados
 
-**Estados usados:**
-
-| Estado | Significado |
+| | Qué significa |
 |---|---|
-| **HECHO** | Existe end-to-end y es alcanzable por el usuario. |
-| **PARCIAL** | Existe una parte; la columna "Qué falta" dice exactamente cuál. |
-| **NO EXISTE** | Cero rastro en código y en DB. |
-| **DISTINTO** | Existe, pero resuelve otra cosa que la comprometida. Va también a la sección 3. |
-| **BLOQUEADO** | Depende de un input externo (datos o archivos de RRHH), no de desarrollo. |
-| **DESCARTADO** | Se decidió no hacerlo. Va también a la sección 3. |
+| ✅ **TERMINADO Y PROBADO** | Funciona, y se comprobó con datos reales cargados en producción. |
+| 🟡 **TERMINADO, SIN PROBAR** | El sistema lo tiene construido, pero **nunca se usó de verdad**. La columna "qué falta" dice exactamente qué hace falta para poder probarlo: una acción de Franco, datos que tiene que cargar RRHH, o una cuenta que hay que conectar. |
+| 🔴 **FALTA** | No está construido. La columna dice qué lo bloquea. |
+
+> ⚠️ **La diferencia entre los dos primeros es lo más importante de todo el documento.**
+> Buena parte de lo que se construyó en los últimos dos meses está entero y **nunca se ejercitó**,
+> porque la base de datos está casi vacía. Eso no es lo mismo que "terminado", y no se puede
+> presentar como tal: si el directorio abre una de esas pantallas hoy, la va a ver en blanco.
+
+### Cómo está verificado
+
+Cada fila trae la evidencia: el archivo y la línea del código, o el nombre del dato en la base.
+Donde no se pudo verificar, dice **NO DETERMINADO** — nunca una suposición. La base se consultó
+en vivo, no a través de las migraciones, porque producción puede haberse desviado de ellas.
 
 ---
 
-## 2. Tabla maestra
+## Resumen en una pantalla
 
-### Bloque 1 — Legajo (Entrega 2)
+**44 ítems comprometidos** (16 de la Entrega 2, 16 de la Entrega 3, 12 del frente AWS):
 
-| # | Ítem | Entrega | Est. orig. | Estado | Evidencia | Qué falta |
-|---|---|---|---|---|---|---|
-| 1a | Campo **sexo** | E2 | — | **HECHO** | DB `empleados.sexo` (text) · API `backend/schemas/empleado.py:46,105,168` · UI edición `frontend/components/features/empleados/modal/DatosPersonalesFields.tsx:35-36` · UI ficha `.../ficha/DatosEmpleadoSection.tsx:28` | — |
-| 1b | Campo **domicilio** | E2 | — | **CERRADO** | DB: seis columnas `domicilio_*` (migración **081**, no destructiva) + `domicilio` legado, reflejadas en `db/schema.sql` · API `schemas/empleado.py` + `schemas/empleado_out.py`, con `domicilio_provincia` validado por `Literal` contra las 24 jurisdicciones (`schemas/_provincias.py`, nombres oficiales del IGN) · catálogo `GET /api/empleados/provincias` · UI: bloque agrupado en el modal (`modal/DomicilioFields.tsx`, provincia como **select cerrado**) y dirección armada en una línea en la ficha (`ficha/_domicilio.ts`) · export de empleados con **Provincia** y **Localidad** | 🔴 **Los seis campos nacen VACÍOS.** `domicilio` estaba 0/19 en producción, así que no hubo migración de datos ni parseo de texto libre. El corte por provincia/localidad existe y está testeado, pero no hay nada que cortar hasta que RRHH cargue domicilios. El texto libre se conserva y se muestra en la ficha como referencia solo mientras los estructurados estén vacíos. **`ubicacion` no se tocó**: es dónde trabaja, no dónde vive. |
-| 1c | Campo **horas de contrato** | E2 | — | **HECHO** | DB `empleados.horas_contrato` (integer) · API `schemas/empleado.py:52,111,174` · UI edición `modal/_constants.ts:125` (label "Horas por día", validado entero en `modal/form-utils.ts:18-19`) · UI ficha `ficha/DatosEmpleadoSection.tsx:45` | — (ojo: el label de edición dice "Horas por día" y el de la ficha "Horas de contrato" — mismo campo, dos nombres) |
-| 1d | Campo **gerencia** | E2 | — | **HECHO** | DB `empleados.gerencia` (text) · API `schemas/empleado.py:54,113,176` · UI edición con autocompletado `modal/_constants.ts:47,138` · UI ficha `ficha/DatosEmpleadoSection.tsx:47` | — |
-| 1e | Campo **liderazgo** | E2 | — | **DISTINTO** | La columna `empleados.liderazgo` (text) **existe en DB** pero **no está en la API** (ausente de los tres schemas de `schemas/empleado.py`) ni en la UI. Lo único que se lee/escribe por API es el booleano `es_lider` (`schemas/empleado.py:61,120,183`; ficha `DatosEmpleadoSection.tsx:57`). El único que escribe `liderazgo` es el import de nómina: `schemas/importacion_nomina_empleados.py:26,36,73` ← `services/_nomina_empleados_transforms.py:134` | El campo cualitativo `liderazgo` es **write-only por import**: se carga desde el CSV y nunca se muestra ni se edita. Falta exponerlo en API + UI, o decidir que `es_lider` lo reemplaza. |
-| 1f | Campo **presencialidad** | E2 | — | **DISTINTO** | No existe ninguna columna llamada `presencialidad`. Lo más cercano: `empleados.modalidad_trabajo` (presencial/remoto/hibrido — `modal/DatosLaboralesFields.tsx:74-81`, ficha `DatosEmpleadoSection.tsx:53`) y `empleados.ubicacion` (text libre, ficha `:43`). También existen `turno` (`:44`) y `modalidad_contratacion` (`:55`). | Confirmar si "presencialidad" del documento = `modalidad_trabajo`. Si se esperaba un % o días presenciales por semana, **no existe**. |
-| 2 | Renombrar **cargo → rol** | E2 | — | **DISTINTO** | No se renombró: se **unificó** `cargo` (mig 003) + `rol` (mig 029) en `empleados.roles TEXT[]` — ver el porqué en `backend/migrations/059_empleados_roles.sql:3-16`. Las 3 columnas conviven hoy en DB (`cargo`, `rol`, `roles`). La UI muestra siempre `roles` con fallback: `ficha/DatosEmpleadoSection.tsx:19`, `EmpleadosTable.tsx:78`, y el form ya no manda `cargo` (`frontend/types/empleado.ts:70`). | El DROP de `cargo` y `rol` está diferido a la tarea "S6" (`migrations/059:15-16`). Quedan fallbacks `?? cargo` en 2 lugares del front. Es 1 campo multi-valor, no 1 campo renombrado. |
-| 3 | **Historial de cambios en el legajo** (rol, área, seniority, sueldo) visible en la ficha | E2 | — | **CERRADO** | Dos secciones en la ficha, separadas a propósito. **Cambios**: `HistorialCambiosSection.tsx`, del audit log filtrado por `entidad="empleado"` + `registro_id`, con paginado y modal — cubre rol, área y seniority, que son columnas de `empleados`. **Sueldo**: `HistorialSalarialSection.tsx`, que NO sale del log sino de la serie de `costos_nomina` (`GET /api/costos/nomina/empleado/{id}`): `UNIQUE (empleado_id, anio, mes)` hace que la progresión ya esté en los datos. No se fusionaron: dos fuentes paginadas server-side no se combinan sin traer todo, y las formas no son compatibles. Gateado por `Seccion.COSTOS` en backend y front. | 🔴 **DOS SALVEDADES.** (1) **El historial de sueldo sale vacío hoy**: `costos_nomina` tiene 0 filas en producción. La capacidad está entregada y testeada, el valor aparece cuando RRHH cargue nómina. (2) Hasta esta tanda, el historial de los otros tres campos **mostraba datos falsos**: 93 de 113 eventos afirmaban que el área y la empresa del empleado se habían vaciado, por un diff que comparaba el registro leído con joins contra el devuelto sin ellos. Corregido; los eventos viejos no se borran y se renderizan como "se editó, sin cambios en campos auditados". |
-| 4 | **Historial de vacaciones desde el ingreso**, accesible desde el legajo | E2 | — | **HECHO** | `frontend/components/features/empleados/ficha/VacacionesSection.tsx`, montada en `empleados/[id]/page.tsx:103`. Consume `GET /vacaciones/empleado/{id}` (`VacacionesSection.tsx:48`), sin recorte de fecha → trae todo el histórico. Muestra desde / hasta / días / estado. Solo lectura. | — (hoy sale vacío: `solicitudes_vacaciones` tiene 0 filas en producción — bloqueo de datos, no de código) |
-| 5 | **Inventario asignado visible en el legajo** | E2 | — | **HECHO** | `frontend/components/features/empleados/ficha/InventarioSection.tsx`, montada en `empleados/[id]/page.tsx:101`. Consume `GET /inventario/asignaciones?empleado_id=` (`:47`). Muestra equipo, N° de serie, fecha de asignación y estado de devolución. Solo lectura. | — (hoy vacío: `inventario_items` tiene 0 filas en producción) |
+| | Cantidad | Lectura |
+|---|---:|---|
+| ✅ Terminado y probado | **13** | Funcionando con datos reales |
+| 🟡 Terminado, sin probar | **14** | Construido y esperando datos o una acción |
+| 🔴 Falta | **17** | De los cuales **12 son del frente AWS**, que no se empezó |
 
-> **Extra no comprometido, presente en la ficha:** adjuntos (`AdjuntosSection`, `:100`) y cesiones (`CesionesSection`, `:104`), más el botón de iniciar offboarding (`:80-88`). La ficha tiene hoy 6 secciones — `empleados/[id]/page.tsx:99-104`.
+**Fuera de eso hay 20 entregas más que no estaban comprometidas** (sección "Lo entregado que no
+estaba comprometido") y **5 fallas graves que se encontraron y arreglaron** sin que nadie las
+hubiera reportado (sección siguiente).
 
-### Bloque 2 — Import / Export (Entrega 2)
+🔴 **El titular:** el sistema está mucho más construido de lo que se puede demostrar hoy. **El
+cuello de botella no es desarrollo: son los datos.** Ocho módulos abren pantallas vacías porque
+RRHH todavía no cargó vacaciones, ausencias, sueldos, inventario ni capacitaciones.
 
-| # | Ítem | Entrega | Est. orig. | Estado | Evidencia | Qué falta |
-|---|---|---|---|---|---|---|
-| 6 | **Export de inventario, evaluaciones y objetivos** | E2 | — | **HECHO** (los 3) | Inventario: dos exports — ítems `routers/inventario_items.py:34` y asignaciones `routers/inventario_asignaciones.py:43`; UI en `components/features/inventario/ItemsTab.tsx` y `AsignacionesTab.tsx`. Evaluaciones: dos — desempeño `routers/ev_instancias.py:33` y resultados importados `routers/evaluaciones_resultados.py:64`; UI vía `services/evaluacionReportes.ts`. Objetivos: `routers/objetivos.py:46`; UI en `app/(dashboard)/objetivos/page.tsx`. | — |
-| 6b | Inventario de exports — **quién tiene y quién no** | E2 | — | **PARCIAL** (10 módulos de ~25) | **CON export** (10 endpoints, todos con `Content-Disposition` en `backend/routers/`): empleados, vacaciones, ausencias, capacitaciones (asignaciones), inventario-ítems, inventario-asignaciones, objetivos, evaluaciones de desempeño (`ev_instancias`), evaluaciones-resultados (evaluados de un lote), reportes. **SIN export:** vacantes, candidatos, costos/nómina, presupuesto, proyectos, horas de proyecto, onboarding, offboarding, áreas, auditoría, procesos, usuarios, cesiones, sucesión, assessment, períodos. Organigrama exporta por `window.print()` del navegador, no por el motor (`app/(dashboard)/organigrama/page.tsx:60-72`). | Definir cuáles de los 16 sin export el documento comprometía. Costos/nómina y auditoría son los ausentes más notorios. |
-| 7 | **Todos los exports por `build_export` + patrón `_<modulo>_export.py`** | E2 | — | **HECHO** | Los 10 services de export importan `services.export.build_export` — único motor, sin implementaciones sueltas: `empleado_service.py:73`, `vacaciones_service.py:58`, `ausencias_service.py:48`, `asignacion_service.py:39`, `inventario_items_service.py:35`, `inventario_asignaciones_service.py:44`, `objetivo_service.py:44`, `ev_instancias_service.py:53`, `evaluacion_reportes_service.py:47`, `reporte_export_service.py:45`. Cada uno proyecta con su `construir_filas_export` en `services/_<modulo>_export.py` (9 archivos). Motor: `services/export/engine.py:24` (+ renderers `_pdf`/`_excel`/`_csv`/`_word`). | — |
-| 8 | **Import Excel (XLSX)** | E2 | — | **NO EXISTE** | `openpyxl` aparece en 2 archivos y **solo para escribir**: `services/export/_excel.py:9` (`from openpyxl import Workbook`) y `_excel_estilos.py:8` (estilos). **Cero `load_workbook`** en todo el backend. Los 3 imports que existen son CSV: `services/nomina_empleados_service.py:49`, `services/nomina_csv_service.py:40`, `services/evaluacion_import_service.py:43` — los tres `csv.DictReader`. | Todo: el reader XLSX, y sobre él los parsers de vacaciones / ausencias / objetivos / evaluaciones. **BLOQUEADO** además por los archivos de ejemplo de RRHH: sin ellos no se define el formato. |
+---
 
-### Bloque 3 — Filtros (Entrega 3)
+## Entrega 2 — 16 ítems
 
-| # | Ítem | Entrega | Est. orig. | Estado | Evidencia | Qué falta |
-|---|---|---|---|---|---|---|
-| 9a | Filtro por **área** en capacitaciones | E3 | — | **HECHO** end-to-end | Repo `repositories/asignacion_repo.py:36,39-40` (resuelve empleados del área y filtra) → service `services/asignacion_service.py:32,34` → router `routers/asignaciones_capacitacion.py:23,26` → UI `components/features/capacitaciones/AsignacionesTab.tsx:57,112`. El export acepta el mismo filtro (`asignaciones_capacitacion.py:30-31`, UI `:126`). | — |
-| 9b | Filtro por **área** en inventario | E3 | — | **NO EXISTE** | `routers/inventario_items.py:34` solo acepta `estado`; `routers/inventario_asignaciones.py:43-50` solo `empleado_id`. Sin `area_id` en repo, service, router ni UI. | Las 4 capas. |
-| 9c | Filtro por **área** en objetivos | E3 | — | **NO EXISTE** | `routers/objetivos.py:46,53` acepta `estado`, `responsable_id`, `prioridad`. Sin `area_id`. Agravante estructural: `objetivos.responsable_id` es FK a **`users`**, no a `empleados` (`backend/schemas/objetivo.py:5`), así que un objetivo no tiene área derivable. | Las 4 capas **y** definir de dónde saldría el área (hoy el modelo no la puede inferir). |
-| 9d | Filtro por **área** en proyectos | E3 | — | **NO EXISTE** | `routers/proyectos.py:27-31` acepta solo `estado`; la UI también solo estado (`app/(dashboard)/proyectos/page.tsx:83,120`). El área aparece únicamente **dentro** del modal de asignación, para filtrar candidatos a asignar (`components/features/proyectos/AsignarEmpleadosModal.tsx`), no para filtrar el listado. | Las 4 capas. |
-| 10 | Filtro por **proyecto** en colaboradores, vacaciones, ausencias y evaluaciones | E3 | — | **NO EXISTE** (0 de 4) | Grep de `proyectoFiltro` / `proyecto_id` en `frontend/app`, `frontend/components` y `frontend/services` excluyendo el propio módulo de proyectos: **cero resultados**. Backend: `routers/empleados.py:24` (area/estado/search/es_lider), `routers/vacaciones.py:30-38` (area/empleado/estado), `routers/ausencias.py:26-33` (area/empleado/tipo), `routers/evaluaciones_resultados.py:57-61` (sector/perfil/con_nota). Ninguno acepta `proyecto_id`. | Las 4 capas × 4 módulos. La tabla puente `proyecto_asignaciones` existe y tiene 19 filas, así que el dato está — falta el filtro. |
+| # | Ítem comprometido | Estado | Evidencia | Qué falta / cómo quedó |
+|---|---|---|---|---|
+| **1** | Roles: administración completa, gerencia solo lectura, mandos medios sobre vacaciones y ausencias de su área | 🟡 | `backend/utils/permisos.py:78` (los tres roles) · `:107-112` (qué puede cada uno) · `:73` (mandos medios: solo vacaciones y ausencias) · espejo en la pantalla: `frontend/services/permisos.ts` | Los roles de administración y gerencia se usan todos los días. **El rol de mandos medios nunca se probó: no existe ningún usuario con ese rol.** Y hay un cambio de alcance: el alcance de un mando medio **no es su área, es la gente que le reporta** (`services/ownership.py`). Recién ahora es probable, porque el jefe de cada persona está cargado en 11 de 31 empleados |
+| **2** | Aislamiento real por empresa: validar la empresa activa contra el acceso del usuario | ✅ | Barrera de empresa en **92 endpoints** (commits `bd95e98` + `9d7baa7`): toda consulta filtra por la empresa del pedido · validación de la empresa recibida: `backend/middleware/_empresa_header.py:13,17,47` | **Cambió de alcance, a favor.** No existe "acceso por usuario" porque la decisión de producto es que **todo usuario ve todas las empresas** — no hay tabla `acceso_empresa` y no la va a haber. El aislamiento se resolvió por una vía más fuerte: antes, el identificador de un dato de otra empresa entraba igual y la operación se ejecutaba sobre él; hoy responde "no encontrado". **Probado con las 2 empresas cargadas** |
+| **3** | Registro de cambios en todos los módulos + pantalla de historial | ✅ | 29 servicios registran eventos · pantalla `frontend/app/(dashboard)/auditoria/page.tsx` · en el menú: `nav-config.ts:85` · **139 eventos reales** en la base | Dos huecos conocidos: la **importación de sueldos no deja registro** (`routers/importacion_nomina.py`), y un registro de presupuesto se etiqueta con la empresa que el usuario tiene seleccionada en pantalla en vez de la del dato (`services/_costos_write.py:80`). Con una sola empresa operando todavía no causó ningún error |
+| **4** | Bloqueo de módulos con fecha configurable desde el panel | 🟡 | Tabla `periodos_cerrados` · `backend/routers/periodos.py`, activo en `main.py:171` · pantalla `/periodos` en el menú (`nav-config.ts:91`) · el bloqueo se aplica en vacaciones, ausencias y sueldos | **Nunca se cerró un período: la tabla tiene 0 filas.** Y hay una limitación de diseño que conviene saber: `services/_periodo_utils.py:57` hace que **el bloqueo solo alcance a los mandos medios**. Un usuario de administración puede seguir cargando sobre un período cerrado |
+| **5a** | Legajo: **sexo** | ✅ | `backend/schemas/empleado.py:63` · se ve y se edita en la ficha | — |
+| **5b** | Legajo: **horas de contrato** | ✅ | `schemas/empleado.py:69` | — |
+| **5c** | Legajo: **gerencia** | ✅ | `schemas/empleado.py:71` | — |
+| **5d** | Legajo: **superior inmediato** | ✅ | `schemas/empleado.py:103,121` · **cargado en 11 de 31 empleados** | Se completa con la importación de nómina. Falta que RRHH complete los 20 restantes |
+| **5e** | Legajo: **domicilio completo** | 🟡 | Seis campos separados —calle, número, piso, localidad, provincia, código postal— en `schemas/empleado.py:80-85`; la provincia es una lista cerrada de las 24 jurisdicciones (`schemas/_provincias.py`) | **Los seis campos están vacíos para los 31 empleados.** Falta que RRHH los cargue. Hasta entonces no hay nada que consultar ni agrupar por provincia |
+| **5f** | Legajo: **liderazgo** | 🔴 | El campo existe en la base pero **no aparece en ningún formulario ni pantalla**: no está en `schemas/empleado.py`. Lo único que lo escribe es la importación de nómina | Lo que sí se ve es un Sí/No de "es líder". Falta decidir si ese Sí/No reemplaza al campo de liderazgo comprometido, o si hay que mostrarlo |
+| **5g** | Legajo: **presencialidad** | 🔴 | **No existe un campo con ese nombre.** Lo más cercano es "modalidad de trabajo" (presencial / remoto / híbrido), en `schemas/empleado.py:55,97` | Falta confirmar qué se comprometió. Si era presencial/remoto/híbrido, ya está. **Si era un porcentaje o una cantidad de días presenciales por semana, no hay dónde guardarlo** |
+| **5h** | Legajo: renombrar **cargo → rol** | ✅ | `schemas/empleado.py:54` | **Se hizo distinto y es mejor:** no se renombró un campo, se unificaron los dos que había (cargo y rol) en **una lista de roles**, porque una persona puede tener más de uno. El campo viejo quedó marcado como obsoleto (`:58`) |
+| **6a** | Historial de cambios de rol, área y seniority en la ficha | ✅ | `frontend/components/features/empleados/ficha/HistorialCambiosSection.tsx`, montado en `app/(dashboard)/empleados/[id]/page.tsx:104` · sale de los 139 eventos registrados | — |
+| **6b** | Historial de **sueldo** en la ficha | 🟡 | `ficha/HistorialSalarialSection.tsx`, montado en `empleados/[id]/page.tsx:103` | 🔴 **Sale vacío para todos los empleados: no hay ni un sueldo cargado** (`costos_nomina`, 0 filas). La pantalla está terminada; **falta que RRHH cargue la nómina** |
+| **7** | Adjuntos en legajo, motivos, vacaciones, ausencias y offboarding | 🟡 | `backend/services/_adjunto_padres.py:51-56` — soporta legajo, vacaciones, ausencias, offboarding **y búsquedas de personal** (esta última no estaba comprometida) | **Hay 1 solo archivo cargado en todo el sistema**, y por un problema de datos viejos está inaccesible. **"Motivos" no existe como entidad**: falta definir a qué apuntaba. La prueba de subida y descarga real contra el almacenamiento **nunca se corrió** |
+| **8** | Historial de vacaciones desde el ingreso, en la ficha | 🟡 | `ficha/VacacionesSection.tsx`, montado en `empleados/[id]/page.tsx:105`, sin recorte de fechas | 🔴 **No hay ni una vacación cargada** (`solicitudes_vacaciones`, 0 filas). Falta el archivo histórico de RRHH |
+| **9** | Inventario asignado dentro de la ficha | 🟡 | `ficha/InventarioSection.tsx`, montado en `empleados/[id]/page.tsx:102` | 🔴 **No hay ni un equipo cargado** (`inventario_items`, 0 filas) |
+| **10** | Importar vacaciones desde Excel, por área o equipo | 🔴 | **El sistema no sabe leer archivos Excel.** Lo verificamos: no hay una sola línea que abra un Excel en todo el backend. Las tres importaciones que existen leen CSV | Falta construir el lector de Excel y el formato de vacaciones. **Bloqueado además por RRHH**: el archivo histórico solo identifica a la gente por número de legajo, y el legajo **está vacío en los 31 empleados** |
+| **11** | Importar objetivos desde Excel | 🔴 | Ídem. No existe ningún camino de importación de objetivos | Falta todo. Es el ítem menos avanzado de la Entrega 2 |
+| **12** | Importar evaluaciones de un sistema externo: promedios y nota única | ✅ | `backend/services/evaluacion_import_service.py` · promedios en `services/_evaluacion_metricas.py:33,58,80` · **funcionando con datos reales: 1 lote de julio 2026, 10 evaluados, 307 resultados** | **Dos diferencias con lo escrito:** el archivo es **CSV, no Excel** (es el formato que entrega el sistema externo, no lo elegimos), y **la nota única no la calcula nuestro sistema: viene ya calculada en el archivo**. Lo que sí calcula el sistema son todos los promedios y comparaciones |
+| **13** | Exportar en Inventario, Evaluaciones y Objetivos | 🟡 | Inventario: `routers/inventario_items.py:35` y `inventario_asignaciones.py:49` · Objetivos: `routers/objetivos.py:49` · Evaluaciones: `routers/ev_instancias.py:35` y `evaluaciones_resultados_export.py:28` | **Solo el de evaluaciones se probó con datos reales.** Inventario exporta un archivo vacío (0 equipos) y objetivos casi vacío (1 objetivo) |
+| **14a** | Un solo formato estándar de exportación | ✅ | Los 12 exportadores pasan por el mismo motor (`services/export/`), en 4 formatos: PDF, Excel, CSV y Word | — |
+| **14b** | Exportación **en todos los módulos** | 🔴 | Hoy exportan 12: empleados, vacaciones, ausencias, capacitaciones, inventario (2), objetivos, evaluaciones (2), reportes, **sueldos** y **auditoría** | **Faltan 14 módulos**: búsquedas de personal, candidatos, proyectos, horas, onboarding, offboarding, áreas, procesos, usuarios, cesiones, sucesión, assessment, períodos y presupuesto. El organigrama "exporta" imprimiendo la pantalla desde el navegador, no con el motor |
+| **15** | Vacaciones: historial desde el ingreso accesible desde el legajo | 🟡 | Es el mismo ítem que el 8 (aparece dos veces en el documento entregado) | Mismo estado: la pantalla está, no hay datos |
+| **16** | Proyectos: asignar áreas o equipos completos, con selector automático | 🟡 | `backend/routers/proyecto_asignaciones.py:49` — asignar un área entera de una vez · también asignación múltiple manual (`:41`) | **Por área funciona; por equipo no existe** y no se va a construir: "equipo" es un campo de texto libre que nadie completó, así que no hay nada que agrupar. 🔴 **Y hay un problema de datos que lo rompe en silencio: dos de las 12 áreas son la misma, cargada con dos grafías distintas** (`GESTION DE DEUDA` y `GD - GESTION DE DEUDA`). Asignar esa área asigna a la mitad de la gente |
 
-### Bloque 4 — Migraciones correctivas de `empresa_id` (Entrega 3)
+---
 
-| # | Ítem | Entrega | Est. orig. | Estado | Evidencia | Qué falta |
-|---|---|---|---|---|---|---|
-| 11 | `costos_nomina` y `presupuesto_areas` con **`empresa_id`** | E3 | — | **HECHO** | Catálogo real: `costos_nomina.empresa_id` (uuid) y `presupuesto_areas.empresa_id` (uuid), ambas presentes. Origen: `backend/migrations/055_retrofit_empresa_id.sql:58` y `:69`. | — |
-| 12 | Tablas de **assessment** (migs 020–021) con `empresa_id` | E3 | — | **HECHO** (las 4, no solo 020–021) | Catálogo real: `assessment_campanas`, `assessment_links`, `assessment_resultados`, `assessment_reportes` — las cuatro con `empresa_id`. Origen: `migrations/055_retrofit_empresa_id.sql:113,124,135,146`. | — |
-| 13 | Tablas de **sucesión** con `empresa_id` | E3 | — | **HECHO** | Catálogo real: `sucesion_posiciones`, `planes_carrera`, `planes_carrera_hitos` — las tres con `empresa_id`. Origen: `migrations/055_retrofit_empresa_id.sql:80,91,102`. | — |
-| 13b | Cobertura general de `empresa_id` | E3 | — | **PARCIAL, por diseño** | De 51 tablas de `public`, **8 no llevan `empresa_id`** y en 7 casos es correcto: `empresas` (es la tabla raíz), `users` y `usuario_integraciones` (los usuarios no cuelgan de empresa — decisión de producto), `tipos_ausencia` (catálogo global), `evaluacion_evaluados` y `evaluacion_resultados` (hijas: alcanzan la empresa por `lote_id`), `notificaciones` / `notificaciones_config` (schema muerto, ver #14). El caso a mirar es **`proyecto_asignaciones`**, que no tiene `empresa_id` sino `empleado_empresa_id` (uuid) — modelo distinto a propósito (un proyecto cruza empresas), pero rompe el patrón del resto. | Confirmar que `proyecto_asignaciones.empleado_empresa_id` es la decisión final y no un retrofit incompleto. |
+## Entrega 3 — 16 ítems
 
-### Bloque 5 — Infraestructura de features no construidas (Entrega 3)
+| # | Ítem comprometido | Estado | Evidencia | Qué falta / cómo quedó |
+|---|---|---|---|---|
+| **1** | Sistema de alertas configurables: motor periódico y pantalla de configuración | 🔴 | Buscamos la palabra en todo el sistema: **no hay una sola línea de código**. Las dos tablas que el documento llamaba "infraestructura existente" están **vacías y nunca se usaron** | Falta todo. **Y no hay "infraestructura que activar"**: son dos tablas sin catálogo de eventos ni de canales de aviso. Es construcción desde cero. ⚠️ Sí se construyó otra cosa parecida y no comprometida: **las alertas del tablero** (ver más abajo), que avisan de campos sin completar y módulos sin datos, pero **no son configurables ni corren solas** |
+| **2** | Plantillas de mail editables + envío por Resend | 🟡 | Tabla `plantillas_mail` · pantalla de edición en `/configuracion` · `backend/routers/plantillas.py:41,47,53,58,64` · motor de envío en `services/mailer/` | **Cambió el proveedor: los mails salen por Gmail, no por Resend** (se sacó del sistema; ver "Cambios de alcance"). 🔴 **El sistema todavía no puede mandar un solo mail.** Falta una acción de Franco: **designar cuál de las casillas conectadas es la casilla oficial del sistema**. Hoy hay una cuenta de Google conectada, pero ninguna marcada como oficial, y **no existe el botón para marcarla** — hay que construirlo. No hay plantillas escritas ni mails enviados |
+| **3** | Filtro por área en capacitaciones, inventario, objetivos y proyectos | 🟡 | Capacitaciones ✅ `routers/asignaciones_capacitacion.py` · Inventario (asignaciones) ✅ `routers/inventario_asignaciones.py:31,51` · Proyectos ✅ `routers/proyectos.py:30` | **Falta en 2 de 5 pantallas:** el listado de equipos de inventario (`routers/inventario_items.py:28`) y **objetivos** (`routers/objetivos.py:30-32`). En objetivos hay un impedimento de fondo: un objetivo se asigna a un usuario del sistema, no a un empleado, así que **no tiene área de la cual colgar**. Y los tres que existen no se pudieron probar de verdad: con 12 áreas y 31 empleados casi cualquier filtro devuelve casi todo |
+| **4** | Filtro por proyecto en colaboradores, vacaciones, ausencias y evaluaciones | 🟡 | **Los cuatro lo tienen**, y el exportar acepta el mismo filtro que la pantalla: `routers/empleados.py`, `vacaciones.py`, `ausencias.py`, `evaluaciones_resultados.py` | Falta probarlo con volumen: vacaciones y ausencias **están vacías**, así que dos de los cuatro filtros nunca devolvieron una fila |
+| **5** | Objetivos: subobjetivos, varios responsables, fechas de entrega distintas | 🔴 | Los tres faltan. `backend/schemas/objetivo.py:22`: **un solo responsable**, y `:5` documenta que es un usuario del sistema, no un empleado. No hay jerarquía ni fechas por subobjetivo | Requiere rediseñar el modelo de datos. 🟢 **La buena noticia: hay 1 solo objetivo cargado, así que hacerlo ahora es barato. Con datos cargados se vuelve caro** |
+| **6** | Evaluaciones: estadísticas anuales, evolución por empleado, comparativas por área, gráficos exportables | 🔴 | Todas las pantallas de evaluaciones trabajan sobre **una sola carga por vez**: `routers/evaluaciones_resultados.py:48,55,65`. No hay comparación entre períodos | Falta construirlo, **y está bloqueado por datos**: hay **una sola carga de evaluaciones** (julio 2026). Sin una segunda, ninguna comparación temporal tiene con qué compararse |
+| **7** | Offboarding: formulario estructurado + estadísticas de motivos con análisis de IA | 🟡 | Formulario con motivos tipificados · **entrevista de salida activada**: `repositories/offboarding_repo.py:71,76` y `routers/offboarding.py:75` — eran dos campos que existían en la base y **no los usaba nadie** | 🔴 **No hay ni un egreso cargado** (`offboarding_instancias`, 0 filas). **El análisis con IA no existe.** Sí hay un reporte de rotación por motivo (`services/reportes/_reporte_movimientos.py:44,52`), pero vive en el módulo de reportes y no es lo mismo |
+| **8** | Organigrama: cards de proyectos desplegables con equipo y datos del contrato | 🟡 | `frontend/components/features/organigrama/CardsProyecto.tsx`, vista activa (`app/(dashboard)/organigrama/page.tsx:22`) | **Los datos del contrato no están en la card**: muestra el equipo y el rol de cada persona (`CardsProyecto.tsx:28`), no el valor hora ni las fechas. Y **dos de las tres vistas están apagadas** (`page.tsx:20-21`), incluido el organigrama clásico por empresa y área: está construido y no se puede llegar a él |
+| **9** | Assessment: reactivar la pantalla + envío de links por mail + PDF de resultados | 🔴 | Ninguna de las tres. La pantalla está apagada (`frontend/app/(dashboard)/assessment/page.tsx:74`), el backend **está desconectado** (`backend/main.py:141`), el envío de links **no manda ningún mail** (`services/assessment_service.py:77-94` solo genera el link) y **no hay ninguna generación de PDF** | El módulo se apagó por decisión (ver "Cambios de alcance"). **El ítem pedía reactivarlo y se hizo lo contrario**, con motivo: estaba abierto sin contraseña |
+| **10** | Assessment: empresa en las tablas de las migraciones 020-021 | ✅ | Las **cuatro** tablas de assessment tienen el campo de empresa (`migrations/055_retrofit_empresa_id.sql:113,124,135,146`) | Se hizo sobre las cuatro, no solo sobre las dos comprometidas |
+| **11** | Sueldos: corregir empresa en nómina y presupuesto | ✅ | `migrations/055_retrofit_empresa_id.sql:58,69` — verificado en la base | — |
+| **12** | Sucesión: corregir consultas lentas + empresa en sus tablas | ✅ | Consultas: commit `51832e2` — el análisis por área hacía **una consulta por empleado**; con 200 empleados pasó de **201 consultas a 2** · empresa: `migrations/055:80,91,102` | — |
+| **13** | AWS: Dockerfile + docker-compose | 🔴 | No existe ninguno de los dos en el repositorio | El frente AWS no se empezó |
+| **14** | AWS: CI/CD con GitHub Actions | 🔴 | No existe la carpeta de configuración de GitHub Actions | Ídem |
+| **15** | AWS: ECS + balanceador + DNS | 🔴 | Sin configuración de infraestructura en el repositorio. Hoy el sistema corre en Vercel | Ídem |
+| **16** | AWS: monitoreo CloudWatch + alertas de error | 🔴 | Sin configuración de monitoreo | Ídem |
 
-| # | Ítem | Entrega | Est. orig. | Estado | Evidencia | Qué falta |
-|---|---|---|---|---|---|---|
-| 14 | **Alertas configurables** | E3 | — | **NO EXISTE** (solo el schema, vacío) | Grep de `notificacion` en todo `backend/` y `frontend/`: **cero resultados**. No hay router, service, repo, motor periódico ni UI. Las tablas existen (migs 022/023) y están **vacías**: `notificaciones` 0 filas, `notificaciones_config` 0 filas. Contenido real: `notificaciones (id, user_id, tipo, titulo, mensaje, referencia_tipo, referencia_id, leida, leida_en, created_at)` — cuelga de `user_id`, sin `empresa_id`; `notificaciones_config (id, user_id, tipo_evento, canal, activo, created_at, updated_at)` — un on/off por usuario × evento × canal, **sin ningún catálogo de eventos ni de canales** (ambos son varchar libre). | Absolutamente todo el código. La "infraestructura existente" son 2 tablas vacías de 10 y 7 columnas, sin FKs de negocio ni catálogo — cubren menos de lo que el nombre sugiere. |
-| 15 | **Plantillas de mail** | E3 | — | **NO EXISTE** | No existe tabla `email_templates` (ni ninguna con `template` o `plantilla` en el nombre) en el catálogo de `public`. Grep de `email_template` / `plantilla_mail`: cero. Resend: **solo la env var** — `backend/config/settings.py:26-28` (`resend_api_key`, `resend_from_email`) y una aserción en `tests/test_critical_flows.py:135,140`. **Ningún service importa Resend**: hoy el sistema no envía un solo mail. | Tabla, UI de edición, y la integración real de Resend (que no está empezada). |
-| 16 | **Bloqueos por módulo con fecha configurable** (cierre de novedades) | E3 | — | **HECHO** — desmiente lo esperado | **Existe y está completo.** Tabla `periodos_cerrados (id, empresa_id, modulo, desde, hasta, estado, cerrado_por, cerrado_at, reabierto_por, reabierto_at)` (mig `062_periodos_cerrados.sql`). Backend: `routers/periodos.py` (listar / cerrar / reabrir, gate `Seccion.PERIODOS`), `services/periodo_service.py` (audita cierre y reapertura), `repositories/periodo_repo.py`. La validación que rechaza escrituras fuera de plazo vive centralizada en `services/_periodo_utils.py::verificar_periodo_abierto`, y está enganchada en 7 puntos de escritura: vacaciones (`vacaciones_service.py:99,138`), ausencias (`_ausencias_write.py:43,68,69,106`) y costos (`costo_service.py:103`). UI completa: `app/(dashboard)/periodos/page.tsx` + `components/features/periodos/PeriodoForm.tsx` y `PeriodoList.tsx`, en el sidebar bajo "Administración" (`nav-config.ts`). Compara contra el **rango de fechas del registro** (solapamiento), no contra la fecha de carga (`_periodo_utils.py:36-38,63-72`). Tests: `tests/test_periodos.py`, `tests/test_periodos_enganche.py`. | Un hueco real, no de infraestructura: **solo bloquea a `mandos_medios`** — admin_rrhh y gerencia_lectura nunca se frenan, por diseño explícito (`_periodo_utils.py:57`). ~~(b) el enganche de costos pasa `rol=None` hardcodeado~~ — **CERRADO en el Bloque A3**: `routers/costos_escrituras.py:39` pasa `u.get("rol")` y `costo_service.cargar_nomina` lo reenvía, así que el check ya no es un no-op en costos. |
-| 17 | **Objetivos: subobjetivos, múltiples responsables, fechas diferenciadas** | E3 | — | **NO EXISTE** (los 3) | Catálogo real de `objetivos`: `(id, empresa_id, responsable_id, titulo, descripcion, prioridad, estado, fecha_entrega, created_at, updated_at)`. **Sin `parent_id`** → no hay jerarquía. **`responsable_id` es un uuid escalar** (`schemas/objetivo.py:22`), y encima FK a `users`, no a `empleados` (`schemas/objetivo.py:5`) → no hay múltiples responsables ni se puede asignar a un empleado. **Una sola `fecha_entrega`** → no hay fechas diferenciadas. La tabla tiene **0 filas** en producción. | Rediseño del modelo de datos (tabla de jerarquía + tabla puente de responsables + fechas por subobjetivo). Es el ítem más lejano de todos los del bloque. |
-| 18 | **Organigrama** | E3 | — | **PARCIAL / DISTINTO** | Hoy renderiza **una sola vista: "Por proyecto · cards"**. Las otras dos están escritas pero apagadas por flag: `app/(dashboard)/organigrama/page.tsx:19-23` — `{empresa, visible:false}`, `{proyecto-arbol, visible:false}`, `{proyecto-cards, visible:true}`. Con una sola vista visible ni siquiera se dibujan los tabs (`:88`). Datos: `fetchOrgProyectos()` → `GET /api/organigrama/proyectos` (`routers/organigrama.py:36`) → `services/organigrama_proyectos_service.py`, o sea **proyectos + sus asignaciones** (`proyecto_asignaciones`, 19 filas / `proyectos`, 6 filas). El árbol clásico Empresa→Área→Empleado tiene endpoint vivo y gateado (`routers/organigrama.py:27`) pero **es inalcanzable desde la UI**. Export = `window.print()` del navegador (`page.tsx:60-72`), no el motor de export. | Decidir si el rediseño está cerrado. Hoy conviven un endpoint huérfano (`GET /api/organigrama`) y dos componentes sin punto de entrada (`ArbolEmpresa`, `ArbolProyecto`). Reactivar cada vista es poner su `visible` en `true`. |
-| 19 | **Offboarding: formulario estructurado con motivos tipificados** | E3 | — | **PARCIAL** | Los motivos **sí están tipificados**: `MotivoEgreso = Literal["renuncia","despido","acuerdo_mutuo","fin_contrato","jubilacion","fallecimiento","otro"]` (`backend/schemas/offboarding.py:12-15`), con dropdown en `components/features/empleados/ficha/OffboardingModal.tsx:17,73`. Captura hoy: `empleado_id`, `motivo` (tipificado), `fecha_ultimo_dia`, `descripcion_motivo` (texto libre) — `schemas/offboarding.py:18-22` — más checklist de activos y accesos (`ActivoResponse`, `AccesoResponse`, `:26-38`). | **La entrevista de salida no existe como formulario.** Las columnas `offboarding_instancias.entrevista_salida` (boolean) y `notas_entrevista` (text) están en DB y tienen **cero referencias en todo el código** (backend y frontend) — son columnas muertas. Tampoco hay estadísticas por motivo. La tabla tiene 0 filas en producción. |
-| 20 | **Evaluaciones: estadísticas anuales / cruce de más de un lote** | E3 | — | **NO EXISTE** | Los 7 endpoints de reporting de evaluaciones cuelgan todos de **un único `lote_id`**: `/lotes/{lote_id}/metricas`, `/evaluados`, `/evaluados/export`, `/evaluados/{id}/ficha` (`routers/evaluaciones_resultados.py:49,56,64,77`). El único endpoint sin `lote_id` es `GET /lotes` (`:25`), que lista lotes para el selector — no agrega nada. Los cálculos (`services/_evaluacion_metricas.py`) operan sobre las filas de un lote. **No hay evolución por empleado, ni comparativa temporal, ni ranking entre períodos.** En producción hay **1 solo lote** (Julio 2026), así que ninguna comparativa tendría datos aún. | Endpoints de estadística cross-lote + modelo de series temporales + librería de gráficos en el front. Ojo con el invariante ya documentado: las competencias de perfil líder y general **no se pueden mezclar** en un mismo ranking. |
+---
 
-### Bloque 6 — Seguridad y AWS
+## Frente AWS — 12 tareas
 
-| # | Ítem | Entrega | Est. orig. | Estado | Evidencia | Qué falta |
-|---|---|---|---|---|---|---|
-| 21 | **Rate limiting** | AWS/Seg. | — | **PARCIAL — 1 solo endpoint** | `slowapi` está instalado y montado: `backend/main.py:8-9,69-70` (handler de `RateLimitExceeded`) + `routers/auth.py:6-7,14` (`Limiter(key_func=get_remote_address)`). **El único endpoint limitado es `POST /api/auth/login`, a 5/minuto por IP** (`routers/auth.py:25`, documentado en `:3`). Grep de `@limiter.limit` en todo el backend: 1 sola ocurrencia. | Todo el resto de la superficie está sin límite: las 2 rutas públicas de assessment sin auth (`middleware/auth.py:28`), el formulario público de candidatos, `/api/auth/refresh`, los endpoints de import y los de export (que son caros: `page_size=100000`). |
-| 22 | **Google OAuth: verificación del callback** | AWS/Seg. | — | **DISTINTO — usa el `user_id`, no un token CSRF** | `services/integracion_service.py:98` pasa `state=user_id` al construir la URL de autorización (documentado como tal en `:82`). El callback lo toma tal cual: `routers/integraciones.py:37-44` → `_service().handle_google_callback(user_id=state, code=code)`. El `state` es **el UUID del usuario**, valor estable y adivinable, no un nonce aleatorio de corta duración, y **no se valida contra nada guardado del lado servidor**. Agravante: `/api/integraciones/google/callback` está en `PUBLIC_ROUTES` (`middleware/auth.py:25`), o sea que se alcanza sin JWT. | Un `state` aleatorio, de un solo uso y con TTL corto, persistido server-side y verificado en el callback. Tal como está, el `state` no cumple su función anti-CSRF. |
-| 23 | **`middleware/auth.py`: validación de `X-Empresa-Id`** | AWS/Seg. | — | **NO EXISTE** (ninguna de las dos validaciones) | `backend/middleware/auth.py:133-141`: se lee el header, se descarta si es vacío o `"todas"`, y lo único que se hace es `UUID(empresa_header)` — **una validación de formato**. Si parsea, se guarda en `request.state.empresa_id`; si no, queda `None`. **No se consulta `empresas`** para ver si existe, y **no se consulta ninguna tabla de acceso** para ver si el usuario la tiene habilitada. El resolver aguas abajo (`utils/empresa.py:14-20`) tampoco valida. | La verificación de existencia es un fix chico y localizado. La de acceso por usuario **no es implementable hoy**: la tabla `acceso_empresa` no existe y la decisión de producto vigente es que todo usuario ve todas las empresas — o sea que hoy no hay aislamiento que romper, pero tampoco red si esa decisión cambia. |
-| 24 | **Dockerfile / .dockerignore / docker-compose / GitHub Actions** | AWS | — | **NO EXISTE** (los 4) | Búsqueda en todo el repo (excluyendo `node_modules`): sin `Dockerfile`, sin `.dockerignore`, sin `docker-compose*`. No existe el directorio `.github/` → sin workflows de CI/CD. El deploy vive 100% en Vercel (`backend/vercel.json`). | El frente AWS entero. `migracionAWS/` tiene el código de aplicación (auth, `postgres_client.py` asyncpg, repos-molde, migraciones 075–077 y docs) pero **cero infraestructura**: ni contenedores, ni pipeline, ni IaC. |
+| # | Tarea | Estado | Evidencia | Qué falta |
+|---|---|---|---|---|
+| **A-1** | Dockerfile del backend | 🔴 | No existe | — |
+| **A-2** | `.dockerignore` | 🔴 | No existe | — |
+| **A-3** | Servicios de AWS (servidores, balanceador, certificados, registro de imágenes, monitoreo) | 🔴 | Sin configuración en el repositorio | Es trabajo del dev de infraestructura, no del código |
+| **A-4** | Dominio y DNS en Route 53 | 🔴 | El dominio hoy lo sirve Vercel | — |
+| **A-5** | Variables de configuración en Parameter Store | 🔴 | Hoy viven en Vercel | — |
+| **A-6** | Dirección de producción en Google | **NO DETERMINADO** | El valor real no vive en el repositorio: está en Vercel y en la consola de Google. **Evidencia indirecta de que funciona**: hay una cuenta de Google conectada el 3/8/2026 con permisos de lectura y envío, o sea que el circuito completó al menos una vez | Confirmarlo en la consola de Google |
+| **A-7** | CI/CD con GitHub Actions | 🔴 | No existe | — |
+| **A-8** | Docker Compose para desarrollo local | 🔴 | No existe | — |
+| **B-1** | Límites de uso en reportes con IA e importaciones masivas | ✅ | **23 límites configurados** en todo el sistema, por nivel de riesgo: importaciones 10 por hora, exportaciones 30 por hora, reportes con IA 20 por hora, login 5 por minuto, y un límite general para todo lo demás (`backend/main.py:90`) | Cubre y excede lo pedido. **Con una salvedad honesta**: los contadores viven en memoria de cada proceso, así que con varios procesos el límite real es más alto. Cerrarlo del todo es una tarea de infraestructura |
+| **B-2** | Preguntas del assessment configurables desde el panel | 🔴 | No existe ninguna tabla de preguntas: las cuatro tablas de assessment son campañas, links, reportes y resultados (`backend/db/schema.sql:72,89,104,120`) | El módulo además está apagado |
+| **B-3** | Seguridad del circuito de Google: token de un solo uso | ✅ | Tabla `oauth_states` · `backend/services/_oauth_state.py` · `_google_oauth.py:63,97` | **Se hizo, y era más grave de lo que el documento sugería**: antes el sistema usaba el identificador del usuario, que es un valor fijo y adivinable. Ahora es un número al azar, guardado cifrado, que vence a los 10 minutos y sirve una sola vez |
+| **B-4** | Gunicorn | 🔴 | No aparece en la configuración del backend | En Vercel no aplica; hace falta el día de la mudanza a AWS |
 
-### Bloque 7 — Los 18 módulos declarados "operativos"
+---
 
-Alcanzabilidad desde el sidebar (`frontend/components/layout/nav-config.ts`), para un usuario `admin_rrhh`:
+## Los 18 módulos declarados operativos
 
-| Módulo | Estado | Evidencia |
+| Módulo | ¿Responde el servidor? | ¿Se llega desde el menú? | Realidad |
+|---|---|---|---|
+| Tablero (dashboard) | ✅ `main.py:144` | ✅ | Operativo |
+| Colaboradores | ✅ `main.py:117-118` | ✅ | **Operativo — 31 empleados cargados** |
+| Vacaciones y ausencias | ✅ `main.py:120-124` | ✅ | 🔴 **Vacío**: 0 vacaciones, 0 ausencias |
+| Capacitaciones | ✅ `main.py:152-153` | ✅ | 🔴 **Vacío**: 0 capacitaciones |
+| Evaluaciones | ✅ `main.py:154-160` | ✅ | **Operativo — 1 carga real, 10 evaluados** |
+| Inventario | ✅ `main.py:161-162` | ✅ | 🔴 **Vacío**: 0 equipos |
+| Objetivos | ✅ `main.py:163` | ✅ | 🔴 **Casi vacío**: 1 objetivo |
+| Proyectos | ✅ `main.py:166-168` | ✅ | **Operativo — 8 proyectos, 31 asignaciones**, pero **todas con valor hora en cero** |
+| Onboarding | ✅ `main.py:129-131` | ✅ | 1 proceso cargado |
+| Offboarding | ✅ `main.py:132` | ✅ | 🔴 **Vacío**: 0 egresos |
+| Áreas | ✅ `main.py:116` | ✅ `nav-config.ts:89` | Operativo — 12 áreas, **2 son la misma duplicada**. (Hasta hace poco la pantalla existía pero **no estaba en el menú**; se agregó) |
+| Organigrama | ✅ `main.py:143` | ✅ | **1 de sus 3 vistas** está visible |
+| Búsquedas y candidatos | ✅ `main.py:127-128` | ✅ | 🔴 **Vacío**: 0 búsquedas, 0 candidatos |
+| Sueldos y nómina | ✅ `main.py:133-134` | ✅ | 🔴 **Vacío**: 0 registros de nómina |
+| **Sucesión (9-box)** | ✅ `main.py:135` — **el servidor responde igual** | 🔴 **OCULTO** | Apagado por decisión de producto. **No se borró nada**: los 11 componentes de pantalla, el servicio y las pruebas siguen ahí. Se prende cambiando dos líneas (`nav-config.ts:48` y `sucesion/page.tsx:25`) |
+| Reportes PDF/Excel + IA | ✅ `main.py:146` | ✅ | Operativo, **pero la parte de IA está oculta**: el reporte con inteligencia artificial no está en el catálogo que ve el usuario. Se reactiva en una línea |
+| Integraciones (Google, Anthropic, Zernio) | ✅ `main.py:150` | ✅ vía Configuración | **1 cuenta de Google conectada**. Anthropic y Zernio sin usar |
+| **Assessment** | 🔴 **NO responde** — `main.py:141` lo deja fuera | 🔴 **OCULTO** | Apagado por seguridad: **tenía dos direcciones abiertas sin contraseña**. Hoy responde igual que una dirección que no existe, sin delatar que el módulo está ahí. Se reactiva con una variable de configuración, sin tocar código |
+
+**En resumen:** 16 de los 18 son alcanzables; 2 están apagados a propósito. **Pero 8 de los 16
+alcanzables abren pantallas vacías** por falta de datos. Además hay **3 módulos en uso que no
+figuran en la lista de 18**: auditoría, períodos y "Mi equipo".
+
+---
+
+## Lo entregado que NO estaba comprometido
+
+Todo esto se construyó después de junio y no está contabilizado en ninguno de los dos documentos.
+
+| Qué | Estado | Evidencia |
 |---|---|---|
-| **dashboard** | **ALCANZABLE** — ítem fijo arriba del acordeón | `nav-config.ts:31-32` (`DASHBOARD_ITEM`, `seccion: null` = siempre visible) |
-| **colaboradores** (empleados) | **ALCANZABLE** — grupo "Personas" | `nav-config.ts:57` |
-| **vacaciones** | **ALCANZABLE** — "Personas" | `nav-config.ts:62` |
-| **ausencias** | **ALCANZABLE** — "Personas" | `nav-config.ts:63` |
-| **capacitaciones** | **ALCANZABLE** — "Desempeño" | `nav-config.ts:78` |
-| **evaluaciones** | **ALCANZABLE** — "Desempeño" | `nav-config.ts:79` |
-| **inventario** | **ALCANZABLE** — "Operación" | `nav-config.ts:75` |
-| **objetivos** | **ALCANZABLE** — "Desempeño" | `nav-config.ts:80` |
-| **proyectos** | **ALCANZABLE** — "Operación" | `nav-config.ts:74` |
-| **onboarding** | **ALCANZABLE** — "Incorporación" | `nav-config.ts:68` |
-| **offboarding** | **ALCANZABLE** — "Incorporación" | `nav-config.ts:69` |
-| **áreas** | **NO ESTÁ EN EL SIDEBAR** — la página existe (`app/(dashboard)/areas/page.tsx`) y la ruta responde, pero ningún ítem de `NAV_GROUPS` apunta a `/areas`. Se llega solo tecleando la URL o desde otra pantalla. | `nav-config.ts:53-92` completo, sin entrada `/areas` |
-| **organigrama** | **ALCANZABLE, con una sola de sus tres vistas** | `nav-config.ts:58` · ver ítem 18 |
-| **vacantes / selección** | **ALCANZABLE** — "Incorporación", dos ítems separados | `nav-config.ts:66` (vacantes) y `:67` (candidatos) |
-| **costos / nómina** | **ALCANZABLE** — "Análisis" | `nav-config.ts:83` |
-| **sucesión** | **OCULTO a propósito** — el ítem está construido (`SUCESION_ITEM`, `nav-config.ts:50-51`) pero solo entra al grupo si `SUCESION_ACTIVA`, que es `false` (`:48`, spread condicional en `:70`). Además la página redirige a `/dashboard` (`app/(dashboard)/sucesion/page.tsx:25,28`). Backend, componentes y tests intactos. | `nav-config.ts:48,50-51,70` |
-| **reportes** | **ALCANZABLE** — "Análisis" | `nav-config.ts:84` |
-| **assessment** | **OCULTO, y más duro que sucesión** — no hay ítem de sidebar, y las dos páginas redirigen. El detalle usa un flag (`assessment/[id]/page.tsx:75,78`), pero el **listado tiene un `router.replace("/dashboard")` incondicional seguido de `return null` y todo el cuerpo real detrás de un `eslint-disable no-unreachable`** (`app/(dashboard)/assessment/page.tsx:74-77`). Backend entero y expuesto, con 2 rutas públicas sin auth (`middleware/auth.py:28`). | `assessment/page.tsx:74-77` |
-| **configuración de integraciones** | **ALCANZABLE** — "Administración" → Configuración | `nav-config.ts:91` |
-
-**Resumen:** de los 18 declarados operativos, **15 son alcanzables** desde el sidebar, **2 están apagados a propósito** (sucesión, assessment) y **1 existe pero no tiene punto de entrada** (áreas). Además hay **3 ítems alcanzables que no figuran en la lista de 18**: **auditoría** (`nav-config.ts:85`), **períodos** (`:90` — justamente la feature del ítem 16) y **"Mi equipo"** (`:61`, visible solo para `mandos_medios`).
-
----
-
-## 3. Divergencias que requieren decisión
-
-Solo el contraste. Sin propuesta de solución.
-
-### 3.1 · "Renombrar cargo → rol" (ítem 2) — DISTINTO
-- **El documento dice:** renombrar el campo `cargo` a `rol`.
-- **El sistema hace:** no renombró nada. Unificó `cargo` (mig 003) **y** `rol` (mig 029) en un tercer campo **multi-valor** `roles TEXT[]` (mig 059). Las tres columnas conviven hoy en la base. La UI muestra `roles.join(", ")` con fallback a `cargo`.
-
-### 3.2 · "Liderazgo" (ítem 1e) — DISTINTO
-- **El documento dice:** campo de liderazgo en el legajo.
-- **El sistema hace:** hay dos cosas distintas. `empleados.liderazgo` (texto) existe en la base y **solo se escribe desde el import de nómina** — no está en la API ni en la UI, nadie lo lee. Lo que la ficha muestra es `es_lider`, un booleano Sí/No.
-
-### 3.3 · "Presencialidad" (ítem 1f) — DISTINTO
-- **El documento dice:** campo de presencialidad.
-- **El sistema hace:** no existe una columna con ese nombre. Existen cuatro campos vecinos que podrían corresponderle según qué se haya prometido: `modalidad_trabajo` (enum presencial/remoto/híbrido), `ubicacion` (texto libre), `turno` (texto libre) y `modalidad_contratacion` (texto libre). Si lo comprometido era un porcentaje o una cantidad de días presenciales, no hay dónde guardarlo.
-
-### 3.4 · "Domicilio completo" (ítem 1b) — RESUELTO (C4, migración 081)
-- **El documento dice:** domicilio completo.
-- **El sistema hacía:** un único campo de texto libre `domicilio`, no filtrable ni agregable.
-- **El sistema hace ahora:** seis columnas estructuradas (calle · número · piso/depto · localidad · provincia · CP). Las tres agregables son provincia, localidad y CP; las otras tres existen para que la dirección sirva para mandar algo. La provincia es una **lista cerrada** de las 24 jurisdicciones: sin eso, "Córdoba"/"CORDOBA"/"Cba" convivirían y el campo no agregaría nada.
-- **Lo que falta para que se note:** datos. Estaba 0/19 y sigue en 0/19 — los campos nacen vacíos. El **filtro** por provincia/localidad en el listado quedó fuera a propósito (es trabajo de Bloque B, cerrado) y está anotado en `MATRIZ-FILTROS.md` como candidato para cuando haya domicilios cargados.
-
-### 3.5 · "Bloqueos por módulo con fecha configurable" (ítem 16) — DISTINTO, y a favor
-- **Lo esperado al encarar esta verificación:** que no existiera.
-- **El sistema hace:** existe completo (tabla, router, service, repo, check centralizado, UI, tests, auditoría). Pero **solo frena al rol `mandos_medios`** por diseño explícito, y el enganche de costos está anulado porque pasa `rol=None`. O sea: para un `admin_rrhh` el período cerrado no bloquea nada.
-
-### 3.6 · "Alertas configurables: activar infraestructura existente" (ítem 14) — DISTINTO
-- **El documento dice:** activar la infraestructura existente.
-- **El sistema hace:** la "infraestructura" son 2 tablas vacías (10 y 7 columnas) creadas en las migraciones 022/023, sin una sola línea de código que las toque, sin catálogo de eventos ni de canales, y sin `empresa_id` (cuelgan de `user_id`). No hay nada que activar: es construcción desde cero.
-
-### 3.7 · "Organigrama" (ítem 18) — DISTINTO
-- **El documento dice:** organigrama.
-- **El sistema hace:** una sola vista, cards por proyecto. La vista jerárquica clásica (Empresa → Área → Empleado) está construida, su endpoint está vivo y gateado, y es **inalcanzable desde la UI** por un flag `visible: false`. Falta decidir si el rediseño está cerrado o si esa vista vuelve.
-
-### 3.8 · `X-Empresa-Id` sin validar (ítem 23) — decisión de producto pendiente
-- **Lo que el sistema hace:** acepta cualquier UUID sintácticamente válido como empresa activa, sin verificar que exista.
-- **El contexto:** la decisión de producto vigente es que **todo usuario accede a todas las empresas**, así que no hay aislamiento que vulnerar hoy. Pero la validación de *existencia* tampoco está, y el día que se introduzca `acceso_empresa`, este es el único punto donde habría que enchufar el control.
-
-### 3.9 · `proyecto_asignaciones` sin `empresa_id` (ítem 13b)
-- **El patrón general:** toda tabla de negocio lleva `empresa_id`.
-- **El sistema hace:** `proyecto_asignaciones` lleva `empleado_empresa_id` en su lugar, porque un proyecto cruza empresas por diseño. Es coherente con el modelo de datos, pero es la única tabla que rompe el patrón y conviene dejarlo declarado como decisión, no como olvido.
+| **Aislamiento entre empresas en 92 pantallas y operaciones** | ✅ | Commits `bd95e98` + `9d7baa7`. Antes, con el identificador de un dato de otra empresa se podía operar sobre él |
+| **Verificación real de la identidad del usuario** | ✅ | `backend/middleware/auth.py`. 🔴 **Antes el sistema aceptaba credenciales sin verificar la firma: cualquiera podía fabricarse un acceso.** Es la falla más grave que se encontró en todo el período |
+| **Sesión que vence por inactividad (8 horas)** | 🟡 | `backend/utils/_sesion_inactividad.py` · `utils/usuario_estado.py`. **Antes una sesión no vencía nunca.** Se probó en desarrollo, no con los usuarios reales |
+| **Baja de usuarios que realmente saca a la persona** | 🟡 | `backend/services/usuario_service.py:66,94,100`. Antes, dar de baja a alguien **no lo sacaba del sistema**. Ahora es una baja reversible que además le corta la renovación de acceso. Nunca se ejecutó sobre un usuario real |
+| **Módulo de envío de mails por Gmail con plantillas editables** | 🟡 | `services/mailer/` · `routers/plantillas.py`. Falta designar la casilla oficial |
+| **Módulo de cierre de períodos completo** | 🟡 | Es el ítem 4 de la Entrega 2. Nunca se cerró un período |
+| **Importación de evaluaciones de sistema externo** | ✅ | Es el ítem 12 de la Entrega 2 |
+| **11 reportes descargables + 9 indicadores de tablero** | 🟡 | `services/reportes/` (9 módulos). Los de dotación funcionan; los de vacaciones, ausencias y costos **salen vacíos por falta de datos** |
+| **Alertas del tablero** (campos sin completar, módulos sin datos) | ✅ | `services/_dashboard_alertas.py` — 107 líneas |
+| **Panel de configuración de reglas de negocio** | 🟡 | La base de días hábiles y la escala de vacaciones **dejaron de estar escritas en el código** y se configuran desde `/configuracion`. Solo una regla se consume hoy; el resto se guarda y todavía no gobierna ningún cálculo |
+| **Cálculo de saldo de vacaciones por período** | 🟡 | `services/_vacaciones_cupos.py` + `_vacaciones_fifo.py` (147 líneas cada uno): días según antigüedad, acumulación por 4 años, vencimiento e imputación por orden de antigüedad. **Nunca se ejercitó: no hay vacaciones cargadas** |
+| **Filtro por rango de fechas en vacaciones y ausencias** | 🟡 | `repositories/_rango_fechas.py:33`, usado en `vacaciones_repo.py:27` y `ausencias_repo.py:33`. Incluye los casos que cruzan el borde del mes, que es lo que un reporte de ausentismo necesita. Sin datos para probarlo |
+| **Límite de filas en las exportaciones, con aviso claro** | ✅ | `services/_limite_export.py:36,41`. Antes, una exportación grande **salía incompleta sin avisar**. Hoy avisa y pide acotar con filtros |
+| **Subtipos de ausencia (dos niveles)** | 🟡 | `services/_tipos_jerarquia.py`. Permite "Enfermedad familiar → Madre/padre", como vienen los archivos reales. Sin ausencias cargadas |
+| **Jefe de otra empresa del grupo** | 🟡 | `services/_alcance_mandos.py` (138 líneas). Un empleado puede reportar a alguien de otra empresa del grupo. Sin usuarios de ese rol, sin probar |
+| **Asignar un área entera a un proyecto** | 🟡 | `routers/proyecto_asignaciones.py:49`. Es el ítem 16 de la Entrega 2 |
+| **Importación de nómina con jefe incluido** | ✅ | Antes el archivo traía el jefe de cada persona **y el sistema lo descartaba**. Hoy lo resuelve: 11 de 31 cargados |
+| **Lector de archivos unificado** | ✅ | `services/_import_encoding.py` |
+| **Alta y baja de usuarios con roles** · **adjuntos** · **cesiones** (10 cargadas) | ✅ | Migraciones 063, 061 y 066 |
+| **6 verificaciones automáticas que corren solas en cada cambio** | ✅ | Detectan clases enteras de error: que una exportación no acepte los mismos filtros que la pantalla, que una consulta pida un campo que no existe, que los permisos de pantalla y servidor se separen |
 
 ---
 
-## 4. Trabajo hecho que no figura en los documentos
+## Lo que se encontró roto y se arregló, sin que nadie lo hubiera reportado
 
-Las cuatro fases ocurrieron **después** de junio de 2026, así que ninguna aparece en el plan de implementación ni en el ejecutivo. Es trabajo entregado que hoy no está contabilizado.
+Todo esto estaba fallando en producción y **nadie lo había notado**, porque fallaba en silencio.
 
-### C6 — Plantillas de onboarding públicas y privadas ✅ CERRADO (cierra el Bloque C)
-Nunca se comprometió con el directorio: nació del `Plan de trabajo` (§C6, §4.3) como necesidad interna del equipo de RRHH. **Alcance resuelto: solo `onboarding_templates`** — `ev_plantillas` quedó afuera (cero callers en el front, sin columna de autor, y las `ev_*` se limpian tras el cutover).
-- **Migración 082**: `es_publica boolean NOT NULL DEFAULT true`. El default reproduce el comportamiento vigente —hoy todos ven todo—, así que correrla no cambia nada de lo que ve nadie; privado es un opt-out deliberado del autor.
-- **La regla vive en un solo lugar**, `repositories/_onboarding_templates_row.py::with_visibilidad`, y va en el WHERE: `es_publica OR created_by = yo OR created_by IS NULL`. Se compone por INTERSECCIÓN con la empresa, que se aplica primero. `gerencia_lectura` no se filtra (ve todo — es lo que ese rol ya significa en el resto del sistema).
-- **El gate es un helper, no un método del service** (`services/_template_scope.py`): tres caminos leen una plantilla por id sin pasar por `OnboardingTemplatesService` —`add_tarea`, el alta de onboarding y la plantilla por defecto—, así que un gate adentro de esa clase quedaba incompleto por construcción.
-- **Prerrequisito entregado en la sesión anterior:** `created_by` existía desde la migración 007 y **ningún camino de escritura la escribía** — toda plantilla nacía sin autor. Sin eso, "privada" no podía tener dueño.
-- **Dos bugs previos cerrados en el camino:** (a) el embed `onboarding_tareas(...)` era ambiguo (dos FKs por el retrofit multiempresa) y los dos endpoints de lectura respondían **300 PGRST201** en producción; (b) `POST /onboarding/{id}/iniciar` devolvía **422 `EMPRESA_MISMATCH`** para una plantilla de otra empresa —un oráculo de enumeración— y ahora devuelve el 404 uniforme.
-- Cobertura: `tests/test_onboarding_template_visibilidad.py` (43 tests, con fake que HONRA `user_id`/`rol` + verificación del `.or_()` real contra el cliente de Supabase + mutation check por eje).
-- 🔴 **Lo que NO incluye:** el listado de plantillas sigue **sin barra de filtros**, así que no hay "ver solo las mías". Montarla es fundación, no un campo — anotado en `MATRIZ-FILTROS.md`.
-
-### Fase 0 — Blindaje pre-testing
-- **Verificación real de la firma del JWT.** El middleware pasó de `jwt.decode(verify_signature=False)` (bypass total: cualquiera podía fabricar un token) a verificar ES256 contra el JWKS público de Supabase, con expiración, fail-closed y 401 genérico (`backend/middleware/auth.py:60-93`). Se sumó refresh automático con mutex anti-concurrencia y logout que revoca de verdad.
-- **Auditoría de nómina que se perdía en silencio:** el payload mandaba el literal `"lote_nomina"` en una columna uuid → el insert fallaba, `AuditService` se tragaba la excepción y el evento desaparecía. Ahora usa un uuid de evento (`services/_audit_payloads_rrhh.py:182`).
-- **Pérdida de datos en `confirmar()` de evaluaciones:** el reimport borraba el lote viejo antes de crear el nuevo, sin transacción — un fallo perdía los dos. Ahora: lote nuevo con período temporal → persistir → **verificación por conteo** → recién ahí borrar el viejo → renombrar.
-- **Edición de `manager_id`** desde la ficha, con anti-ciclos server-side (auto-referencia, ciclo directo e indirecto, tope de 50 saltos).
-
-### Fase 1 — Reportes y KPIs
-- **11 reportes descargables** (PDF/Excel/CSV/Word) sobre el motor genérico: dotación (headcount, altas/bajas nominal, distribución por seniority/modalidad/turno, rotación por motivo), vacaciones y ausencias (listado combinado, ausentismo por área, saldos), costos (masa salarial, presupuesto vs. real, capacitación por área) y auditoría/trazabilidad.
-- **9 KPIs de dashboard**, con `_safe` por KPI: si uno falla, los demás se devuelven igual y el fallido queda marcado en `errores` — antes un KPI roto tiraba el dashboard entero a 500.
-- Quedó fijado el principio **Vista vs. Acción**: el selector de empresa del sidebar filtra lo que se *mira*; las acciones reciben la empresa como parámetro explícito del formulario.
-
-### Fase 2 — Barrera de empresa (commits `bd95e98` + `9d7baa7`)
-- **92 de 92 endpoints** que reciben un id de recurso validan que ese recurso sea de la empresa del request, con el filtro en el `WHERE` de la query donde el repo lo permite. Antes, un UUID de otra empresa entraba igual y la operación se ejecutaba sobre él.
-- **13 de 13 superficies** de vacaciones y ausencias componen además el eje de ownership (empresa ∩ ownership, por intersección).
-- **8 endpoints marcados NO APLICA con razón escrita** (usuarios, empresa, assessment público, integraciones).
-- El 404 es idéntico para "no existe" y "es de otra empresa" — un 403 sería un oráculo de enumeración. Se corrigió también el orden de los gates: la barrera de empresa va antes de cualquier chequeo de estado que responda otro código.
-
-### Fase 3 — Deuda estructural (commits `51832e2` + `a6acaed`)
-- **N+1 de sucesión resuelto:** `get_analisis_posicion` hacía una query por empleado. Con batch, 200 empleados pasaron de **201 requests a 2**.
-- **`sucesion/page.tsx` de 855 → 85 líneas** (8 componentes + 2 hooks extraídos). Es el precedente de corte para las páginas grandes que quedan.
-- **`fetchEmpleados` / `exportarEmpleados` migrados a objeto de opciones** sobre una interfaz compartida, con 10 call sites auditados uno por uno. Elimina la trampa de los parámetros posicionales del mismo tipo.
-
-### Fuera de fase, tampoco en los documentos
-- **Módulo de períodos completo** (mig 062 + router + service + repo + check centralizado + UI + tests) — el ítem 16 de este documento.
-- **Módulo de evaluaciones por importación de resultados** (migs 078/079): lotes, evaluados, resultados, equivalencias, matcheo por apellido+nombre, métricas con brecha de autopercepción, historial de importaciones con multi-selección y borrado.
-- **ABM de usuarios con roles funcionales** (mig 063), **adjuntos polimórficos** (mig 061), **cesiones** (mig 066).
-
----
-
-## 5. Lo que está bloqueado por datos, no por código
-
-Vale registrarlo porque distorsiona cualquier demo: el sistema está construido pero la base está casi vacía. Conteos reales de producción al 27/7/2026:
-
-| Tabla | Filas |
+| Qué pasaba | Cómo se detectó |
 |---|---|
-| `empleados` | 19 |
-| `proyectos` | 6 |
-| `proyecto_asignaciones` | 19 |
-| `evaluacion_lotes` | 1 |
-| `objetivos` | 0 |
-| `inventario_items` | 0 |
-| `capacitaciones` | 0 |
-| `horas_proyecto` | 0 |
-| `offboarding_instancias` | 0 |
-| `planes_carrera` | 0 |
-| `sucesion_posiciones` | 0 |
-| `assessment_campanas` | 0 |
-| `notificaciones` / `notificaciones_config` | 0 / 0 |
-
-Los reportes y KPIs de la Fase 1 son correctos y salen **vacíos**. Antes de cualquier entrega a testing hay que decirlo explícitamente, o se va a leer como "está roto".
+| 🔴 **6 de los 11 reportes nunca funcionaron.** Se habían entregado como terminados y pedían datos con nombres que no existían: salían en blanco | Las pruebas automáticas pasaban igual, porque el simulador de base de datos aceptaba cualquier nombre. Se construyó una verificación que compara contra la estructura real |
+| 🔴 **94 registros de auditoría afirmaban cambios que nunca ocurrieron.** Cada vez que alguien editaba un empleado, el sistema anotaba que se le había borrado el área y la empresa. La pantalla se lo mostraba al usuario sobre empleados reales | Se detectó al revisar el historial. Corregido; los registros viejos no se borran porque la auditoría es inmutable, pero ya no se generan nuevos |
+| 🔴 **El listado de plantillas de onboarding devolvía un error** desde hacía meses | Apareció al construir la verificación de consultas |
+| 🔴 **La pantalla de Proyectos quedaba cargando para siempre**, con el servidor respondiendo bien. Una línea perdida en un cambio anterior | Se agregó una verificación automática que barre todo el sistema buscando pantallas que prendan el indicador de carga y no lo apaguen |
+| 🔴 **Un archivo en formato UTF-16 se importaba como texto ilegible y la importación decía que había salido bien**, cargando nombres corruptos en la base | Se verificó en vivo antes de tocar nada. La causa: el sistema probaba un formato que **nunca falla**, así que el error nunca aparecía |
+| 🔴 **La importación de sueldos perdía su registro de auditoría en silencio** | El evento se descartaba por un error de formato que el sistema se tragaba por diseño |
 
 ---
 
-## 6. Donde `CLAUDE.md` no coincide con el código
+## Lo que cambió de alcance por decisión
 
-Verificado contra los archivos fuente. En todos los casos gana el código.
+No son faltas: son decisiones tomadas con fundamento. **No se van a entregar como estaban escritas.**
 
-1. **`CLAUDE.md` no menciona el módulo de períodos** (`periodos_cerrados`, router, service, UI, tests). Es una feature completa y en producción, ausente del documento — y encima es la que responde al ítem 16.
-2. **Gate de assessment.** `CLAUDE.md` dice que los dos módulos apagados usan `useState(false)` y que "no hay que convertir el flag en `const`". Cierto para `assessment/[id]/page.tsx:75` y para sucesión. **Falso para el listado**: `app/(dashboard)/assessment/page.tsx:74-75` tiene un `router.replace()` incondicional + `return null` y el cuerpo entero detrás de un `eslint-disable no-unreachable`. No hay flag ahí.
-3. **La ficha del empleado tiene 6 secciones** (datos, adjuntos, inventario, historial de cambios, vacaciones, cesiones — `empleados/[id]/page.tsx:99-104`) y `CLAUDE.md` no las documenta en ningún lado. Tres de esas seis son ítems comprometidos con el directorio (3, 4 y 5 de este documento).
-4. ~~**`Plan de trabajo` (raíz) está desactualizado en su ítem 1.4**~~ — **CERRADO, ya no aplica.** El hallazgo era doble y las dos mitades se resolvieron: (a) el defecto de comparar "contra la fecha de hoy" ya estaba corregido — el código compara **por solapamiento con el rango del registro** (`services/_periodo_utils.py:31-60`); (b) el `rol=None` que el call de costos pasaba también se cerró — `routers/costos_escrituras.py:39` pasa `u.get("rol")` y `costo_service.cargar_nomina` lo reenvía a `verificar_periodo_abierto`. Además el documento que originaba el hallazgo (la v1 de `Plan de trabajo`, en la raíz) **se borró al consolidar la doc**; el vigente es [`Plan de trabajo`](<Plan de trabajo>) v2. Se deja la entrada en vez de renumerar, para no romper las referencias a los ítems 1–5.
-5. **La auditoría del 29/5 marcaba offboarding como hecho y era falso** — confirmado: offboarding era el básico y las columnas de entrevista de salida estaban muertas. (Esa auditoría se borró el 2/8/2026; queda en git. Las columnas se activaron después, en C3.)
+### Assessment — se apagó en vez de reactivarse
+
+El ítem pedía reactivar la pantalla. Se hizo lo contrario, y por seguridad: **el módulo tenía dos
+direcciones accesibles sin contraseña**. Hoy el servidor no lo publica y responde igual que a una
+dirección inexistente, sin delatar que existe. **No se borró una línea de código**: se reactiva
+con una variable de configuración. Lo que sigue faltando aunque se prenda: el envío de links por
+mail y el PDF de resultados, que nunca se construyeron.
+
+### Evaluaciones — el sistema no evalúa, importa resultados
+
+Se comprometía un módulo de evaluación con estadísticas anuales. Lo que se construyó es la
+**importación de resultados calculados afuera**, porque es como trabaja RRHH hoy. Las estadísticas
+entre períodos no se pueden construir todavía: **hay una sola carga de evaluaciones**, y una
+comparación necesita al menos dos.
+
+### Sucesión — apagado por decisión de producto
+
+Funciona y está completo. Se ocultó de la pantalla por decisión, no por un problema.
+**El servidor responde igual** y todo el código está intacto: se prende cambiando dos líneas.
+
+### Mails — Gmail en vez de Resend
+
+Se comprometía conectar Resend. Se sacó del sistema y **los mails salen por Gmail**, reusando la
+conexión que ya existía. Motivo: la cuenta de Google ya estaba conectada para leer postulaciones,
+así que no había que sumar un proveedor más. Además RRHH escribe las plantillas en texto simple y
+**el sistema genera el formato final**, para que no se pueda inyectar contenido peligroso.
+
+### Aislamiento por empresa — no hay accesos por usuario
+
+Se comprometía validar la empresa activa contra los accesos del usuario. **No existe ni va a
+existir esa tabla**: la decisión de producto es que todo usuario ve todas las empresas. Lo que se
+construyó es más fuerte en el eje que importa: el filtro por empresa viaja en las 92 consultas.
+
+### Asignar por equipo — no se construyó, por datos
+
+El campo "equipo" es texto libre y **nadie lo completó**. No hay nada que agrupar. El trabajo real
+era por área, que sí está cargada.
 
 ---
 
-## 7. Cómo mantener este documento
+## Lo que está bloqueado por datos, no por código
 
-- **Se actualiza al cerrar cada ítem**, no al final de una fase: se cambia el estado de esa fila, se reemplaza la evidencia por la del código nuevo y se vacía "Qué falta". Si el ítem se cerró de una forma distinta a la comprometida, además se agrega o se corrige su entrada en la sección 3.
-- **La evidencia es siempre `archivo:línea` o el nombre del objeto de DB** (tabla, columna, endpoint). Nunca "según CLAUDE.md" ni "según el auto-reporte". Lo de base se verifica contra el catálogo real por MCP, no contra las migraciones.
+**Conteos reales de producción al 5 de agosto de 2026.** Esto es lo que distorsiona cualquier demo.
+
+| Dato | Cargado | Consecuencia |
+|---|---:|---|
+| Empresas | **2** | — |
+| Empleados | **31** | — |
+| Áreas | **12** | 🔴 **2 son la misma, duplicada** |
+| Proyectos / asignaciones | **8 / 31** | 🔴 **Las 31 asignaciones tienen valor hora en cero**: el reporte de costos las suma como cero, y "cero" no se distingue de "no lo sabemos" |
+| Jefe de cada empleado | **11 de 31** | Hasta completarlo, el rol de mandos medios no se puede entregar |
+| **Legajo** | **0 de 31** | 🔴 **Bloquea la importación de vacaciones**: el archivo histórico identifica a la gente solo por legajo |
+| Seniority | **3 de 31** | El reporte de distribución sale casi todo en "sin especificar" |
+| **Vacaciones** | **0** | Bloquea 4 entregas: historial en la ficha, saldo por período, filtros y reportes |
+| **Ausencias** | **0** | Bloquea el reporte de ausentismo y los subtipos |
+| **Nómina / sueldos** | **0** | 🔴 Bloquea el historial salarial, la masa salarial y el presupuesto |
+| Presupuesto por área | **0** | Bloquea el reporte de presupuesto vs. real |
+| **Inventario** | **0** | La sección del legajo sale vacía |
+| **Capacitaciones** | **0** | — |
+| Objetivos | **1** | 🟢 Rediseñar el modelo ahora es barato |
+| Búsquedas / candidatos | **0 / 0** | — |
+| Egresos | **0** | — |
+| Cargas de evaluaciones | **1** | Bloquea las estadísticas entre períodos |
+| Plantillas de mail / mails enviados | **0 / 0** | El sistema todavía no mandó un mail |
+| Períodos cerrados | **0** | Nunca se cerró un período |
+| Adjuntos | **1** | Y está inaccesible por un problema de datos viejos |
+| Registros de auditoría | **139** | ✅ Funcionando |
+| Cesiones | **10** | ✅ Funcionando |
+
+> 🔴 **El patrón, y es el mensaje central de este documento: la funcionalidad está entera y el dato
+> no existe.** Historial salarial, saldo de vacaciones, mails, ownership de mandos medios, subtipos
+> de ausencia y buena parte de los reportes están construidos y salen vacíos.
+> **No es deuda técnica ni trabajo pendiente de desarrollo: la acción es de RRHH.**
 
 ---
 
-## Addendum — lo construido después del 28/7/2026
+## Cómo se mantiene este documento
 
-No estaba en el compromiso original con el directorio: salió del `Plan de trabajo` y de pedidos
-de RRHH durante el desarrollo. Se lista para que el contraste quede completo.
-
-| Ítem | Estado | Evidencia |
-|---|---|---|
-| **Configuración de reglas de negocio** — la base de días hábiles y la escala de vacaciones dejan de estar hardcodeadas | ✅ HECHO | mig 085 · `/configuracion` |
-| **Alertas del dashboard** (campos vacíos, módulo bloqueado) | ✅ HECHO | `_dashboard_alertas_catalogo.py` |
-| **Historial salarial en la ficha** | ⚠️ HECHO, **sale vacío**: `costos_nomina` tiene 0 filas | `costo_service.get_historial_salarial` |
-| **`manager_id` desde el import de nómina** | ⚠️ HECHO, **sin datos**: `manager_id` sigue 0/19 porque RRHH no reimportó | `_nomina_superiores.py` |
-| **Superior de otra empresa del grupo** (ownership cruzado) | ✅ HECHO | `_alcance_mandos.py` |
-| **Envío de mails por Gmail + plantillas editables** | ✅ HECHO, **sin usar**: falta designar la casilla del sistema y reconectar con el scope de envío | mig 087 · `services/mailer/` |
-| **Subtipos de ausencia** (dos niveles) | ✅ HECHO | mig 088 |
-| **Asignar un área entera a un proyecto** | ✅ HECHO | `_asignaciones_bulk.asignar_area` |
-| **Lector de CSV unificado** (arregla UTF-16 leído como basura) | ✅ HECHO | `_import_encoding.py` |
-| **Import de novedades (ausencias/vacaciones)** | 🔴 **BLOQUEADO**: RRHH no definió la estructura del archivo, y el de vacaciones solo trae legajo — que está 0/19 | `_import_csv.py` |
-
-🔴 **El patrón que se repite: la feature está entera y el dato no existe.** Historial salarial,
-`manager_id`, mails y reportes están construidos y salen vacíos o sin usar. **No es deuda
-técnica: es un bloqueante de adopción**, y la acción es de RRHH, no de desarrollo.
+- **Se actualiza al cerrar cada ítem**, no al final de una fase: cambia el estado de esa fila, se
+  reemplaza la evidencia por la del código nuevo y se vacía "qué falta".
+- **Nunca se agrega un addendum.** Si algo es posterior, va **en su fila**. La versión anterior de
+  este documento tenía el cuerpo de julio y un agregado de agosto, y **las tablas contradecían al
+  agregado del mismo archivo** en doce puntos.
+- **La evidencia es siempre `archivo:línea` o el nombre del dato en la base.** Nunca "según la
+  documentación": los documentos internos se desactualizan y el código no miente.
+- **La base se consulta en vivo**, no a través de las migraciones: producción puede haberse
+  desviado de ellas.
+- **Un ítem pasa de 🟡 a ✅ el día que se lo ejercita con datos reales, no el día que se termina de
+  escribir.** Es la distinción que este documento existe para sostener.
