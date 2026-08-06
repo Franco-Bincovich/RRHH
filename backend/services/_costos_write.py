@@ -59,13 +59,19 @@ def set_presupuesto_area(presupuesto_repo, audit, data: PresupuestoCreate,
     """
     Establece o actualiza el presupuesto de nómina de un área para un período (upsert).
     empresa_id se hereda del área — el repositorio lo resuelve automáticamente.
-    Registra el evento de auditoría (empresa_id = el del header, puede ser None).
+
+    🔴 El evento de auditoría se etiqueta con la empresa DEL REGISTRO PERSISTIDO
+    (`presupuesto.empresa_id`), no con la del header. Auditar es una ACCIÓN, y en una acción la
+    empresa sale de la entidad afectada: el selector del sidebar es VISTA y no gobierna una
+    escritura. Antes salía del header, que en modo consolidado es None — así el evento quedaba
+    sin empresa aunque el presupuesto sí la tuviera (heredada del área). Mismo criterio que
+    `cargar_nomina`, acá arriba.
 
     Args:
         presupuesto_repo: Repositorio de presupuestos.
         audit: Servicio de auditoría.
         data: Datos del presupuesto (área, período, monto presupuestado).
-        empresa_id: Contexto de empresa (header) para validación y audit. None = consolidado.
+        empresa_id: Contexto de empresa (header). Solo VISTA — no se usa para etiquetar el audit.
         usuario_id: ID del operador (trazabilidad de audit).
 
     Raises:
@@ -77,7 +83,7 @@ def set_presupuesto_area(presupuesto_repo, audit, data: PresupuestoCreate,
         raise
     except Exception as exc:
         raise AppError("Error al guardar el presupuesto", "PRESUPUESTO_SAVE_ERROR", 500) from exc
-    audit.registrar(**payload_set_presupuesto(presupuesto, usuario_id, str(empresa_id) if empresa_id else None))
+    audit.registrar(**payload_set_presupuesto(presupuesto, usuario_id, presupuesto.empresa_id))
     logger.info(
         "Presupuesto de área configurado",
         extra={"area_id": data.area_id, "mes": data.mes, "anio": data.anio},

@@ -89,9 +89,13 @@ class CandidatoService:
             except Exception as exc:  # storage falló: se conserva el flujo, objeto huérfano en Storage
                 logger.error("Storage remove falló (CV)", extra={"candidato_id": candidato_id, "error": str(exc)})
         self._candidato_repo.delete(candidato_id, empresa_id)
+        # 🔴 La empresa del evento sale del CANDIDATO (leído arriba), no del header: auditar es
+        # una ACCIÓN y la empresa sale de la entidad afectada. Con el header, una baja hecha en
+        # modo consolidado (empresa_id=None) grababa el evento sin empresa aunque el candidato
+        # sí la tuviera — ya pasó una vez en producción. Ver "Vista vs Acción" en CLAUDE.md.
         self._audit.registrar(
             usuario_id=usuario_id, entidad="candidato", registro_id=candidato_id, accion="DELETE",
-            evento="baja_candidato", empresa_id=str(empresa_id) if empresa_id else None,
+            evento="baja_candidato", empresa_id=cand.empresa_id,
             datos_anteriores={"nombre": f"{cand.nombre} {cand.apellido}", "email": cand.email}, datos_nuevos=None,
         )
         logger.info("Candidato eliminado", extra={"candidato_id": candidato_id})

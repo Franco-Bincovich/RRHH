@@ -1,19 +1,19 @@
 """Router de importación masiva de nómina via CSV. Rutas protegidas por AuthMiddleware.
 Rate limit: franja "import", 10/hora compartida con el resto de los imports (ver
 utils/rate_limit.py). Son operaciones humanas y deliberadas; nadie importa nómina 11 veces
-por hora. `request: Request` no lo usan los handlers, lo exige slowapi para poder decorar."""
+por hora. `preview_nomina` no usa su `request: Request` —lo exige slowapi para poder decorar—;
+`confirmar_nomina` sí lo usa, para sacar el `usuario_id` que va al evento de auditoría."""
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 
-from repositories.nomina_import_repo import NominaImportRepo
 from schemas.importacion import (
     ImportacionNominaConfirmarRequest,
     ImportacionNominaConfirmarResponse,
     ImportacionNominaPreviewResponse,
 )
 from services.nomina_csv_service import parse_nomina_csv
+from services.nomina_import_service import NominaImportService
 from services._import_csv import decodificar
 from utils.files import ALLOWED_TYPES_CSV, MAX_SIZE_CSV, validate_upload
-from utils.logger import logger
 from utils.permisos import Accion, Seccion, require_permission
 from utils.rate_limit import limiter
 
@@ -21,8 +21,8 @@ router = APIRouter()
 SECCION = Seccion.IMPORTACION
 
 
-def _repo() -> NominaImportRepo:
-    return NominaImportRepo()
+def _service() -> NominaImportService:
+    return NominaImportService()
 
 
 @router.post("/nomina/preview", response_model=ImportacionNominaPreviewResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -47,24 +47,11 @@ async def preview_nomina(
 async def confirmar_nomina(
     request: Request,
     body: ImportacionNominaConfirmarRequest,
-    repo: NominaImportRepo = Depends(_repo),
+    service: NominaImportService = Depends(_service),
 ) -> ImportacionNominaConfirmarResponse:
-    """UPSERT en batch por (empleado_id, anio, mes). empresa_id se toma del request (uniforme)."""
-    filas = [
-        {
-            "empleado_id": f.empleado_id, "anio": f.anio, "mes": f.mes,
-            "salario_bruto": f.salario_bruto,
-            "cargas_sociales": max(0.0, f.salario_bruto - f.neto),
-            "empresa_id": body.empresa_id,
-        }
-        for f in body.filas
-    ]
-    repo.batch_upsert_nomina(filas)
+    """UPSERT en batch por (empleado_id, anio, mes) + UN evento de auditoría por lote.
 
-    importados = sum(1 for f in body.filas if not f.es_actualizacion)
-    actualizados = sum(1 for f in body.filas if f.es_actualizacion)
-    logger.info(
-        "Importación nómina confirmada",
-        extra={"importados": importados, "actualizados": actualizados, "errores": 0},
-    )
-    return ImportacionNominaConfirmarResponse(importados=importados, actualizados=actualizados, errores=[])
+    El `usuario_id` sale de `request.state.user` (mismo patrón que el import de nómina de
+    empleados): sin él el evento no diría quién importó los sueldos."""
+    usuario_id = request.state.user.get("id", "system")
+    return service.confirmar(body, usuario_id)

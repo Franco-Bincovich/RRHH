@@ -60,6 +60,11 @@ class PresupuestoResponse(BaseModel):
     id: str
     area_id: str
     area_nombre: str
+    # Se hereda del área en la escritura (ver PresupuestoRepo.save_presupuesto). Viaja en el
+    # response porque el evento de auditoría la necesita DEL REGISTRO, no del header: sin este
+    # campo el call site no tenía de dónde sacarla y caía en el `X-Empresa-Id` del sidebar, que
+    # en modo consolidado es None. Optional como el hermano `NominaResponse.empresa_id`.
+    empresa_id: Optional[str] = None
     mes: int
     anio: int
     presupuesto: float

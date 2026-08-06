@@ -41,6 +41,96 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-06 · No se puede dar de baja al usuario que sostiene la casilla del sistema · commit pendiente
+
+**Qué cambió:** `DELETE /api/usuarios/{user_id}` ahora rechaza con **409
+`USUARIO_ES_REMITENTE_SISTEMA`** la baja del usuario del que cuelga la casilla de correo del
+sistema. Antes no había ninguna guarda: bajar a esa persona apaga el envío de mails de **todo el
+sistema** (no solo los suyos) y nadie se enteraba hasta que alguien intentaba mandar uno y le
+saltaba `MAIL_SIN_REMITENTE`. El chequeo corre **antes** de tocar al usuario. La guarda vive en
+`services/_usuario_remitente.py` (satélite nuevo; con el razonamiento adentro, `usuario_service`
+se iba a 171/150).
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets ni endpoints nuevos. 🔴 **El `ON DELETE CASCADE` de `usuario_integraciones.user_id →
+users(id)` NO se tocó** — la guarda es de aplicación, a propósito: desde el 3/8 la baja es blanda
+(`activo=false` + ban) y ese CASCADE ya no se dispara por esta vía, pero el `activo=false` apaga
+el envío igual porque la integración queda colgando de un usuario inactivo. **El agujero existe
+aunque el CASCADE nunca corra**, así que no se puede cerrar desde la base.
+
+**Para el que opere el sistema:** si hay que dar de baja a la persona que hoy es la casilla, el
+orden es: Configuración → Integraciones → designar otra casilla del sistema → recién ahí la baja.
+El mensaje del 409 lo dice.
+
+⚠️ **La guarda es FAIL-OPEN:** si no se puede leer quién sostiene la casilla (Supabase caído), la
+baja **sigue** y se loguea a ERROR. Deliberado: dar de baja es una acción de seguridad y no puede
+quedar bloqueada por un subsistema no relacionado; lo que la guarda evita es un error operativo
+recuperable. Fail-closed convertiría un blip de base en "no se puede echar a nadie".
+
+🔴 **Para quien toque `IntegracionRemitenteRepo.get_remitente()`: el `select("*")` es contrato,
+no comodidad.** De esa fila salen el `user_id` que mira esta guarda y los tokens que usa el
+mailer. Angostarlo a "las columnas que se usan" apagaría la guarda **en silencio** y rompería el
+envío, con toda la suite de service en verde. Hay un test que lo fija
+(`test_usuarios.py::TestLaFilaDelRemitenteTraeElUserId`).
+
+---
+
+## 2026-08-06 · El import de costos emite un evento de auditoría por lote · commit pendiente
+
+**Qué cambió:** `POST /api/importacion/nomina/confirmar` persistía el lote de sueldos sin emitir
+ningún evento, así que un import de nómina era invisible en `/auditoria`. Ahora emite **uno por
+lote** (`evento="importacion_costos"`, `entidad="nomina"`). El `confirmar` era el único de los
+tres imports **sin capa de service** —iba router → repo directo, con el armado de las filas y el
+conteo dentro del handler—: se creó `services/nomina_import_service.py` y el router bajó de 70 a
+**57** líneas. El handler ahora extrae `usuario_id` de `request.state.user` (antes no lo hacía,
+así que el evento no habría dicho quién importó).
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, sin variables de entorno, sin
+dependencias, sin buckets, sin endpoints nuevos ni cambios de auth. La ruta, su método, su
+contrato de request/response y su rate limit (franja `import`, 10/hora compartida) quedan
+**idénticos** — el front no necesita redeploy coordinado.
+
+**Para el que mire `/auditoria`:** aparece un `evento` nuevo, `importacion_costos`. 🔴 **No
+confundirlo con `importacion_nomina`**, que es el del roster de EMPLEADOS. El nombre viejo quedó
+pegado a "nómina" cuando era el único import y **no se puede renombrar**: hay eventos en
+producción con ese valor y `auditoria` es inmutable, así que renombrarlo partiría el historial en
+dos nombres para la misma operación. Se distinguen por `entidad`: `empleado` el del roster,
+`nomina` el de sueldos.
+
+⚠️ **El evento NO lleva `importados`/`actualizados`, y es deliberado.** El upsert de PostgREST
+devuelve las filas resultantes pero no dice cuáles fueron INSERT y cuáles UPDATE; esa distinción
+solo vive en el `es_actualizacion` que el cliente manda en el body. El evento cuenta
+`filas_persistidas` desde el retorno del repo (autoritativo), más `filas_enviadas` y un `parcial`
+derivado. La respuesta HTTP sí conserva el desglose para la pantalla.
+
+---
+
+## 2026-08-06 · Auditoría etiquetada con la empresa de la ENTIDAD, no del header · commit pendiente
+
+**Qué cambió:** dos eventos de auditoría (`set_presupuesto` y `baja_candidato`) se etiquetaban
+con el `X-Empresa-Id` del header en vez de con la empresa de la entidad afectada, violando
+"Vista vs Acción" (el selector del sidebar es visual y no gobierna una escritura). En modo
+consolidado el header es `None`, así que el evento quedaba sin empresa aunque la entidad sí la
+tuviera. En los dos casos el dato ya viajaba en el SELECT y el **mapper del repo lo descartaba**,
+así que el fix fue de tres piezas por instancia: declarar `empresa_id` en el schema de respuesta
+(`PresupuestoResponse`, `CandidatoResponse`), mapearlo en el repo (`_to_presupuesto`, `_crow`) y
+usarlo en el call site. `cargar_nomina` ya lo hacía bien y quedó como molde. **El import de
+costos NO se tocó** — su falta de auditoría es tarea aparte (E1 del plan).
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones (las dos columnas ya existían y son
+`NOT NULL`), sin variables de entorno, sin dependencias, sin endpoints nuevos, sin cambios de
+auth ni de contrato HTTP. Los dos campos nuevos son **aditivos** en el JSON de respuesta de
+`PresupuestoResponse` y `CandidatoResponse`; el front no los consume y no requiere redeploy
+coordinado.
+
+**Para el que mire `/auditoria`:** los **3 eventos viejos mal etiquetados** (`alta_adjunto`,
+`baja_adjunto`, `baja_candidato`, todos de julio 2026 con `empresa_id NULL`) **se dejan como
+están** — `auditoria` es inmutable por diseño, y además sus entidades padre ya fueron borradas
+(vacante y candidato), así que no hay de dónde recuperar la empresa correcta. Verificado contra
+el catálogo vivo.
+
+---
+
 ## 2026-08-06 · Filtro por área en ítems de inventario · commit pendiente
 
 **Qué cambió:** el listado y el export de `/inventario` → pestaña Ítems aceptan **`area_id`**.

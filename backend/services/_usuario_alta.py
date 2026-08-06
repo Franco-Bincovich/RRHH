@@ -10,6 +10,10 @@ La lógica se movió VERBATIM desde UsuarioService.crear_usuario.
 usuario que es la casilla de correo del sistema — ver `repositories/integracion_remitente_repo.py`).
 El alta es el método más largo y el más autocontenido de los tres, así que sacarlo es lo que deja
 sitio para esa guarda sin volver a tocar límites.
+
+✅ Esa guarda YA SE ESCRIBIÓ (`usuario_service._ensure_no_es_remitente`) y entró en el sitio que
+este corte dejó libre. El párrafo de arriba queda como registro de para qué se hizo el corte: no
+volver a llenar `usuario_service` sin mirar esto.
 """
 import secrets
 from typing import Optional

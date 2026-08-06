@@ -18,20 +18,30 @@ es reconectar otra cuenta al mismo usuario técnico: cero código, y lo que se p
 a producción. Con "sale del que disparó", probar con la personal y después mudarse son dos
 circuitos distintos y el segundo queda sin probar.
 
-## ⚠️ EL `ON DELETE CASCADE` CONTRA `users` APAGA EL ENVÍO
+## ⚠️ BAJAR AL USUARIO QUE SOSTIENE LA CASILLA APAGA EL ENVÍO DE TODO EL SISTEMA
 
-La FK `usuario_integraciones.user_id → users(id)` es `ON DELETE CASCADE`. Si alguien da de baja
-al usuario que sostiene la casilla del sistema, **la integración se borra con él y el envío deja
-de funcionar**.
+`usuario_integraciones` es POR USUARIO, así que la casilla del sistema cuelga de una persona
+concreta. Dar de baja a esa persona apaga el envío de mails de todo el sistema, no solo el suyo.
+(La FK `usuario_integraciones.user_id → users(id)` es además `ON DELETE CASCADE`; desde el 3/8 la
+baja es blanda, así que el CASCADE ya no se dispara por esa vía — pero el `activo=false` apaga el
+envío igual, porque la integración queda colgando de un usuario inactivo. **El agujero existe
+aunque el CASCADE nunca corra.**)
 
-Hoy eso NO es silencioso: `get_remitente()` devuelve None, el mailer corta con un error propio
-(`MAIL_SIN_REMITENTE`) y la pantalla de configuración muestra que no hay casilla configurada. Se
-avisa al intentar mandar, no cuando se borra.
+✅ **YA HAY GUARDA, y avisa al DAR DE BAJA en vez de al MANDAR:**
+`usuario_service._ensure_no_es_remitente` rechaza esa baja con **409
+`USUARIO_ES_REMITENTE_SISTEMA`** y un mensaje que dice a dónde ir a designar otra casilla. El
+motivo por el que no estaba —`usuario_service` en 149/150— desapareció al extraer el alta a
+`_usuario_alta.py`. Es una guarda de APLICACIÓN: el CASCADE de la FK no se tocó.
 
-🚩 **La guarda que faltaría** —bloquear la baja del usuario que es la casilla, con un 409— NO se
-implementó acá a propósito: vive en `usuario_service.eliminar_usuario`, y ese archivo está en
-**149/150**, así que agregarla exige dividirlo primero (regla 2 del repo). Queda propuesta como
-tanda propia. Lo que se ganaría es enterarse al BORRAR en vez de al MANDAR.
+Segunda red, para el caso en que igual se quede sin casilla (p. ej. alguien desconecta la cuenta
+de Google): `get_remitente()` devuelve None, el mailer corta con `MAIL_SIN_REMITENTE` y la
+pantalla de configuración muestra que no hay casilla configurada.
+
+🔴 **`get_remitente()` DEVUELVE LA FILA ENTERA (`select("*")`) Y DE AHÍ SALE EL `user_id`.**
+Dos consumidores dependen de ese campo: la guarda de la baja y `mailer/engine._remitente`.
+Angostar el `select` a las columnas "que se usan" haría que los dos leyeran `None` **en
+silencio** —la guarda dejaría de proteger y el mailer cortaría creyendo que no hay casilla—.
+Hay un test que lo fija (`test_usuarios.py::TestLaFilaDelRemitenteTraeElUserId`).
 """
 from typing import Optional
 from uuid import UUID

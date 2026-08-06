@@ -17,9 +17,13 @@ _PRE_SEL = "id,area_id,empresa_id,mes,anio,monto_presupuestado,areas!presupuesto
 
 def _to_presupuesto(r: dict) -> PresupuestoResponse:
     area = r.get("areas") or {}
+    emp = r.get("empresa_id")
     return PresupuestoResponse(
         id=str(r["id"]), area_id=str(r["area_id"]),
         area_nombre=area.get("nombre", ""),
+        # _PRE_SEL ya la traía; el mapper la descartaba, así que el dato llegaba a la base y se
+        # perdía al volver. La necesita el evento de auditoría (empresa DEL REGISTRO, no del header).
+        empresa_id=str(emp) if emp else None,
         mes=int(r["mes"]), anio=int(r["anio"]),
         presupuesto=float(r["monto_presupuestado"]),
     )

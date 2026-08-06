@@ -16,8 +16,12 @@ _C = "candidatos"
 
 def _crow(r: dict) -> CandidatoResponse:
     vid = r.get("vacante_id")
+    emp = r.get("empresa_id")
     return CandidatoResponse(
         id=str(r["id"]), vacante_id=str(vid) if vid else None,
+        # El `select("*")` ya la traía; el mapper la descartaba. La necesita el evento de
+        # auditoría de la baja (empresa DEL REGISTRO, no del header).
+        empresa_id=str(emp) if emp else None,
         nombre=r["nombre"], apellido=r["apellido"], email=r["email"],
         telefono=r.get("telefono"),
         cargo_anterior=r.get("cargo_anterior"), empresa_anterior=r.get("empresa_anterior"),

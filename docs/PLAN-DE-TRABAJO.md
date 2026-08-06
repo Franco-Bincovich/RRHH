@@ -44,10 +44,12 @@ el refresh está roto, se rompen los dos y conviene descubrirlo en el más barat
 llamada por acción y un destinatario controlado; CV screening son N llamadas, un árbol MIME que
 no se conoce y una dependencia de PDF sin decidir.
 
-**Los fixes de auditoría (`E1`, `E2`) van antes de que exista la segunda empresa con movimiento.**
-Hoy hay 2 empresas cargadas pero una sola opera: el desajuste header-vs-entidad todavía no
-etiquetó mal casi nada. Cuando las dos operen, cada evento mal etiquetado es un dato perdido en
-una tabla inmutable.
+**Los fixes de auditoría (`E1`, `E2`) iban antes de que existiera la segunda empresa con
+movimiento — ✅ los dos están HECHOS.** El razonamiento queda escrito porque sigue rigiendo para
+lo que venga: hoy hay 2 empresas cargadas pero una sola opera, así que el desajuste
+header-vs-entidad todavía no etiquetó mal casi nada. Cuando las dos operen, cada evento mal
+etiquetado es un dato perdido en una tabla inmutable. **Lo que NO se cerró es la CLASE de bug:
+ver `T11`.**
 
 **Los cortes de archivo van cuando bloquean, no antes.** `routers/vacantes.py` está en 80/80 y la
 Fase 2 le agrega endpoints: ese corte es parte de la Fase 2, no una tanda de limpieza. Los 35
@@ -101,9 +103,9 @@ No son sesiones de desarrollo. Son minutos cada una, y verifican semanas de cód
 
 | id | Qué | Qué destraba | Quién | Esf. | Grav. |
 |---|---|---|---|---|---|
-| **E1** | **Auditar el import de costos.** `routers/importacion_nomina.py` hace `batch_upsert_nomina` sin un solo evento, contra la regla propia de "un evento por lote" | Un import de costos hoy es invisible en `/auditoria`. Molde: `payload_carga_nomina` | 🖥️ | S | 🟠 |
+| ~~**E1**~~ | ✅ **HECHO — Auditar el import de costos.** `batch_upsert_nomina` ya no corre sin evento: emite **uno por lote** (`importacion_costos`) desde `services/nomina_import_service.py`, el service nuevo que le faltaba al `confirmar` (era el único de los 3 imports sin capa de service) | ⚠️ **El molde que decía esta fila era el equivocado.** `payload_carga_nomina` es de **UNA FILA** (recibe un `NominaResponse` y difea contra el `prior`): habría dado un evento **por fila**, justo lo que la regla prohíbe. El molde real es **`payload_importacion_nomina`** en `_audit_payloads_import.py` — mismo problema resuelto (`registro_id` = uuid4 de EVENTO, porque `costos_nomina` no persiste un lote con id propio) | 🖥️ | S | ✅ |
 | **E2** | **`_costos_write.py:80` audita con la empresa del HEADER**, no la de la entidad. Viola Vista vs Acción | Con 2 empresas cargadas, el desajuste pasa a ser real. Junto: los 3 eventos ya mal etiquetados (`alta_adjunto`, `baja_adjunto`, `baja_candidato`) | 🖥️ | S | 🟠 |
-| **E3** | **Guarda de baja del usuario que sostiene la casilla del sistema** (409) | 🆕 **El motivo por el que no se hizo ya no existe**: `usuario_service.py` bajó de 149 a **77**, y el DELETE es baja blanda desde el 3/8 (el CASCADE ya no se dispara por esa vía). Queda como guarda del `activo=false`, que igual apaga el envío | 🖥️ | S | 🟠 |
+| ~~**E3**~~ | ✅ **HECHO — Guarda de baja del usuario que sostiene la casilla del sistema (409 `USUARIO_ES_REMITENTE_SISTEMA`).** Corre ANTES de tocar al usuario. Vive en `services/_usuario_remitente.py` (satélite: con el razonamiento adentro, `usuario_service` se iba a 171/150) | Es guarda del `activo=false`, no del CASCADE — que **no se tocó**: la baja blanda ya no lo dispara, pero igual apaga el envío porque la integración queda colgando de un usuario inactivo. ⚠️ **Es FAIL-OPEN**: si no se puede leer la casilla, la baja sigue (dar de baja es acción de seguridad; no puede bloquearla un subsistema caído) | 🖥️ | S | ✅ |
 | **E4** | **Migrar `objetivos.responsable_id`** de FK a `users` → FK a `empleados` | Desbloquea el filtro por área y el import de objetivos. 🆕 **Hay 1 sola fila: la migración sigue siendo trivial.** Con datos, es cara | 🖥️ | M | 🟠 |
 | **E5** | **Los 2 hooks del front sobre 80** (`useFiltrosVacaciones` 95, `useFiltrosAsignacionesCap` 89) | Molde ya aplicado: `useOpcionesAusencias` | 🖥️ | S | 🟡 |
 | **E6** | **Dividir `objetivos.py` e `inventario_items.py` (79/80)** y agregarles `shared_limit("30/hour", scope="export")` | Son 2 de los 3 exports que corren bajo el baseline de 300/min. Hay un test que lo recuerda | 🖥️ | S | 🟡 |
@@ -219,7 +221,7 @@ Verificado por grep de cada símbolo contra `tests/`:
 
 | id | Qué | Qué clase de bug cerraría |
 |---|---|---|
-| **T11** | **Barrido de "todo repo con método de escritura tiene su evento de auditoría"** | Es exactamente `E1` (el import de costos no audita). Arreglar la instancia no cierra la clase — el próximo import nace igual |
+| **T11** | **Barrido de "todo repo con método de escritura tiene su evento de auditoría"** | 🆕 **Sigue abierto aunque `E1` ya esté hecho, y por eso mismo:** se arregló LA INSTANCIA (el import de costos), no LA CLASE. El próximo import nace igual de mudo y nadie se entera hasta que alguien mira `/auditoria` y no encuentra nada |
 | **T12** | **Barrido de "todo `_*.py` público tiene al menos un caller"** | 🆕 Habría detectado `set_remitente` con cero callers, que es el bloqueante de la Fase 1 entera. Y habría detectado los 3 muertos que se borraron a mano el 2/8 |
 | **T13** | **Test que compare `aplicar_filtro_estado` con `derive_estado`** | Son espejo declarado y no hay nada que los ate |
 

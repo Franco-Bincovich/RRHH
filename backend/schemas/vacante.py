@@ -90,6 +90,10 @@ class CandidatoCreate(BaseModel):
 class CandidatoResponse(BaseModel):
     id: str
     vacante_id: Optional[str] = None  # NULL si su búsqueda fue borrada (migración 071)
+    # Columna NOT NULL de `candidatos`, heredada de la vacante al crear. Viaja en el response
+    # porque el evento de auditoría de la baja la necesita DEL REGISTRO, no del header: el
+    # selector del sidebar es VISTA y en modo consolidado es None.
+    empresa_id: Optional[str] = None
     nombre: str
     apellido: str
     email: str

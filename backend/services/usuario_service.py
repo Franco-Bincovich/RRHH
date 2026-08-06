@@ -6,10 +6,12 @@ el perfil, a public.users. Ambos pasos van juntos o se revierten (rollback del a
 from typing import Optional
 
 from integrations.supabase_client import supabase_admin, supabase_client
+from repositories.integracion_remitente_repo import IntegracionRemitenteRepo
 from repositories.usuario_repo import UsuarioRepo
 from schemas.usuario import CrearUsuarioRequest, CrearUsuarioResponse
 from services._audit_payloads_usuarios import payload_baja_usuario, payload_cambio_password
 from services._usuario_alta import crear as _crear_usuario
+from services._usuario_remitente import ensure_no_es_remitente as _ensure_no_es_remitente
 from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
@@ -20,9 +22,13 @@ _BAN_PERMANENTE = "876000h"
 
 
 class UsuarioService:
-    def __init__(self, repo: Optional[UsuarioRepo] = None, audit: Optional[AuditService] = None) -> None:
+    def __init__(
+        self, repo: Optional[UsuarioRepo] = None, audit: Optional[AuditService] = None,
+        remitente_repo: Optional[IntegracionRemitenteRepo] = None,
+    ) -> None:
         self._repo = repo or UsuarioRepo()
         self._audit = audit or AuditService()
+        self._remitente = remitente_repo or IntegracionRemitenteRepo()
 
     def crear_usuario(self, data: CrearUsuarioRequest, creado_por: Optional[str]) -> CrearUsuarioResponse:
         """Crea identidad + perfil con rollback. Ver services/_usuario_alta.crear."""
@@ -83,13 +89,19 @@ class UsuarioService:
 
         Reversión (a mano, ver docs/DEPLOY.md): `activo=true` + `ban_duration: "none"`.
 
-        Raises: AppError AUTOELIMINACION (400), USUARIO_NOT_FOUND (404), USUARIO_DELETE_ERROR (502).
+        🔴 NO SE PUEDE DAR DE BAJA AL USUARIO QUE SOSTIENE LA CASILLA DEL SISTEMA (409). Ver
+        `_ensure_no_es_remitente`. El chequeo va ANTES de tocar nada: desactivar y después
+        avisar dejaría el envío de mails caído durante la ventana entre las dos cosas.
+
+        Raises: AppError AUTOELIMINACION (400), USUARIO_NOT_FOUND (404),
+                USUARIO_ES_REMITENTE_SISTEMA (409), USUARIO_DELETE_ERROR (502).
         """
         if ejecutor_id and str(ejecutor_id) == str(user_id):
             raise AppError("No podés eliminar tu propio usuario", "AUTOELIMINACION", 400)
         perfil = self._repo.get_perfil(user_id)
         if not perfil:
             raise AppError("Usuario no encontrado", "USUARIO_NOT_FOUND", 404)
+        self._ensure_no_es_remitente(user_id)
 
         self._repo.set_activo(user_id, False)
         invalidar_estado(user_id)  # que rija en el acto, sin esperar el TTL
@@ -105,3 +117,8 @@ class UsuarioService:
             logger.error("Baja aplicada pero el ban de Auth falló", extra={"user_id": user_id})
             raise AppError("El usuario quedó desactivado, pero no se pudo revocar su sesión. Reintentá.",
                            "USUARIO_DELETE_ERROR", 502) from exc
+
+    def _ensure_no_es_remitente(self, user_id: str) -> None:
+        """Bloquea con 409 la baja del usuario que sostiene la casilla del sistema.
+        Ver services/_usuario_remitente.ensure_no_es_remitente (extraído por límite de líneas)."""
+        _ensure_no_es_remitente(self._remitente, user_id)

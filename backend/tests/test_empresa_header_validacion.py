@@ -215,13 +215,30 @@ class TestResolverEmpresaId:
 class TestAuditoriaConHeaderFalso:
     """Cierra el círculo: con un header falso el evento se registraba con un empresa_id que
     viola la FK de `auditoria.empresa_id`, el INSERT fallaba, AuditService se tragaba la
-    excepción y el evento desaparecía. Ahora el header llega como None y el evento se guarda.
+    excepción y el evento desaparecía.
+
+    🔴 AHORA HAY DOS DEFENSAS, y esta clase pasó a cubrir la SEGUNDA. La primera es el middleware
+    (un header inexistente se descarta → None), y la prueba `TestResolverEmpresaId`. La segunda,
+    posterior: `set_presupuesto_area` ya NO etiqueta el evento con el header — usa la empresa del
+    REGISTRO persistido, heredada del área (Vista vs Acción). O sea que el header **ya no llega**
+    a `auditoria.empresa_id` por este camino, ni siquiera si esquivara al middleware.
+
+    Por eso los tests de acá cambiaron de forma: antes afirmaban "el header falso llega como None
+    y por eso no rompe la FK", que hoy pasaría **por el motivo equivocado** —el evento no lleva el
+    header en absoluto—, o sea una aserción vacua. Ahora afirman la propiedad más fuerte que
+    reemplazó a aquella: el evento lleva la empresa de la entidad, sea cual sea el header.
     """
 
     class _PresupuestoRepo:
+        """El repo real hereda `empresa_id` del ÁREA (ver PresupuestoRepo.save_presupuesto), así
+        que el response persistido SIEMPRE trae una empresa válida. Modelarlo es lo que permite
+        distinguir "empresa del registro" de "empresa del header": con el response sin empresa,
+        los dos orígenes darían None y ningún test de acá podría fallar."""
+
         def save_presupuesto(self, data) -> PresupuestoResponse:
             return PresupuestoResponse(id=str(uuid4()), area_id=data.area_id,
-                                       area_nombre="Sistemas", mes=data.mes, anio=data.anio,
+                                       area_nombre="Sistemas", empresa_id=EXISTE,
+                                       mes=data.mes, anio=data.anio,
                                        presupuesto=data.presupuesto)
 
     class _AuditFK:
@@ -247,16 +264,30 @@ class TestAuditoriaConHeaderFalso:
         )
         return audit
 
-    def test_header_falso_ya_no_pierde_el_evento(self, cache_sembrado) -> None:
-        """El middleware lo convirtió en None ANTES de llegar acá; None pasa la FK."""
-        resuelto = _resolver_empresa_id(NO_EXISTE, "/api/costos/presupuesto")
-        assert self._cargar(resuelto).guardados, "el evento de auditoría se perdió"
-
-    def test_sin_el_fix_el_evento_se_perdia(self) -> None:
-        """Guarda de regresión: demuestra que el fake modela el daño y no da verde de arriba."""
-        assert not self._cargar(NO_EXISTE).guardados
-
-    def test_empresa_real_se_registra_con_su_empresa(self, cache_sembrado) -> None:
+    def test_el_evento_lleva_la_empresa_del_registro(self, cache_sembrado) -> None:
+        """Con un header real y válido, el evento se guarda con la empresa de la entidad."""
         resuelto = _resolver_empresa_id(EXISTE, "/api/costos/presupuesto")
         guardados = self._cargar(resuelto).guardados
         assert len(guardados) == 1 and guardados[0]["empresa_id"] == EXISTE
+
+    def test_un_header_inexistente_ya_no_puede_matar_el_evento(self) -> None:
+        """🔴 Contrario de `test_sin_el_fix_el_evento_se_perdia`, que afirmaba que con el header
+        crudo (sin pasar por el middleware) el evento se perdía por violar la FK.
+
+        Ese test no se borró: se movió acá, invertido. Su premisa —que el header viaja hasta
+        `auditoria.empresa_id`— dejó de ser cierta al pasar el etiquetado a la entidad. Se le pasa
+        el UUID inexistente CRUDO, salteando el middleware a propósito: aun así el evento se
+        guarda, y con la empresa del registro. Es la defensa en profundidad: aunque el primer
+        anillo fallara, el header ya no llega a la columna con FK."""
+        guardados = self._cargar(NO_EXISTE).guardados
+        assert len(guardados) == 1, "el evento de auditoría se perdió"
+        assert guardados[0]["empresa_id"] == EXISTE, "se coló el header en el evento"
+
+    def test_el_fake_de_FK_sigue_siendo_letal(self) -> None:
+        """Guarda contra el verde vacuo: si `_AuditFK` aceptara cualquier cosa, los dos tests de
+        arriba pasarían con el bug puesto. Se lo invoca directo con un id inexistente —que es lo
+        que el service ya no puede producir— para demostrar que el fake todavía descarta."""
+        audit = self._AuditFK({EXISTE})
+        audit.registrar(usuario_id="u1", entidad="presupuesto", registro_id=str(uuid4()),
+                        accion="UPDATE", evento="set_presupuesto", empresa_id=NO_EXISTE)
+        assert audit.guardados == []
