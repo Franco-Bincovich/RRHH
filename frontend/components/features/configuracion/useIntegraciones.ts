@@ -50,5 +50,7 @@ export function useIntegraciones() {
       conBloqueo(tipo, () => acciones.guardarKey(tipo, key, load)),
     conectarGoogle: () => conBloqueo("google", acciones.conectarGoogle),
     desconectarGoogle: () => conBloqueo("google-off", () => acciones.desconectarGoogle(load)),
+    designarRemitente: () =>
+      conBloqueo("google-remitente", () => acciones.designarRemitente(load)),
   }
 }

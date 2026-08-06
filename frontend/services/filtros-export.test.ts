@@ -109,18 +109,31 @@ describe("inventario — asignaciones", () => {
 })
 
 describe("inventario — ítems", () => {
-  const filtros = { empresaIdOverride: "emp-3", estado: "disponible" }
+  const filtros = { empresaIdOverride: "emp-3", estado: "disponible", areaId: "area-9" }
 
-  it("el export manda estado", async () => {
+  it("el export manda estado y area_id", async () => {
     await exportarInventarioItems("word", filtros)
-    expect(queryExport()).toEqual({ estado: "disponible" })
+    expect(queryExport()).toEqual({ estado: "disponible", area_id: "area-9" })
     expect(headersExport()).toEqual({ "X-Empresa-Id": "emp-3" })
+  })
+
+  it("el listado manda area_id con el MISMO nombre que espera el backend", async () => {
+    // `areaId` en el objeto de filtros, `area_id` en el cable: la traducción vive una sola vez
+    // en queryItems. Si divergiera, el backend ignoraría el filtro y devolvería todo.
+    await fetchItems(filtros)
+    expect(queryListado().get("area_id")).toBe("area-9")
   })
 
   it("el listado y el export traducen el mismo objeto a los mismos params", async () => {
     await fetchItems(filtros)
     await exportarInventarioItems("word", filtros)
     expect(queryExport()).toEqual(listadoComoObjeto())
+  })
+
+  it("sin área no manda el param: un area_id vacío filtraría por nada", async () => {
+    // Contrapeso del primero: sin esto, mandar SIEMPRE area_id pasaría los de arriba.
+    await fetchItems({ estado: "disponible" })
+    expect(queryListado().has("area_id")).toBe(false)
   })
 })
 

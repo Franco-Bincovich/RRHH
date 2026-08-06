@@ -1,6 +1,7 @@
 import { toast } from "sonner"
 
 import {
+  designarRemitente as designarRemitenteApi,
   disconnectIntegracion,
   getGoogleAuthUrl,
   saveAnthropicKey,
@@ -51,5 +52,18 @@ export async function desconectarGoogle(recargar: () => Promise<void>): Promise<
     await recargar()
   } catch {
     toast.error("No se pudo desconectar la cuenta de Google. Intentá de nuevo.")
+  }
+}
+
+/**
+ * Marca esta cuenta como la casilla del sistema. Se recarga porque el chip que la muestra sale
+ * de `es_remitente_sistema`, que viene en la lista.
+ */
+export async function designarRemitente(recargar: () => Promise<void>): Promise<void> {
+  try {
+    await designarRemitenteApi()
+    await recargar()
+  } catch {
+    toast.error("No se pudo designar la casilla del sistema. Intentá de nuevo.")
   }
 }

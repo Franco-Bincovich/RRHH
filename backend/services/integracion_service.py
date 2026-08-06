@@ -6,18 +6,23 @@ El flujo OAuth de Google vive en services/_google_oauth.py; acá quedan solo los
 que lo delegan en una línea. Por eso este módulo no importa nada de Google ni de httpx.
 """
 from typing import Optional
+from uuid import UUID
 
+from repositories.integracion_remitente_repo import IntegracionRemitenteRepo
 from repositories.integracion_repo import IntegracionRepo
 from schemas.integracion import IntegracionResponse
 from services._google_oauth import construir_url_autorizacion, procesar_callback
 from services._google_scopes import puede_enviar
+from services._integracion_response import armar_response
 from utils.errors import AppError
 from utils.logger import logger
 
 
 class IntegracionService:
-    def __init__(self, repo: Optional[IntegracionRepo] = None) -> None:
+    def __init__(self, repo: Optional[IntegracionRepo] = None,
+                 remitente_repo: Optional[IntegracionRemitenteRepo] = None) -> None:
         self._repo = repo or IntegracionRepo()
+        self._remitente_repo = remitente_repo or IntegracionRemitenteRepo()
 
     def get_integraciones(self, user_id: str) -> list[IntegracionResponse]:
         """
@@ -27,32 +32,46 @@ class IntegracionService:
             user_id: UUID del usuario autenticado.
 
         Returns:
-            Lista de IntegracionResponse para 'google' y 'anthropic'.
+            Lista de IntegracionResponse para 'google', 'anthropic' y 'zernio'.
         """
-        rows = self._repo.get_by_user(user_id)
-        existing = {r["tipo"]: r for r in rows}
+        existing = {r["tipo"]: r for r in self._repo.get_by_user(user_id)}
+        return [armar_response(t, existing.get(t)) for t in ("google", "anthropic", "zernio")]
 
-        result = []
-        for tipo in ("google", "anthropic", "zernio"):
-            row = existing.get(tipo)
-            if row and row.get("activo"):
-                result.append(IntegracionResponse(
-                    tipo=tipo,
-                    email_cuenta=row.get("email_cuenta"),
-                    activo=True,
-                    connected=True,
-                    # Solo google puede enviar; en las otras dos el scope no significa nada.
-                    puede_enviar=tipo == "google" and puede_enviar(row.get("scopes")),
-                    es_remitente_sistema=bool(row.get("es_remitente_sistema")),
-                ))
-            else:
-                result.append(IntegracionResponse(
-                    tipo=tipo,
-                    email_cuenta=None,
-                    activo=False,
-                    connected=False,
-                ))
-        return result
+    def designar_remitente(self, user_id: str) -> IntegracionResponse:
+        """
+        Marca la integración de Google del usuario como la casilla del sistema.
+
+        🔴 LAS DOS VALIDACIONES NO SON OPCIONALES, y su orden tampoco. `set_remitente` son DOS
+        UPDATE sin transacción: DESMARCA la casilla vigente y recién después marca la nueva,
+        filtrando por `user_id + tipo`. Si esa segunda sentencia matchea 0 filas —el usuario no
+        tiene Google conectado— el sistema queda SIN remitente y la función devuelve None igual,
+        sin forma de enterarse. Que la fila exista se verifica ACÁ porque el repo no lo reporta.
+
+        El scope se exige por lo mismo un escalón más arriba: una casilla sin `gmail.send` se ve
+        configurada y recién falla con un 403 de Google en el primer envío.
+
+        Args:
+            user_id: UUID del usuario autenticado, como string (es lo que entrega el router).
+
+        Returns:
+            IntegracionResponse de 'google', ya con es_remitente_sistema=True.
+
+        Raises:
+            AppError: INTEGRACION_NOT_FOUND (404) si no hay integración de Google activa.
+            AppError: SCOPE_ENVIO_FALTANTE (409) si la cuenta no concedió `gmail.send`.
+        """
+        row = self._repo.get_by_user_and_tipo(user_id, "google")
+        if not row or not row.get("activo"):
+            raise AppError("Integración no encontrada", "INTEGRACION_NOT_FOUND", 404)
+        if not puede_enviar(row.get("scopes")):
+            raise AppError(
+                "Esta cuenta de Google está conectada solo para lectura. Volvé a conectarla para "
+                "conceder el permiso de envío antes de designarla como casilla del sistema.",
+                "SCOPE_ENVIO_FALTANTE", 409)
+        # El repo declara UUID y el router entrega str: el casteo va acá, no en el repo.
+        self._remitente_repo.set_remitente(UUID(user_id))
+        logger.info("Casilla del sistema designada", extra={"user_id": user_id})
+        return armar_response("google", {**row, "es_remitente_sistema": True})
 
     def init_google_oauth(self, user_id: str) -> str:
         """URL de autorización de Google. Delegado a _google_oauth.construir_url_autorizacion."""

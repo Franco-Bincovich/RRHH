@@ -44,7 +44,8 @@ class OrganigramaProyectosService:
             if pids:
                 asig_data = (
                     supabase_admin.table("proyecto_asignaciones")
-                    .select("proyecto_id, empleado_id, empleado_empresa_id, rol")
+                    .select("proyecto_id, empleado_id, empleado_empresa_id, rol, "
+                            "valor_hora, fecha_desde, fecha_hasta")
                     .in_("proyecto_id", pids).eq("activo", True).execute().data or []
                 )
 
@@ -98,6 +99,8 @@ class OrganigramaProyectosService:
                         empleado_empresa_id=a["empleado_empresa_id"],
                         empleado_empresa_nombre=empresa_map.get(a["empleado_empresa_id"]),
                         total_proyectos=conteo.get(a["empleado_id"], 1),
+                        valor_hora=float(a.get("valor_hora") or 0),
+                        fecha_desde=a.get("fecha_desde"), fecha_hasta=a.get("fecha_hasta"),
                     ))
                 proyectos_resp.append(ProyectoOrgNodoResponse(
                     id=p["id"], nombre=p["nombre"], estado=p["estado"],

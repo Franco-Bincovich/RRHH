@@ -37,6 +37,17 @@ export async function disconnectIntegracion(tipo: string): Promise<void> {
   await apiFetch<void>(`/api/integraciones/${tipo}`, { method: "DELETE" })
 }
 
+/**
+ * Designa la cuenta de Google del usuario como la casilla desde la que salen los mails del
+ * sistema. Sin body: el backend toma la identidad del token, no de un parámetro.
+ *
+ * No existe la operación inversa a propósito: la casilla es única y se cambia designando otra.
+ * Sin casilla configurada, todo envío corta con `MAIL_SIN_REMITENTE`.
+ */
+export async function designarRemitente(): Promise<void> {
+  await apiFetch<Integracion>("/api/integraciones/google/remitente", { method: "POST" })
+}
+
 export async function saveZernioKey(api_key: string): Promise<Integracion> {
   return apiFetch<Integracion>("/api/integraciones/zernio", {
     method: "POST",

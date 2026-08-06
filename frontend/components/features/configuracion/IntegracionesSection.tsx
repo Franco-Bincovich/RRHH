@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, CheckCircle2, KeyRound, Unlink } from "lucide-react"
+import { AlertTriangle, CheckCircle2, KeyRound, Mailbox, Unlink } from "lucide-react"
 
 import { ApiKeyBlock } from "@/components/features/configuracion/ApiKeyBlock"
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
@@ -22,7 +22,7 @@ function ChipConectado({ texto }: { texto: string }) {
 export function IntegracionesSection() {
   const {
     loading, ocupado, google, anthropic, zernio,
-    guardarKey, conectarGoogle, desconectarGoogle,
+    guardarKey, conectarGoogle, desconectarGoogle, designarRemitente,
   } = useIntegraciones()
 
   return (
@@ -56,15 +56,35 @@ export function IntegracionesSection() {
             )}
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">{google.email_cuenta}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={desconectarGoogle}
-              disabled={ocupado["google-off"]}
-            >
-              <Unlink className="mr-2 size-4" />
-              Desconectar
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* No hay botón para DESmarcar: la casilla es única y se cambia designando otra,
+                  no apagando ésta. Sin casilla, todo envío corta con MAIL_SIN_REMITENTE, así
+                  que un botón de apagarla sería un botón de romper el envío sin reemplazo.
+                  Va deshabilitado sin `puede_enviar`: designar una cuenta sin permiso de envío
+                  deja una casilla que se ve configurada y falla con 403 en el primer mail. */}
+              {google.es_remitente_sistema ? (
+                <ChipConectado texto="Casilla del sistema" />
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={designarRemitente}
+                  disabled={ocupado["google-remitente"] || !google.puede_enviar}
+                >
+                  <Mailbox className="mr-2 size-4" />
+                  Usar como casilla del sistema
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={desconectarGoogle}
+                disabled={ocupado["google-off"]}
+              >
+                <Unlink className="mr-2 size-4" />
+                Desconectar
+              </Button>
+            </div>
           </div>
           </div>
         ) : (

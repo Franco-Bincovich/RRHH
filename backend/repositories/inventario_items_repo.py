@@ -3,6 +3,8 @@ from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._inventario_items_row import _build
+from repositories._inventario_scope import items_de_area
 from schemas.inventario import ItemCreate, ItemResponse, ItemUpdate
 from utils.errors import AppError
 from utils.logger import logger
@@ -10,43 +12,25 @@ from utils.logger import logger
 _T = "inventario_items"
 
 
-def _build(rows: List[dict]) -> List[ItemResponse]:
-    """Enriquece filas con empresa_nombre y asignado_a (empleado con asignación activa)."""
-    if not rows:
-        return []
-    empresa_map = {
-        e["id"]: e["nombre"]
-        for e in (supabase_admin.table("empresas").select("id, nombre")
-                  .in_("id", list({r["empresa_id"] for r in rows})).execute().data or [])
-    }
-    item_ids = [r["id"] for r in rows]
-    asig_data = (supabase_admin.table("inventario_asignaciones")
-                 .select("item_id, empleado_id").in_("item_id", item_ids)
-                 .is_("fecha_devolucion", "null").execute().data or [])
-    emp_ids = list({a["empleado_id"] for a in asig_data})
-    emp_map: dict = {}
-    if emp_ids:
-        emp_map = {
-            e["id"]: f"{e['nombre']} {e['apellido']}"
-            for e in (supabase_admin.table("empleados").select("id, nombre, apellido")
-                      .in_("id", emp_ids).execute().data or [])
-        }
-    asig_map = {a["item_id"]: emp_map.get(a["empleado_id"]) for a in asig_data}
-    return [
-        ItemResponse.model_validate({**r, "empresa_nombre": empresa_map.get(r["empresa_id"]),
-                                     "asignado_a": asig_map.get(r["id"])})
-        for r in rows
-    ]
-
-
 class InventarioItemsRepo:
-    def find_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None) -> List[ItemResponse]:
-        """Retorna ítems filtrados por empresa y/o estado, ordenados por nombre."""
+    def find_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None,
+                 area_id: Optional[UUID] = None) -> List[ItemResponse]:
+        """Retorna ítems filtrados por empresa, estado y/o área, ordenados por nombre.
+
+        El área se resuelve a ítems en `_inventario_scope`, que documenta qué significa el
+        filtro y por qué un ítem sin asignación activa no cae bajo ninguna área.
+        """
+        if area_id:
+            ids = items_de_area(area_id, empresa_id)
+            if not ids:
+                return []   # área sin ítems en mano: `.in_([])` no es un WHERE válido
         q = supabase_admin.table(_T).select("*").order("nombre")
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if estado:
             q = q.eq("estado", estado)
+        if area_id:
+            q = q.in_("id", ids)
         return _build(q.execute().data or [])
 
     def find_by_id(self, id: str, empresa_id: Optional[UUID] = None) -> Optional[ItemResponse]:

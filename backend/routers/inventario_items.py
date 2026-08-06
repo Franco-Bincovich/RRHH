@@ -25,15 +25,15 @@ def _svc() -> InventarioItemsService:
 @router.get("", response_model=ItemListResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def list_items(
     request: Request,
-    estado: Optional[str] = Query(None),
+    estado: Optional[str] = Query(None), area_id: Optional[UUID] = Query(None),
     service: InventarioItemsService = Depends(_svc),
 ) -> ItemListResponse:
-    return service.get_all(get_empresa_id(request), estado)
+    return service.get_all(get_empresa_id(request), estado, area_id)
 
 
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-async def exportar_items(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), estado: Optional[str] = Query(None), service: InventarioItemsService = Depends(_svc)) -> Response:
-    d = service.exportar(get_empresa_id(request), formato, estado)
+async def exportar_items(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), estado: Optional[str] = Query(None), area_id: Optional[UUID] = Query(None), service: InventarioItemsService = Depends(_svc)) -> Response:
+    d = service.exportar(get_empresa_id(request), formato, estado, area_id)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 

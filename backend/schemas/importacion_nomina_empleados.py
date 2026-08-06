@@ -19,6 +19,16 @@ from schemas.empleado import EmpleadoCreate, EmpleadoUpdate
 class EmpleadoCreateNomina(EmpleadoCreate):
     """EmpleadoCreate + campos de nómina. email opcional (se permite crear sin email)."""
     email_corporativo: Optional[str] = None  # tolerante: si falta, se crea con email null
+    # 🔴 SE REDECLARA Optional PISANDO EL `bool = False` DE EmpleadoBase, y es el punto entero
+    # de este cambio. `_empleado_write_repo.guardar` arma el INSERT con
+    # `{k: v for k, v in data.model_dump().items() if v is not None}`: con el tipo heredado,
+    # `False` NO es None y entraba SIEMPRE en el payload, así que el import escribía
+    # `es_lider = false` explícito en cada alta aunque el CSV no dijera nada.
+    # Con Optional, None cae del payload y la columna toma su DEFAULT de la 060 (false) — mismo
+    # resultado para un alta, pero ahora por la razón correcta: no afirmamos nada.
+    # Lo importante es que deja los DOS caminos con la MISMA semántica: None = no escribir.
+    # Ver el docstring de EmpleadoUpdateNomina para el lado del update, que es donde se nota.
+    es_lider: Optional[bool] = None
     fecha_ingreso_reconocida: Optional[str] = None
     equipo: Optional[str] = None
     co_sourcing: Optional[bool] = None
@@ -28,7 +38,15 @@ class EmpleadoCreateNomina(EmpleadoCreate):
 
 
 class EmpleadoUpdateNomina(EmpleadoUpdate):
-    """EmpleadoUpdate + campos de nómina (para actualizar un empleado ya existente por DNI)."""
+    """EmpleadoUpdate + campos de nómina (para actualizar un empleado ya existente por DNI).
+
+    `es_lider` NO se redeclara: `EmpleadoUpdate` ya lo tiene como `Optional[bool] = None` y
+    `_empleado_write_repo.actualizar` usa `model_dump(exclude_none=True)`. De ahí sale la
+    garantía que se pedía: un CSV con 'SI'/'NO' pisa lo que haya (el import gana sobre la
+    edición manual, mismo criterio que `manager_id`), pero un valor NO RECONOCIDO llega como
+    None, cae del patch y **deja intacto un `es_lider` puesto a mano**. No hay que hacer nada
+    para conseguirlo salvo no romperlo.
+    """
     fecha_ingreso_reconocida: Optional[str] = None
     equipo: Optional[str] = None
     co_sourcing: Optional[bool] = None
@@ -101,6 +119,9 @@ def _base_nomina(f: dict, email: Optional[str]) -> dict:
         "fecha_ingreso_reconocida": f["fecha_ingreso_reconocida"], "equipo": f["equipo"],
         "co_sourcing": f["co_sourcing"], "product_owner": f["product_owner"],
         "liderazgo": f["liderazgo"], "motivo_baja": f["motivo_baja"],
+        # Los dos: `liderazgo` es el texto crudo que se conserva, `es_lider` el booleano que lee
+        # todo el sistema. None (no reconocido) no escribe por ninguno de los dos caminos.
+        "es_lider": f["es_lider"],
     }
 
 

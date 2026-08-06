@@ -37,6 +37,7 @@ vi.mock("@/services/integraciones", () => ({
   saveAnthropicKey: vi.fn(),
   saveZernioKey: vi.fn(),
   disconnectIntegracion: vi.fn(),
+  designarRemitente: vi.fn(),
 }))
 vi.mock("@/services/configuracion", () => ({
   fetchConfiguracion: vi.fn(() => new Promise(() => {})),

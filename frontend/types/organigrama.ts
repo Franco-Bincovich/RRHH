@@ -35,6 +35,17 @@ export interface EmpleadoProyectoNodoAPI {
   empleado_empresa_id: string
   empleado_empresa_nombre: string | null
   total_proyectos: number
+  /**
+   * Contrato de la asignación. Los tres llegan vacíos hoy (las 31 asignaciones de producción
+   * tienen valor_hora 0 y las dos fechas en null).
+   *
+   * `valor_hora` NO es opcional en la API —la columna es NOT NULL DEFAULT 0— pero un 0
+   * significa "no está cargado", no "cobra cero": la traducción la hace `contratoAsignacion.ts`.
+   * Las fechas son columnas `date`, o sea ISO de solo fecha ("2026-03-01").
+   */
+  valor_hora: number
+  fecha_desde: string | null
+  fecha_hasta: string | null
 }
 
 export interface ProyectoOrgNodoAPI {

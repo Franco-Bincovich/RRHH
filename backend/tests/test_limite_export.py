@@ -157,8 +157,10 @@ class _RepoPorFiltro:
     def __init__(self, sin_filtro: int, con_filtro: int) -> None:
         self.sin_filtro, self.con_filtro = sin_filtro, con_filtro
 
-    def find_all(self, empresa_id=None, estado=None):
-        n = self.con_filtro if estado else self.sin_filtro
+    def find_all(self, empresa_id=None, estado=None, area_id=None):
+        # CUALQUIER filtro acota, no solo `estado`: si el fake solo mirara uno, un filtro nuevo
+        # que no bajara el total pasaría inadvertido y el consejo "usá los filtros" sería falso.
+        n = self.con_filtro if (estado or area_id) else self.sin_filtro
         # SimpleNamespace y no dict: construir_filas_export lee atributos, no claves.
         return [SimpleNamespace(
             empresa_nombre="ACME", nombre=f"item-{i}", tipo="notebook", descripcion=None,

@@ -41,6 +41,206 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-06 · Filtro por área en ítems de inventario · commit pendiente
+
+**Qué cambió:** el listado y el export de `/inventario` → pestaña Ítems aceptan **`area_id`**.
+Antes solo filtraban por `estado`. Cierra el ítem de `MATRIZ-FILTROS.md` para ese módulo.
+
+Llegó en tres commits: dos divisiones previas (el repo 98→70, `ItemsTab.tsx` 152→70) y este.
+
+- **`repositories/_inventario_scope.py`** (NUEVO, 47) — `items_de_area`. Reusa
+  `empleados_de_area` y suma el salto por `inventario_asignaciones`.
+- **`inventario_items_repo.py`** (82/100) — el filtro va en el **WHERE** (Forma A), con el early
+  return del molde cuando el área no tiene gente: un `.in_([])` no es un WHERE válido.
+- **`inventario_items_service.py`** (96/150) · **`routers/inventario_items.py`** (**79/80**,
+  `area_id` en la misma línea que `estado`, estilo compacto del archivo).
+- Front: `useFiltrosItemsInv.ts` (78/80) carga las áreas y limpia el área al cambiar de empresa ·
+  `ItemsTab.tsx` (77/150) suma el `<select>` · `ItemsFiltros` gana `areaId` y `queryItems` lo
+  traduce a `area_id` — **una sola vez, y le llega al listado y al export**.
+- Tests: `tests/test_inventario_filtro_area.py` (NUEVO, 15) + 2 en `filtros-export.test.ts`.
+  Backend **1709 passed**, front **373 passed**, `tsc` 0.
+
+🔴 **DEFINICIÓN DEL FILTRO, escrita en `_inventario_scope.py` y no implícita:** "ítems del área
+X" = **los que un empleado del área tiene asignados HOY** (`fecha_devolucion IS NULL`), no los
+que alguna vez tuvo. El catálogo de ítems muestra TODO —incluidos `disponible` y `baja`—, así
+que sin ese recorte un ítem devuelto hace dos años seguiría apareciendo bajo el área de quien lo
+usó. Consecuencia declarada: **un ítem sin asignación activa no aparece bajo ninguna área**,
+porque no hay área que pueda reclamarlo. Es el modelo, no la implementación.
+
+**Impacto en infraestructura: Ninguno.** Sin migraciones, sin env vars, sin dependencias. Un
+`Query` param nuevo, opcional, en dos endpoints que ya existían: aditivo, nada se rompe.
+⚠️ `exportar_items` **sigue sin decorador de rate limit** (corre bajo el baseline de 300/min):
+`test_rate_limit.py:276-286` lo afirma y sigue en verde. Cuando ese router se divida, hay que
+agregarle `shared_limit("30/hour", scope="export")` y mover el caso a `TestFranjaExport`.
+⚠️ El filtro suma **2 queries batch** (empleados del área → asignaciones activas) antes de la del
+catálogo. No hay N+1.
+
+## 2026-08-06 · Contrato de la asignación en las cards del organigrama · commit pendiente
+
+**Qué cambió:** las cards de `/organigrama` (vista por proyecto) mostraban nombre y rol de cada
+persona; ahora muestran también **valor hora y período** de la asignación.
+
+**Salió del alcance "solo front": los tres campos no llegaban.** A diferencia del caso de
+`liderazgo` —donde el repo hacía `SELECT *` y el schema descartaba la columna en silencio—, acá
+la query de `organigrama_proyectos_service.py` tiene **lista explícita de columnas** y ni siquiera
+las pedía. Hubo que tocar las tres capas:
+
+- **`services/organigrama_proyectos_service.py`** — `select(...)` suma `valor_hora, fecha_desde,
+  fecha_hasta`, y el nodo los pasa. Nombres verificados contra `db/schema.sql:662-664`.
+- **`schemas/organigrama.py`** — `EmpleadoProyectoNodoResponse` declara los tres.
+- **`types/organigrama.ts`** + **`CardsProyecto.tsx`** (130/150) + **`contratoAsignacion.ts`**
+  (NUEVO): los formateadores salieron a su propio módulo porque la card se pasaba de 150.
+- Tests: `contratoAsignacion.test.tsx`, 20 nuevos. Front **371 passed**, `tsc` 0.
+  Backend **1694 passed** (sin cambios: ningún test cubría este service).
+
+🔴 **`valor_hora = 0` se muestra "Sin definir", no "$0"**, y una fecha nula es "no se definió",
+no "sin límite". Hoy las **31 asignaciones de producción tienen valor_hora 0 y las dos fechas en
+NULL**, o sea que el camino "vacío" es el 100% de los casos reales. La traducción vive en el
+FRONT: el schema devuelve el 0 tal cual, para no perder —el día que exista— la diferencia entre
+un 0 deliberado y uno sin cargar.
+
+**Impacto en infraestructura: Ninguno.** Sin migraciones, sin env vars, sin dependencias, sin
+endpoints nuevos. `GET /api/organigrama/proyectos` devuelve **tres campos más** por empleado en
+un response que ya existía: es aditivo, ningún consumidor se rompe.
+⚠️ La query pide 3 columnas más sobre `proyecto_asignaciones`, sin joins nuevos ni N+1: sigue
+siendo **una sola** consulta batch para todas las asignaciones.
+
+## 2026-08-06 · `liderazgo` → `es_lider`: el parser que la 064 dejó sin escribir · commit pendiente
+
+**Qué cambió:** la migración 064 creó la columna `liderazgo` (texto crudo del CSV) y declaró **en
+su propio comentario** que *"el parser decide cómo poblar `es_lider` a partir de él"*. Ese parser
+nunca se escribió. Resultado verificado contra el catálogo vivo: `liderazgo` poblado **31/31**
+('SI' en 3, 'NO' en 28) y `es_lider` en **false en las 31, incluidos los 3 líderes**.
+
+Importa porque `es_lider` es la columna que leen los 15 consumidores (filtro del listado, columna
+del export, campo de la ficha) y sobre todo `fetchEmpleadosLideres()`, que decide **qué empleados
+se pueden vincular a un usuario `mandos_medios`**: con las 31 en false, ese selector estaba vacío.
+
+- **`migrations/093_backfill_es_lider.sql`** (NUEVA, 🔴 **PENDIENTE DE CORRER**) — puebla
+  `es_lider` desde `liderazgo` para las filas existentes. Data-only, no toca estructura.
+- **`services/_nomina_empleados_transforms.py`** — `parsear_fila` ahora produce `es_lider` además
+  de `liderazgo`, con `parse_bool` (que ya existía y ya devolvía `Optional[bool]`).
+- **`schemas/importacion_nomina_empleados.py`** — `es_lider` viaja por alta y update.
+- **`services/nomina_empleados_service.py`** — un liderazgo no reconocido se reporta en
+  `con_faltantes`. **149/150 líneas: el próximo cambio de ese archivo exige dividirlo primero.**
+- **`tests/test_liderazgo_es_lider.py`** (NUEVO, 45 tests). Antes de esto, **ningún test afirmaba
+  nada sobre `liderazgo`**. Backend: **1694 passed**.
+
+🔴 **Un valor no reconocido NO se escribe como false.** 'SI'/'NO' mapean; cualquier otro texto
+deja `es_lider` sin tocar y se reporta. Un false silencioso convertiría "GERENTE DE ÁREA" en
+"no es líder", que es una afirmación que nadie hizo.
+
+**Impacto en infraestructura:**
+
+- 🔴 **Migración 093 pendiente. Correrla DESPUÉS del deploy del código**, por el mismo motivo que
+  la 092: con el código viejo, el próximo import de nómina vuelve a dejar `es_lider` en false y
+  hay que correrla de nuevo. Con el código nuevo desplegado, el backfill queda firme.
+  No destructiva, idempotente, y reversible de hecho (`liderazgo` conserva el texto).
+- **Sin cambios en `db/schema.sql`**: la 093 toca DATOS, no estructura. Por lo mismo no lleva
+  `NOTIFY pgrst, 'reload schema'`.
+- Sin env vars, sin dependencias, sin endpoints nuevos, sin cambios de auth.
+- **El front no se tocó y no hace falta tocarlo**: el filtro, la ficha y el export ya leen
+  `es_lider` — después del backfill empiezan a decir la verdad solos.
+- `liderazgo` **NO se borra**: queda como dato crudo del import y es lo único que permite
+  recalcular el mapeo o desambiguar un valor que no entendimos.
+
+## 2026-08-06 · UI para designar la casilla del sistema · commit pendiente
+
+**Qué cambió:** solo front. El endpoint de la entrada de abajo ya no es alcanzable solo por API:
+en **Configuración → Google / Gmail**, una cuenta conectada muestra el botón **"Usar como casilla
+del sistema"**, y la que ya lo es muestra el chip **"Casilla del sistema"** en vez del botón.
+
+- `services/integraciones.ts` — `designarRemitente()` (POST, sin body).
+- `accionesIntegracion.ts` — la acción con su toast de error; recarga la lista al terminar.
+- `useIntegraciones.ts` — la expone con `conBloqueo("google-remitente")`.
+- `IntegracionesSection.tsx` — el control, dentro del bloque de Google (148/150).
+- Tests: `IntegracionesSection.test.tsx` (8 nuevos) + `designarRemitente` agregado al mock de
+  `page.test.tsx`. Front: **351 passed** en 27 archivos. `tsc --noEmit`: 0.
+
+**No se ofrece DESdesignar**, y es una decisión, no un olvido: la casilla es única y se cambia
+designando otra. Sin casilla, todo envío corta con `MAIL_SIN_REMITENTE`, así que un botón de
+apagarla sería un botón de romper el envío sin nada que lo reemplace.
+
+**Impacto en infraestructura: Ninguno.** Sin endpoints nuevos (usa el de la entrada de abajo),
+sin env vars, sin dependencias, sin migraciones. El botón queda deshabilitado si la cuenta no
+tiene `gmail.send`; **la cuenta que hay hoy en producción SÍ lo tiene** (ver la corrección en la
+entrada siguiente), así que va a salir habilitado.
+
+## 2026-08-06 · Designar la casilla del sistema (endpoint nuevo) · commit pendiente
+
+**Qué cambió:** se destrabó el bloqueante V2/F1.1 del plan. `set_remitente()` existía desde la
+migración 087 con **cero callers**: no había forma de designar la casilla desde la que salen los
+mails, así que **todo envío cortaba con `MAIL_SIN_REMITENTE` (400)**. Ahora hay endpoint.
+
+- **`POST /api/integraciones/google/remitente`** (nuevo). Designa la integración de Google **del
+  propio llamante**. Sin body. Gate `Seccion.INTEGRACIONES + WRITE` → **solo `admin_rrhh`**.
+  Devuelve el `IntegracionResponse` de google con `es_remitente_sistema=true`.
+- **`services/integracion_service.py`** — `designar_remitente(user_id)`. Valida en este orden y
+  **antes** de tocar el repo: (a) existe integración de Google activa, si no `404
+  INTEGRACION_NOT_FOUND`; (b) la cuenta concedió `gmail.send`, si no `409 SCOPE_ENVIO_FALTANTE`
+  con mensaje pidiendo reconectar. 🔴 **La validación previa no es cosmética**: `set_remitente`
+  son dos UPDATE sin transacción que DESMARCAN la casilla vigente antes de marcar la nueva, así
+  que designar a alguien sin Google conectado dejaría el sistema **sin remitente**, en silencio
+  y con un 200. Hay 5 tests que fallan si la llamada al repo se adelanta a las validaciones.
+- **`services/_integracion_response.py`** (nuevo, 32 líneas) — el armado del response salió del
+  service, que se pasaba a 154/150. Lo comparten `get_integraciones` y `designar_remitente`.
+- **Tests**: +10 en `tests/test_google_scopes.py`. El fake del remitente modela **dos**
+  integraciones con su flag y reproduce el orden apagar-todas→prender-la-pedida, incluida la
+  rama en que el usuario no tiene fila y no se prende nada.
+
+**Impacto en infraestructura:**
+
+- **Endpoint nuevo, NO público**: `POST /api/integraciones/google/remitente`, con auth y gate de
+  escritura. No se agregó a `PUBLIC_ROUTES`.
+- **Sin rate limit propio**: corre bajo el baseline global de 300/min del middleware.
+- **Sin auditoría**, igual que el resto de los endpoints de integraciones (ninguno audita hoy).
+- **La migración 087 ya está corrida**, así que la columna y el índice único parcial existen: no
+  hace falta nada del lado de la base.
+- 🔴 **Para que el envío de mails funcione en producción hay que ejecutar esto una vez**: un
+  `admin_rrhh` entra a Configuración y designa la casilla. **No hace falta reconectar nada.**
+  > ✏️ **CORRECCIÓN (6/8/2026).** La primera versión de esta entrada decía que la integración
+  > conectada tenía `scopes` **sin** `gmail.send` y que **iba a rechazar con 409 hasta
+  > reconectarla**. **Es falso.** Verificado contra el **catálogo vivo de producción**, esa fila
+  > tiene `[gmail.readonly, gmail.send, userinfo.email, openid]`: `gmail.send` **está**, así que
+  > `designar_remitente` pasa la validación de scope y el 409 no se produce. El dato original
+  > salía de suponer que la fila era anterior a la migración 087 — no se había verificado contra
+  > la base. Lo que sigue siendo cierto es el mecanismo (Google no amplía un consentimiento ya
+  > otorgado, y una cuenta sin el scope exige reconectar); lo que era falso es que ESTA cuenta
+  > estuviera en ese estado.
+- Sin migraciones, sin env vars, sin dependencias, sin storage, sin cambios de auth ni de CORS.
+- **La UI no existe todavía** (`IntegracionesSection.tsx` sigue ofreciendo solo Conectar y
+  Desconectar): hoy el endpoint solo es alcanzable por API. Es la sesión siguiente.
+- Suite backend: **1649 passed**.
+
+## 2026-08-06 · División de `routers/integraciones.py` (refactor puro) · commit pendiente
+
+**Qué cambió:** solo backend, y **solo movimiento de código — cero funcionalidad nueva**.
+`routers/integraciones.py` estaba en **77/80** líneas y no entraba el endpoint para designar la
+casilla del sistema (`es_remitente_sistema`), que se escribe en la sesión siguiente. Se movieron
+**verbatim** los dos endpoints de API keys —`POST /anthropic` y `POST /zernio`— a
+**`routers/integraciones_credenciales.py`** (nuevo, 39 líneas), con su propio `APIRouter()`,
+`SECCION` y `_service()`. `integraciones.py` quedó en **67**.
+
+Se movieron las API keys y **no** los de Google a propósito: `google_callback` es la única ruta
+pública del módulo (`PUBLIC_ROUTES`) y su nombre de módulo está fijado por
+`tests/test_rate_limit.py`, que lee la clave `routers.integraciones.google_callback`. Mudarla
+habría roto ese test y tocado la pieza más delicada del archivo para ganar espacio.
+
+El router nuevo se monta desde `integraciones.py` con `router.include_router(...)`, colocado
+**inmediatamente después** de crear el router principal y no al final: el `DELETE /{tipo}` es
+catch-all y montar detrás de él dejaría las rutas incluidas atrás de un comodín.
+
+**Impacto en infraestructura: Ninguno.**
+
+- **`main.py` NO se tocó.** El prefijo `/api/integraciones` sigue declarado en un solo lugar
+  (`app.include_router(integraciones_router, prefix="/api/integraciones")`).
+- **Ninguna ruta cambió de path ni de método.** Verificado por introspección de `app.routes`: las
+  6 siguen registradas idénticas, y las 5 con gate conservan su `require_permission`
+  (el callback sigue con 0 dependencies, que es lo correcto: es público).
+- Sin migraciones, sin env vars, sin dependencias, sin storage, sin endpoints nuevos, sin
+  cambios de auth ni de CORS/callbacks.
+- Suite backend: **1639 passed** (`tests/test_rate_limit.py`: 58 passed).
+
 ## 2026-08-03 · Modales que entran en pantalla + aviso de modo consolidado · 3 commits pendientes
 
 **Qué cambió:** solo front.

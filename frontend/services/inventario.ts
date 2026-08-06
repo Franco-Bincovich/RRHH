@@ -17,7 +17,7 @@ function override(empresaId?: string): RequestInit {
  * tipo a propósito, para que un filtro nuevo no pueda quedar en uno solo de los dos
  * (invariante list ↔ export).
  */
-export interface ItemsFiltros { empresaIdOverride?: string; estado?: string }
+export interface ItemsFiltros { empresaIdOverride?: string; estado?: string; areaId?: string }
 export interface AsignacionesInventarioFiltros { empresaIdOverride?: string; empleadoId?: string; areaId?: string }
 
 /**
@@ -25,7 +25,7 @@ export interface AsignacionesInventarioFiltros { empresaIdOverride?: string; emp
  * un filtro, se suma acá una sola vez y le llega a los dos.
  */
 function queryItems(f: ItemsFiltros): Record<string, string | undefined> {
-  return { estado: f.estado }
+  return { estado: f.estado, area_id: f.areaId }
 }
 
 function queryAsignaciones(f: AsignacionesInventarioFiltros): Record<string, string | undefined> {

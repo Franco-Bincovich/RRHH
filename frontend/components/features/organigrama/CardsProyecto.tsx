@@ -1,6 +1,7 @@
 "use client"
 
 import { GitBranch } from "lucide-react"
+import { periodoTexto, valorHoraTexto } from "@/components/features/organigrama/contratoAsignacion"
 import { colorByEmpresa, initials, MULTI_PROY, type EmpresaColor } from "@/utils/colorEmpresa"
 import type { EmpleadoProyectoNodoAPI, OrgProyectosResponse, ProyectoOrgNodoAPI } from "@/types/organigrama"
 
@@ -33,6 +34,13 @@ function GrupoEmpresa({ empresaNombre, empleados, color, proyectoEmpresaId }: {
             </span>
           )}
         </div>
+      )}
+      {primero && (
+        // Alineado con el nombre (pl-7 = avatar + gap), no con el borde: se lee como detalle de
+        // esa persona y no como un dato del grupo.
+        <p className="pl-7 pb-1 text-[11px] text-muted-foreground">
+          {valorHoraTexto(primero.valor_hora)} · {periodoTexto(primero.fecha_desde, primero.fecha_hasta)}
+        </p>
       )}
       {resto.length > 0 && (
         <p className="py-0.5 pl-7 text-[12px] text-muted-foreground">

@@ -8,13 +8,18 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 
 from config.settings import settings
-from schemas.integracion import ApiKeyUpdate, IntegracionResponse
+from routers.integraciones_credenciales import router as credenciales_router
+from schemas.integracion import IntegracionResponse
 from services.integracion_service import IntegracionService
 from utils.permisos import Accion, Seccion, require_permission
 from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.INTEGRACIONES
+# Las API keys viven en su propio módulo (límite de líneas). Se monta ACÁ y no al final del
+# archivo: el `DELETE /{tipo}` de abajo es catch-all, y montar después de él dejaría a las
+# rutas incluidas detrás de un comodín.
+router.include_router(credenciales_router)
 
 
 def _service() -> IntegracionService:
@@ -56,19 +61,10 @@ async def google_callback(
     return RedirectResponse(url=f"{settings.frontend_url}/configuracion?oauth=google")
 
 
-@router.post("/anthropic", response_model=IntegracionResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def save_anthropic_key(
-    request: Request,
-    body: ApiKeyUpdate,
-) -> IntegracionResponse:
+@router.post("/google/remitente", response_model=IntegracionResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
+async def designar_remitente(request: Request) -> IntegracionResponse:
     user_id: str = request.state.user["id"]
-    return _service().save_anthropic_key(user_id, body.api_key)
-
-
-@router.post("/zernio", response_model=IntegracionResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def save_zernio_key(request: Request, body: ApiKeyUpdate) -> IntegracionResponse:
-    user_id: str = request.state.user["id"]
-    return _service().save_zernio_key(user_id, body.api_key)
+    return _service().designar_remitente(user_id)
 
 
 @router.delete("/{tipo}", status_code=204, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])

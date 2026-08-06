@@ -24,15 +24,15 @@ class InventarioItemsService:
     def __init__(self, repo: Optional[InventarioItemsRepo] = None) -> None:
         self._repo = repo or InventarioItemsRepo()
 
-    def get_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None) -> ItemListResponse:
-        """Retorna ítems filtrados por empresa y/o estado. None = todos."""
-        items = self._repo.find_all(empresa_id, estado)
+    def get_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None, area_id: Optional[UUID] = None) -> ItemListResponse:
+        """Retorna ítems filtrados por empresa, estado y/o área. None = todos."""
+        items = self._repo.find_all(empresa_id, estado, area_id)
         return ItemListResponse(items=items, total=len(items))
 
-    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", estado: Optional[str] = None) -> Descarga:
-        """Exporta el catálogo de ítems (columnas legibles, sin UUIDs) respetando el filtro
-        de estado. None = consolidado (todas las empresas). El motor genérico no se toca."""
-        items = self._repo.find_all(empresa_id, estado)
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", estado: Optional[str] = None, area_id: Optional[UUID] = None) -> Descarga:
+        """Exporta el catálogo de ítems (columnas legibles, sin UUIDs) respetando los filtros
+        de estado y área. None = consolidado (todas las empresas). El motor genérico no se toca."""
+        items = self._repo.find_all(empresa_id, estado, area_id)
         verificar_limite_export(len(items))
         datos = {"Ítems": construir_filas_export(items)}
         return build_export(nombre="Inventario de ítems", datos=datos, filename_base="inventario_items", formato=formato)

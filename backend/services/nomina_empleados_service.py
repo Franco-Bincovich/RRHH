@@ -111,6 +111,10 @@ class NominaEmpleadosImportService:
 
         email = f["email_corporativo"] if email_valido(f["email_corporativo"]) else None
         faltan = [] if email else ["email"]
+        # La fila se carga igual, pero `es_lider` quedó sin escribir: hay que decirlo. Callarlo
+        # sería equivalente a un false silencioso, que es lo que este cambio vino a sacar.
+        if f["_liderazgo_no_reconocido"]:
+            faltan.append("liderazgo")
 
         # `areas_validadas` y `prior` ahorran una query cada uno POR FILA: el área la acabó de
         # resolver `_catalogos` contra esta misma empresa, y `existente` ES la fila anterior que

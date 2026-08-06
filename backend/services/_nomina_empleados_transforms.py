@@ -79,6 +79,18 @@ def parsear_fila(row: dict) -> dict:
     Devuelve los campos del empleado + empresa/área/superior aparte (claves con '_')."""
     rol = limpiar(_get(row, "Rol"))
     reconocida = parse_fecha(_get(row, "Fecha Ingreso Reconocida"))
+    # 🔴 LIDERAZGO SE LEE DOS VECES, A PROPÓSITO — el texto crudo Y el booleano derivado.
+    # La migración 064 creó `liderazgo` declarando en su comentario que "el parser decide cómo
+    # poblar `es_lider` a partir de él", y ese parser nunca se escribió: durante meses el import
+    # cargó el texto y dejó `es_lider` en su default false, incluidos los líderes reales.
+    # `parse_bool` ya devuelve Optional[bool] con la semántica exacta que hace falta —'SI'/'NO'
+    # y None para todo lo demás—, así que NO hace falta un parser nuevo: alcanza con usarlo.
+    # 🔴 None NO ES False: un valor no reconocido deja `es_lider` SIN ESCRIBIR y se reporta como
+    # faltante. Mapear "GERENTE DE ÁREA" a false diría que esa persona no es líder, que es
+    # justamente la afirmación que nadie hizo. Ver `_liderazgo_no_reconocido` abajo.
+    crudo_liderazgo = _get(row, "Liderazgo")
+    liderazgo = limpiar(crudo_liderazgo)
+    es_lider = parse_bool(crudo_liderazgo)
     return {
         "apellido": _get(row, "Apellido"),
         "nombre": _get(row, "Nombre"),
@@ -99,13 +111,17 @@ def parsear_fila(row: dict) -> dict:
         "categoria": limpiar(_get(row, "Categoria")),
         "tipo_contrato": _get(row, "Modalidad Contratacion"),  # texto libre tal cual
         "co_sourcing": parse_bool(_get(row, "Co-sourcing")),
-        "liderazgo": limpiar(_get(row, "Liderazgo")),
+        "liderazgo": liderazgo,          # texto crudo: se conserva, no lo lee nadie todavía
+        "es_lider": es_lider,            # None = no reconocido → no se escribe (ver arriba)
         "ubicacion": limpiar(_get(row, "Ubicación Física")),
         "turno": limpiar(_get(row, "Carga Horaria")),
         "product_owner": parse_bool(_get(row, "Product Owner")),
         "fecha_baja": parse_fecha(_get(row, "Fecha Baja")),
         "motivo_baja": limpiar(_get(row, "Motivo Baja")),
         # No se persisten en empleados: se usan para crear empresa/área y para el reporte.
+        # Trajo texto pero no se pudo mapear a Sí/No. Distinto de la celda vacía, que no es un
+        # problema que reportar: nadie dijo nada, y no hay nada que corregir.
+        "_liderazgo_no_reconocido": liderazgo is not None and es_lider is None,
         "_empresa": _get(row, "Organismo"),
         "_area": _get(row, "Sector"),
         "_superior_apellido": limpiar(_get(row, "Apellido Superior")),
