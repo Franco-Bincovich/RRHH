@@ -12,6 +12,27 @@ export { API_BASE, clearSession, getSession, saveSession } from "@/services/sess
 // el error al usuario.
 const RUTAS_SIN_REFRESH = ["/api/auth/login", "/api/auth/refresh"]
 
+/**
+ * 🔴 EL MÁXIMO `page_size` QUE ACEPTA EL BACKEND. Pedir más NO devuelve menos filas: FastAPI
+ * rechaza el request con **422** antes de tocar un service, así que la pantalla se queda sin
+ * NINGÚN dato.
+ *
+ * Los seis routers paginados lo declaran igual —`Query(20, ge=1, le=100)` en `empleados`,
+ * `vacaciones`, `vacaciones_pendientes`, `ausencias`, `auditoria` y `proyecto_horas`—, o sea que
+ * es una propiedad del backend y no de un endpoint. Vive acá, en la capa HTTP compartida, para
+ * que haya UNA fuente y no un `100` repetido en cada modal.
+ *
+ * ⚠️ SUBIR ESTE NÚMERO SOLO NO ALCANZA: el tope real está en el `le=100` de los routers, y este
+ * const es el espejo. Cambiarlo de un lado deja el otro rechazando o truncando en silencio.
+ *
+ * Ya rompió dos pantallas: `useDestinatarios` (envío de plantillas) y `useCandidatosProyecto`
+ * (asignar empleados a un proyecto) pedían 200 y mostraban "no hay datos" con la base llena,
+ * porque el `.catch` de cada hook convertía el 422 en una lista vacía. Hay un barrido que
+ * verifica que ningún call site del listado de empleados vuelva a pasarse:
+ * `services/pageSize.test.ts`.
+ */
+export const MAX_PAGE_SIZE = 100
+
 // ── Request helpers ────────────────────────────────────────────────────────────
 
 export function authHeaders(): Record<string, string> {

@@ -29,7 +29,7 @@ export function useAsignarEmpleados(
   const [saving, setSaving] = useState(false)
   const [asignandoArea, setAsignandoArea] = useState(false)
 
-  const { empleados, areas } = useCandidatosProyecto(open, areaFiltro)
+  const { empleados, areas, error: errorCandidatos, recargar: recargarCandidatos } = useCandidatosProyecto(open, areaFiltro)
 
   useEffect(() => {
     if (!open) return
@@ -74,6 +74,6 @@ export function useAsignarEmpleados(
     empleados, areas, areaFiltro, setAreaFiltro, search, setSearch, sel, rol, setRol,
     valorHora, setValorHora, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
     saving, asignandoArea, yaEnElProyecto, faltan, visibles, allSelected,
-    toggle, toggleAll, handleSubmit, handleAsignarArea,
+    toggle, toggleAll, handleSubmit, handleAsignarArea, errorCandidatos, recargarCandidatos,
   }
 }

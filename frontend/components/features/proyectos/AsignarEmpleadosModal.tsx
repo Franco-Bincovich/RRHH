@@ -4,6 +4,9 @@ import { useAsignarEmpleados } from "@/components/features/proyectos/useAsignarE
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ErrorCarga } from "@/components/ui/ErrorCarga"
+
+export const ERROR_CANDIDATOS = "No se pudieron cargar los empleados."
 
 interface Props {
   open: boolean
@@ -38,7 +41,7 @@ export function AsignarEmpleadosModal({ open, proyectoId, yaAsignadosIds, onClos
     empleados, areas, areaFiltro, setAreaFiltro, search, setSearch, sel, rol, setRol,
     valorHora, setValorHora, fechaDesde, setFechaDesde, fechaHasta, setFechaHasta,
     saving, asignandoArea, yaEnElProyecto, faltan, visibles, allSelected,
-    toggle, toggleAll, handleSubmit, handleAsignarArea,
+    toggle, toggleAll, handleSubmit, handleAsignarArea, errorCandidatos, recargarCandidatos,
   } = useAsignarEmpleados(open, proyectoId, yaAsignadosIds, onSuccess)
 
   return (
@@ -54,7 +57,9 @@ export function AsignarEmpleadosModal({ open, proyectoId, yaAsignadosIds, onClos
             <input className={INPUT_CLS} type="search" value={search} placeholder="Buscar por nombre…" onChange={(e) => setSearch(e.target.value)} />
           </div>
 
-          {areaFiltro && (
+          {/* El resumen del área sale de `empleados`; con la carga fallida diría "no queda nadie
+              por agregar" sobre una lista que nunca llegó. Se oculta junto con la lista. */}
+          {areaFiltro && !errorCandidatos && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2">
               <p className="text-xs text-muted-foreground">
                 {empleados.length} en el área
@@ -71,6 +76,13 @@ export function AsignarEmpleadosModal({ open, proyectoId, yaAsignadosIds, onClos
             </div>
           )}
 
+          {/* 🔴 "Sin candidatos." solo cuando la lista LLEGÓ y está vacía. Cuando la consulta
+              falla, decir eso manda a RRHH a revisar las altas de empleados por un problema que
+              está en la red o en el request — que es lo que pasó acá durante meses con el
+              `page_size=200` que el backend rechazaba con 422. */}
+          {errorCandidatos ? (
+            <ErrorCarga mensaje={ERROR_CANDIDATOS} onReintentar={recargarCandidatos} />
+          ) : (
           <div className="rounded-md border">
             <label className="flex items-center gap-2 border-b px-3 py-2 text-xs font-medium text-muted-foreground">
               <input type="checkbox" checked={allSelected} onChange={toggleAll} />
@@ -88,6 +100,7 @@ export function AsignarEmpleadosModal({ open, proyectoId, yaAsignadosIds, onClos
               ))}
             </div>
           </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">

@@ -23,7 +23,11 @@ export function useEnvioPlantilla(open: boolean, clave: string) {
   const [resultado, setResultado] = useState<EnvioResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const { empleados, cargando } = useDestinatarios(open, sinEmpresa === false)
+  // `errorCarga` (no se pudo TRAER la lista) es distinto de `error` (falló el ENVÍO): el primero
+  // se resuelve reintentando la consulta, el segundo hablando con el backend. Fusionarlos daría
+  // un "reintentar" que no se sabe qué reintenta.
+  const { empleados, cargando, error: errorCarga, recargar } =
+    useDestinatarios(open, sinEmpresa === false)
 
   useEffect(() => {
     if (!open) return
@@ -60,7 +64,7 @@ export function useEnvioPlantilla(open: boolean, clave: string) {
   }
 
   return {
-    empleados, visibles, cargando, sinEmpresa: sinEmpresa === true, search, setSearch,
-    sel, toggle, elegidos, paso, setPaso, enviando, resultado, error, confirmar,
+    empleados, visibles, cargando, errorCarga, recargar, sinEmpresa: sinEmpresa === true,
+    search, setSearch, sel, toggle, elegidos, paso, setPaso, enviando, resultado, error, confirmar,
   }
 }

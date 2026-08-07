@@ -1,8 +1,11 @@
 "use client"
 
 import type { Destinatario } from "@/components/features/configuracion/envioAcciones"
+import { ErrorCarga } from "@/components/ui/ErrorCarga"
 
 const INPUT_CLS = "flex min-h-[2.75rem] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+
+export const ERROR_DESTINATARIOS = "No se pudieron cargar los empleados."
 
 interface Props {
   /** Los que se ven con el filtro de búsqueda aplicado. */
@@ -10,8 +13,11 @@ interface Props {
   sel: Set<string>
   search: string
   cargando: boolean
+  /** La carga FALLÓ. Distinto de una lista vacía: ver el bloque de abajo. */
+  error: boolean
   onSearch: (v: string) => void
   onToggle: (id: string) => void
+  onReintentar: () => void
 }
 
 /**
@@ -25,8 +31,18 @@ interface Props {
  * persona como FALLIDA con ese motivo, así que igual iba a aparecer en el resumen; verlo antes
  * de apretar es la diferencia entre elegir a conciencia y enterarse después. Ocultarlo dejaría
  * a alguien fuera de un comunicado sin que nadie se entere de que faltó.
+ *
+ * 🔴 TRES ESTADOS, NO DOS: cargando · error · lista (que puede estar vacía DE VERDAD). "Falló la
+ * consulta" y "no hay nadie activo" son hechos distintos y llevan al usuario a lugares distintos;
+ * mostrarlos igual fue lo que hizo invisible el `page_size=200` durante meses.
  */
-export function EnvioDestinatarios({ visibles, sel, search, cargando, onSearch, onToggle }: Props) {
+export function EnvioDestinatarios({
+  visibles, sel, search, cargando, error, onSearch, onToggle, onReintentar,
+}: Props) {
+  // El buscador no se renderiza en el estado de error: filtrar una lista que no se pudo traer
+  // sugiere que el problema es el filtro. Lo único accionable acá es reintentar.
+  if (error) return <ErrorCarga mensaje={ERROR_DESTINATARIOS} onReintentar={onReintentar} />
+
   return (
     <div className="space-y-3">
       <input

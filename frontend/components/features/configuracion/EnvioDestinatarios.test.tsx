@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
-import { EnvioDestinatarios } from "./EnvioDestinatarios"
+import { EnvioDestinatarios, ERROR_DESTINATARIOS } from "./EnvioDestinatarios"
 
 /**
  * La lista de destinatarios: qué se ve marcado y qué no.
@@ -32,11 +32,14 @@ const EMPLEADOS = [
   { id: "e3", nombre: "Cari", apellido: "Tres", email_corporativo: "" },
 ]
 
-function render(sel: string[], extra: Partial<{ search: string; cargando: boolean }> = {}): string {
+function render(
+  sel: string[], extra: Partial<{ search: string; cargando: boolean; error: boolean }> = {},
+): string {
   const html = renderToStaticMarkup(
     <EnvioDestinatarios
       visibles={EMPLEADOS} sel={new Set(sel)} search={extra.search ?? ""}
-      cargando={extra.cargando ?? false} onSearch={() => {}} onToggle={() => {}}
+      cargando={extra.cargando ?? false} error={extra.error ?? false}
+      onSearch={() => {}} onToggle={() => {}} onReintentar={() => {}}
     />,
   )
   expect(html.length, "la lista no renderizó nada: toda aserción de abajo sería vacua")
@@ -92,12 +95,45 @@ describe("quién no tiene email se ve ANTES de mandar", () => {
   })
 })
 
+describe("un fallo de carga NO se muestra como «no hay empleados»", () => {
+  /**
+   * Es el bug que dejó este modal inservible en producción: el `.catch` del hook convertía el
+   * 422 del backend en una lista vacía, y la pantalla afirmaba un hecho sobre los datos («no hay
+   * empleados activos») cuando lo que hubo fue un error. Con 31 activos en la base.
+   *
+   * Los dos casos se afirman UNO CONTRA EL OTRO: el de error exige que el texto de vacío NO esté,
+   * y el de vacío exige que el de error NO esté. Con uno solo, un componente que mostrara siempre
+   * el mismo mensaje pasaría — que es exactamente lo que hacía antes.
+   */
+  it("🔴 con error se dice que no se pudieron cargar, y se ofrece reintentar", () => {
+    const html = render([], { error: true })
+
+    expect(html).toContain(ERROR_DESTINATARIOS)
+    expect(html).toContain("Reintentar")
+  })
+
+  it("🔴 y NUNCA aparece el texto de lista vacía", () => {
+    const html = render([], { error: true })
+
+    expect(html).not.toContain("No hay empleados activos")
+    expect(html).not.toContain("Nadie coincide")
+  })
+
+  it("con error tampoco se ofrece buscar: filtrar algo que no llegó culpa al filtro", () => {
+    expect(render([], { error: true })).not.toContain('type="search"')
+  })
+
+  it("sin error, el mensaje de error NO aparece (si no, lo de arriba pasaría con él siempre)", () => {
+    expect(render([])).not.toContain(ERROR_DESTINATARIOS)
+  })
+})
+
 describe("estados vacíos", () => {
   function renderVacio(search: string): string {
     const html = renderToStaticMarkup(
       <EnvioDestinatarios
-        visibles={[]} sel={new Set()} search={search} cargando={false}
-        onSearch={() => {}} onToggle={() => {}}
+        visibles={[]} sel={new Set()} search={search} cargando={false} error={false}
+        onSearch={() => {}} onToggle={() => {}} onReintentar={() => {}}
       />,
     )
     expect(html.length).toBeGreaterThan(0)
@@ -115,8 +151,8 @@ describe("estados vacíos", () => {
   it("cargando no muestra 'no hay empleados': todavía no se sabe", () => {
     const html = renderToStaticMarkup(
       <EnvioDestinatarios
-        visibles={[]} sel={new Set()} search="" cargando
-        onSearch={() => {}} onToggle={() => {}}
+        visibles={[]} sel={new Set()} search="" cargando error={false}
+        onSearch={() => {}} onToggle={() => {}} onReintentar={() => {}}
       />,
     )
     expect(html).not.toContain("No hay empleados activos")

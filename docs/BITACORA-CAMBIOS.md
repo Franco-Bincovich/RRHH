@@ -41,6 +41,37 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-07 · `page_size=200` contra un endpoint que topea en 100 · commit pendiente
+
+**Qué cambió:** dos selectores de empleados pedían `page_size=200` a `GET /api/empleados`, que
+declara `Query(20, ge=1, le=100)`. **No devolvían menos filas: el request moría en 422**, y el
+`.catch` de cada hook lo convertía en una lista vacía. El modal de envío de plantillas decía "No
+hay empleados activos" y el modal "Asignar empleados" de proyectos decía "Sin candidatos", los dos
+con **31 empleados activos en la base** (19 en SERVICIOS Y CONSULTORIA, 12 en KARSTEC - IT NET).
+El de proyectos venía roto desde antes; el de plantillas nació roto la semana pasada por copiarle
+el 200.
+
+**Tres cosas, no una:**
+- El valor pasó a **`MAX_PAGE_SIZE`**, constante nueva en `services/api.ts` — espejo del `le=100`
+  que declaran **los seis routers paginados** (`empleados`, `vacaciones`, `vacaciones_pendientes`,
+  `ausencias`, `auditoria`, `proyecto_horas`).
+- 🔴 **Los dos `.catch` mudos.** La carga se extrajo a `components/features/shared/cargarEmpleados.ts`
+  (molde: `cargarProyectos`) y ahora deja **tres estados distinguibles**: cargando · error · lista
+  vacía de verdad. En error la UI dice "No se pudieron cargar los empleados" y ofrece **Reintentar**
+  (`components/ui/ErrorCarga.tsx`, nuevo). Sin esto el fix era cosmético: el próximo fallo volvía a
+  ser invisible.
+- 🔴 **Barrido nuevo `services/pageSize.test.ts`**: descubre los call sites leyendo el código y
+  verifica que ninguno se pase de `MAX_PAGE_SIZE`. **El test que existía (`empleados.test.ts`)
+  llamaba con `pageSize: 200` y pasaba**, porque mockea `apiFetch` entero y el fake no puede
+  modelar la validación del backend.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets ni endpoints nuevos — no se tocó una línea de backend. ⚠️ **Dato para el que monte AWS:**
+el `le=100` de los routers ahora tiene un espejo explícito en el front (`MAX_PAGE_SIZE`). **Si
+alguna vez se sube el tope de un router, hay que subir también ese const**, y al revés: quedan
+declarados el uno junto al otro en el docstring de `services/api.ts`. El barrido no puede
+verificar el lado Python, así que ese par es espejo manual — como `permisos.ts` ↔ `permisos.py`.
+
 ## 2026-08-07 · El envío de mails ya tiene punta en el front · commit pendiente
 
 **Qué cambió:** `POST /api/plantillas/enviar` existía montado, testeado y **sin un solo caller en

@@ -68,8 +68,19 @@ describe("fetchEmpleados — objeto de opciones → query params", () => {
     expect([...q.keys()]).toEqual(["page", "page_size"])
   })
 
+  /**
+   * ⚠️ ESTE TEST PEDÍA `pageSize: 200` Y PASABA. No estaba mal escrito: estaba mirando otra cosa
+   * (el header) con un valor que el backend rechaza con 422 — y como `apiFetch` está mockeado
+   * entero, el fake no tiene forma de modelar el `le=100` del router, así que el modo de falla
+   * que importaba NO PODÍA APARECER acá. Ese 200 se copió a dos hooks y dejó dos modales
+   * mostrando "no hay empleados" con la base llena.
+   *
+   * El valor pasó a uno válido y neutro. **La verificación del tope NO vive en este archivo**,
+   * porque un test de traducción a query params no puede tenerla: vive en `pageSize.test.ts`,
+   * que barre los call sites reales contra `MAX_PAGE_SIZE`.
+   */
   it('empresaId "todas" viaja tal cual en el header (el backend lo lee como consolidado)', async () => {
-    await fetchEmpleados({ page: 1, pageSize: 200, estado: "activo", empresaId: "todas" })
+    await fetchEmpleados({ page: 1, pageSize: 20, estado: "activo", empresaId: "todas" })
     expect(initDeFetch().headers).toEqual({ "X-Empresa-Id": "todas" })
   })
 })
