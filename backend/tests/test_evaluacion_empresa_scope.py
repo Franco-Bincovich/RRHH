@@ -1,10 +1,18 @@
 """
 Tests de la barrera de empresa en evaluaciones (Fase 2 — fuga entre empresas). Fakes, sin red.
 
-Cubre los 4 endpoints que reciben un lote_id crudo (/metricas, /evaluados, /export, /ficha) más
-las lecturas por lote de EvaluacionService: un lote de OTRA empresa responde el MISMO 404 que
-uno inexistente (mismo code y mismo mensaje: no confirma la existencia de recursos ajenos), el
-propio responde OK, y el modo consolidado (empresa None = "Todas") no restringe.
+Cubre los 4 endpoints que reciben un lote_id crudo (/metricas, /evaluados, /export, /ficha): un
+lote de OTRA empresa responde el MISMO 404 que uno inexistente (mismo code y mismo mensaje: no
+confirma la existencia de recursos ajenos), el propio responde OK, y el modo consolidado
+(empresa None = "Todas") no restringe.
+
+🔑 DÓNDE VIVE LA BARRERA, para no volver a testear el camino equivocado: la valida
+`evaluacion_service.verificar_empresa_lote` —función de MÓDULO, no método de EvaluacionService—
+y quien la invoca en el camino vivo es `EvaluacionReportesService._lote_rows`, que sirve los 4
+endpoints. Por eso los tests de acá construyen `EvaluacionReportesService`.
+Este archivo tenía además un caso sobre `EvaluacionService.get_lote`/`listar_evaluados`, que se
+borró junto con esos métodos: ningún router los invocaba (los sirve el reportes service), así que
+verificaba la barrera de un camino inalcanzable mientras el vivo quedaba cubierto solo acá.
 
 Incluye la cadena de dos saltos evaluado → lote → empresa de /ficha: el evaluado se busca solo
 entre los del lote ya validado, así que un evaluado de otra empresa no es alcanzable ni pasando
@@ -30,7 +38,6 @@ import pytest
 
 from schemas.evaluacion_resultados import EvaluadoResponse, LoteResponse, ResultadoResponse
 from services.evaluacion_reportes_service import EvaluacionReportesService
-from services.evaluacion_service import EvaluacionService
 from utils.errors import AppError
 
 EMPRESA_PROPIA, EMPRESA_AJENA = uuid4(), uuid4()
@@ -151,16 +158,3 @@ def test_evaluados_de_un_lote_ajeno_nunca_se_devuelven(svc, repo):
     items = svc.listado(repo.propio.id, EMPRESA_PROPIA).items
     assert [i.apellido for i in items] == ["Propio"]
     assert repo.leidos == [str(repo.propio.id)]
-
-
-# ── Lecturas por lote de EvaluacionService ────────────────────────────────────
-
-def test_service_get_lote_y_listar_evaluados_validan_empresa(repo):
-    svc = EvaluacionService(repo=repo)
-    assert svc.get_lote(repo.propio.id, EMPRESA_PROPIA).id == repo.propio.id
-    assert svc.listar_evaluados(repo.propio.id, EMPRESA_PROPIA).total == 1
-    for llamar in (svc.get_lote, svc.listar_evaluados):
-        with pytest.raises(AppError) as exc:
-            llamar(repo.ajeno.id, EMPRESA_PROPIA)
-        assert exc.value.code == "LOTE_NOT_FOUND" and exc.value.status_code == 404
-    assert svc.get_lote(repo.ajeno.id).id == repo.ajeno.id  # sin empresa = consolidado

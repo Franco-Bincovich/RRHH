@@ -177,6 +177,40 @@ Además: la sección **"Líneas — REMEDIDO 28/7/2026"** está entera obsoleta 
 
 ---
 
+## 7-bis. `db/schema.sql` — dos trampas de mantenimiento
+
+Verificado el 7/8/2026 contra el catálogo vivo: el archivo está **exacto** (0 diferencias en
+tablas, columnas, FKs, CHECKs e índices, en las dos direcciones). No es deuda de contenido. Lo
+que sigue es deuda de **proceso**, y las dos muerden recién el día que alguien lo regenere.
+
+### 🔴 Regenerarlo con `pg_dump` rompe el barrido de selects — y el rojo miente
+
+`tests/_postgrest_schema.py` no parsea SQL: lo lee con dos regex hechos a medida del formato
+actual del archivo.
+
+| Regex | Qué exige hoy | Qué emite `pg_dump` |
+|---|---|---|
+| `_RE_TABLA` | que el `CREATE TABLE` cierre con `\n);` | formato propio, con tipos calificados por esquema |
+| `_RE_FK` | `ALTER TABLE [public.]tabla ADD CONSTRAINT … FOREIGN KEY …` | **`ALTER TABLE ONLY public.tabla …`** |
+
+**`_RE_FK` no contempla el `ONLY`.** Con un dump, las **153 FKs dejarían de parsearse**: `entre()`
+devolvería siempre vacío, los embeds con FK nombrada tirarían `SelectInvalidoError` y
+`test_selects_repos.py` caería en masa sobre sus 238 selects.
+
+**Lo peligroso no es el rojo, es cómo se lee:** parece "el schema está mal" cuando el problema es
+el formato. **Si alguna vez se regenera con otra herramienta, los dos regex se adaptan en la MISMA
+tanda**, o se pierde medio día persiguiendo un bug que no existe.
+
+### No hay script generador, ni procedimiento escrito
+
+`schema.sql` se generó **a mano**, leyendo el catálogo. En `backend/scripts/` solo hay smoke
+tests. `docs/DEPLOY.md` dice *"hay que regenerarlo desde el catálogo"* sin decir **con qué**, y
+`backend/db/README.md` tampoco. O sea: el artefacto más crítico del rebuild no tiene forma
+reproducible de rehacerse, y el próximo que lo intente va a improvisar un `pg_dump` — que es
+exactamente lo que dispara la trampa de arriba.
+
+---
+
 ## 8. Anotado y nunca hecho
 
 | Pendiente | Dónde | Gravedad | Esf. |

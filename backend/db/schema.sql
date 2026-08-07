@@ -9,7 +9,7 @@
 -- multiempresa), e indices.
 --
 -- POR QUE EXISTE:
--- Las 74 migraciones incrementales (001..074) NO reconstruyen la base desde cero
+-- Las migraciones incrementales (001..093) NO reconstruyen la base desde cero
 -- de forma confiable: tienen dependencias de orden rotas, operaciones no
 -- idempotentes, y parte del modelo multiempresa fue aplicado a mano en produccion
 -- (drift) y versionado retroactivamente de forma incompleta. Las migraciones
@@ -17,15 +17,31 @@
 -- de verdad para RECONSTRUIR.
 --
 -- COMO SE GENERO: leido del catalogo de la base de produccion via el catalogo de
--- Postgres. Generado: 2026-07-16.
+-- Postgres. Generado: 2026-07-16 (cubre hasta la migracion 074).
+--
+-- CONTENIDO VERIFICADO CONTRA EL CATALOGO VIVO el 2026-08-07 (proyecto
+-- grmdiwxcvcjorlohpwji), ya con las migraciones 075..093 corridas: 58 tablas,
+-- 698 columnas, 153 FKs, 103 CHECKs y los 151 indices standalone coinciden
+-- EXACTAMENTE, sin fantasmas ni faltantes en ninguna de las dos direcciones.
+-- O sea: el archivo se regenero despues del 16/7 y solo la fecha de arriba quedo
+-- vieja. Los otros 108 indices de produccion son los que Postgres crea solo por
+-- PK/UNIQUE, y salen de las constraints que este archivo si declara.
 --
 -- COMO USARLO EN UN REBUILD:
 --   1. Crear una base vacia.
 --   2. Correr este schema.sql (crea todo el esquema 'public').
---   3. NO correr las migraciones 001..074 encima (son historial, no bootstrap).
+--   3. NO correr las migraciones 001..093 encima (son historial, no bootstrap).
+--   4. Correr los DOS scripts de triggers (ver NOTA de abajo): sin ellos el
+--      esquema queda estructuralmente completo pero sin comportamiento.
 --
 -- NOTA: no incluye datos (solo estructura), ni objetos de los esquemas internos de
 -- Supabase (auth, storage). La unica referencia externa es users.id -> auth.users(id).
+--
+-- 🔴 TAMPOCO INCLUYE FUNCIONES NI TRIGGERS: el catalogo se leyo para tablas,
+-- columnas, constraints, indices y defaults. En produccion hay 50 triggers no
+-- internos y este archivo trae 0. Se recrean aparte:
+--   - los 41 de updated_at  -> migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql
+--   - los 9  trg_emp_*      -> backend/migrations/094_recrear_triggers_empresa.sql
 -- ============================================================================
 
 SET statement_timeout = 0;

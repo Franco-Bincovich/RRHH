@@ -9,9 +9,9 @@ from uuid import UUID
 
 from repositories.evaluacion_repo import EvaluacionRepo
 from schemas.evaluacion_resultados import (
-    EvaluadoCreate, EvaluadoListResponse, EvaluadoResponse,
+    EvaluadoCreate, EvaluadoResponse,
     LoteBulkError, LoteCreate, LoteListResponse, LoteResponse, LotesBulkResult,
-    ResultadoCreate, ResultadoListResponse,
+    ResultadoCreate,
 )
 from services._audit_payloads_ev import payload_baja_lote_evaluaciones
 from services.audit_service import AuditService
@@ -111,21 +111,6 @@ class EvaluacionService:
         """Lista lotes, filtrados por la empresa activa si se indica."""
         items = self._repo.find_lotes(str(empresa_id) if empresa_id else None)
         return LoteListResponse(items=items, total=len(items))
-
-    def get_lote(self, id: UUID, empresa_id: Optional[UUID] = None) -> LoteResponse:
-        """Lote por id, acotado a la empresa activa. 404 si no existe o es de otra empresa."""
-        return self._lote_or_404(id, empresa_id)
-
-    def listar_evaluados(self, lote_id: UUID, empresa_id: Optional[UUID] = None) -> EvaluadoListResponse:
-        """Evaluados de un lote, acotado a la empresa activa (404 si no existe o es ajeno)."""
-        self._lote_or_404(lote_id, empresa_id)
-        items = self._repo.find_evaluados(str(lote_id))
-        return EvaluadoListResponse(items=items, total=len(items))
-
-    def listar_resultados(self, evaluado_id: UUID) -> ResultadoListResponse:
-        """Resultados de un evaluado, en el orden del archivo."""
-        items = self._repo.find_resultados(str(evaluado_id))
-        return ResultadoListResponse(items=items, total=len(items))
 
     # ── Helpers ──
     def _lote_or_404(self, id: UUID, empresa_id: Optional[UUID] = None) -> LoteResponse:

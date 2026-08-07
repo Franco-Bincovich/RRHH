@@ -8,13 +8,13 @@ from uuid import UUID
 from repositories.candidato_repo import CandidatoRepo
 from repositories.vacante_repo import VacanteRepo
 from schemas.vacante import CandidatoCreate, CandidatoResponse, VacanteCreate, VacanteResponse, VacanteUpdate
+from services._vacante_candidatos import agregar, mover
 from services.adjunto_service import AdjuntoService
 from services.audit_service import AuditService
 from services.cv_service import CvService
 from utils.errors import AppError
 from utils.logger import logger
 
-_ETAPAS = {"postulado", "assessment", "entrevista_rrhh", "entrevista_tecnica", "oferta"}
 _ESTADOS = {"nueva", "en_proceso", "con_candidatos", "cerrada"}
 
 
@@ -64,10 +64,16 @@ class VacanteService:
             created_by: ID del usuario que realiza la operación (trazabilidad).
         """
         vacante = self._repo.save(data)
+        self._audit.registrar(
+            usuario_id=created_by, entidad="vacante", registro_id=vacante.id, accion="INSERT",
+            evento="alta_vacante", empresa_id=vacante.empresa_id, datos_anteriores=None,
+            datos_nuevos={"titulo": vacante.titulo, "area_id": vacante.area_id, "estado": vacante.estado},
+        )
         logger.info("Vacante creada", extra={"vacante_id": vacante.id, "created_by": created_by})
         return vacante
 
-    def update_vacante(self, id: UUID, data: VacanteUpdate, empresa_id: Optional[UUID] = None) -> VacanteResponse:
+    def update_vacante(self, id: UUID, data: VacanteUpdate, empresa_id: Optional[UUID] = None,
+                       usuario_id: Optional[str] = None) -> VacanteResponse:
         """
         Actualiza los campos de una vacante existente (actualización parcial).
 
@@ -84,9 +90,21 @@ class VacanteService:
             raise AppError(
                 f"Estado inválido. Permitidos: {', '.join(_ESTADOS)}", "ESTADO_INVALIDO", 400
             )
+        # Lectura previa para el diff: `update` devuelve la fila YA actualizada, así que sin esto
+        # el evento no podría decir de qué valor se venía. El 404 es el mismo de abajo.
+        previa = self._repo.find_by_id(str(id), empresa_id)
+        if not previa:
+            raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
         vacante = self._repo.update(str(id), data, empresa_id)
         if not vacante:
             raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
+        tocados = data.model_dump(exclude_none=True)
+        self._audit.registrar(
+            usuario_id=usuario_id, entidad="vacante", registro_id=str(id), accion="UPDATE",
+            evento="edicion_vacante", empresa_id=vacante.empresa_id,
+            datos_anteriores={k: getattr(previa, k, None) for k in tocados},
+            datos_nuevos={k: getattr(vacante, k, None) for k in tocados},
+        )
         logger.info("Vacante actualizada", extra={"vacante_id": str(id)})
         return vacante
 
@@ -99,36 +117,16 @@ class VacanteService:
     def add_candidato(
         self, vacante_id: UUID, data: CandidatoCreate, empresa_id: Optional[UUID] = None,
         cv_content: Optional[bytes] = None, cv_filename: Optional[str] = None,
-        cv_content_type: Optional[str] = None,
+        cv_content_type: Optional[str] = None, usuario_id: Optional[str] = None,
     ) -> CandidatoResponse:
-        """Agrega un candidato (etapa 'postulado') con CV opcional; empresa_id se hereda de la vacante.
-        CV validado antes de crear; si la subida falla tras crear, conserva el candidato sin CV (no revert).
-        Raises: VACANTE_NOT_FOUND (404), INVALID_CV_FORMAT (400), CV_TOO_LARGE (413)."""
-        vacante = self._repo.find_by_id(str(vacante_id), empresa_id)
-        if not vacante:
-            raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
-        if cv_content is not None:
-            self._cv.validar(cv_content, cv_filename or "cv", cv_content_type)
-        candidato = self._candidato_repo.save_candidato(str(vacante_id), data, vacante.empresa_id or "")
-        if cv_content is not None:
-            try:
-                path = self._cv.subir(vacante.empresa_id, candidato.id, cv_content, cv_filename or "cv", cv_content_type)
-                self._candidato_repo.set_cv(candidato.id, path)
-                candidato.cv_storage_path = path
-            except Exception as exc:  # storage falló: no perder el candidato ya creado
-                logger.error("CV no adjuntado tras crear candidato", extra={"candidato_id": candidato.id, "error": str(exc)})
-        logger.info("Candidato agregado", extra={"vacante_id": str(vacante_id), "candidato_id": candidato.id})
-        return candidato
+        """Agrega un candidato con CV opcional. Delegado a _vacante_candidatos.agregar."""
+        return agregar(self._repo, self._candidato_repo, self._cv, self._audit, vacante_id, data,
+                       empresa_id, cv_content, cv_filename, cv_content_type, usuario_id)
 
-    def mover_candidato(self, candidato_id: UUID, etapa: str, empresa_id: Optional[UUID] = None) -> CandidatoResponse:
-        """Mueve un candidato de etapa. Raises ETAPA_INVALIDA (400), CANDIDATO_NOT_FOUND (404)."""
-        if etapa not in _ETAPAS:
-            raise AppError(f"Etapa inválida. Permitidas: {', '.join(_ETAPAS)}", "ETAPA_INVALIDA", 400)
-        candidato = self._candidato_repo.update_etapa_candidato(str(candidato_id), etapa, empresa_id)
-        if not candidato:
-            raise AppError("Candidato no encontrado", "CANDIDATO_NOT_FOUND", 404)
-        logger.info("Candidato movido", extra={"candidato_id": str(candidato_id), "etapa": etapa})
-        return candidato
+    def mover_candidato(self, candidato_id: UUID, etapa: str, empresa_id: Optional[UUID] = None,
+                        usuario_id: Optional[str] = None) -> CandidatoResponse:
+        """Mueve un candidato de etapa. Delegado a _vacante_candidatos.mover."""
+        return mover(self._candidato_repo, self._audit, candidato_id, etapa, empresa_id, usuario_id)
 
     def delete_vacante(self, id: UUID, empresa_id: Optional[UUID] = None, rol: Optional[str] = None, usuario_id: Optional[str] = None) -> None:
         """Elimina la vacante. Orden estricto: (1) congela el nombre en sus candidatos (sobreviven

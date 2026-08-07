@@ -7,13 +7,16 @@ real de la base de producción, leído directamente del catálogo de Postgres
 (`information_schema` / `pg_catalog`), no derivado del historial de migraciones.
 
 Correrlo contra un Postgres limpio reconstruye el esquema `public` completo:
-**58 tablas, 364 constraints y 151 índices declarados** (PK, FK, UNIQUE y CHECK, incluidas las
-constraints compuestas del modelo multiempresa).
+**58 tablas, 698 columnas, 364 constraints y 151 índices declarados** (PK, FK, UNIQUE y CHECK,
+incluidas las constraints compuestas del modelo multiempresa).
 
-Contiene solo estructura: **no incluye datos**, ni los objetos de los esquemas internos de
-Supabase (`auth`, `storage`). La única referencia externa es `users.id -> auth.users(id)`,
-por lo que la base destino necesita tener ese esquema disponible si se apunta a un proyecto
-Supabase real.
+Verificado contra el catálogo vivo el **7/8/2026**: **0 diferencias** en tablas, columnas, FKs,
+CHECKs e índices, en las dos direcciones.
+
+Contiene solo estructura: **no incluye datos**, ni funciones, ni triggers, ni los objetos de los
+esquemas internos de Supabase (`auth`, `storage`). La única referencia externa es
+`users.id -> auth.users(id)`, por lo que la base destino necesita tener ese esquema disponible si
+se apunta a un proyecto Supabase real.
 
 ## Cómo reconstruir
 
@@ -21,10 +24,16 @@ Supabase real.
 2. Correr `schema.sql` contra ella (por ejemplo, desde el SQL Editor de Supabase o con
    cualquier cliente de Postgres apuntado a esa base).
 3. **No** correr las migraciones encima. El schema ya las incluye a todas.
+4. 🔴 Correr los **dos** scripts de triggers — sin ellos el esquema queda completo pero sin
+   comportamiento. Producción tiene 50 triggers no internos y `schema.sql` trae 0:
+   - `migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql` → los 41 de
+     `updated_at` + la función `set_updated_at`.
+   - `backend/migrations/094_recrear_triggers_empresa.sql` → los 9 `trg_emp_*` + la función
+     `fn_misma_empresa`, que impiden el cruce de empresas por referencia.
 
 ## `migrations/` es historial, no bootstrap
 
-`backend/migrations/` (001 → 089, 87 archivos) documenta **cómo se llegó hasta acá**. No es un mecanismo
+`backend/migrations/` (001 → 094) documenta **cómo se llegó hasta acá**. No es un mecanismo
 de bootstrap y correrlas en orden contra una base vacía no reconstruye producción de forma
 confiable: hay dependencias de orden rotas, operaciones no idempotentes, y parte del modelo
 multiempresa se aplicó a mano en producción (drift) y se versionó retroactivamente de forma

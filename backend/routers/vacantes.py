@@ -43,7 +43,7 @@ async def create_vacante(
 async def update_vacante(
     id: UUID, body: VacanteUpdate, request: Request, service: VacanteService = Depends(_svc)
 ) -> VacanteResponse:
-    return service.update_vacante(id, body, get_empresa_id(request))
+    return service.update_vacante(id, body, get_empresa_id(request), request.state.user.get("id", "system"))
 
 
 @router.delete("/{id}", status_code=204, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -62,7 +62,7 @@ async def add_candidato(
     id: UUID, request: Request, form: tuple = Depends(candidato_form), service: VacanteService = Depends(_svc)
 ) -> CandidatoResponse:
     data, contenido, filename, content_type = form
-    return service.add_candidato(id, data, get_empresa_id(request), contenido, filename, content_type)
+    return service.add_candidato(id, data, get_empresa_id(request), contenido, filename, content_type, request.state.user.get("id", "system"))
 
 
 @router.post("/{id}/publicar-linkedin", response_model=PublicarLinkedinResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])

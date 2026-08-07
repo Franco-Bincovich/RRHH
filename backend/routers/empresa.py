@@ -58,7 +58,8 @@ async def toggle_activa(
 
 
 @router.post("/{id}/logo", response_model=EmpresaResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def upload_logo(id: UUID, file: UploadFile = File(...), service: EmpresaService = Depends(_service)) -> EmpresaResponse:
+async def upload_logo(id: UUID, request: Request, file: UploadFile = File(...), service: EmpresaService = Depends(_service)) -> EmpresaResponse:
     content = await file.read()
     validate_upload(content, file.content_type, ALLOWED_TYPES_IMAGEN, MAX_SIZE_LOGO, "logo")
-    return service.upload_logo(str(id), content, file.filename or "logo", file.content_type or "image/jpeg")
+    return service.upload_logo(str(id), content, file.filename or "logo", file.content_type or "image/jpeg",
+                               request.state.user.get("id", "system"))

@@ -50,4 +50,4 @@ async def delete_candidato(
 async def mover_candidato(
     id: UUID, body: EtapaUpdate, request: Request, service: VacanteService = Depends(_svc)
 ) -> CandidatoResponse:
-    return service.mover_candidato(id, body.etapa, get_empresa_id(request))
+    return service.mover_candidato(id, body.etapa, get_empresa_id(request), request.state.user.get("id", "system"))

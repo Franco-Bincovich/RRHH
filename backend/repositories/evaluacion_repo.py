@@ -86,12 +86,6 @@ class EvaluacionRepo:
         data = _insert_completo(_RESULTADOS, filas, "Error al guardar los resultados del lote")
         return [ResultadoResponse.model_validate(r) for r in data]
 
-    def find_resultados(self, evaluado_id: str) -> List[ResultadoResponse]:
-        """Resultados de un evaluado, en el orden de columnas del archivo."""
-        res = (supabase_admin.table(_RESULTADOS).select("*")
-               .eq("evaluado_id", evaluado_id).order("orden").execute())
-        return [ResultadoResponse.model_validate(r) for r in (res.data or [])] if res else []
-
     def find_resultados_por_evaluados(self, ids: List[str]) -> List[ResultadoResponse]:
         """Resultados de varios evaluados (todo el lote) en una sola query. [] si no hay ids."""
         if not ids:

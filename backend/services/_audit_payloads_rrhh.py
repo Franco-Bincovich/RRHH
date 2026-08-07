@@ -94,24 +94,14 @@ def payload_toggle_empresa(empresa_id: str, activa: bool, usuario_id: Optional[s
     }
 
 
-def payload_alta_adjunto(adj, usuario_id: Optional[str]) -> dict:
-    """Evento INSERT de alta de adjunto. Se registra bajo la ENTIDAD PADRE (entidad/entidad_id
-    del adjunto) para que aparezca en el historial de ese registro (ej. empleado)."""
+def payload_logo_empresa(row, anterior: Optional[str], usuario_id: Optional[str]) -> dict:
+    """Evento UPDATE del logo de una empresa. Lleva el valor ANTERIOR y el nuevo: un evento que
+    solo dice "cambió el logo" no permite reconstruir qué se reemplazó. La empresa del evento ES
+    el registro (registro_id == empresa_id), así que acá no hay header del que confundirse."""
     return {
-        "usuario_id": usuario_id, "entidad": adj.entidad, "registro_id": adj.entidad_id,
-        "accion": "INSERT", "evento": "alta_adjunto", "empresa_id": adj.empresa_id,
-        "datos_anteriores": None,
-        "datos_nuevos": {"adjunto_id": adj.id, "nombre_archivo": adj.nombre_archivo, "categoria": adj.categoria},
-    }
-
-
-def payload_baja_adjunto(adj, usuario_id: Optional[str]) -> dict:
-    """Evento DELETE (soft) de adjunto, bajo la entidad padre (mismo criterio que el alta)."""
-    return {
-        "usuario_id": usuario_id, "entidad": adj.entidad, "registro_id": adj.entidad_id,
-        "accion": "DELETE", "evento": "baja_adjunto", "empresa_id": adj.empresa_id,
-        "datos_anteriores": {"adjunto_id": adj.id, "nombre_archivo": adj.nombre_archivo},
-        "datos_nuevos": None,
+        "usuario_id": usuario_id, "entidad": "empresa", "registro_id": row.id,
+        "accion": "UPDATE", "evento": "cambio_logo_empresa", "empresa_id": row.id,
+        "datos_anteriores": {"logo_url": anterior}, "datos_nuevos": {"logo_url": row.logo_url},
     }
 
 

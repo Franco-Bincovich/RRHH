@@ -98,26 +98,36 @@ ya está puesto en el código; conectarlo es decisión de infraestructura.
 🔴 **`backend/db/schema.sql` es la ÚNICA fuente de verdad del schema.** Se lee del catálogo de
 Postgres (`information_schema` / `pg_catalog`), no se deriva del historial de migraciones.
 
-**Estado verificado hoy: 58 tablas · 364 constraints · 151 índices declarados.**
+**Estado verificado el 7/8/2026 contra el catálogo vivo: 58 tablas · 698 columnas · 364
+constraints (153 FK + 103 CHECK + PK/UNIQUE) · 151 índices declarados.** El contraste dio **0
+diferencias** en las dos direcciones: no hay nada en `schema.sql` que no exista en producción, ni
+al revés. (Producción reporta 259 índices; los 108 de diferencia son los que Postgres crea solo
+por PK/UNIQUE, y salen de las constraints que el archivo sí declara.)
 
 ### Procedimiento
 
 1. Crear una base vacía.
 2. Correr `backend/db/schema.sql` completo.
 3. **NO correr las migraciones encima.** El schema ya las incluye a todas.
+4. Correr los **dos** scripts de triggers de la tabla de abajo. Sin ellos el esquema queda
+   estructuralmente completo pero **sin comportamiento**.
 
 ### Lo que `schema.sql` NO trae
+
+🔴 **No trae ninguna función ni ningún trigger.** El snapshot se leyó del catálogo para tablas,
+columnas, constraints, índices y defaults. Producción tiene **50 triggers** no internos y el
+archivo trae **0**.
 
 | | |
 |---|---|
 | **Datos** | Solo estructura. Los catálogos base (tipos de ausencia, etc.) hay que sembrarlos |
-| 🔴 **Los 36 triggers de `updated_at`** | Se recrean con `migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql`. **Sin ellos, `updated_at` queda congelado en el valor del INSERT y nadie se entera** |
+| 🔴 **Los 41 triggers de `updated_at`** | Se recrean con `migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql` (+ la función `set_updated_at`). **Sin ellos, `updated_at` queda congelado en el valor del INSERT y nadie se entera** |
+| 🔴 **Los 9 triggers `trg_emp_*`** | Se recrean con **`backend/migrations/094_recrear_triggers_empresa.sql`** (+ la función `fn_misma_empresa`). Hacen cumplir que un registro y las filas que referencia sean de la MISMA empresa — una FK garantiza que el área existe, no que sea de la empresa del empleado. **Hasta el 7/8/2026 existían solo en producción, sin ningún artefacto que los recreara: un rebuild los perdía en silencio** |
 | **Esquemas internos de Supabase** (`auth`, `storage`) | La única referencia externa es `users.id → auth.users(id)`. 🔴 **En AWS hay que dropear esa FK** y ponerle `DEFAULT gen_random_uuid()`, o no se puede insertar un usuario |
-| **Los 9 triggers `trg_emp_*`** | Defaults de `empresa_id` del retrofit multiempresa |
 
 ### `migrations/` es historial, NO bootstrap
 
-**87 archivos, 001 → 089.** Documentan cómo se llegó hasta acá. Correrlas en orden contra una
+**001 → 094.** Documentan cómo se llegó hasta acá. Correrlas en orden contra una
 base vacía **no reconstruye producción de forma confiable**: hay dependencias de orden rotas,
 operaciones no idempotentes, y parte del modelo multiempresa se aplicó a mano en producción y se
 versionó retroactivamente de forma incompleta.
@@ -138,10 +148,10 @@ Siguen siendo el lugar donde se versiona **cada cambio nuevo**. ⚠️ Al aplica
 
 Las 85 restantes son aditivas: `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, índices.
 
-**Estado en producción (verificado 2/8/2026):** hasta la **088 corridas**. 🔴 **La 089
-(`ausencias_unicidad`) está PENDIENTE** — y hay que correrla **antes** de que se cargue el
-histórico de ausencias: hoy la tabla tiene 0 filas y crear el índice único no puede fallar; con
-duplicados cargados, falla y hay que deduplicar a mano.
+**Estado en producción (verificado 7/8/2026 contra el catálogo vivo):** **001 → 093 corridas
+TODAS**, incluida la 089 (`ausencias_unicidad`), que estaba pendiente al 2/8. 🔴 **La 094
+(`recrear_triggers_empresa`) NO está corrida y NO hace falta correrla en producción**: los 9
+triggers ya existen ahí. Existe para el **rebuild** (RDS), que es donde faltaban.
 
 ### Buckets de Storage
 

@@ -18,7 +18,10 @@ from integrations.supabase_client import supabase_admin
 from repositories.adjunto_repo import AdjuntoRepo
 from schemas.adjunto import Adjunto
 from services._adjunto_padres import ensure_padre_de_empresa
-from services._audit_payloads_rrhh import payload_alta_adjunto, payload_baja_adjunto
+from services._adjuntos_masivo import eliminar_todos
+from services._audit_payloads_adjuntos import (
+    payload_alta_adjunto, payload_baja_adjunto, payload_principal_adjunto,
+)
 from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.files import ALLOWED_TYPES_ADJUNTO, MAX_SIZE_ADJUNTO, validate_upload
@@ -109,16 +112,20 @@ class AdjuntoService:
         return res["signedURL"]
 
     def marcar_principal(
-        self, id: str, principal: bool, empresa_id: Optional[UUID], rol: Optional[str]
+        self, id: str, principal: bool, empresa_id: Optional[UUID], rol: Optional[str],
+        usuario_id: Optional[str] = None,
     ) -> Adjunto:
         """Marca (o desmarca) un adjunto como principal de su entidad. Al marcar, desmarca los
-        hermanos para garantizar UNA sola principal por entidad. Raises ADJUNTO_NOT_FOUND (404),
-        FORBIDDEN (403)."""
+        hermanos para garantizar UNA sola principal por entidad. Audita el cambio con el valor
+        anterior y el nuevo. Raises ADJUNTO_NOT_FOUND (404), FORBIDDEN (403)."""
         adj = self._get_owned(id, empresa_id)
         self._gate(rol, adj.entidad, Accion.WRITE)
         if principal:
             self._repo.desmarcar_principales(adj.entidad, adj.entidad_id)
         self._repo.set_principal(id, principal)
+        # `adj` es el estado PREVIO y de ahí sale la empresa del evento: el header puede ser None
+        # (consolidado) y el adjunto siempre tiene la empresa que heredó de su padre.
+        self._audit.registrar(**payload_principal_adjunto(adj, principal, usuario_id))
         logger.info("Adjunto principal", extra={"adjunto_id": id, "principal": principal})
         return self._repo.find_by_id(id)  # type: ignore[return-value]
 
@@ -135,15 +142,5 @@ class AdjuntoService:
         self, entidad: str, entidad_id: str, empresa_id: Optional[UUID],
         rol: Optional[str], usuario_id: Optional[str],
     ) -> None:
-        """Borra FÍSICAMENTE del Storage + soft-delete de TODOS los adjuntos activos de una entidad
-        (al eliminar la entidad dueña, ej. vacante). Si el remove físico falla → log y sigue: nunca
-        deja la fila colgada por un fallo de Storage. Raises FORBIDDEN (403)."""
-        self._gate(rol, entidad, Accion.WRITE)
-        for adj in self._repo.find_by_entidad(entidad, entidad_id, empresa_id):
-            if adj.storage_path:  # guard: nunca remove sobre key vacía; usa la key de la DB tal cual
-                try:
-                    supabase_admin.storage.from_(adj.bucket).remove([adj.storage_path])
-                except Exception as exc:  # storage falló: se conserva el flujo, objeto huérfano
-                    logger.error("Storage remove falló (adjunto)", extra={"adjunto_id": adj.id, "error": str(exc)})
-            self._repo.marcar_eliminado(adj.id)
-            self._audit.registrar(**payload_baja_adjunto(adj, usuario_id))
+        """Borra todos los adjuntos de una entidad. Delegado a _adjuntos_masivo.eliminar_todos."""
+        eliminar_todos(self._repo, self._audit, self._gate, entidad, entidad_id, empresa_id, rol, usuario_id)

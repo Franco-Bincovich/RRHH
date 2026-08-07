@@ -1,0 +1,213 @@
+"""
+🔴 BARRIDO ESTRUCTURAL — falla cuando alguien construye algo que nadie llama.
+
+POR QUÉ EXISTE. Un símbolo sin caller no rompe nada: no hay excepción, no hay 500, la suite
+sigue verde. Lo que hay es una feature que el usuario no puede alcanzar, y que se lee como
+"implementada" en la doc y en el código. Este repo ya juntó DOS casos, y cada uno bloqueaba un
+módulo entero:
+  · `set_remitente()` — existía, estaba documentado y testeado. Sin caller, el módulo de mails
+    no tenía casilla de sistema y era inalcanzable.
+  · `POST /api/plantillas/enviar` — montado, testeado, y sin ninguna pantalla que lo llame.
+Los dos se encontraron A MANO. Este barrido es para no depender de eso.
+
+🔑 EL ALCANCE ES `services/` + `repositories/` COMPLETO, NO SOLO LOS `_*.py`. Es deliberado:
+`set_remitente` vive en `repositories/integracion_remitente_repo.py`, un repo SIN guion bajo. Un
+barrido acotado a los satélites habría nacido en verde y ciego al caso que lo motiva — que es
+exactamente el falso verde que el repo persigue en todos sus barridos.
+
+⚠️ ¿QUÉ TENDRÍA QUE SER DISTINTO PARA QUE ESTOS TESTS PUEDAN FALLAR?
+  · El mecanismo (AST + introspección de `app.routes`) descubre solo; no hay ninguna lista
+    escrita a mano de qué mirar. Un módulo o un endpoint que se agregue mañana entra solo.
+  · Los SIETE falsos positivos que producían ~48 huérfanos falsos están cubiertos y explicados
+    uno por uno en `tests/_barrido_callers.py`. Sin ellos el barrido nace en rojo y se apaga.
+  · Guardas de mínimo ANTES de comparar (abajo): si el descubrimiento se rompe, esto falla en
+    vez de pasar en el vacío habiendo mirado cero símbolos.
+  · Las excepciones se verifican en las DOS direcciones: que lo huérfano esté declarado, y que
+    lo declarado siga huérfano. Una lista de excepciones que nadie limpia se vuelve basura.
+
+🚩 LO QUE NO CUBRE: llamadas dinámicas (`repo[nombre]()`), símbolos alcanzados solo por
+`Depends()`, y paths que el front arme concatenando fuera de un literal. Los tres sobre-cuentan
+callers (dan por vivo algo muerto), nunca al revés: el barrido no puede inventar un huérfano.
+"""
+import os
+
+_TEST_ENV: dict[str, str] = {
+    "SUPABASE_URL": "https://test-project.supabase.co",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.anon",
+    "SUPABASE_SERVICE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.service",
+    "JWT_SECRET": "test-secret-for-unit-tests-only-minimum-32-chars!!",
+    "ANTHROPIC_API_KEY": "sk-ant-test",
+    "RESEND_API_KEY": "re_test",
+}
+for _k, _v in _TEST_ENV.items():
+    os.environ.setdefault(_k, _v)
+
+from tests._barrido_callers import (  # noqa: E402
+    clasificar_simbolos, endpoints_sin_front, paths_del_front, rutas_backend,
+)
+
+# ── Motivos compartidos ───────────────────────────────────────────────────────
+
+_EV = ("familia ev_*: los routers siguen MONTADOS y responden, la UI se borró. No se limpia de a "
+       "un símbolo: se va entera en el cutover a AWS, con el resto de las tablas huérfanas.")
+
+_MAILS = ("🔴 PENDIENTE, NO INTENCIONAL. Es el mismo cable cortado que `destinatarios_pendientes`: "
+          "el envío de mails está entero del lado del backend y no tiene punta en el front. Sale "
+          "de esta lista cuando se conecte el bloque de mails — no es una excepción permanente.")
+
+_PARA_TESTS = ("existe PARA el test estructural, por diseño, y su docstring lo dice. No tiene "
+               "caller de producción y no debe tenerlo.")
+
+# ── Símbolos sin caller declarados ────────────────────────────────────────────
+# Cada entrada lleva su razón: si alguien agrega una acá sin justificarla, se ve en el diff.
+
+_SIMBOLOS_SIN_CALLER: dict[str, str] = {
+    "repositories/ev_plantillas_repo.py::EvPlantillasRepo.find_criterios": _EV,
+
+    "repositories/assessment_campanas_repo.py::AssessmentCampanasRepo.mark_link_completed":
+        "assessment está apagado por ASSESSMENT_ENABLED (router desmontado). El módulo entero "
+        "queda fuera de alcance hasta que se encienda; que un link nunca se marque completado se "
+        "revisa ahí, no acá.",
+
+    "services/horas_service.py::HorasService.get_by_asignacion":
+        "posible punta del link público de carga de horas (E4), que está EN PAUSA esperando la "
+        "reunión de definición. No se borra hasta que esa reunión decida.",
+
+    "services/mail_envio_service.py::destinatarios_pendientes": _MAILS,
+
+    "services/mailer/_variables.py::campos_leidos": _PARA_TESTS,
+    "services/_nomina_empleados_transforms.py::HEADERS_OPCIONALES": _PARA_TESTS,
+}
+
+# ── Endpoints sin caller en el front declarados ───────────────────────────────
+
+_ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
+    ("GET", "/health"): "infraestructura: lo consulta el chequeo post-deploy, no una pantalla.",
+
+    ("GET", "/api/integraciones/google/callback"):
+        "lo invoca el REDIRECT de Google, no el front. Un wrapper en services/ sería incorrecto.",
+
+    ("POST", "/api/plantillas/enviar"): _MAILS,
+
+    # Completitud REST: quedan publicados a propósito. El front resuelve lo mismo por otra vía
+    # (el listado ya filtra, la baja va por offboarding), pero el endpoint es correcto y barato.
+    ("DELETE", "/api/empleados/{id}"):
+        "completitud REST: es baja LÓGICA (deactivate_empleado). El front da de baja por "
+        "offboarding; el endpoint queda publicado.",
+    ("GET", "/api/vacaciones-pendientes/empleado/{empleado_id}"):
+        "completitud REST: el listado ya acepta `empleado_id` como Query y es el que usa el front.",
+    ("GET", "/api/ausencias/{id}"): "completitud REST: el front nunca pide una ausencia sola.",
+    ("GET", "/api/capacitaciones/{id}"): "completitud REST: el front nunca pide una sola.",
+
+    ("GET", "/api/evaluaciones/ciclos"): _EV,
+    ("POST", "/api/evaluaciones/ciclos"): _EV,
+    ("GET", "/api/evaluaciones/ciclos/{id}"): _EV,
+    ("PUT", "/api/evaluaciones/ciclos/{id}"): _EV,
+    ("POST", "/api/evaluaciones/ciclos/{id}/cerrar"): _EV,
+    ("GET", "/api/evaluaciones/instancias"): _EV,
+    ("POST", "/api/evaluaciones/instancias"): _EV,
+    ("GET", "/api/evaluaciones/instancias/exportar"): _EV,
+    ("GET", "/api/evaluaciones/instancias/{id}"): _EV,
+    ("POST", "/api/evaluaciones/instancias/{id}/finalizar"): _EV,
+    ("PUT", "/api/evaluaciones/instancias/{id}/resultados/{criterio_id}"): _EV,
+    ("GET", "/api/evaluaciones/plantillas"): _EV,
+    ("POST", "/api/evaluaciones/plantillas"): _EV,
+    ("GET", "/api/evaluaciones/plantillas/{id}"): _EV,
+    ("PUT", "/api/evaluaciones/plantillas/{id}"): _EV,
+    ("DELETE", "/api/evaluaciones/plantillas/{id}"): _EV,
+    ("POST", "/api/evaluaciones/plantillas/{id}/criterios"): _EV,
+    ("PUT", "/api/evaluaciones/plantillas/{id}/criterios/{criterio_id}"): _EV,
+    ("DELETE", "/api/evaluaciones/plantillas/{id}/criterios/{criterio_id}"): _EV,
+}
+
+# ── Guardas de mínimo ─────────────────────────────────────────────────────────
+# Criterio: ~25% por debajo del valor real de hoy (916 símbolos, 210 rutas, 196 paths del front).
+# El margen absorbe la baja normal del repo —que borra código muerto y parte archivos seguido—
+# sin absorber una ROTURA del descubrimiento, que no baja un 25%: colapsa. Si `_BAJO_BARRIDO`
+# deja de matchear, si `app.routes` no se puede introspeccionar o si cambia la raíz del front,
+# el conteo se va a cero o a una fracción, y eso es lo que estas tres guardas muerden.
+_MINIMO_SIMBOLOS = 700
+_MINIMO_RUTAS = 180
+_MINIMO_PATHS_FRONT = 140
+
+
+class TestElBarridoEstaMirandoAlgo:
+    """Sin esto, todo lo de abajo pasa en el vacío."""
+
+    def test_descubre_simbolos(self) -> None:
+        _, _, total = clasificar_simbolos()
+        assert total >= _MINIMO_SIMBOLOS, (
+            f"El barrido solo encontró {total} símbolos públicos (mínimo {_MINIMO_SIMBOLOS}). "
+            "No es que se borró código: es que el descubrimiento se rompió.")
+
+    def test_descubre_rutas(self) -> None:
+        assert len(rutas_backend()) >= _MINIMO_RUTAS
+
+    def test_descubre_llamadas_del_front(self) -> None:
+        """Si el front no se lee, TODOS los endpoints saldrían huérfanos a la vez."""
+        assert len(paths_del_front()) >= _MINIMO_PATHS_FRONT
+
+
+class TestSimbolosSinCaller:
+
+    def test_ningun_simbolo_huerfano_sin_declarar(self) -> None:
+        """Bucket 1: nadie lo llama, ni siquiera un test."""
+        huerfanos, _, _ = clasificar_simbolos()
+        nuevos = [s for s in huerfanos if s not in _SIMBOLOS_SIN_CALLER]
+        assert not nuevos, (
+            f"Símbolos públicos que nadie llama: {nuevos}. Si falta la punta del cable río "
+            "arriba, conectala; si está muerto, borralo; si es legítimo, declaralo en "
+            "_SIMBOLOS_SIN_CALLER CON su razón.")
+
+    def test_ningun_simbolo_solo_de_tests_sin_declarar(self) -> None:
+        """Bucket 2, el peligroso: PARECE vivo porque la suite lo ejercita.
+
+        Es el caso `set_remitente`: documentado, testeado, y sin un solo caller de producción.
+        Un test verde sobre un símbolo inalcanzable no prueba la feature: prueba la función."""
+        _, solo_tests, _ = clasificar_simbolos()
+        nuevos = [s for s in solo_tests if s not in _SIMBOLOS_SIN_CALLER]
+        assert not nuevos, (
+            f"Símbolos cuyo ÚNICO caller está en tests/: {nuevos}. La suite los ejercita pero "
+            "producción no los alcanza — verificá que la feature tenga punta antes de darla por "
+            "hecha.")
+
+    def test_las_excepciones_siguen_sin_caller(self) -> None:
+        """Dirección inversa: una excepción que ya tiene caller (o que apunta a un símbolo
+        borrado) es ruido que oculta el próximo caso."""
+        huerfanos, solo_tests, _ = clasificar_simbolos()
+        vigentes = set(huerfanos) | set(solo_tests)
+        obsoletas = [s for s in _SIMBOLOS_SIN_CALLER if s not in vigentes]
+        assert not obsoletas, (
+            f"Excepciones que ya no corresponden: {obsoletas}. O el símbolo consiguió caller "
+            "(sacalo de la lista) o se borró (sacalo igual).")
+
+
+class TestEndpointsSinCaller:
+
+    def test_ningun_endpoint_sin_front_sin_declarar(self) -> None:
+        """Bucket 3: la ruta existe, está montada y responde, y ninguna pantalla la llama."""
+        nuevos = [par for par in endpoints_sin_front() if par not in _ENDPOINTS_SIN_FRONT]
+        assert not nuevos, (
+            f"Endpoints que el front nunca llama: {nuevos}. Es una feature publicada e "
+            "inalcanzable — como POST /api/plantillas/enviar. Conectala o declarala CON razón.")
+
+    def test_las_excepciones_siguen_sin_caller(self) -> None:
+        vigentes = set(endpoints_sin_front())
+        montadas = set(rutas_backend())
+        obsoletas = [
+            par for par in _ENDPOINTS_SIN_FRONT
+            if par not in vigentes and par in montadas          # ya lo llama el front
+        ]
+        assert not obsoletas, (
+            f"Endpoints declarados sin front que AHORA sí se llaman: {obsoletas}. Sacalos.")
+
+    def test_ninguna_excepcion_apunta_a_una_ruta_borrada(self) -> None:
+        montadas = set(rutas_backend())
+        muertas = [par for par in _ENDPOINTS_SIN_FRONT if par not in montadas]
+        assert not muertas, f"Excepciones que ya no corresponden a ninguna ruta: {muertas}"
+
+    def test_toda_excepcion_tiene_razon_escrita(self) -> None:
+        """Una lista pelada no se puede auditar: en seis meses nadie sabe por qué está cada una."""
+        sin_razon = [k for k, v in {**_ENDPOINTS_SIN_FRONT}.items() if len(v.strip()) < 20]
+        sin_razon += [k for k, v in _SIMBOLOS_SIN_CALLER.items() if len(v.strip()) < 20]
+        assert not sin_razon, f"Excepciones sin razón escrita: {sin_razon}"

@@ -69,8 +69,8 @@ async def marcar_principal(
     principal: bool = Body(True, embed=True),
     service: AdjuntoService = Depends(_svc),
 ) -> AdjuntoResponse:
-    rol, _ = _actor(request)
-    return service.marcar_principal(str(id), principal, get_empresa_id(request), rol)
+    rol, usuario = _actor(request)
+    return service.marcar_principal(str(id), principal, get_empresa_id(request), rol, usuario)
 
 
 @router.delete("/{id}", status_code=200)
