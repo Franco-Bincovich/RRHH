@@ -48,9 +48,14 @@ export async function previewPlantilla(
 export async function enviarPlantilla(
   plantillaClave: string,
   empleadoIds: string[],
+  destinatariosLibres: string[] = [],
 ): Promise<EnvioResponse> {
   return apiFetch<EnvioResponse>(`${BASE}/enviar`, {
     method: "POST",
-    body: JSON.stringify({ plantilla_clave: plantillaClave, empleado_ids: empleadoIds }),
+    body: JSON.stringify({
+      plantilla_clave: plantillaClave,
+      empleado_ids: empleadoIds,
+      destinatarios_libres: destinatariosLibres,
+    }),
   })
 }

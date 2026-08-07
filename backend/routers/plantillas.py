@@ -15,7 +15,6 @@ service.
 ⚠️ El preview lee datos de un empleado real, así que lleva ADEMÁS el gate de lectura de
 EMPLEADOS: quien puede editar plantillas pero no ver empleados no debe sacar datos por esta vía.
 """
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
@@ -65,6 +64,14 @@ async def preview(body: PreviewRequest, request: Request) -> PreviewResponse:
 @limiter.shared_limit("20/hour", scope="mail")  # franja propia: manda correo a nombre de la empresa
 async def enviar(body: EnvioRequest, request: Request) -> EnvioResponse:
     """Envía la plantilla a los empleados. Con presupuesto de tiempo y reporte parcial;
-    reintentar el mismo lote no duplica (idempotencia por el log)."""
-    empresa_id: Optional[UUID] = get_empresa_id(request)
+    reintentar el mismo lote no duplica (idempotencia por el log).
+
+    🔴 `require_empresa_id`, NO `get_empresa_id` — igual que `guardar` y `borrar`. Con `None` el
+    repo saltea la plantilla PROPIA y resuelve la GLOBAL: existiendo una global con esa clave, el
+    mail sale con un TEXTO DISTINTO del que muestra la pantalla, con 200 y sin ninguna señal. Y
+    el evento de auditoría queda con `empresa_id` NULL, fuera del filtro por empresa de
+    `/auditoria`. Enviar es una ACCIÓN y las acciones se hacen sobre UNA empresa: `None` no es
+    "todas" acá, es "no se sabe con qué texto". La UI ya lo evita; el endpoint también tiene que.
+    """
+    empresa_id = require_empresa_id(request)   # en su propia línea: se rechaza ANTES de construir
     return MailEnvioService().enviar(body, empresa_id, request.state.user.get("id"))

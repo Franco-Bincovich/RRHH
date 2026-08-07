@@ -44,6 +44,12 @@ export function getRol(): UserRol | null {
  * pantalla mezcla reglas de negocio (gateadas) con el cambio de contraseña y "Mi perfil", que
  * todo usuario necesita sea cual sea su rol. Gatear la RUTA entera dejaría a gerencia_lectura
  * y a mandos_medios sin poder cambiar su propia contraseña. El gate va POR BLOQUE, adentro.
+ *
+ * ⚠️ /comunicacion SÍ entra, con esa MISMA sección, y no es una contradicción: ahí no vive nada
+ * que todo usuario necesite —son las plantillas de mail, el envío y su historial—, así que
+ * gatear la ruta entera es correcto. Es el mismo permiso que el backend ya exige en esos tres
+ * endpoints. No se creó una `Seccion` nueva porque `puede()` es genérica: una sección propia
+ * daría el mismo resultado a cambio de tocar el espejo manual con `permisos.py`.
  */
 const RUTA_SECCION: Readonly<Record<string, Seccion>> = {
   empleados: "empleados",
@@ -70,6 +76,9 @@ const RUTA_SECCION: Readonly<Record<string, Seccion>> = {
   auditoria: "auditoria",
   periodos: "periodos",
   usuarios: "usuarios",
+  // Plantillas de mail + envío + historial. Ruta propia desde el 7/8/2026; el permiso sigue
+  // siendo el de configuración, que es el que gatea esos endpoints en el backend.
+  comunicacion: "configuracion",
 }
 
 /** Seccion correspondiente a un pathname, o null si la ruta no se gatea por permiso. */

@@ -1,9 +1,11 @@
 "use client"
 
-import { EnvioDestinatarios } from "@/components/features/configuracion/EnvioDestinatarios"
-import { EnvioPie } from "@/components/features/configuracion/EnvioPie"
-import { EnvioResultado } from "@/components/features/configuracion/EnvioResultado"
-import { useEnvioPlantilla } from "@/components/features/configuracion/useEnvioPlantilla"
+import { EnvioDestinatarios } from "@/components/features/comunicacion/EnvioDestinatarios"
+import { EnvioLibre } from "@/components/features/comunicacion/EnvioLibre"
+import { EnvioModo } from "@/components/features/comunicacion/EnvioModo"
+import { EnvioPie } from "@/components/features/comunicacion/EnvioPie"
+import { EnvioResultado } from "@/components/features/comunicacion/EnvioResultado"
+import { useEnvioPlantilla } from "@/components/features/comunicacion/useEnvioPlantilla"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import type { Plantilla } from "@/types/plantillas"
@@ -30,7 +32,8 @@ export function EnviarPlantillaModal({ open, plantilla, onClose }: Props) {
   const {
     visibles, cargando, errorCarga, recargar, sinEmpresa, search, setSearch, sel, toggle,
     elegidos, paso, setPaso, enviando, resultado, error, confirmar,
-  } = useEnvioPlantilla(open, plantilla?.clave ?? "")
+    modo, setModo, libre, bloqueado, usaVariables,
+  } = useEnvioPlantilla(open, plantilla?.clave ?? "", plantilla?.usa_variables ?? false)
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -42,10 +45,20 @@ export function EnviarPlantillaModal({ open, plantilla, onClose }: Props) {
         {paso === "resultado" && resultado ? (
           <EnvioResultado res={resultado} />
         ) : (
-          <EnvioDestinatarios
-            visibles={visibles} sel={sel} search={search} cargando={cargando && !sinEmpresa}
-            error={errorCarga} onSearch={setSearch} onToggle={toggle} onReintentar={recargar}
-          />
+          <>
+            <EnvioModo modo={modo} usaVariables={usaVariables} onCambio={setModo} />
+            {modo === "libre" ? (
+              <EnvioLibre
+                texto={libre.texto} direcciones={libre.direcciones} invalidas={libre.invalidas}
+                onCambio={libre.setTexto}
+              />
+            ) : (
+              <EnvioDestinatarios
+                visibles={visibles} sel={sel} search={search} cargando={cargando && !sinEmpresa}
+                error={errorCarga} onSearch={setSearch} onToggle={toggle} onReintentar={recargar}
+              />
+            )}
+          </>
         )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -57,7 +70,8 @@ export function EnviarPlantillaModal({ open, plantilla, onClose }: Props) {
             <Button onClick={onClose}>Cerrar</Button>
           ) : (
             <EnvioPie
-              cantidad={elegidos.length} confirmando={paso === "confirmar"} enviando={enviando}
+              cantidad={bloqueado ? 0 : elegidos.length} confirmando={paso === "confirmar"}
+              enviando={enviando}
               sinEmpresa={sinEmpresa} onPedirConfirmacion={() => setPaso("confirmar")}
               onVolver={() => setPaso("seleccion")} onEnviar={confirmar} onCancelar={onClose}
             />

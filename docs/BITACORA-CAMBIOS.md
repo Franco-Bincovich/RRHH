@@ -41,6 +41,120 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-07 · Cobertura del módulo de mails: guardado de plantillas e idempotencia · commit pendiente
+
+**Qué cambió:** solo tests — **cero líneas de producción**. Se cerraron los dos huecos que el plan
+marcaba como T2 y T3, con dos archivos nuevos (47 tests).
+
+- **T2 · `plantillas_service.guardar` / `.borrar`** no tenían ningún test. Lo que existía cubría
+  los gates y el render. 🔴 **Hallazgo:** `test_mail_variables.py` prueba `variables_invalidas`
+  **como función suelta**, así que anular el `if malas: raise` de `guardar` dejaba esa suite
+  ENTERA en verde y la plantilla rota se guardaba igual. Verificado por mutación.
+- **T3 · `MailEnviadoRepo.ya_enviado`** estaba probada solo contra fakes de repo. Ahora se prueba
+  contra el **cliente de Supabase falseado**, que registra los `.eq/.gte/.limit`. 🔴 **Hallazgo:**
+  borrar el `.eq("estado", "enviado")` deja `test_mail_envio.py` y `test_envio_libre.py` en verde
+  — o sea que la garantía de "nadie recibe el mismo mail dos veces" no estaba realmente fijada.
+- Queda fijado además el registro del **fallo** (`estado='fallido'` + motivo) desde el punto de
+  salida único, y las **dos ramas** de destinatario de la idempotencia (empleado / dirección libre).
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets ni endpoints. ⚠️ Para el que monte AWS, lo único relevante: estos tests **no tocan la red
+ni la base** (falsean el cliente de Supabase), así que corren igual del otro lado del cutover. El
+que sí va a haber que reescribir cuando `mail_enviado_repo` se porte a asyncpg es
+`test_mail_enviado_repo.py`, porque afirma sobre la API de PostgREST (`.eq/.gte`), no sobre SQL.
+
+## 2026-08-07 · Envío de plantillas a direcciones escritas a mano · commit pendiente
+
+**Qué cambió:** el modal de `/comunicacion` ahora tiene **dos modos**: empleados del sistema (lo
+que había) o **direcciones de mail escritas a mano**. `EnvioRequest` suma
+`destinatarios_libres: List[str] = []` — **campo opcional con default, así el caller que ya
+existía no se toca**.
+
+**Cuatro decisiones que condicionan el uso:**
+- 🔴 **Una plantilla con `{{variables}}` NO se puede mandar a una dirección suelta.** Sin empleado,
+  el render deja la variable en "" y el mail sale con un hueco donde iba el nombre de la persona.
+  La UI deshabilita el modo con el motivo a la vista **antes** de apretar; el backend lo verifica
+  igual (422 `PLANTILLA_CON_VARIABLES`), porque la pantalla no es la frontera.
+  ⚠️ El predicado es "usa ALGUNA variable", más restrictivo de lo estrictamente necesario:
+  `{{empresa_nombre}}`, `{{fecha_hoy}}` y `{{hora_ahora}}` sí resolverían sin empleado. Se eligió
+  así porque el costo de los dos errores no es simétrico. La perilla para aflojarlo es una sola
+  función (`plantilla_usa_variables`).
+- 🔴 **Los dos modos son EXCLUYENTES.** Un body con las dos listas se rechaza (422
+  `ENVIO_MODO_MIXTO`): la regla de las variables aplica a un modo y no al otro, así que un lote
+  mixto sería mitad permitido.
+- **Formato validado en las dos puntas**, con el mismo patrón conservador. Una dirección mal
+  escrita **rechaza el lote entero** (422 `EMAIL_INVALIDO`, con la lista de cuáles): la escribió
+  una persona hace un segundo y corregirla es inmediato. Tope de **50** direcciones por envío.
+- **La idempotencia también vale acá.** Sin `empleado_id`, `MailEnviadoRepo.ya_enviado` pregunta
+  por `destinatario`. Sin eso, un lote cortado por presupuesto reenviaría a gente de afuera.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets ni endpoints nuevos. `mail_enviado.empleado_id` ya era nullable y la FK es
+`ON DELETE SET NULL`, así que un envío libre entra sin tocar el schema. ⚠️ **Para el que monte
+AWS:** el índice `idx_mail_enviado_idempotencia` es `(plantilla_clave, empleado_id, created_at)` y
+**no cubre la consulta por `destinatario`** que usa el modo libre. Con el volumen de hoy no se
+nota; si el envío a direcciones sueltas se vuelve frecuente, hace falta un índice hermano por
+`(plantilla_clave, destinatario, created_at)`. No se creó ahora para no meter una migración por
+una consulta que todavía no tiene tráfico.
+
+## 2026-08-07 · Módulo Comunicación: ruta propia + historial de mails · commit pendiente
+
+**Qué cambió:** las plantillas de mail salieron de `/configuracion` a una ruta propia
+**`/comunicacion`**, con entrada en el sidebar (grupo "Operación") y **dos pestañas**: Plantillas
+(mudada tal cual) e **Historial**. El motivo no es estético: mientras fue el ABM de un texto que
+se toca dos veces al año, vivir dentro de configuración era correcto; desde que se manda mail a la
+gente desde ahí, es operación recurrente e irreversible.
+
+**El historial es feature nueva de punta a punta.** `mail_enviado` se escribía desde la migración
+087 y **no lo leía nadie**: `MailEnviadoRepo.ultimos()` no tenía un solo caller y no existían ni
+service ni router. Ahora hay **`GET /api/mails`** (router nuevo `routers/mail_historial.py` +
+`services/mail_historial_service.py`), con filtro por **estado** y por **rango de fechas**,
+ordenado por fecha descendente.
+
+**Cuatro decisiones que condicionan lo que se puede pedir después:**
+- 🔴 **NO hay export, y no se le agrega uno.** `mail_enviado` guarda datos personales por
+  definición —nombre, dirección y el cuerpo entero del mail—. La decisión ya estaba escrita en el
+  repo y se respetó en vez de reabrirla. Consecuencia: este listado **no entra** en
+  `test_paridad_list_export.py`, que solo empareja listados que tienen export.
+- 🔴 **NO pagina.** Techo duro de **200** filas en el repo, con `limite` en la respuesta para que
+  la pantalla avise que ve un recorte. Paginar convertiría un diagnóstico acotado en un volcado.
+- **El `select` es una allowlist**: `cuerpo_render` no sale del backend.
+- **NO se creó una `Seccion` de permisos nueva.** `/comunicacion` se gatea con `configuracion`,
+  que es lo que el backend ya exigía en plantillas, envío e historial. `puede()` es genérica
+  (admin escribe · gerencia lee · mandos_medios no entra), así que una sección propia daba el
+  mismo resultado a cambio de tocar el espejo manual `permisos.py` ↔ `permisos.ts`.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias
+ni buckets. ⚠️ **Un endpoint nuevo montado: `GET /api/mails`** (con auth y gate de permisos, no
+público) — el prefijo `/api/mails` es nuevo en `main.py`, tenerlo en cuenta si hay reglas de ruteo
+por path del lado de la infra. 🔴 **Para el que monte AWS:** el historial es la primera pantalla
+que lee `mail_enviado`, así que esa tabla pasa a tener tráfico de lectura además de escritura —
+conviene que el índice por `created_at` exista antes de que la tabla crezca.
+
+## 2026-08-07 · El envío de mails exige empresa concreta (era Optional) · commit pendiente
+
+**Qué cambió:** `POST /api/plantillas/enviar` resolvía la empresa con `get_empresa_id` (Optional),
+a diferencia del `guardar` y el `borrar` del **mismo router**, que usan `require_empresa_id`. Con
+`None`, `PlantillaMailRepo.find` saltea la plantilla PROPIA y resuelve la GLOBAL: **existiendo una
+global con la misma clave, el mail salía con un texto DISTINTO del que muestra la pantalla, con
+200 y sin ninguna señal**, y el evento de auditoría quedaba con `empresa_id NULL` — fuera del
+filtro por empresa de `/auditoria`. La UI ya lo evitaba exigiendo empresa elegida; el endpoint
+seguía abierto. Ahora usa `require_empresa_id`, resuelto **en su propia línea, antes de construir
+el service**, así nada se arma para un pedido que se va a rechazar.
+
+**Además, el mensaje de `EMPRESA_ID_REQUIRED` pasó a ser accionable.** Decía *"empresa_id
+requerido para esta operación"* — jerga de backend que el front muestra **tal cual** en una
+pantalla de RRHH, y que no dice qué hacer. Ahora dice que hay que elegir una empresa en el
+selector. **El `code` no cambió**, así que nada que dependa de él se entera.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets ni endpoints nuevos. ⚠️ **Cambio de contrato menor, para el que integre:** ese endpoint
+ahora responde **400 `EMPRESA_ID_REQUIRED`** cuando `X-Empresa-Id` viene ausente o en `"todas"`.
+Antes respondía 200 o 404 según hubiera o no una plantilla global. Cualquier cliente que llamara
+sin empresa —hoy no existe ninguno— pasa a recibir 400. 🔴 **`require_empresa_id` lo usa también
+`routers/configuracion.py`**: el texto nuevo del error sale por ahí igual, y es el único otro
+lugar afectado por el cambio de mensaje.
+
 ## 2026-08-07 · `page_size=200` contra un endpoint que topea en 100 · commit pendiente
 
 **Qué cambió:** dos selectores de empleados pedían `page_size=200` a `GET /api/empleados`, que

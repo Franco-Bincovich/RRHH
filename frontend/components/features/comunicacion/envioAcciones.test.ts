@@ -30,7 +30,7 @@ vi.mock("@/services/plantillas", () => ({
 }))
 
 const { destinatarios, enviarAhora, ERROR_ENVIO } =
-  await import("@/components/features/configuracion/envioAcciones")
+  await import("@/components/features/comunicacion/envioAcciones")
 
 /** TRES, no uno: ver el punto 1 del encabezado. */
 const EMPLEADOS = [
@@ -50,7 +50,7 @@ describe("manda a los seleccionados, no a todos", () => {
 
     expect(enviarPlantilla).toHaveBeenCalledTimes(1)
     // Body completo: si la implementación mandara los tres, este toEqual rojea.
-    expect(enviarPlantilla).toHaveBeenCalledWith("bienvenida", ["e1", "e3"])
+    expect(enviarPlantilla).toHaveBeenCalledWith("bienvenida", ["e1", "e3"], [])
   })
 
   it("elegir uno solo manda uno solo (el caso de arriba no está pasando por otra vía)", async () => {
@@ -58,7 +58,7 @@ describe("manda a los seleccionados, no a todos", () => {
 
     await enviarAhora("aviso", EMPLEADOS, new Set(["e2"]))
 
-    expect(enviarPlantilla).toHaveBeenCalledWith("aviso", ["e2"])
+    expect(enviarPlantilla).toHaveBeenCalledWith("aviso", ["e2"], [])
   })
 
   it("un id seleccionado que ya no está en el catálogo NO viaja", async () => {
@@ -69,11 +69,42 @@ describe("manda a los seleccionados, no a todos", () => {
 
     await enviarAhora("aviso", EMPLEADOS, new Set(["e1", "fantasma"]))
 
-    expect(enviarPlantilla).toHaveBeenCalledWith("aviso", ["e1"])
+    expect(enviarPlantilla).toHaveBeenCalledWith("aviso", ["e1"], [])
   })
 
   it("`destinatarios` respeta el orden del catálogo, no el de la selección", () => {
     expect(destinatarios(EMPLEADOS, new Set(["e3", "e1"]))).toEqual(["e1", "e3"])
+  })
+})
+
+describe("modo LIBRE: manda direcciones y NO empleados", () => {
+  /**
+   * Los dos modos son excluyentes por decisión (ver `ModoEnvio`). Acá se verifica que la
+   * exclusión ocurra en el body, no solo en la UI: con `libres` no vacío, la selección de
+   * empleados NO viaja aunque esté cargada. Sin este caso, un body mixto llegaría al backend y
+   * se comería un 422 `ENVIO_MODO_MIXTO` que el usuario no puede explicar.
+   */
+  it("🔴 con direcciones libres, los empleados seleccionados NO viajan", async () => {
+    enviarPlantilla.mockResolvedValue(OK)
+
+    await enviarAhora("aviso", EMPLEADOS, new Set(["e1", "e2"]), ["ana@k.com", "beto@k.com"])
+
+    expect(enviarPlantilla).toHaveBeenCalledWith("aviso", [], ["ana@k.com", "beto@k.com"])
+  })
+
+  it("sin direcciones libres, el modo empleados sigue intacto", () => {
+    // Contrapeso: sin esto, un `enviarAhora` que vaciara SIEMPRE `empleado_ids` pasaría arriba.
+    enviarPlantilla.mockResolvedValue(OK)
+    return enviarAhora("aviso", EMPLEADOS, new Set(["e1"])).then(() => {
+      expect(enviarPlantilla).toHaveBeenCalledWith("aviso", ["e1"], [])
+    })
+  })
+
+  it("sin empleados ni direcciones, no se llama al backend", async () => {
+    const r = await enviarAhora("aviso", EMPLEADOS, new Set(), [])
+
+    expect(enviarPlantilla).not.toHaveBeenCalled()
+    expect(r.ok).toBe(false)
   })
 })
 

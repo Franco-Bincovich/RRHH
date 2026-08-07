@@ -184,7 +184,7 @@ describe("el barrido está mirando algo", () => {
    */
   it("🔴 cubre los dos archivos donde vivía el bug", () => {
     for (const a of [
-      "components/features/configuracion/useDestinatarios.ts",
+      "components/features/comunicacion/useDestinatarios.ts",
       "components/features/proyectos/useCandidatosProyecto.ts",
     ]) {
       expect(LLAMADAS.some((l) => l.archivo === a), `${a} quedó FUERA del barrido`).toBe(true)

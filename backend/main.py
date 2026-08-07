@@ -30,6 +30,7 @@ from routers.assessment import router as assessment_router
 from routers.dashboard import router as dashboard_router
 from routers.organigrama import router as organigrama_router
 from routers.importacion_nomina_empleados import router as importacion_nomina_empleados_router
+from routers.mail_historial import router as mail_historial_router
 from routers.plantillas import router as plantillas_router
 from routers.importacion_nomina import router as importacion_nomina_router
 from routers.integraciones import router as integraciones_router
@@ -146,6 +147,7 @@ app.include_router(empresa_router, prefix="/api/empresas", tags=["empresa"])
 app.include_router(reportes_router, prefix="/api/reportes", tags=["reportes"])
 app.include_router(importacion_nomina_empleados_router, prefix="/api/importacion", tags=["importacion"])
 app.include_router(plantillas_router, prefix="/api/plantillas", tags=["plantillas"])
+app.include_router(mail_historial_router, prefix="/api/mails", tags=["plantillas"])  # historial de envíos
 app.include_router(importacion_nomina_router, prefix="/api/importacion", tags=["importacion"])
 app.include_router(integraciones_router, prefix="/api/integraciones", tags=["integraciones"])
 app.include_router(configuracion_router, prefix="/api/configuracion", tags=["configuracion"])

@@ -14,6 +14,13 @@ export interface Plantilla {
    * la versión de esta empresa, que a partir de ahí tiene precedencia.
    */
   es_global: boolean
+  /**
+   * El asunto o el cuerpo tienen alguna `{{variable}}`. **Lo calcula el BACKEND** y el front solo
+   * lo lee: la regla "una plantilla con variables no se manda a una dirección suelta" tiene que
+   * ser una sola. Con un regex propio acá, una divergencia habilitaría en pantalla algo que el
+   * backend después rechaza con 422.
+   */
+  usa_variables: boolean
 }
 
 export interface PlantillasResponse {
@@ -21,6 +28,44 @@ export interface PlantillasResponse {
   /** contexto → variables disponibles. Viene del backend para que la UI ofrezca solo las
    * válidas y RRHH no las escriba a mano (que es de donde salen los typos). */
   contextos: Record<string, string[]>
+}
+
+/**
+ * Una línea del historial de envíos (`mail_enviado`).
+ *
+ * NO trae `cuerpo_render`, y no es un olvido: el texto completo que recibió una persona no viaja
+ * a una pantalla de listado. La allowlist de columnas vive en `repositories/mail_enviado_repo.py`.
+ */
+export interface MailEnviado {
+  id: string
+  plantilla_clave: string | null
+  destinatario: string
+  asunto_render: string
+  estado: "enviado" | "fallido"
+  /** El motivo, solo cuando `estado === "fallido"`. */
+  error: string | null
+  created_at: string
+}
+
+export interface MailHistorialResponse {
+  items: MailEnviado[]
+  /** El techo aplicado. El historial NO se pagina y NO expone un total: sirve para avisar que
+   *  lo que se ve es un recorte de los últimos N, no el universo. */
+  limite: number
+}
+
+/**
+ * Filtros del historial. Viajan enteros de la UI al service (molde: `shared/filtros.ts`).
+ *
+ * Es un `type` con índice y no una `interface` para poder pasarlo a los helpers genéricos de
+ * `shared/filtros.ts` (`setFiltro`, `filtrosActivos`), que piden `Record<string, ValorFiltro>`:
+ * TS no considera que una `interface` satisfaga una firma de índice, aunque sus campos encajen.
+ */
+export type MailsFiltros = {
+  [k: string]: string | undefined
+  estado?: string
+  fecha_desde?: string
+  fecha_hasta?: string
 }
 
 /** Un destinatario al que NO se le pudo mandar, con el motivo tal cual lo dio el backend. */

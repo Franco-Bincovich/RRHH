@@ -43,11 +43,16 @@ export async function enviarAhora(
   clave: string,
   empleados: Destinatario[],
   sel: Set<string>,
+  libres: string[] = [],
 ): Promise<ResultadoEnvio> {
-  const ids = destinatarios(empleados, sel)
-  if (ids.length === 0) return { ok: false, error: "Elegí al menos una persona." }
+  // Los dos modos son EXCLUYENTES (ver `ModoEnvio`): `libres` con contenido significa modo libre
+  // y la selección de empleados no viaja. El backend además rechaza el body mixto (422).
+  const ids = libres.length > 0 ? [] : destinatarios(empleados, sel)
+  if (ids.length === 0 && libres.length === 0) {
+    return { ok: false, error: "Elegí al menos una persona." }
+  }
   try {
-    return { ok: true, res: await enviarPlantilla(clave, ids) }
+    return { ok: true, res: await enviarPlantilla(clave, ids, libres) }
   } catch (e) {
     // El backend tiene mensajes accionables para este flujo (sin casilla de sistema configurada,
     // plantilla inexistente, 429 del rate limit). Se muestran tal cual: son más útiles que

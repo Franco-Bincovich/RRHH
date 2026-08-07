@@ -27,6 +27,7 @@ from repositories.plantilla_mail_repo import PlantillaMailRepo
 from schemas.plantillas import (
     PlantillaResponse, PlantillasListResponse, PlantillaUpsert, PreviewRequest, PreviewResponse,
 )
+from services._envio_libre import plantilla_usa_variables
 from services.mailer._markdown import a_html
 from services.mailer._render import contexto_valido, datos_de_ejemplo, render, variables_invalidas
 from services.mailer._variables import CONTEXTOS
@@ -127,7 +128,11 @@ def datos_empleado(emp) -> dict:
 
 
 def _a_response(fila: dict) -> PlantillaResponse:
+    # `usa_variables` se calcula acá, del lado del backend, y viaja en el listado: es lo que hace
+    # que la pantalla pueda deshabilitar el envío a direcciones sueltas SIN reimplementar la
+    # detección. Ver la nota en el schema y `services/_envio_libre.py`.
     return PlantillaResponse(
         id=fila["id"], empresa_id=fila.get("empresa_id"), clave=fila["clave"],
         contexto=fila["contexto"], asunto=fila["asunto"], cuerpo=fila["cuerpo"],
-        activa=bool(fila.get("activa", True)), es_global=fila.get("empresa_id") is None)
+        activa=bool(fila.get("activa", True)), es_global=fila.get("empresa_id") is None,
+        usa_variables=plantilla_usa_variables(fila))

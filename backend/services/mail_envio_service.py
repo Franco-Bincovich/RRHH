@@ -27,6 +27,7 @@ from repositories.empleado_repo import EmpleadoRepo
 from repositories.mail_enviado_repo import MailEnviadoRepo
 from repositories.plantilla_mail_repo import PlantillaMailRepo
 from schemas.plantillas import EnvioRequest, EnvioResponse
+from services._envio_libre import enviar_a_direccion, validar
 from services._lote_mails import LoteMails
 from services.audit_service import AuditService
 from services.mailer import enviar_mail
@@ -48,10 +49,14 @@ class MailEnvioService:
 
     def enviar(self, data: EnvioRequest, empresa_id: Optional[UUID],
                usuario_id: Optional[str], lote: Optional[LoteMails] = None) -> EnvioResponse:
-        """Manda la plantilla a cada empleado de la lista. Uno solo o cincuenta: el mismo camino.
+        """Manda la plantilla a cada destinatario. Uno solo o cincuenta: el mismo camino.
+
+        Dos modos, EXCLUYENTES entre sí (ver `EnvioRequest`): empleados del sistema, o direcciones
+        escritas a mano. El segundo vive en `services/_envio_libre.py` — incluida la regla de que
+        una plantilla con variables no se puede mandar a una dirección suelta.
 
         Args:
-            data: clave de la plantilla y los empleados destinatarios.
+            data: clave de la plantilla y los destinatarios (empleados o direcciones).
             empresa_id: la del request; resuelve qué plantilla se usa (propia o global).
             usuario_id: quién disparó, para el log y la auditoría.
             lote: inyectable para test (reloj falso). None → presupuesto de settings.
@@ -62,8 +67,20 @@ class MailEnvioService:
         plantilla = self._plantillas.find(data.plantilla_clave, empresa_id)
         if not plantilla:
             raise AppError("Plantilla no encontrada", "PLANTILLA_NOT_FOUND", 404)
+        if data.empleado_ids and data.destinatarios_libres:
+            raise AppError(
+                "Elegí empleados del sistema o direcciones escritas a mano, no las dos cosas en "
+                "el mismo envío.", "ENVIO_MODO_MIXTO", 422)
 
         lote = lote or LoteMails()
+        if data.destinatarios_libres:
+            # Valida ANTES de mandar el primero: si una dirección está mal escrita, el lote entero
+            # se rechaza y no queda medio mandado. Es distinto del camino de empleados, donde un
+            # dato faltante de uno no puede castigar a los otros 49 — acá la lista la acaba de
+            # escribir una persona y corregirla es inmediato.
+            libres = validar(plantilla, list(data.destinatarios_libres))
+            for direccion in lote.destinatarios_con_margen(libres):
+                enviar_a_direccion(lote, plantilla, direccion, empresa_id, usuario_id, self._log)
         for empleado_id in lote.destinatarios_con_margen(list(data.empleado_ids)):
             self._uno(lote, plantilla, empleado_id, empresa_id, usuario_id)
 

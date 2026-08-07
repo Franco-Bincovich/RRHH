@@ -3,22 +3,30 @@
 import { useState } from "react"
 import { Mail, Pencil, Plus, Send } from "lucide-react"
 
+// ConfigSection sigue viviendo en `features/configuracion/`: es la shell plegable COMPARTIDA
+// (la usan también las cards del dashboard), no una pieza de este módulo.
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
-import { EnviarPlantillaModal } from "@/components/features/configuracion/EnviarPlantillaModal"
-import { PlantillaModal } from "@/components/features/configuracion/PlantillaModal"
-import { usePlantillas } from "@/components/features/configuracion/usePlantillas"
+import { EnviarPlantillaModal } from "@/components/features/comunicacion/EnviarPlantillaModal"
+import { PlantillaModal } from "@/components/features/comunicacion/PlantillaModal"
+import { usePlantillas } from "@/components/features/comunicacion/usePlantillas"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { Plantilla } from "@/types/plantillas"
 
 /**
- * Plantillas de mail, dentro del panel de configuración.
+ * Plantillas de mail — pestaña "Plantillas" de /comunicacion.
  *
- * Va acá y no en una pantalla propia por cuatro razones: la conexión de Gmail —la cuenta DESDE
- * la que salen estos mails— ya vive en esta misma pantalla; es el mismo dueño y la misma sección
- * de permisos que las reglas de negocio; el gate por bloque ya está resuelto en la página; y una
- * pantalla propia arrastraría una entrada en el sidebar y su test estructural para algo que se
- * toca dos veces al año.
+ * 🔴 ESTE COMPONENTE VIVÍA EN /configuracion Y SE MUDÓ EL 7/8/2026. El argumento de entonces
+ * está en el historial de git y era razonable con lo que había: "es el ABM de un texto que se
+ * toca dos veces al año, no justifica una pantalla ni una entrada en el sidebar". Lo que lo
+ * invalidó no fue una discusión de diseño: fue que desde acá ahora se MANDAN MAILS a la gente
+ * (botón "Enviar" por fila). Eso es una acción operativa recurrente, con historial propio y con
+ * consecuencias hacia afuera de la empresa — deja de ser configuración.
+ *
+ * Se mudó TAL CUAL: sigue usando `ConfigSection` (la shell plegable compartida), que en la
+ * pestaña se monta bajo un `Accordion.Root` propio. Que un acordeón de un solo ítem adentro de
+ * una pestaña sea redundante es cierto y quedó pendiente a propósito: mezclar la mudanza con un
+ * rediseño hace que el diff no se pueda revisar.
  *
  * `editable=false` (gerencia_lectura) muestra las plantillas en SOLO LECTURA, con el mismo
  * criterio que las reglas: el texto con el que la empresa se comunica es información, y quien

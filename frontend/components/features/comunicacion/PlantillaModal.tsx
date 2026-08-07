@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react"
 
-import { AccionesDelPie } from "@/components/features/configuracion/PlantillaAcciones"
-import { PlantillaCampos, type CampoPlantilla } from "@/components/features/configuracion/PlantillaCampos"
-import { PlantillaPreview } from "@/components/features/configuracion/PlantillaPreview"
+import { AccionesDelPie } from "@/components/features/comunicacion/PlantillaAcciones"
+import { PlantillaCampos, type CampoPlantilla } from "@/components/features/comunicacion/PlantillaCampos"
+import { PlantillaPreview } from "@/components/features/comunicacion/PlantillaPreview"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { guardarPlantilla, previewPlantilla } from "@/services/plantillas"

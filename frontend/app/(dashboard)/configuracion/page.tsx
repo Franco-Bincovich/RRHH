@@ -6,7 +6,6 @@ import { Accordion } from "@base-ui/react/accordion"
 import { IntegracionesSection } from "@/components/features/configuracion/IntegracionesSection"
 import { OAuthPopupHandler } from "@/components/features/configuracion/OAuthPopupHandler"
 import { PerfilSection } from "@/components/features/configuracion/PerfilSection"
-import { PlantillasSection } from "@/components/features/configuracion/PlantillasSection"
 import { ReglasSections } from "@/components/features/configuracion/ReglasSections"
 import { TiposAusenciaSection } from "@/components/features/configuracion/TiposAusenciaSection"
 import { PageHeader } from "@/components/layout/PageHeader"
@@ -67,9 +66,10 @@ export default function ConfiguracionPage() {
         >
           {puedeLeerReglas && (
             <>
+              {/* Las plantillas de mail se fueron a /comunicacion el 7/8/2026: desde ahí ahora
+                  se MANDAN mails, y eso es operación, no configuración. */}
               <ReglasSections editable={puedeEditarReglas} />
               <TiposAusenciaSection editable={puedeEditarReglas} />
-              <PlantillasSection editable={puedeEditarReglas} />
             </>
           )}
           {puedeIntegraciones && <IntegracionesSection />}

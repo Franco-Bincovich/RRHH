@@ -1,6 +1,6 @@
 "use client"
 
-import { PlantillaVariables } from "@/components/features/configuracion/PlantillaVariables"
+import { PlantillaVariables } from "@/components/features/comunicacion/PlantillaVariables"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
