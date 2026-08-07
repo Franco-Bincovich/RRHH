@@ -41,6 +41,33 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-07 · El envío de mails ya tiene punta en el front · commit pendiente
+
+**Qué cambió:** `POST /api/plantillas/enviar` existía montado, testeado y **sin un solo caller en
+el front** desde que se hizo el módulo de mails — el segundo caso igual en el mismo módulo, después
+de `set_remitente`. Ahora hay un botón **"Enviar" por fila** en `PlantillasSection` (dentro de
+`/configuracion`, gateado por el mismo `editable` que Editar) que abre un modal de destinatarios:
+elegir → confirmar con el número explícito → resumen. Se agregó el wrapper `enviarPlantilla` en
+`services/plantillas.ts`, que era la pieza que faltaba. **El endpoint sale de la lista de
+excepciones de `tests/test_callers_huerfanos.py`** (`destinatarios_pendientes` sigue ahí, con su
+razón reescrita: es lo único de mails que todavía no tiene punta).
+
+**Dos decisiones que condicionan la operación, no el deploy:**
+- 🔴 **En modo consolidado ("Todas las empresas") NO se puede enviar**, y el botón lo dice. El
+  backend usa `get_empresa_id` (Optional) y con `None` `PlantillaMailRepo.find` **solo encuentra la
+  plantilla GLOBAL**: el mail saldría con un texto distinto del que se ve en pantalla, sin ningún
+  error. Para una acción irreversible ese es el peor desenlace, así que la pantalla lo bloquea.
+- 🔴 **El resultado se muestra con los cinco números, no como un "Enviado".** El backend manda de a
+  uno con presupuesto de tiempo (~120 s) y puede devolver un 200 que significa "salieron 30 de 50".
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets ni endpoints nuevos — el endpoint ya existía. 🔴 **Dos cosas que ahora sí se van a ejercitar
+en producción por primera vez y conviene tener a mano el día del cutover:** (1) el envío usa la
+**casilla del sistema** de Gmail (`MAIL_SIN_REMITENTE`, 400, si no está configurada), o sea que
+depende del OAuth de Google y de sus scopes; (2) el endpoint lleva rate limit propio **20/hora,
+franja `mail`**, y como el store es `memory://` **por proceso**, en serverless el límite efectivo es
+N×instancias — mismo caveat que el resto de las franjas, pero acá cada request manda correo real.
+
 ## 2026-08-06 · No se puede dar de baja al usuario que sostiene la casilla del sistema · commit pendiente
 
 **Qué cambió:** `DELETE /api/usuarios/{user_id}` ahora rechaza con **409

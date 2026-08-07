@@ -51,9 +51,11 @@ from tests._barrido_callers import (  # noqa: E402
 _EV = ("familia ev_*: los routers siguen MONTADOS y responden, la UI se borró. No se limpia de a "
        "un símbolo: se va entera en el cutover a AWS, con el resto de las tablas huérfanas.")
 
-_MAILS = ("🔴 PENDIENTE, NO INTENCIONAL. Es el mismo cable cortado que `destinatarios_pendientes`: "
-          "el envío de mails está entero del lado del backend y no tiene punta en el front. Sale "
-          "de esta lista cuando se conecte el bloque de mails — no es una excepción permanente.")
+_MAILS = ("🔴 PENDIENTE, NO INTENCIONAL. `POST /api/plantillas/enviar` YA se conectó (el botón "
+          "'Enviar' de PlantillasSection), pero esta función sigue sin punta: es la que permitiría "
+          "decir 'quedan 12 de 50' después de un corte parcial. Hoy el modal de envío lo resuelve "
+          "de otra forma —reintentar el mismo grupo, apoyado en la idempotencia del backend—, así "
+          "que sale de esta lista cuando la pantalla muestre los pendientes, o se borra.")
 
 _PARA_TESTS = ("existe PARA el test estructural, por diseño, y su docstring lo dice. No tiene "
                "caller de producción y no debe tenerlo.")
@@ -86,8 +88,6 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
 
     ("GET", "/api/integraciones/google/callback"):
         "lo invoca el REDIRECT de Google, no el front. Un wrapper en services/ sería incorrecto.",
-
-    ("POST", "/api/plantillas/enviar"): _MAILS,
 
     # Completitud REST: quedan publicados a propósito. El front resuelve lo mismo por otra vía
     # (el listado ya filtra, la baja va por offboarding), pero el endpoint es correcto y barato.

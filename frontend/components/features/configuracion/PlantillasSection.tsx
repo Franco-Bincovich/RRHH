@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Mail, Pencil, Plus } from "lucide-react"
+import { Mail, Pencil, Plus, Send } from "lucide-react"
 
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
+import { EnviarPlantillaModal } from "@/components/features/configuracion/EnviarPlantillaModal"
 import { PlantillaModal } from "@/components/features/configuracion/PlantillaModal"
 import { usePlantillas } from "@/components/features/configuracion/usePlantillas"
 import { Badge } from "@/components/ui/badge"
@@ -22,11 +23,17 @@ import type { Plantilla } from "@/types/plantillas"
  * `editable=false` (gerencia_lectura) muestra las plantillas en SOLO LECTURA, con el mismo
  * criterio que las reglas: el texto con el que la empresa se comunica es información, y quien
  * puede leer todos los reportes debería poder verlo. Lo que se oculta es el botón de editar.
+ *
+ * 🔴 ENVIAR VA DETRÁS DEL MISMO `editable` QUE EDITAR, y no de un gate propio: el backend gatea
+ * `POST /api/plantillas/enviar` con WRITE sobre configuración —la misma dependencia que el PUT—,
+ * o sea que solo `admin_rrhh` puede. Un botón visible para `gerencia_lectura` daría 403 al
+ * apretarlo, que es peor que no estar.
  */
 export function PlantillasSection({ editable }: { editable: boolean }) {
   const { items, contextos, loading, recargar } = usePlantillas()
   const [abierta, setAbierta] = useState<Plantilla | null>(null)
   const [nueva, setNueva] = useState(false)
+  const [enviando, setEnviando] = useState<Plantilla | null>(null)
 
   const open = nueva || abierta !== null
 
@@ -55,9 +62,16 @@ export function PlantillasSection({ editable }: { editable: boolean }) {
                 <div className="flex shrink-0 items-center gap-2">
                   {p.es_global && <Badge variant="outline">General</Badge>}
                   {editable && (
-                    <Button variant="ghost" size="sm" onClick={() => setAbierta(p)}>
-                      <Pencil className="size-4" />
-                    </Button>
+                    <>
+                      <Button variant="ghost" size="sm" aria-label={`Enviar ${p.clave}`}
+                              onClick={() => setEnviando(p)}>
+                        <Send className="size-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" aria-label={`Editar ${p.clave}`}
+                              onClick={() => setAbierta(p)}>
+                        <Pencil className="size-4" />
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -78,6 +92,13 @@ export function PlantillasSection({ editable }: { editable: boolean }) {
         contextos={contextos}
         onClose={() => { setAbierta(null); setNueva(false) }}
         onSuccess={() => { setAbierta(null); setNueva(false); void recargar() }}
+      />
+
+      {/* No recarga al cerrar: enviar no cambia ninguna plantilla. */}
+      <EnviarPlantillaModal
+        open={enviando !== null}
+        plantilla={enviando}
+        onClose={() => setEnviando(null)}
       />
     </>
   )
