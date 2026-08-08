@@ -38,7 +38,11 @@ interface Props {
 export function KanbanView({ objetivos, onMover, moviendo, canWrite, onEdit, onDelete, deletingId }: Props) {
   const porEstado = useMemo(() => {
     const map: Record<EstadoObjetivo, Objetivo[]> = { por_hacer: [], haciendo: [], terminado: [] }
-    for (const obj of objetivos) map[obj.estado]?.push(obj)
+    // 🔴 SOLO RAÍCES. El backend ya devuelve el árbol (los hijos vienen anidados en `hijos`),
+    // pero el filtro va igual: un hijo que se colara acá sería una tarjeta suelta, y peor,
+    // sumaría al contador de su columna — "8 objetivos" pasaría a contar subtareas. La
+    // cantidad de hijos se muestra como badge en la tarjeta del padre (ObjetivoCard).
+    for (const obj of objetivos) if (!obj.parent_id) map[obj.estado]?.push(obj)
     return map
   }, [objetivos])
 

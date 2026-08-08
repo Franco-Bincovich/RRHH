@@ -1,10 +1,24 @@
-import { API_BASE, apiFetch, authHeaders } from "@/services/api"
+import { API_BASE, apiFetch, authHeaders, descargarArchivo, type FormatoExport } from "@/services/api"
 import type { Empresa, EmpresaCreate, EmpresaListResponse, EmpresaUpdate } from "@/types/empresa"
 
 const BASE = "/api/empresas"
 
 export async function fetchEmpresas(): Promise<EmpresaListResponse> {
   return apiFetch<EmpresaListResponse>(BASE)
+}
+
+/**
+ * Exporta el listado de empresas — las MISMAS filas que muestra la pantalla.
+ *
+ * `fetchEmpresas` no manda ningún query param, y este tampoco: no hay filtros que puedan
+ * quedar en una sola de las dos puntas. 🔴 El día que el listado gane uno (por ejemplo
+ * activas/inactivas), NO se lo agregue a una sola: los dos tienen que armar sus params con
+ * UNA función de traducción compartida (molde: `queryProyectos` en services/proyectos.ts).
+ *
+ * Tampoco viaja `X-Empresa-Id`: esta pantalla lista TODAS las empresas, no las de la activa.
+ */
+export function exportarEmpresas(formato: FormatoExport): Promise<void> {
+  return descargarArchivo(`${BASE}/exportar`, formato, "empresas")
 }
 
 export async function fetchEmpresa(id: string): Promise<Empresa> {

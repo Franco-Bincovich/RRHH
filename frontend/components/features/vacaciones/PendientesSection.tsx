@@ -7,8 +7,10 @@ import { Pagination } from "@/components/ui/Pagination"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { useCanWrite } from "@/hooks/useCanWrite"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
 import {
-  deleteVacacionPendiente, fetchVacacionesPendientes, updateVacacionPendiente,
+  deleteVacacionPendiente, exportarVacacionesPendientes, fetchVacacionesPendientes,
+  updateVacacionPendiente,
 } from "@/services/vacacionesPendientes"
 import type { VacacionPendiente } from "@/types/vacaciones"
 import { PendientesTable } from "./PendientesTable"
@@ -79,7 +81,14 @@ export function PendientesSection({ showEmpresa, refreshKey }: PendientesSection
 
   return (
     <section className="mt-8" aria-label="Días de vacaciones pendientes">
-      <h2 className="mb-1 text-base font-semibold text-foreground">Días pendientes</h2>
+      <div className="mb-1 flex items-start justify-between gap-2">
+        <h2 className="text-base font-semibold text-foreground">Días pendientes</h2>
+        {/* El archivo sale del MISMO listado que la tabla, con el mismo recorte por ownership
+            que el backend resuelve con el token. Sin filas no se ofrece exportar. */}
+        {!loading && !error && items.length > 0 && (
+          <ExportMenu onExport={exportarVacacionesPendientes} />
+        )}
+      </div>
       <p className="mb-4 text-sm text-muted-foreground">
         Días de un período que no se tomaron. No tienen fechas porque nadie faltó ningún día.
         {!loading && !error && ` · ${total} registro${total !== 1 ? "s" : ""}`}

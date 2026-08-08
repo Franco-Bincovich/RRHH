@@ -5,6 +5,12 @@ ObjetivoCreate → Update → Response → ListResponse
 responsable_id: FK a users (operadores RRHH), NO empleados.
 empresa_id: explícito en Create; heredado por el objeto en lecturas.
 estado: no se pide al crear (default 'por_hacer'); se cambia por CambiarEstadoRequest.
+
+JERARQUÍA (migración 095): `parent_id` self-FK, profundidad máxima 2 — un objetivo con padre no
+puede ser padre de otro. La guarda vive en services/_objetivos_jerarquia.py, no en un CHECK.
+
+MÚLTIPLES RESPONSABLES (migración 096): `responsable_id` sigue siendo el DUEÑO PRINCIPAL y no se
+toca; `responsables` es la lista COMPLETA (incluye al dueño) que arma la tabla puente.
 """
 from datetime import date, datetime
 from typing import List, Optional
@@ -24,6 +30,9 @@ class ObjetivoCreate(BaseModel):
     descripcion:    Optional[str] = None
     prioridad:      str = "media"
     fecha_entrega:  Optional[date] = None
+    parent_id:      Optional[UUID] = None       # None = objetivo raíz
+    # Responsables ADICIONALES al dueño. El dueño entra siempre a la puente, venga o no acá.
+    responsables:   Optional[List[UUID]] = None
 
 
 class ObjetivoUpdate(BaseModel):
@@ -32,6 +41,15 @@ class ObjetivoUpdate(BaseModel):
     descripcion:    Optional[str] = None
     prioridad:      Optional[str] = None
     fecha_entrega:  Optional[date] = None
+    parent_id:      Optional[UUID] = None
+    # `None` = no se toca la lista. `[]` = se deja solo al dueño. Ver services/objetivo_service.
+    responsables:   Optional[List[UUID]] = None
+
+
+class ResponsableItem(BaseModel):
+    """Un responsable del objetivo, con el nombre ya resuelto desde `users`."""
+    id:     str
+    nombre: Optional[str] = None
 
 
 class CambiarEstadoRequest(BaseModel):
@@ -51,6 +69,15 @@ class ObjetivoResponse(BaseModel):
     fecha_entrega:       Optional[date] = None
     created_at:          datetime
     updated_at:          datetime
+    parent_id:           Optional[str] = None
+    parent_titulo:       Optional[str] = None   # derivado: alimenta la columna del export
+    # Lista COMPLETA de responsables (el dueño incluido). Vacía solo si la puente no tiene filas.
+    responsables:        List[ResponsableItem] = []
+    # Subobjetivos anidados. Siempre vacía en un hijo: la profundidad máxima es 2.
+    hijos:               List["ObjetivoResponse"] = []
+
+
+ObjetivoResponse.model_rebuild()   # `hijos` se referencia a sí misma
 
 
 class ObjetivoListResponse(BaseModel):

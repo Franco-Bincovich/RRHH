@@ -86,6 +86,7 @@ _SIMBOLOS_SIN_CALLER: dict[str, str] = {
 _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     ("GET", "/health"): "infraestructura: lo consulta el chequeo post-deploy, no una pantalla.",
 
+
     ("GET", "/api/integraciones/google/callback"):
         "lo invoca el REDIRECT de Google, no el front. Un wrapper en services/ sería incorrecto.",
 

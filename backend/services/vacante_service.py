@@ -8,15 +8,17 @@ from uuid import UUID
 from repositories.candidato_repo import CandidatoRepo
 from repositories.vacante_repo import VacanteRepo
 from schemas.vacante import CandidatoCreate, CandidatoResponse, VacanteCreate, VacanteResponse, VacanteUpdate
+from services._limite_export import verificar_limite_export
 from services._vacante_candidatos import agregar, mover
+from services._vacantes_export import construir_filas_export
+from services._vacante_write import actualizar as _actualizar
+from services._vacante_write import crear as _crear
+from services._vacante_write import eliminar as _eliminar
 from services.adjunto_service import AdjuntoService
 from services.audit_service import AuditService
 from services.cv_service import CvService
+from services.export import Descarga, build_export
 from utils.errors import AppError
-from utils.logger import logger
-
-_ESTADOS = {"nueva", "en_proceso", "con_candidatos", "cerrada"}
-
 
 class VacanteService:
     def __init__(self, repo: Optional[VacanteRepo] = None, candidato_repo: Optional[CandidatoRepo] = None, cv_service: Optional[CvService] = None, adjunto_service: Optional[AdjuntoService] = None, audit: Optional[AuditService] = None) -> None:
@@ -39,6 +41,18 @@ class VacanteService:
         """
         return self._repo.find_all(estado, empresa_id)
 
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel",
+                 estado: Optional[str] = None) -> Descarga:
+        """Exporta el listado de vacantes con el MISMO filtro que la pantalla.
+
+        Va por el mismo `find_all` que `get_vacantes`, así que el archivo no puede traer filas
+        que el listado no muestre. Qué columnas salen y por qué, en _vacantes_export.
+        """
+        items = self._repo.find_all(estado, empresa_id)
+        verificar_limite_export(len(items))
+        datos = {"Vacantes": construir_filas_export(items)}
+        return build_export(nombre="Vacantes", datos=datos, filename_base="vacantes", formato=formato)
+
     def get_vacante(self, id: UUID, empresa_id: Optional[UUID] = None) -> VacanteResponse:
         """
         Retorna el detalle de una vacante por ID.
@@ -56,57 +70,13 @@ class VacanteService:
         return vacante
 
     def create_vacante(self, data: VacanteCreate, created_by: str) -> VacanteResponse:
-        """
-        Crea una nueva vacante en estado 'nueva'. empresa_id viene en el body.
-
-        Args:
-            data: Datos de la vacante validados por Pydantic (incluye empresa_id).
-            created_by: ID del usuario que realiza la operación (trazabilidad).
-        """
-        vacante = self._repo.save(data)
-        self._audit.registrar(
-            usuario_id=created_by, entidad="vacante", registro_id=vacante.id, accion="INSERT",
-            evento="alta_vacante", empresa_id=vacante.empresa_id, datos_anteriores=None,
-            datos_nuevos={"titulo": vacante.titulo, "area_id": vacante.area_id, "estado": vacante.estado},
-        )
-        logger.info("Vacante creada", extra={"vacante_id": vacante.id, "created_by": created_by})
-        return vacante
+        """Crea una vacante en estado 'nueva'. Ver services/_vacante_write.crear."""
+        return _crear(self._repo, self._audit, data, created_by)
 
     def update_vacante(self, id: UUID, data: VacanteUpdate, empresa_id: Optional[UUID] = None,
                        usuario_id: Optional[str] = None) -> VacanteResponse:
-        """
-        Actualiza los campos de una vacante existente (actualización parcial).
-
-        Args:
-            id: UUID de la vacante a actualizar.
-            data: Campos a actualizar — solo los no-None se aplican.
-            empresa_id: Si se provee, el UPDATE solo afecta vacantes de esa empresa.
-
-        Raises:
-            AppError: ESTADO_INVALIDO (400) si el estado no está en el enum.
-            AppError: VACANTE_NOT_FOUND (404) si el ID no existe o no pertenece a la empresa.
-        """
-        if data.estado and data.estado not in _ESTADOS:
-            raise AppError(
-                f"Estado inválido. Permitidos: {', '.join(_ESTADOS)}", "ESTADO_INVALIDO", 400
-            )
-        # Lectura previa para el diff: `update` devuelve la fila YA actualizada, así que sin esto
-        # el evento no podría decir de qué valor se venía. El 404 es el mismo de abajo.
-        previa = self._repo.find_by_id(str(id), empresa_id)
-        if not previa:
-            raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
-        vacante = self._repo.update(str(id), data, empresa_id)
-        if not vacante:
-            raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
-        tocados = data.model_dump(exclude_none=True)
-        self._audit.registrar(
-            usuario_id=usuario_id, entidad="vacante", registro_id=str(id), accion="UPDATE",
-            evento="edicion_vacante", empresa_id=vacante.empresa_id,
-            datos_anteriores={k: getattr(previa, k, None) for k in tocados},
-            datos_nuevos={k: getattr(vacante, k, None) for k in tocados},
-        )
-        logger.info("Vacante actualizada", extra={"vacante_id": str(id)})
-        return vacante
+        """Actualización parcial de la vacante. Ver services/_vacante_write.actualizar."""
+        return _actualizar(self._repo, self._audit, id, data, empresa_id, usuario_id)
 
     def get_candidatos(self, vacante_id: UUID, empresa_id: Optional[UUID] = None) -> List[CandidatoResponse]:
         """Candidatos de una vacante por fecha. Raises VACANTE_NOT_FOUND (404) si no existe/otra empresa."""
@@ -129,19 +99,7 @@ class VacanteService:
         return mover(self._candidato_repo, self._audit, candidato_id, etapa, empresa_id, usuario_id)
 
     def delete_vacante(self, id: UUID, empresa_id: Optional[UUID] = None, rol: Optional[str] = None, usuario_id: Optional[str] = None) -> None:
-        """Elimina la vacante. Orden estricto: (1) congela el nombre en sus candidatos (sobreviven
-        vía FK SET NULL, migración 071), (2) borra físicamente + soft-delete sus imágenes, (3) borra
-        la fila. Raises VACANTE_NOT_FOUND (404)."""
-        vac = self._repo.find_by_id(str(id), empresa_id)
-        if not vac:
-            raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
-        texto = f"{vac.titulo} — {vac.area_nombre}" if vac.area_nombre else vac.titulo
-        self._candidato_repo.congelar_busqueda(str(id), texto, empresa_id)  # ANTES de borrar la vacante
-        self._adjuntos.eliminar_todos_por_entidad("vacante", str(id), empresa_id, rol, usuario_id)
-        self._repo.delete(str(id), empresa_id)
-        self._audit.registrar(
-            usuario_id=usuario_id, entidad="vacante", registro_id=str(id), accion="DELETE",
-            evento="baja_vacante", empresa_id=vac.empresa_id,
-            datos_anteriores={"titulo": vac.titulo}, datos_nuevos=None,
-        )
-        logger.info("Vacante eliminada", extra={"vacante_id": str(id)})
+        """Elimina la vacante y congela el nombre de la búsqueda en sus candidatos.
+        Ver services/_vacante_write.eliminar (el ORDEN del borrado es load-bearing)."""
+        _eliminar(self._repo, self._candidato_repo, self._adjuntos, self._audit,
+                  id, empresa_id, rol, usuario_id)

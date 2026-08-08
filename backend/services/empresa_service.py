@@ -4,21 +4,20 @@ Flujo: router → service → repository → DB
 Validación de CUIT aquí (no en Pydantic) para devolver AppError 400 en lugar de 422.
 """
 import re
-import uuid
 from typing import Optional
 
-from integrations.supabase_client import supabase_admin
 from repositories.empresa_repo import EmpresaRepo
 from schemas.empresa import EmpresaCreate, EmpresaListResponse, EmpresaResponse, EmpresaUpdate
-from services._audit_payloads_rrhh import (
-    payload_alta_empresa, payload_logo_empresa, payload_toggle_empresa,
-)
+from services._audit_payloads_rrhh import payload_alta_empresa, payload_toggle_empresa
+from services._empresa_logo import subir_logo as _subir_logo
+from services._empresas_export import construir_filas_export
+from services._limite_export import verificar_limite_export
 from services.audit_service import AuditService
+from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 
 _CUIT_RE = re.compile(r"^\d{2}-\d{8}-\d{1}$")
-_BUCKET = "avatars"
 
 
 def _validate_cuit(cuit: Optional[str]) -> None:
@@ -39,6 +38,18 @@ class EmpresaService:
         """Retorna todas las empresas ordenadas por nombre."""
         items = self._repo.find_all()
         return EmpresaListResponse(items=items, total=len(items))
+
+    def exportar(self, formato: str = "excel") -> Descarga:
+        """Exporta el listado de empresas con columnas legibles (sin UUIDs).
+
+        Va por el MISMO `find_all` que el listado, así que el archivo no puede traer filas que
+        la pantalla no muestre. El listado no tiene filtros: no hay ninguno que se pueda perder
+        entre las dos puntas. Qué columnas salen y por qué, en _empresas_export.
+        """
+        items = self._repo.find_all()
+        verificar_limite_export(len(items))
+        datos = {"Empresas": construir_filas_export(items)}
+        return build_export(nombre="Empresas", datos=datos, filename_base="empresas", formato=formato)
 
     def get_empresa(self, id: str) -> EmpresaResponse:
         """Retorna una empresa por ID. Lanza 404 si no existe."""
@@ -107,41 +118,6 @@ class EmpresaService:
         self, id: str, content: bytes, filename: str, content_type: str,
         usuario_id: Optional[str] = None,
     ) -> EmpresaResponse:
-        """
-        Sube el logo al bucket 'avatars' de Supabase Storage y actualiza logo_url.
-        Genera una ruta única con UUID para evitar colisiones. Audita el cambio.
-
-        Args:
-            id: UUID de la empresa.
-            content: Bytes del archivo de imagen.
-            filename: Nombre original del archivo (para extraer extensión).
-            content_type: MIME type del archivo (debe empezar con 'image/').
-            usuario_id: quién hizo el cambio (trazabilidad del evento de auditoría).
-
-        Returns:
-            EmpresaResponse con logo_url actualizado.
-
-        Raises:
-            AppError: 404 si la empresa no existe, 400 si el archivo no es imagen.
-        """
-        # El find_by_id ya existía como guarda del 404; ahora además se CONSERVA, porque el
-        # logo anterior solo se puede leer antes del UPDATE. Cero queries nuevas.
-        previa = self._repo.find_by_id(id)
-        if not previa:
-            raise AppError("Empresa no encontrada", "EMPRESA_NOT_FOUND", 404)
-        if not content_type.startswith("image/"):
-            raise AppError("El archivo debe ser una imagen", "INVALID_FILE_TYPE", 400)
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
-        path = f"logos/{id}/{uuid.uuid4()}.{ext}"
-        supabase_admin.storage.from_(_BUCKET).upload(
-            path=path,
-            file=content,
-            file_options={"content-type": content_type},
-        )
-        logo_url = supabase_admin.storage.from_(_BUCKET).get_public_url(path)
-        empresa = self._repo.set_logo_url(id, logo_url)
-        if not empresa:
-            raise AppError("Error al actualizar el logo", "LOGO_UPDATE_ERROR", 500)
-        self._audit.registrar(**payload_logo_empresa(empresa, previa.logo_url, usuario_id))
-        logger.info("Logo de empresa actualizado", extra={"empresa_id": id, "path": path})
-        return empresa
+        """Sube el logo al bucket 'avatars' y actualiza logo_url.
+        Ver services/_empresa_logo.subir_logo (extraído por límite de líneas)."""
+        return _subir_logo(self._repo, self._audit, id, content, filename, content_type, usuario_id)

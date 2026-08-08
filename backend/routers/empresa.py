@@ -1,7 +1,9 @@
 """Router de empresas — CRUD + upload de logo. Rutas protegidas por AuthMiddleware (JWT)."""
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from fastapi.responses import Response
 
 from schemas.empresa import (
     EmpresaActivaToggle,
@@ -13,6 +15,7 @@ from schemas.empresa import (
 from services.empresa_service import EmpresaService
 from utils.files import ALLOWED_TYPES_IMAGEN, MAX_SIZE_LOGO, validate_upload
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.EMPRESA
@@ -25,6 +28,14 @@ def _service() -> EmpresaService:
 @router.get("", response_model=EmpresaListResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def list_empresas(service: EmpresaService = Depends(_service)) -> EmpresaListResponse:
     return service.list_empresas()
+
+
+# ⚠️ ANTES de /{id}: si fuera después, "exportar" matchearía como un id y daría 422 de UUID.
+@router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+async def exportar_empresas(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), service: EmpresaService = Depends(_service)) -> Response:
+    d = service.exportar(formato)
+    return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 
 @router.get("/{id}", response_model=EmpresaResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])

@@ -10,9 +10,12 @@ from repositories.integracion_remitente_repo import IntegracionRemitenteRepo
 from repositories.usuario_repo import UsuarioRepo
 from schemas.usuario import CrearUsuarioRequest, CrearUsuarioResponse
 from services._audit_payloads_usuarios import payload_baja_usuario, payload_cambio_password
+from services._limite_export import verificar_limite_export
 from services._usuario_alta import crear as _crear_usuario
 from services._usuario_remitente import ensure_no_es_remitente as _ensure_no_es_remitente
+from services._usuarios_export import construir_filas_export
 from services.audit_service import AuditService
+from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 from utils.usuario_estado import invalidar_estado
@@ -29,6 +32,23 @@ class UsuarioService:
         self._repo = repo or UsuarioRepo()
         self._audit = audit or AuditService()
         self._remitente = remitente_repo or IntegracionRemitenteRepo()
+
+    def listar(self) -> dict:
+        """Usuarios activos del sistema, para la pantalla de ABM y los selectores."""
+        items = self._repo.listar_activos()
+        return {"items": items, "total": len(items)}
+
+    def exportar(self, formato: str = "excel") -> Descarga:
+        """Exporta el listado de usuarios con columnas legibles (sin ids ni credenciales).
+
+        Va por el MISMO `listar_activos` que el listado, así que el archivo no puede traer
+        filas que la pantalla no muestre. El listado no tiene filtros: no hay ninguno que se
+        pueda perder entre las dos puntas. Qué columnas salen y por qué, en _usuarios_export.
+        """
+        items = self._repo.listar_activos()
+        verificar_limite_export(len(items))
+        datos = {"Usuarios": construir_filas_export(items)}
+        return build_export(nombre="Usuarios", datos=datos, filename_base="usuarios", formato=formato)
 
     def crear_usuario(self, data: CrearUsuarioRequest, creado_por: Optional[str]) -> CrearUsuarioResponse:
         """Crea identidad + perfil con rollback. Ver services/_usuario_alta.crear."""

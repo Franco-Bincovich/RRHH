@@ -2,17 +2,19 @@
 Servicio de offboarding. Lógica de negocio del módulo de Offboarding.
 Flujo: router → service → repository → DB
 """
-from datetime import date, timedelta
 from typing import Optional
 from uuid import UUID
 
 from repositories.empleado_repo import EmpleadoRepo
 from repositories.offboarding_repo import OffboardingRepo
 from schemas.offboarding import OffboardingCreate, OffboardingResponse
-from services._audit_payloads_offboarding import payload_devolucion_activo, payload_inicio_offboarding
-from services._empleado_scope import ensure_empleado_de_empresa
+from services._audit_payloads_offboarding import payload_devolucion_activo
+from services._limite_export import verificar_limite_export
 from services._offboarding_entrevista import registrar as _registrar_entrevista
+from services._offboarding_export import construir_filas_export
+from services._offboarding_iniciar import iniciar as _iniciar
 from services.audit_service import AuditService
+from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -38,61 +40,22 @@ class OffboardingService:
         """
         return self._repo.find_activos(empresa_id)
 
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel") -> Descarga:
+        """Exporta los offboardings ACTIVOS — los mismos que muestra la pantalla.
+
+        Va por el mismo `find_activos` que el listado, así que el archivo no puede traer filas
+        que la pantalla no muestre. El listado no tiene filtros: no hay ninguno que se pueda
+        perder entre las dos puntas. Qué columnas salen y por qué, en _offboarding_export.
+        """
+        items = self._repo.find_activos(empresa_id)
+        verificar_limite_export(len(items))
+        datos = {"Offboardings": construir_filas_export(items)}
+        return build_export(nombre="Offboardings", datos=datos, filename_base="offboardings", formato=formato)
+
     def iniciar_offboarding(self, data: OffboardingCreate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> OffboardingResponse:
-        """
-        Inicia el proceso de offboarding para un empleado.
-        La empresa en la que se escribe se hereda del empleado (es un dato del empleado, no del
-        contexto de sesión) — eso NO cambia. empresa_id del header se usa solo como barrera de
-        a qué empleado se puede apuntar; validado eso, ambas coinciden por construcción.
-        Crea la instancia y los activos corporativos por defecto a devolver.
-        Registra el evento de auditoría tras crear la instancia (usuario_id = operador).
-
-        Args:
-            data: Datos del offboarding — empleado_id, motivo y fecha_ultimo_dia opcional.
-            empresa_id: empresa activa del request. Acota A QUÉ EMPLEADO se puede apuntar (no la
-                empresa en la que se escribe, que se deriva del empleado). None = todas.
-
-        Returns:
-            OffboardingResponse con la instancia creada y activos por defecto.
-
-        Raises:
-            AppError: EMPLEADO_NOT_FOUND (404) si el empleado no existe o es de otra empresa.
-            AppError: OFFBOARDING_ALREADY_ACTIVE (409) si el empleado ya tiene un offboarding activo.
-        """
-        empleado = ensure_empleado_de_empresa(self._empleado_repo, data.empleado_id, empresa_id)
-
-        existente = self._repo.find_by_empleado(str(data.empleado_id))
-        if existente:
-            raise AppError(
-                "El empleado ya tiene un proceso de offboarding activo",
-                "OFFBOARDING_ALREADY_ACTIVE",
-                409,
-            )
-
-        empresa_id_str = empleado.empresa_id or ""
-        offboarding = self._repo.create_offboarding(data, empresa_id_str)
-        self._audit.registrar(**payload_inicio_offboarding(offboarding, usuario_id, empresa_id_str or None))
-
-        fecha_egreso = data.fecha_ultimo_dia or (date.today() + timedelta(days=30))
-        empresa_uuid = UUID(empresa_id_str) if empresa_id_str else None
-        if not self._empleado_repo.dar_de_baja(str(data.empleado_id), fecha_egreso, empresa_uuid):
-            logger.warning(
-                "Offboarding iniciado pero no se pudo actualizar estado del empleado",
-                extra={
-                    "empleado_id": str(data.empleado_id),
-                    "instancia_id": str(offboarding.id),
-                },
-            )
-
-        logger.info(
-            "Offboarding iniciado",
-            extra={
-                "empleado_id": str(data.empleado_id),
-                "motivo": data.motivo,
-                "instancia_id": str(offboarding.id),
-            },
-        )
-        return offboarding
+        """Inicia el offboarding de un empleado y lo da de baja.
+        Ver services/_offboarding_iniciar.iniciar (el ORDEN de los gates es load-bearing)."""
+        return _iniciar(self._repo, self._empleado_repo, self._audit, data, empresa_id, usuario_id)
 
     def registrar_entrevista(
         self, instancia_id: UUID, entrevista_salida: bool, notas: Optional[str] = None,

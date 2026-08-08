@@ -11,7 +11,8 @@ import { EmptyState } from "@/components/ui/EmptyState"
 import { AdjuntosDialog } from "@/components/features/adjuntos/AdjuntosDialog"
 import { cn } from "@/lib/utils"
 import { EntrevistaSalida } from "@/components/features/offboarding/EntrevistaSalida"
-import { fetchOffboardings, marcarActivoDevuelto } from "@/services/offboarding"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { exportarOffboardings, fetchOffboardings, marcarActivoDevuelto } from "@/services/offboarding"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { ActivoResponse, MotivoEgreso, OffboardingInstancia } from "@/types/offboarding"
@@ -160,6 +161,9 @@ export default function OffboardingPage() {
       <PageHeader
         title="Offboarding"
         description={`${offboardings.length} procesos activos`}
+        // El archivo sale del MISMO listado que las tarjetas y esta pantalla no tiene filtros:
+        // trae exactamente los procesos que se ven. Sin procesos no se ofrece exportar.
+        action={offboardings.length > 0 ? <ExportMenu onExport={exportarOffboardings} /> : undefined}
       />
 
       {offboardings.length === 0 ? (

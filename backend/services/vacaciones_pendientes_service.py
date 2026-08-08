@@ -46,15 +46,15 @@ from schemas.vacaciones_pendientes import (
     VacacionPendienteCreate, VacacionPendienteListResponse,
     VacacionPendienteResponse, VacacionPendienteUpdate,
 )
-from services._audit_payloads_vacaciones import (
-    payload_alta_pendiente, payload_baja_pendiente, payload_update_pendiente,
-)
 from services._alcance_mandos import alcance_listado, empresa_efectiva
 from services._empleado_scope import ensure_empleado_visible
+from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
+from services._vacaciones_pendientes_export import construir_filas_export
+from services._vacaciones_pendientes_write import actualizar as _actualizar
+from services._vacaciones_pendientes_write import crear as _crear
+from services._vacaciones_pendientes_write import eliminar as _eliminar
 from services.audit_service import AuditService
-from services.ownership import puede_gestionar_empleado
-from utils.errors import AppError
-from utils.logger import logger
+from services.export import Descarga, build_export
 
 
 class VacacionesPendientesService:
@@ -66,21 +66,6 @@ class VacacionesPendientesService:
         self._audit = audit or AuditService()
         self._ownership = ownership_repo or EmpleadoOwnershipRepo()
         self._empleados = empleado_repo or EmpleadoRepo()
-
-    def _or_404(self, row: Optional[VacacionPendienteResponse]) -> VacacionPendienteResponse:
-        """Literal ÚNICO del 404. Mismo code y mensaje para 'no existe', 'es de otra empresa' y
-        'está fuera del alcance de tu rol' —nunca un 403—: un status o un texto distinto
-        confirmaría que el registro existe y es de otro (oráculo de enumeración)."""
-        if not row:
-            raise AppError("Registro de días pendientes no encontrado", "VACACION_PENDIENTE_NOT_FOUND", 404)
-        return row
-
-    def _gestionable(self, row: Optional[VacacionPendienteResponse], usuario_id, rol) -> VacacionPendienteResponse:
-        """Empresa (ya aplicada en el WHERE del repo) ∩ ownership. Los dos fallos → el mismo 404."""
-        row = self._or_404(row)
-        if not puede_gestionar_empleado(usuario_id, rol, row.empleado_id, self._ownership):
-            return self._or_404(None)
-        return row
 
     def get_all(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None,
                 area_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None,
@@ -94,6 +79,28 @@ class VacacionesPendientesService:
         items, total = ([], 0) if vacio else self._repo.find_all(empresa, empleado_ids, page, page_size)
         return VacacionPendienteListResponse(items=items, total=total)
 
+    def exportar(self, user_id: str, rol: str, empresa_id: Optional[UUID] = None,
+                 formato: str = "excel", area_id: Optional[UUID] = None,
+                 empleado_id: Optional[UUID] = None, proyecto_id: Optional[UUID] = None) -> Descarga:
+        """Exporta los días pendientes con los MISMOS filtros que el listado.
+
+        🔴 VA POR `get_all`, NO POR EL REPO. VACACIONES está en MANDOS_MEDIOS_SECCIONES, así que
+        el universo de este módulo NO lo acota solo la empresa: lo acota el OWNERSHIP (a qué
+        empleados llego por mi `manager_id`), que se resuelve en `alcance_listado`. Un export que
+        le pegara al repo por su cuenta —aunque le pasara el `empresa_id`— le entregaría a un
+        `mandos_medios` los días de gente que no puede ver en ninguna pantalla, en un archivo
+        descargable y sin ningún error. Reusar el listado es lo que hace que eso no pueda pasar.
+
+        El total sale con `count="exact"` de la misma consulta, así que el chequeo de límite
+        respeta los filtros y actúa antes de traer nada grande.
+        """
+        pagina = self.get_all(user_id, rol, empresa_id, area_id, empleado_id,
+                              1, LIMITE_FILAS_EXPORT, proyecto_id)
+        verificar_limite_export(pagina.total)
+        datos = {"Días pendientes": construir_filas_export(pagina.items)}
+        return build_export(nombre="Días de vacaciones pendientes", datos=datos,
+                            filename_base="vacaciones_pendientes", formato=formato)
+
     def get_by_empleado(self, empleado_id: UUID, user_id: Optional[str] = None,
                         rol: Optional[str] = None, empresa_id: Optional[UUID] = None,
                         ) -> VacacionPendienteListResponse:
@@ -103,44 +110,22 @@ class VacacionesPendientesService:
         items = self._repo.find_by_empleado(str(empleado_id), empresa_id)
         return VacacionPendienteListResponse(items=items, total=len(items))
 
+    # Las tres ESCRITURAS viven en services/_vacaciones_pendientes_write.py (extraídas por
+    # límite de líneas), junto con el literal único del 404 del módulo.
+
     def crear(self, data: VacacionPendienteCreate, created_by: str, rol: Optional[str] = None,
               empresa_id: Optional[UUID] = None) -> VacacionPendienteResponse:
-        """Registra días no tomados de un período. La empresa sale del EMPLEADO, no del header."""
-        empleado = ensure_empleado_visible(
-            self._empleados, self._ownership, data.empleado_id,
-            empresa_efectiva(empresa_id, rol), created_by, rol)
-        if data.dias_liquidados > data.dias:
-            raise AppError("Los días liquidados no pueden superar los días pendientes",
-                           "DIAS_LIQUIDADOS_INVALIDOS", 422)
-        row = self._repo.crear({
-            "empleado_id": str(data.empleado_id), "empresa_id": empleado.empresa_id,
-            "periodo": data.periodo, "dias": data.dias,
-            "dias_liquidados": data.dias_liquidados, "comentario": data.comentario,
-        })
-        self._audit.registrar(**payload_alta_pendiente(row, created_by))
-        logger.info("Días de vacaciones pendientes registrados",
-                    extra={"registro_id": row.id, "empleado_id": str(data.empleado_id), "periodo": data.periodo})
-        return row
+        """Registra días no tomados de un período. Ver _vacaciones_pendientes_write.crear."""
+        return _crear(self._repo, self._audit, self._empleados, self._ownership,
+                      data, created_by, rol, empresa_id)
 
     def actualizar(self, id: UUID, data: VacacionPendienteUpdate, empresa_id: Optional[UUID] = None,
                    usuario_id: Optional[str] = None, rol: Optional[str] = None) -> VacacionPendienteResponse:
-        """Edita el registro (típicamente `dias_liquidados`). Gate empresa ∩ ownership antes de escribir."""
-        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
-        prior = self._gestionable(self._repo.find_by_id(str(id), empresa_id), usuario_id, rol)
-        patch = data.model_dump(exclude_unset=True, exclude_none=True)
-        if patch.get("dias_liquidados", 0) > patch.get("dias", prior.dias):
-            raise AppError("Los días liquidados no pueden superar los días pendientes",
-                           "DIAS_LIQUIDADOS_INVALIDOS", 422)
-        nuevo = self._or_404(self._repo.update(str(id), patch, empresa_id))
-        self._audit.registrar(**payload_update_pendiente(prior, nuevo, usuario_id))
-        return nuevo
+        """Edita el registro. Ver _vacaciones_pendientes_write.actualizar."""
+        return _actualizar(self._repo, self._audit, self._ownership, id, data,
+                           empresa_id, usuario_id, rol)
 
     def eliminar(self, id: UUID, empresa_id: Optional[UUID] = None,
                  usuario_id: Optional[str] = None, rol: Optional[str] = None) -> None:
-        """Borra el registro. Audita con el snapshot tomado ANTES del delete."""
-        empresa_id = empresa_efectiva(empresa_id, rol)  # mandos_medios: manda el manager, no la empresa
-        prior = self._gestionable(self._repo.find_by_id(str(id), empresa_id), usuario_id, rol)
-        if not self._repo.delete(str(id), empresa_id):
-            self._or_404(None)
-        self._audit.registrar(**payload_baja_pendiente(prior, usuario_id))
-        logger.info("Días de vacaciones pendientes eliminados", extra={"registro_id": str(id)})
+        """Borra el registro. Ver _vacaciones_pendientes_write.eliminar."""
+        _eliminar(self._repo, self._audit, self._ownership, id, empresa_id, usuario_id, rol)

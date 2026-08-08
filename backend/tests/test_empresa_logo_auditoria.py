@@ -40,7 +40,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-import services.empresa_service as emp_mod
+# El upload vive en services/_empresa_logo.py desde que empresa_service se partió por límite
+# de líneas: el parche va donde está la llamada, no donde estaba antes.
+import services._empresa_logo as logo_mod
 from schemas.empresa import EmpresaResponse
 from services.empresa_service import EmpresaService
 
@@ -98,7 +100,7 @@ class _FakeStorage:
 @pytest.fixture
 def storage(monkeypatch):
     fake = _FakeStorage()
-    monkeypatch.setattr(emp_mod.supabase_admin, "storage", fake, raising=False)
+    monkeypatch.setattr(logo_mod.supabase_admin, "storage", fake, raising=False)
     return fake
 
 

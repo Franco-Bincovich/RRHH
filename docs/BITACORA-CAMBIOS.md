@@ -41,6 +41,388 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-08 · La pantalla del import de objetivos: el cable conectado (E2-11) · commit pendiente
+
+**Qué cambió:** solo frontend. Los dos endpoints del import de objetivos —que existían, estaban
+testeados y **no los llamaba nadie**— ahora tienen pantalla.
+
+🔴 **Era el TERCER caso del proyecto de código construido sin la punta del cable**, después de
+`set_remitente` (dejó el módulo de mails inalcanzable durante meses) y `POST /plantillas/enviar`
+(el sistema no podía mandar un mail). La diferencia con esos dos: este quedó **declarado** como
+excepción en `test_callers_huerfanos` en la misma sesión que lo creó, con la instrucción de
+borrar la declaración al construir la pantalla. **Las dos entradas están borradas** y el barrido
+queda verde sin ellas.
+
+**Lo nuevo:** botón "Importar" gateado por escritura junto a "Nuevo objetivo" ·
+`ImportarObjetivosModal` en dos pasos (subir → preview → confirmar → resultado) ·
+`ImportObjetivosPreview` y `ImportObjetivosResultado` como componentes propios ·
+`services/importacionObjetivos.ts` + `types/importacionObjetivos.ts`.
+
+🔴 **EL RESULTADO NO SE MUESTRA COMO BINARIO**, porque no lo es: el lote no aborta por una fila
+con problemas. `ImportObjetivosResultado` tiene TRES estados —nada cargado / todo cargado /
+**parcial**— y el parcial dice "se cargaron 12 de 14" con el detalle de las 2 que no. Un cartel
+de "Importación completada" sobre un lote donde entró el 30% es la clase de mentira por la que
+el usuario cierra el modal creyendo que terminó.
+
+🔴 **En modo consolidado el botón queda deshabilitado con el motivo a la vista**, pegado al
+botón y no en el encabezado. Importar es una ACCIÓN: la empresa viaja en el body del confirmar.
+Mismo criterio y mismo molde que el guardado de plantillas (`PlantillaAcciones`).
+
+**Los mensajes de error del backend se muestran TAL CUAL** — están redactados para alguien con la
+planilla abierta ("Faltan columnas obligatorias: Responsable"). Si el archivo se rechaza entero
+(headers faltantes o columna de padre), el usuario se queda en el paso 1: no se cargó nada.
+
+**Verificación.** Front **521 passed, 0 skipped** (eran 504; +17) · backend **2601 passed, 0
+skipped** (sin cambios) · `tsc --noEmit` en 0 · barridos verdes (569) · ningún archivo sobre su
+límite (el más ajustado: `objetivos/page.tsx` 148/150 y el modal 148/150).
+✅ **`test_callers_huerfanos` verde SIN las dos excepciones**, y verificado que tiene dientes:
+desconectando el `BASE` del service, el barrido vuelve a rojo con los dos endpoints.
+
+⚠️ Un error de eslint en `objetivos/page.tsx:70` (`set-state-in-effect`) es **preexistente** —el
+`useEffect(() => load(), [load])` que ya estaba— y la regla dispara 4 veces más en archivos que
+esta sesión no tocó. Los seis archivos nuevos no tienen ningún hallazgo.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets ni endpoints nuevos — los dos que se conectan ya estaban publicados. Sin cambios de auth.
+
+---
+
+## 2026-08-08 · Lector de Excel + import de objetivos (E2-11) · commit pendiente
+
+**Qué cambió:** el backend aprendió a LEER Excel —hasta hoy `openpyxl` solo se usaba para
+escribir— y se sumó el import de objetivos con preview → confirmar.
+
+**`services/_import_excel.py`** — lector genérico, simétrico a `_import_csv`: devuelve filas como
+dicts con headers por clave y valores string, así los parsers no saben de qué formato vinieron.
+🔴 **NO importa `_import_encoding` y no es un olvido:** un `.xlsx` es un ZIP con XML que declara
+su encoding, así que los cuatro pasos de detección y el `permitir_latin1` no aplican.
+**Las seis trampas resueltas** (medidas contra openpyxl 3.1.5, no supuestas): celda vacía `None`
+(no `""`) · números que arrastran `.0` · fechas como `datetime` (no `date`, ni string) · espacios
+invisibles en los headers · varias hojas → **se lee la PRIMERA, no la activa** (la activa es la
+pestaña donde quedó el cursor al guardar) · filas fantasma al final.
+⚠️ **`data_only=True` devuelve `None` si el productor nunca calculó la fórmula** — medido: un
+.xlsx generado por librería no trae valor cacheado.
+
+**El import** — preview en `objetivos_import_preview.py` y confirmar en
+`objetivos_import_service.py`, que es literalmente el molde del Flujo 2 de nómina
+(`nomina_csv_service` / `nomina_import_service`). El responsable se resuelve contra **`users`**
+por email, username o "nombre apellido"; una fila con responsable inexistente o inactivo **no se
+carga y se reporta** — nunca con responsable nulo. El confirmar va por `ObjetivoService.create`,
+así que **revalida**: el preview resuelve para MOSTRAR, no para autorizar.
+
+🔴 **QUÉ DEL MODELO NUEVO SOPORTA, declarado y no implícito:** responsables múltiples **SÍ** (la
+puente de la 096); jerarquía **NO** — todo nace raíz. El motivo es concreto: la única columna
+posible sería el título del padre y **`objetivos.titulo` no tiene UNIQUE**, y si el padre viniera
+en el mismo archivo el resultado dependería del ORDEN DE LAS FILAS, que es el bug que
+`_nomina_superiores` existe para evitar. **Y no se ignora en silencio:** un archivo con columna de
+padre se RECHAZA ENTERO con un mensaje que dice dónde armar la jerarquía.
+
+**Auditoría — primer evento del módulo.** UN evento por lote (`_audit_payloads_objetivos`),
+`registro_id` uuid4 de EVENTO, empresa del body, con los ids creados. **Se emite siempre**,
+también con lote vacío.
+✅ **Verificado lo que se pedía: `test_auditoria_coherente` NO rojea.** El barrido toma como
+alcance los ARCHIVOS que emiten eventos, y el que entró es `objetivos_import_service.py` —cuya
+única escritura es ese mismo lote—, no `objetivo_service.py`. **El CRUD de objetivos sigue sin
+auditar, igual que antes.**
+
+**Verificación.** Backend **2601 passed, 0 skipped** (eran 2561) · front **504 passed, 0 skipped**
+(sin cambios) · `tsc --noEmit` en 0 · barridos verdes · **11 mutaciones, todas cazadas**.
+
+🚩 **DOS HALLAZGOS, para el registro:**
+1. **La mutación encontró un test que no podía fallar.** `openpyxl normaliza a int los floats
+   integrales que él mismo escribe`, así que con una planilla generada en el test la rama
+   `float.is_integer()` **nunca se ejecuta** y borrarla quedaba en verde. Se agregó un test
+   directo sobre `_valor`, que es el único punto donde la rama es alcanzable; el caso real llega
+   de otros productores que escriben `<v>12345678.0</v>`.
+2. **`test_callers_huerfanos` cazó dos cosas:** un atajo `_import_excel.leer` sin caller de
+   producción (era código muerto, se borró) y los dos endpoints sin pantalla.
+
+**Impacto en infraestructura:** **Endpoints nuevos** — `POST /api/importacion/objetivos/preview`
+y `/confirmar`, autenticados (IMPORTACION + WRITE) y bajo la franja `import` (10/hora compartida).
+**Dependencias: ninguna nueva** — `openpyxl==3.1.5` ya estaba en `requirements.txt` para el
+export; esto es el primer `load_workbook` del repo. Sin migraciones, variables de entorno ni
+buckets.
+> 🔴 **PENDIENTE DECLARADO: la pantalla del import NO está.** Los dos endpoints quedan publicados
+> e inalcanzables desde el front, **declarados con razón** en `test_callers_huerfanos`. Esas dos
+> entradas **hay que borrarlas cuando se construya la pantalla** — una excepción que sobrevive a
+> su motivo es el ruido contra el que ese mismo barrido avisa.
+
+---
+
+## 2026-08-08 · Subobjetivos con múltiples responsables (E3-5) · commit pendiente
+
+**Qué cambió:** el rediseño del modelo de objetivos. Jerarquía de 2 niveles, responsables
+múltiples por tabla puente, y los dos consumidores externos ajustados.
+
+🔴 **DOS MIGRACIONES ESCRITAS Y **NO** CORRIDAS — las corre Franco.** Las dos son **aditivas**:
+no hay ningún DROP, ni en estas ni en una futura.
+- **095_objetivos_jerarquia.sql** — `objetivos.parent_id` uuid nullable, self-FK
+  **ON DELETE CASCADE**, índice `idx_obj_parent`. Reejecutable (`IF NOT EXISTS` + guarda sobre
+  `pg_constraint`).
+- **096_objetivo_responsables.sql** — tabla puente con **PK compuesta** `(objetivo_id, user_id)`,
+  las dos FKs en CASCADE, índice `idx_obj_resp_user` para la pregunta inversa, y **backfill** de
+  `responsable_id` con `ON CONFLICT DO NOTHING`.
+- `db/schema.sql` quedó sincronizado con las dos (es la fuente de reconstrucción y contra lo que
+  `test_selects_repos` valida por AST).
+
+**Decisiones implementadas tal como venían cerradas:** profundidad 2 · estado del padre
+INDEPENDIENTE (`cambiar_estado` funciona igual en padres e hijos) · `responsable_id` se conserva
+como dueño principal · cascade al borrar el padre · fecha propia · procesos y reporte anual
+cuentan SOLO RAÍCES · export con columna "Objetivo padre" · sin auditoría.
+
+**Backend.** `_objetivos_jerarquia.py` con la guarda de las **dos puntas** —el padre elegido no
+puede ser hijo, y el que se cuelga no puede tener hijos—, con su limitación declarada: un CHECK
+no consulta otra fila, así que **por SQL directo se puede crear un nieto**. El repo se partió en
+tres satélites (`_objetivo_row`, `_objetivos_arbol`, `_objetivo_responsables`) para no pasar de
+100 líneas.
+
+🔴 **CERO EMBEDS DE POSTGREST, a propósito.** `objetivos` pasó a tener DOS relaciones contra
+`users` (la columna de dueño y la puente), que es exactamente el escenario de PGRST201: un embed
+`users(...)` que hoy resolvería se vuelve ambiguo y devuelve 300 sin que ningún test con el fake
+de Supabase pueda verlo. Todo se resuelve con lookups batch, que además es el patrón que
+`_objetivo_row` ya usaba.
+
+🔴 **EL FILTRO POR RESPONSABLE MIRA LOS DOS LADOS** (puente `or` columna de dueño). No es
+redundancia: **las migraciones las corre Franco a mano y el código se deploya antes**, y en esa
+ventana la puente está vacía — un filtro que mirara solo ahí vaciaría el listado por responsable
+sin ningún error. Hay un test dedicado a esa ventana.
+
+**El orden del listado cambió de forma, no de query.** Las raíces salen por `fecha_entrega`
+ascendente y los hijos debajo de su padre; el `.order()` sigue en la query y el anidado se arma
+en Python. ⚠️ Un hijo cuyo padre no pasa el filtro **se promueve** al nivel superior en vez de
+desaparecer: la pantalla y el archivo pueden mostrar de más, nunca de menos y en silencio.
+
+**Frontend.** Kanban: hijos ni como tarjetas ni en el contador, badge de cantidad en el padre ·
+ListView: hijos indentados en la misma tabla · Modal: selector de padre (solo raíces, sin sí
+mismo) + multi-select de responsables por checkboxes.
+
+**Verificación.** Backend **2560 passed, 0 skipped** (eran 2524) · front **504 passed, 0 skipped**
+(eran 498) · `tsc --noEmit` en 0 · barridos estructurales verdes (602) · **11 mutaciones, todas
+cazadas** (guarda de profundidad, las dos puntas, procesos, reporte anual, filtro de puente,
+ventana pre-096, tope de export, hijos del export, columna padre, filtro del kanban, badge).
+
+🚩 **DOS HALLAZGOS DE LA RED DE TESTS, para el registro:**
+1. `test_ordena_por_fecha_entrega_ASCENDENTE` estaba escrito para rojear con la jerarquía y **NO
+   rojeó**: el diseño elegido deja el `.order()` intacto. Sigue vivo verificando la mitad que no
+   cambió, y se sumó `TestElOrdenDelArbol` para la que sí.
+2. Dos tests rojearon con **ConnectError**, no con una aserción: el espía del cliente parcheaba
+   solo `objetivo_repo`, y al mover el filtro a un satélite con su propio import, el test pegaba
+   a la red. El espía ahora parchea los tres módulos.
+
+**Impacto en infraestructura:** 🔴 **MIGRACIONES 095 y 096 PENDIENTES DE CORRER.** Orden: 095
+antes que 096 (la puente referencia `objetivos`, que ya existe, pero el backfill conviene
+después de la columna). **Se pueden correr con el código viejo arriba** (son aditivas y nada las
+lee todavía) y **el código nuevo tolera que no estén corridas** salvo en un punto: el filtro por
+responsable cae a la columna de dueño mientras la puente esté vacía, que es el comportamiento de
+hoy. Sin variables de entorno, buckets, endpoints ni cambios de auth. Ninguna ruta cambió.
+> ⚠️ Con la 089 (`ausencias_unicidad`) todavía sin correr, quedan **tres** migraciones pendientes
+> en producción: 089, 095 y 096.
+
+---
+
+## 2026-08-08 · Preparación del rediseño de objetivos: 3 cortes + la red de tests que faltaba · commit pendiente
+
+**Qué cambió:** preparación para el rediseño del modelo de objetivos (jerarquía + múltiples
+responsables). **Cero cambios de comportamiento**: tres divisiones por límite de líneas y 52 tests
+nuevos que describen lo que el código hace HOY.
+
+**A · Los tres archivos ahogados**, movimiento verbatim:
+- `repositories/objetivo_repo.py` **99/100 → 80**; el mapper `_build` a `_objetivo_row.py` (47).
+- `components/features/objetivos/ObjetivoModal.tsx` **156/150 → 109** (ya estaba POR ENCIMA antes
+  de tocarlo); los campos del form a `ObjetivoFormFields.tsx` (90). El corte va por los campos y
+  no por el estado porque ese es el lado que crece: selector de padre + multi-select.
+- `app/(dashboard)/objetivos/page.tsx` **149/150 → 130**; la barra de filtros a
+  `ObjetivosFiltros.tsx` (68). NO se migró a `FiltersBar`/`useFiltros<Modulo>` a propósito: eso
+  es un rediseño del filtro, no una división.
+
+**B · 52 tests, en `tests/test_objetivos.py`.** El módulo tenía **CERO tests propios**: lo único
+que lo tocaba era cobertura de barrido (límite de export, franja de rate limit, paridad
+list↔export, limpieza de columnas), que no mira ni una regla de negocio.
+🔴 **Se prueba en DOS planos, y no es redundancia:** el service con un repo falso (validación del
+responsable, 404, barrera de empresa, qué filtros se pasan) y **el repo con el CLIENTE de Supabase
+falseado** (los `.eq()` y el `.order()` que tienen que viajar EN LA QUERY). Un fake de repo que
+filtre y ordene en Python fija el contrato pero deja la query real sin probar — es el caso #3 de
+la regla del repo, y la mutación lo confirmó: **borrar el filtro de estado del repo solo rojea del
+lado de la query**, los tests de service siguen en verde porque el fake filtra por su cuenta.
+
+**Verificado por mutación — 11 mutaciones, todas cazadas:** filtro de estado borrado · orden a
+descendente · `.order()` eliminado · `_validate_responsable` en no-op · deja pasar un inactivo ·
+`update` validando siempre · `cambiar_estado` sin CHECK · `find_by_id` sin barrera de empresa ·
+`DELETE` sin empresa en el WHERE · `delete` sin 404 · export emitiendo el UUID del responsable.
+
+🚩 **Un test está escrito para ROJEAR con el rediseño, a propósito:**
+`test_ordena_por_fecha_entrega_ASCENDENTE`. Hoy el listado sale por fecha de entrega ascendente;
+con subobjetivos ese orden desarma el árbol. Cuando cambie, el test falla y obliga a decidir el
+orden nuevo a propósito en vez de que se mueva de refilón.
+
+**Verificación:** backend **2524 passed, 0 skipped** (eran 2472; +52, todos nuevos — ninguno
+existente cambió de resultado) · front **498 passed, 0 skipped** (sin cambio) · `tsc --noEmit` en
+0 · los barridos estructurales verdes (564) · cero imports huérfanos.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets, endpoints ni cambios de auth. Ninguna ruta cambió: las tres divisiones son internas a su
+módulo y no tocan `main.py`.
+> ⚠️ **Para la sesión del rediseño**, del diagnóstico previo: `objetivos` tiene **1 fila** en
+> producción y **nadie la referencia por FK**, pero **dos consumidores fuera del módulo cuentan sus
+> filas** — `services/procesos_service.py` (tablero de Procesos por estado) y
+> `services/_reporte_anual_metricas.py:80` ("objetivos cumplidos en el año"). Con jerarquía, los
+> dos empiezan a contar padres + hijos sin distinguirlos: no rompen, cambian de significado.
+
+---
+
+## 2026-08-08 · Últimos 3 exports: pendientes de vacaciones, vacantes y offboarding · commit pendiente
+
+**Qué cambió:** los exports pasan de 22 a **25**. Los tres módulos exigieron dividir antes.
+
+**A · Días de vacaciones pendientes.** `vacaciones_pendientes_service.py` (146/150) → 131, con las
+tres escrituras y el literal único del 404 en `_vacaciones_pendientes_write.py`.
+🔴 **Es el TERCER export del repo que puede FILTRAR DATOS**, después de /equipo y las plantillas
+de onboarding: VACACIONES está en `MANDOS_MEDIOS_SECCIONES`, así que su universo no lo acota la
+empresa sino el OWNERSHIP (`manager_id`). El export va por `get_all`, el mismo camino del
+listado; pegarle al repo por su cuenta —aunque pasando el `empresa_id`— le entregaría a un mando
+medio los días de gente que no ve en ninguna pantalla. Verificado por mutación **contra el
+contenido del CSV**, no contra lo que devuelve el fake. Acepta los tres filtros del listado
+(area/empleado/proyecto), aunque la pantalla todavía no los exponga.
+La columna que importa es **"Sin liquidar" = días − liquidados**: es lo que la empresa todavía
+debe, y en una planilla se suma por empleado o por área. Van las tres (días, liquidados, resta):
+"10 y 10 liquidados" y "0 pendientes" dan los dos 0 y significan cosas distintas.
+
+**B · Vacantes.** Router 80/80 → 57 + `vacantes_escrituras.py`; service 147/150 → 90 con las tres
+escrituras de la vacante en `_vacante_write.py` (se llevan sus payloads de auditoría inline; el
+ORDEN del borrado —congelar el nombre en los candidatos ANTES de borrar la fila— viaja con
+`eliminar`). Export con el filtro `estado`, y el front pasa a tener **una función de traducción
+compartida** (`queryVacantes`) entre listado y export.
+Quedan afuera del archivo los **bloques de texto libre** (descripción, requisitos, funciones,
+copy) y el `linkedin_post_id`: son párrafos que en una celda vuelven ilegible la fila, y un id
+interno de otra plataforma. El `estado` sale con el texto de la pantalla, no con el enum.
+⚠️ `vacantes/page.tsx` estaba en 217/150: se extrajo `VacantesTable.tsx` y bajó a **170** — sigue
+sobre el límite, y el próximo corte natural es la barra de filtros. No se hizo en esta tanda.
+
+**C · Offboarding.** Router 78/80 → 44 + `offboarding_escrituras.py`; service 149/150 → 112 con el
+alta en `_offboarding_iniciar.py` (molde del hermano `_onboarding_iniciar.py`; **el orden de los
+gates es load-bearing**: la barrera de empresa va ANTES del chequeo de "ya tiene uno activo", o el
+409 delata que el empleado existe). Export sin filtros.
+🔴 **`notas_entrevista` NO sale en el archivo**, a propósito: es texto libre que escribe RRHH
+sobre por qué se fue una persona, y este es justo el archivo que se manda por mail. El flag de si
+la entrevista se hizo sí sale — eso es seguimiento del proceso. Los `activos` y `accesos` van
+**contados, no volcados** (son listas anidadas: el motor renderiza escalares).
+
+**Los tres tienen 0 filas en producción**, así que nadie va a abrir estos archivos y notar que una
+columna dice cualquier cosa. Por eso los fakes traen poblado justo lo que la proyección tiene que
+dejar afuera —textos largos, notas de entrevista, listas anidadas—: sin eso, borrar la proyección
+entera dejaba los tests en verde.
+
+**Verificación:** 227 rutas (eran 224; las 3 nuevas son los exports, ninguna perdida, mismo path,
+método y gate para el resto) · **backend 2472 passed, 0 skipped** (eran 2408) · **front 498
+passed, 0 skipped** · `tsc --noEmit` en 0 · los cinco barridos estructurales verdes (558 tests),
+con `test_limite_export` de 14 a 17 · 8 mutaciones aplicadas y revertidas, todas cazadas.
+Cero archivos sobre su límite en backend.
+
+**Impacto en infraestructura:** **Endpoints nuevos** — `GET /api/vacaciones-pendientes/exportar`,
+`GET /api/vacantes/exportar`, `GET /api/offboarding/exportar`. Los tres autenticados (gate READ de
+su sección) y bajo la franja compartida de export. 🔴 **La cuota de export ahora se reparte entre
+25 endpoints**: siguen siendo 30/hora por IP para todos juntos, y con `RATE_LIMIT_STORAGE_URI=memory://`
+es por proceso. Cuantos más exports, más probable que un uso normal choque contra el techo; si
+aparecen 429 sin abuso, el arreglo es Redis, no subir el número. Sin migraciones, variables de
+entorno, buckets ni cambios de auth.
+
+---
+
+## 2026-08-08 · Franja de export completa + 3 exports nuevos (usuarios, empresas, plantillas) · commit pendiente
+
+**Qué cambió:** cuatro tandas. Los exports pasan de 19 a **22**, y **ya no queda ninguno bajo el
+baseline**.
+
+**A · La franja que faltaba.** `objetivos.py` e `inventario_items.py` estaban en 79/80 y corrían
+bajo el baseline de 300/min porque el decorador no entraba. Se dividieron por lectura/escritura
+sobre el mismo prefijo (`*_escrituras.py`, molde `areas_escrituras.py`) y se les puso
+`shared_limit("30/hour", scope="export")`. 🔴 **El export se quedó en su router original a
+propósito**: la clave del limiter es `routers.<módulo>.<función>`, así que mudarlo habría cambiado
+la clave y dejado su test mirando una clave inexistente, en verde.
+
+**A3/A4 · El test que afirmaba lo contrario se MOVIÓ, no se borró**, y de paso `TestFranjaExport`
+pasó de lista escrita a mano a **barrido por introspección de `app.routes`** con guarda de mínimo.
+🔴 **Hallazgo:** la lista enumeraba **10 endpoints cuando la app ya tenía 19** — los 9 que faltaban
+(areas, candidatos, capacitaciones, equipo, onboarding, periodos, proyectos y los dos de esta
+tanda) no estaban exentos de nada, simplemente **nadie los verificaba**, que es peor que no tener
+el test. Se sumaron dos tests que el decorador solo no puede dar: que ningún export montado quede
+sin franja, y que la cuota sea **compartida** (se consume desde un export y se mide el saldo desde
+otro — la diferencia entre 30/hora entre todos y 30/hora **cada uno**, o sea 660/hora reales).
+
+**B · Export de usuarios.** `usuarios.py` (77/80) se dividió; **cambiar-password y el export se
+quedaron**, por lo mismo del limiter — "escrituras" acá no es literal, el criterio real es *no
+mover nada decorado*. 🔴 La query del listado **vivía en el router** (pegaba a `supabase_admin`
+directo): bajó al repo para que listado y archivo salgan del mismo lugar. Columnas: las cinco de
+la pantalla + Activo. **Sin credenciales, sin ban, sin `must_change_password`, sin `ultimo_acceso`,
+sin id** — y el fake del test trae esos campos puestos, para que borrar la proyección no pueda
+quedar en verde.
+
+**C · Export de empresas.** `empresa_service.py` (147/150) se partió: `upload_logo` salió a
+`_empresa_logo.py` (se lleva Storage y su payload de auditoría). Columnas: la ficha completa, no
+las 4 de la tabla — **es el único export que hoy se puede verificar mirando el archivo** (hay 2
+empresas en producción) y es el que alguien usa para un trámite. Sin `logo_url` ni id.
+⚠️ El front `empresas/page.tsx` estaba en **204/150** (deuda previa): se extrajo `EmpresasTable.tsx`
+y quedó en 140.
+
+**D · Export de plantillas de onboarding.** `onboarding_templates_service.py` (144/150) se partió
+(las 3 operaciones sobre tareas a `_onboarding_templates_tareas.py`). **El router NO hizo falta
+dividirlo** —quedó en 43/80 tras el corte previo, verificado, no asumido—. 🔴 **Es el segundo
+export del repo que puede FILTRAR DATOS, no traer filas de más**: el universo lo acota la
+visibilidad (públicas de mi empresa + privadas mías), que sale del token. Un export que no pase
+`user_id`/`rol` entrega las plantillas privadas de otros en un archivo, sin error y sin 403.
+Verificado por mutación contra **el contenido del CSV generado**, no contra lo que devuelve el fake
+— la primera versión de ese test comparaba contra el fake y **sobrevivía a la mutación**.
+
+**Verificación:** 224 rutas (eran 221; las 3 nuevas son los exports, ninguna perdida, mismo path,
+método y gate para el resto) · **backend 2373 passed, 0 skipped** (eran 2262) · **front 498 passed,
+0 skipped** · `tsc --noEmit` en 0 · los cinco barridos estructurales verdes, con sus mínimos
+subidos (`test_limite_export` de 11 a 14) · 14 mutaciones aplicadas y revertidas, todas cazadas.
+Cero archivos sobre su límite de líneas en backend y en los tocados del front.
+
+**Impacto en infraestructura:** **Endpoints nuevos** — `GET /api/usuarios/exportar`,
+`GET /api/empresas/exportar`, `GET /api/onboarding/templates/exportar`. Los tres **autenticados**
+(gate READ de su sección), los tres bajo la franja compartida de export. 🔴 **Para el que monte
+AWS:** la cuota de export es de **30/hora por IP compartida entre los 22 endpoints**, y con
+`RATE_LIMIT_STORAGE_URI=memory://` es **por proceso** — con N instancias vivas el límite efectivo
+es N×30. Con 3 personas en RRHH exportando, esa franja se puede volver molesta antes que
+protectora: si aparecen 429 en uso normal, el arreglo es Redis, no subir el número. Sin
+migraciones, variables de entorno nuevas, buckets ni cambios de auth.
+
+---
+
+## 2026-08-08 · Los 61 tests `async def` podían saltearse en silencio · commit pendiente
+
+**Qué cambió:** solo **configuración de test** — cero líneas de producción y cero tests tocados.
+
+- **El síntoma (Windows):** 61 tests `async def` en 14 archivos reportados como *skipped* con
+  "async def function and no async plugin installed", **contados dentro del total**. Entre ellos
+  `test_critical_flows` (13), `test_usuario_estado` (9), `test_assessment_modulo_flag` (8),
+  `test_rate_limit` (6), `test_envio_exige_empresa` (5) y los tres exports nuevos del 7/8
+  (`areas` 3, `proyectos` 2, `equipo` 2).
+- **La causa NO era `pytest.ini`:** `asyncio_mode = auto` ya estaba y está tracked. 🔴 **Si
+  `pytest-asyncio` no está cargado en el intérprete que corre pytest, esa clave no da error: se
+  ignora con un warning (`Unknown config option: asyncio_mode`) y los async no fallan, se
+  SALTEAN.** El venv de Windows tenía `pytest-asyncio 0.23.8`, que ni siquiera cumplía el
+  `>=0.24.0` declarado — o sea que nunca se instaló desde `requirements-dev.txt`. Rangos abiertos
+  + instalación manual = la suite dependía de lo que cada máquina hubiera resuelto.
+- **`backend/pytest.ini`** suma `required_plugins = pytest-asyncio` (pytest **aborta al arrancar**
+  con exit 4 en vez de reportar verde a medias) y `addopts = -rs` (todo skip queda listado con su
+  razón, sin depender de acordarse del flag). Verificado con `-p no:asyncio`.
+- **`backend/requirements-dev.txt`** pasa de rangos abiertos a **versiones exactas**
+  (`pytest==9.1.1`, `pytest-asyncio==1.4.0`, `httpx==0.27.2`, la misma que producción).
+- **En la Mac nunca pasó** (0 skipped) y **los 61 pasan todos** al ejecutarse: ninguno estaba mal
+  escrito ni destapó un bug. El conteo real de la suite es **2262**; el número que se venía
+  reportando en Windows incluía 61 que no corrían.
+
+**Impacto en infraestructura:** **Dependencias** — `requirements-dev.txt` queda pinneado. Es
+**solo de desarrollo/CI, NO entra al deploy** (`requirements.txt` de producción no se tocó), así
+que Vercel y la imagen de AWS no cambian. Lo único a saber: cualquier máquina o pipeline que corra
+la suite tiene que hacer `pip install -r requirements-dev.txt` **después de este cambio**, o pytest
+aborta de entrada con `Missing required plugins: pytest-asyncio` — que es exactamente el
+comportamiento buscado. Sin migraciones, variables de entorno, buckets, endpoints ni cambios de auth.
+
+---
+
 ## 2026-08-07 · Export en /equipo — el único que puede filtrar datos · commit pendiente
 
 **Qué cambió:** **`GET /api/equipo/exportar`**. Los exports pasan de 18 a **19**. Va solo, sin

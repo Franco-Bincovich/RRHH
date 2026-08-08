@@ -14,8 +14,10 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { UsuariosTable } from "@/components/features/usuarios/UsuariosTable"
 import { CrearUsuarioModal } from "@/components/features/usuarios/CrearUsuarioModal"
 import { PasswordRevealModal } from "@/components/features/usuarios/PasswordRevealModal"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
 import {
   eliminarUsuario,
+  exportarUsuarios,
   fetchUsuarios,
   type CrearUsuarioResult,
   type UsuarioOption,
@@ -91,7 +93,14 @@ export default function UsuariosPage() {
       <PageHeader
         title="Usuarios"
         description={loading ? "Cargando..." : `${usuarios.length} usuario${usuarios.length !== 1 ? "s" : ""}`}
-        action={!loading && !error && usuarios.length > 0 ? crearBtn : undefined}
+        action={!loading && !error && usuarios.length > 0 ? (
+          // El archivo sale del MISMO listado que la tabla y esta pantalla no tiene filtros:
+          // trae exactamente lo que se ve. Sin filas no se ofrece exportar.
+          <div className="flex items-center gap-2">
+            <ExportMenu onExport={exportarUsuarios} />
+            {crearBtn}
+          </div>
+        ) : undefined}
       />
 
       {loading ? (

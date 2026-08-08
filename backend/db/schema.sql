@@ -506,10 +506,16 @@ CREATE TABLE public.oauth_states (
     expires_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone NOT NULL DEFAULT now()
 );
+CREATE TABLE public.objetivo_responsables (
+    objetivo_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now()
+);
 CREATE TABLE public.objetivos (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     empresa_id uuid NOT NULL,
     responsable_id uuid NOT NULL,
+    parent_id uuid,
     titulo text NOT NULL,
     descripcion text,
     prioridad text NOT NULL DEFAULT 'media'::text,
@@ -933,6 +939,7 @@ ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_pkey PRIMARY
 ALTER TABLE public.notificaciones ADD CONSTRAINT notificaciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.notificaciones_config ADD CONSTRAINT notificaciones_config_pkey PRIMARY KEY (id);
 ALTER TABLE public.oauth_states ADD CONSTRAINT oauth_states_pkey PRIMARY KEY (id);
+ALTER TABLE public.objetivo_responsables ADD CONSTRAINT objetivo_responsables_pkey PRIMARY KEY (objetivo_id, user_id);
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_pkey PRIMARY KEY (id);
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offboarding_activos_pkey PRIMARY KEY (id);
 ALTER TABLE public.offboarding_instancias ADD CONSTRAINT offboarding_instancias_pkey PRIMARY KEY (id);
@@ -1198,8 +1205,11 @@ ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_empresa_id_f
 ALTER TABLE public.notificaciones ADD CONSTRAINT notificaciones_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE public.notificaciones_config ADD CONSTRAINT notificaciones_config_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE public.oauth_states ADD CONSTRAINT oauth_states_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE public.objetivo_responsables ADD CONSTRAINT objetivo_responsables_objetivo_id_fkey FOREIGN KEY (objetivo_id) REFERENCES objetivos(id) ON DELETE CASCADE;
+ALTER TABLE public.objetivo_responsables ADD CONSTRAINT objetivo_responsables_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_responsable_id_fkey FOREIGN KEY (responsable_id) REFERENCES users(id);
+ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES objetivos(id) ON DELETE CASCADE;
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offb_act_instancia_emp_fkey FOREIGN KEY (instancia_id, empresa_id) REFERENCES offboarding_instancias(id, empresa_id) ON DELETE CASCADE;
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offboarding_activos_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offboarding_activos_instancia_id_fkey FOREIGN KEY (instancia_id) REFERENCES offboarding_instancias(id) ON DELETE CASCADE;
@@ -1361,6 +1371,8 @@ CREATE INDEX idx_notif_config_user ON public.notificaciones_config USING btree (
 CREATE INDEX idx_obj_empresa ON public.objetivos USING btree (empresa_id);
 CREATE INDEX idx_obj_estado ON public.objetivos USING btree (estado);
 CREATE INDEX idx_obj_responsable ON public.objetivos USING btree (responsable_id);
+CREATE INDEX idx_obj_parent ON public.objetivos USING btree (parent_id);
+CREATE INDEX idx_obj_resp_user ON public.objetivo_responsables USING btree (user_id);
 CREATE INDEX idx_oauth_states_expires_at ON public.oauth_states USING btree (expires_at);
 CREATE INDEX idx_offboarding_activos_empresa ON public.offboarding_activos USING btree (empresa_id);
 CREATE INDEX idx_offboarding_activos_estado ON public.offboarding_activos USING btree (estado);

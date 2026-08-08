@@ -15,8 +15,13 @@ from schemas.onboarding import (
     TareaCreate, TareaResponse, TareaUpdate,
     TemplateCreate, TemplateResponse, TemplateUpdate,
 )
+from services._limite_export import verificar_limite_export
+from services._onboarding_templates_export import construir_filas_export
+from services._onboarding_templates_tareas import add_tarea as _add_tarea
+from services._onboarding_templates_tareas import delete_tarea as _delete_tarea
+from services._onboarding_templates_tareas import update_tarea as _update_tarea
 from services._template_scope import ensure_autor, ensure_template_accesible, template_or_404
-from utils.errors import AppError
+from services.export import Descarga, build_export
 from utils.logger import logger
 
 
@@ -28,6 +33,22 @@ class OnboardingTemplatesService:
                       rol: Optional[str] = None) -> list[TemplateResponse]:
         """Templates activos de la empresa que `user_id` puede ver (None = todas las empresas)."""
         return self._repo.get_templates(empresa_id, user_id, rol)
+
+    def exportar(self, empresa_id: Optional[UUID] = None, user_id: Optional[str] = None,
+                 rol: Optional[str] = None, formato: str = "excel") -> Descarga:
+        """Exporta las plantillas que ESTE usuario ve, con columnas legibles (sin UUIDs).
+
+        🔴 `user_id` y `rol` NO son opcionales de hecho, aunque la firma los deje en None: van
+        al mismo `get_templates` que el listado, y ahí deciden la VISIBILIDAD. Un export que se
+        los olvidara traería las plantillas privadas de otros usuarios en un archivo — sin
+        error, sin 403 y sin nada en pantalla que lo delate. Es el mismo riesgo que el export
+        de /equipo: acá el universo no lo acota un Query, lo acota quién sos.
+        """
+        items = self._repo.get_templates(empresa_id, user_id, rol)
+        verificar_limite_export(len(items))
+        datos = {"Plantillas": construir_filas_export(items)}
+        return build_export(nombre="Plantillas de onboarding", datos=datos,
+                            filename_base="plantillas_onboarding", formato=formato)
 
     def get_template(self, template_id: UUID, empresa_id: Optional[UUID] = None,
                      user_id: Optional[str] = None, rol: Optional[str] = None) -> TemplateResponse:
@@ -95,50 +116,21 @@ class OnboardingTemplatesService:
         logger.info("Template eliminado", extra={"template_id": str(template_id)})
         return True
 
+    # Las tres operaciones sobre TAREAS viven en services/_onboarding_templates_tareas.py
+    # (extraídas por límite de líneas). El gate del template padre va adentro, no acá.
+
     def add_tarea(self, template_id: UUID, data: TareaCreate, empresa_id: Optional[UUID] = None,
                   user_id: Optional[str] = None, rol: Optional[str] = None) -> TareaResponse:
-        """
-        Agrega una tarea a un template existente.
-
-        ⚠️ Este path llamaba a `self._repo.get_template` DIRECTO y era el único de los cinco de
-        escritura que no pasaba por el gate del service. Ahora usa el helper como sus hermanos.
-
-        Raises:
-            AppError: TEMPLATE_NOT_FOUND (404) si no lo alcanza por empresa o por visibilidad.
-        """
-        tmpl = ensure_template_accesible(self._repo, template_id, empresa_id, user_id, rol)
-        tarea = self._repo.add_tarea(str(template_id), data.model_dump(), str(tmpl.empresa_id))
-        logger.info("Tarea agregada al template", extra={"template_id": str(template_id), "tarea_id": str(tarea.id)})
-        return tarea
+        """Agrega una tarea a un template. Ver _onboarding_templates_tareas.add_tarea."""
+        return _add_tarea(self._repo, template_id, data, empresa_id, user_id, rol)
 
     def update_tarea(self, template_id: UUID, tarea_id: UUID, data: TareaUpdate,
                      empresa_id: Optional[UUID] = None, user_id: Optional[str] = None,
                      rol: Optional[str] = None) -> TareaResponse:
-        """
-        Actualiza campos de una tarea del template.
-
-        La tarea se alcanza por su template: gatear el template cubre la cadena tarea → template
-        → (empresa ∩ visibilidad); las tareas no se resuelven sueltas.
-
-        Raises:
-            AppError: TEMPLATE_NOT_FOUND (404) si no lo alcanza por empresa o por visibilidad.
-            AppError: TAREA_NOT_FOUND (404) si la tarea no existe.
-        """
-        ensure_template_accesible(self._repo, template_id, empresa_id, user_id, rol)  # gate antes de escribir
-        tarea = self._repo.update_tarea(str(tarea_id), data.model_dump(exclude_none=True))
-        if not tarea:
-            raise AppError("Tarea no encontrada", "TAREA_NOT_FOUND", 404)
-        return tarea
+        """Actualiza una tarea del template. Ver _onboarding_templates_tareas.update_tarea."""
+        return _update_tarea(self._repo, template_id, tarea_id, data, empresa_id, user_id, rol)
 
     def delete_tarea(self, template_id: UUID, tarea_id: UUID, empresa_id: Optional[UUID] = None,
                      user_id: Optional[str] = None, rol: Optional[str] = None) -> bool:
-        """
-        Elimina una tarea del template, previa validación sobre el template padre.
-
-        Raises:
-            AppError: TEMPLATE_NOT_FOUND (404) si no lo alcanza por empresa o por visibilidad.
-        """
-        ensure_template_accesible(self._repo, template_id, empresa_id, user_id, rol)  # gate antes del borrado
-        self._repo.delete_tarea(str(tarea_id))
-        logger.info("Tarea eliminada", extra={"template_id": str(template_id), "tarea_id": str(tarea_id)})
-        return True
+        """Elimina una tarea del template. Ver _onboarding_templates_tareas.delete_tarea."""
+        return _delete_tarea(self._repo, template_id, tarea_id, empresa_id, user_id, rol)

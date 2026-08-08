@@ -7,38 +7,17 @@ import { Briefcase, Plus } from "lucide-react"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { VacanteModal } from "@/components/features/vacantes/VacanteModal"
-import { fetchVacantes } from "@/services/vacantes"
+import { VacantesTable } from "@/components/features/vacantes/VacantesTable"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { exportarVacantes, fetchVacantes } from "@/services/vacantes"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { EstadoVacante, Vacante } from "@/types/vacantes"
 import type { Empresa } from "@/types/empresa"
-
-const ESTADO_LABELS: Record<EstadoVacante, string> = {
-  nueva: "Nueva",
-  en_proceso: "En proceso",
-  con_candidatos: "Con candidatos",
-  cerrada: "Cerrada",
-}
-
-const ESTADO_VARIANTS: Record<EstadoVacante, "default" | "secondary" | "destructive" | "outline"> = {
-  nueva: "outline",
-  en_proceso: "default",
-  con_candidatos: "secondary",
-  cerrada: "destructive",
-}
 
 const SELECT_CLASS =
   "min-h-[2rem] rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
@@ -114,12 +93,19 @@ export default function VacantesPage() {
         title="Vacantes"
         description={loading ? "Cargando..." : `${vacantes.length} vacante${vacantes.length !== 1 ? "s" : ""}`}
         action={
-          canWrite ? (
-            <Button className="min-h-11" onClick={() => setModalOpen(true)}>
-              <Plus />
-              Nueva vacante
-            </Button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {/* Exporta con el MISMO estado que filtra la pantalla. La empresa viaja por el
+                header, igual que en el listado. Sin filas no se ofrece exportar. */}
+            {!loading && !error && vacantes.length > 0 && (
+              <ExportMenu onExport={(f) => exportarVacantes(f, estadoFilter || undefined, empresaFiltro || undefined)} />
+            )}
+            {canWrite && (
+              <Button className="min-h-11" onClick={() => setModalOpen(true)}>
+                <Plus />
+                Nueva vacante
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -164,44 +150,11 @@ export default function VacantesPage() {
       )}
 
       {!loading && !error && vacantes.length > 0 && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Título</TableHead>
-              {!empresaActivaId && <TableHead>Empresa</TableHead>}
-              <TableHead>Área</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Fecha de apertura</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {vacantes.map((vacante) => (
-              <TableRow
-                key={vacante.id}
-                className="cursor-pointer"
-                onClick={() => router.push(`/vacantes/${vacante.id}`)}
-              >
-                <TableCell className="font-medium">{vacante.titulo}</TableCell>
-                {!empresaActivaId && (
-                  <TableCell className="text-muted-foreground">
-                    {vacante.empresa_nombre ?? "—"}
-                  </TableCell>
-                )}
-                <TableCell className="text-muted-foreground">
-                  {vacante.area_nombre ?? "—"}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={ESTADO_VARIANTS[vacante.estado]}>
-                    {ESTADO_LABELS[vacante.estado]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatFecha(vacante.fecha_apertura ?? vacante.created_at)}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <VacantesTable
+          vacantes={vacantes}
+          mostrarEmpresa={!empresaActivaId}
+          onAbrir={(id) => router.push(`/vacantes/${id}`)}
+        />
       )}
 
       <VacanteModal

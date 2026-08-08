@@ -9,7 +9,8 @@ import { PageHeader } from "@/components/layout/PageHeader"
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { NuevoTemplateModal } from "@/components/features/onboarding/NuevoTemplateModal"
 import { TemplatesList } from "@/components/features/onboarding/TemplatesList"
-import { deleteTemplate, fetchTemplates } from "@/services/onboarding"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { deleteTemplate, exportarTemplates, fetchTemplates } from "@/services/onboarding"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
@@ -70,16 +71,21 @@ export default function TemplatesPage() {
     <div>
       <div className="relative">
         <PageHeader title="Templates de onboarding" description={descripcion} />
-        {canWrite && listo && (
-          <button
-            type="button"
-            onClick={() => setModalOpen(true)}
-            className="absolute right-0 top-0 flex min-h-10 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Plus className="size-4" />
-            <span className="hidden sm:inline">Nuevo template</span>
-          </button>
-        )}
+        <div className="absolute right-0 top-0 flex items-center gap-2">
+          {/* El archivo trae las MISMAS plantillas que la lista: mismo endpoint de origen y
+              mismo recorte por visibilidad, que el backend resuelve con el token. */}
+          {listo && templates.length > 0 && <ExportMenu onExport={exportarTemplates} />}
+          {canWrite && listo && (
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="flex min-h-10 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Plus className="size-4" />
+              <span className="hidden sm:inline">Nuevo template</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <TemplatesList

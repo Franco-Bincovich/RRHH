@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import Link from "next/link"
-import { Building2, Pencil, Plus, Power, PowerOff } from "lucide-react"
+import { Building2, Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
@@ -10,17 +9,10 @@ import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { EmpresaModal } from "@/components/features/empresas/EmpresaModal"
-import { fetchEmpresas, toggleEmpresaActiva } from "@/services/empresas"
+import { EmpresasTable } from "@/components/features/empresas/EmpresasTable"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { exportarEmpresas, fetchEmpresas, toggleEmpresaActiva } from "@/services/empresas"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Empresa } from "@/types/empresa"
 
@@ -98,12 +90,18 @@ export default function EmpresasPage() {
         title="Empresas"
         description={`${empresas.length} empresa${empresas.length !== 1 ? "s" : ""}`}
         action={
-          canWrite ? (
-            <Button className="min-h-11" onClick={openCreate}>
-              <Plus />
-              Nueva empresa
-            </Button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {/* El archivo sale del MISMO listado que la tabla y esta pantalla no tiene
+                filtros: trae exactamente las empresas que se ven, activas e inactivas.
+                Disponible también para gerencia_lectura — exportar es una lectura. */}
+            {empresas.length > 0 && <ExportMenu onExport={exportarEmpresas} />}
+            {canWrite && (
+              <Button className="min-h-11" onClick={openCreate}>
+                <Plus />
+                Nueva empresa
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -122,75 +120,13 @@ export default function EmpresasPage() {
           }
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>CUIT</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="w-28 text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {empresas.map((empresa) => (
-              <TableRow key={empresa.id}>
-                <TableCell className="font-medium">
-                  <Link
-                    href={`/empresas/${empresa.id}`}
-                    className="hover:underline hover:text-primary"
-                  >
-                    {empresa.nombre}
-                  </Link>
-                </TableCell>
-                <TableCell className="font-mono text-sm text-muted-foreground">
-                  {empresa.cuit ?? (
-                    <span className="italic text-muted-foreground/60">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {empresa.email ?? (
-                    <span className="italic text-muted-foreground/60">—</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={empresa.activa ? "default" : "secondary"}>
-                    {empresa.activa ? "Activa" : "Inactiva"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    {canWrite && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-9"
-                          aria-label={`Editar ${empresa.nombre}`}
-                          onClick={() => openEdit(empresa)}
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-9"
-                          aria-label={empresa.activa ? `Desactivar ${empresa.nombre}` : `Activar ${empresa.nombre}`}
-                          onClick={() => handleToggle(empresa)}
-                          disabled={togglingId === empresa.id}
-                        >
-                          {empresa.activa
-                            ? <PowerOff className="size-4" />
-                            : <Power className="size-4" />}
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <EmpresasTable
+          empresas={empresas}
+          canWrite={canWrite}
+          onEdit={openEdit}
+          onToggle={handleToggle}
+          togglingId={togglingId}
+        />
       )}
 
       <EmpresaModal

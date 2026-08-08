@@ -22,6 +22,23 @@ function isOverdue(fecha: string | null, estado: string) {
   return !(!fecha || estado === "terminado") && fecha < new Date().toISOString().slice(0, 10)
 }
 
+/**
+ * Árbol → filas: cada raíz seguida de sus hijos, marcados para indentar.
+ *
+ * 🔴 Los hijos van EN LA MISMA TABLA e indentados, no en una tabla aparte ni colapsados: la
+ * vista de Lista es donde alguien busca "qué hay que hacer y para cuándo", y la fecha de
+ * entrega real vive en los subobjetivos. Esconderlos detrás de un expandir dejaría la columna
+ * más importante fuera de la vista por default.
+ *
+ * No recursiona: la profundidad máxima es 2 (services/_objetivos_jerarquia.py).
+ */
+function aplanar(raices: Objetivo[]): { obj: Objetivo; esHijo: boolean }[] {
+  return raices.flatMap((r) => [
+    { obj: r, esHijo: false },
+    ...r.hijos.map((h) => ({ obj: h, esHijo: true })),
+  ])
+}
+
 interface Props {
   objetivos:  Objetivo[]
   showEmpresa: boolean
@@ -54,12 +71,19 @@ export function ListView({ objetivos, showEmpresa, canWrite, onEdit, onDelete, d
         </TableRow>
       </TableHeader>
       <TableBody>
-        {objetivos.map((obj) => {
+        {aplanar(objetivos).map(({ obj, esHijo }) => {
           const atrasado = isOverdue(obj.fecha_entrega, obj.estado)
           return (
-            <TableRow key={obj.id}>
-              <TableCell className="font-medium">{obj.titulo}</TableCell>
-              <TableCell className="text-muted-foreground">{obj.responsable_nombre ?? "—"}</TableCell>
+            <TableRow key={obj.id} className={esHijo ? "bg-muted/30" : undefined}>
+              <TableCell className={esHijo ? "pl-8 text-muted-foreground" : "font-medium"}>
+                {esHijo && <span aria-hidden className="mr-1.5">↳</span>}
+                {obj.titulo}
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {obj.responsables.length > 0
+                  ? obj.responsables.map((r) => r.nombre ?? "—").join(", ")
+                  : obj.responsable_nombre ?? "—"}
+              </TableCell>
               <TableCell>
                 <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${PRIORIDAD_CLASS[obj.prioridad]}`}>
                   {PRIORIDAD_LABEL[obj.prioridad]}

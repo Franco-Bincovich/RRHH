@@ -1,0 +1,92 @@
+"""
+Import de objetivos por Excel: preview → confirmar.
+
+El PREVIEW vive en `objetivos_import_preview.py` (salió por límite de líneas, igual que las dos
+mitades del Flujo 2). Molde: el Flujo 2 (nómina de COSTOS), el único import del repo con preview. La forma del
+reporte de filas con problemas viene del Flujo 1 (nómina de empleados), que es el más maduro en
+eso: cada fila cae en un grupo y **el lote no aborta por una fila**.
+
+🔴 EL RESPONSABLE SE RESUELVE CONTRA `users`, NO CONTRA `empleados`. Este es el tablero de tareas
+del equipo de RRHH, no de los 31 empleados — decisión de producto cerrada, y es la razón por la
+que la migración de `responsable_id` a empleados se canceló. Una fila cuyo responsable no existe
+o está inactivo **no se carga y se reporta**: nunca se carga con un responsable nulo, entre otras
+cosas porque `objetivos.responsable_id` es NOT NULL y el insert fallaría igual, pero con un 500
+en vez de un renglón en el reporte.
+
+🔴 QUÉ DEL MODELO NUEVO SOPORTA: responsables múltiples SÍ, jerarquía NO (todo nace como raíz), y
+un archivo con columna de padre se RECHAZA ENTERO en vez de ignorarla. El porqué de las dos
+cosas está en `_objetivos_import_transforms`.
+
+AUDITORÍA: UN evento por lote, en el confirmar. Ver `_audit_payloads_objetivos`.
+"""
+from typing import List, Optional
+from uuid import UUID
+
+from schemas.importacion_objetivos import (
+    FilaObjetivoError, FilaObjetivoPreview, ImportacionObjetivosConfirmarRequest,
+    ImportacionObjetivosConfirmarResponse, ImportacionObjetivosPreviewResponse,
+)
+from schemas.objetivo import ObjetivoCreate
+from services._audit_payloads_objetivos import payload_importacion_objetivos
+from services.audit_service import AuditService
+from services.objetivos_import_preview import preview as _preview
+from services.objetivo_service import ObjetivoService
+from utils.errors import AppError
+from utils.logger import logger
+
+
+class ObjetivosImportService:
+    def __init__(self, objetivos: Optional[ObjetivoService] = None,
+                 audit: Optional[AuditService] = None) -> None:
+        self._objetivos = objetivos or ObjetivoService()
+        self._audit = audit or AuditService()
+
+    def preview(self, data: bytes) -> ImportacionObjetivosPreviewResponse:
+        """Lee el Excel y clasifica cada fila. Ver services/objetivos_import_preview.preview."""
+        return _preview(data)
+
+    def confirmar(self, body: ImportacionObjetivosConfirmarRequest,
+                  usuario_id: Optional[str] = None,
+                  archivo: str = "objetivos.xlsx") -> ImportacionObjetivosConfirmarResponse:
+        """Crea los objetivos del lote y emite UN evento de auditoría.
+
+        🔴 VA POR `ObjetivoService.create`, no por el repo: así el import hereda TODAS las
+        validaciones del alta manual —título, prioridad, y sobre todo que el responsable siga
+        siendo un user activo—. El preview resolvió para MOSTRAR; el body viajó por la red y el
+        cliente lo pudo alterar, así que la autorización se rehace acá. Es el mismo criterio por
+        el que `payload_importacion_costos` no confía en el `es_actualizacion` del body.
+
+        🔴 EL EVENTO SE EMITE SIEMPRE, también con lote vacío o con todas las filas fallidas: es
+        el ÚNICO registro de que alguien importó objetivos (el alta no emite evento propio, sería
+        uno por fila). Mismo criterio que los otros dos imports.
+        """
+        creados: List[str] = []
+        errores: List[FilaObjetivoError] = []
+        for f in body.filas:
+            try:
+                row = self._objetivos.create(self._a_create(f, body.empresa_id), usuario_id or "system")
+                creados.append(row.id)
+            except AppError as exc:
+                errores.append(FilaObjetivoError(fila=f.fila, identificador=f.titulo,
+                                                 motivo=exc.message))
+            except Exception as exc:  # noqa: BLE001 — el lote no aborta por una fila
+                errores.append(FilaObjetivoError(fila=f.fila, identificador=f.titulo,
+                                                 motivo=str(exc)))
+
+        self._audit.registrar(**payload_importacion_objetivos(
+            body.empresa_id, archivo, len(body.filas), len(creados), len(errores),
+            usuario_id, creados))
+        logger.info("Import objetivos confirmado", extra={
+            "archivo": archivo, "enviadas": len(body.filas), "creados": len(creados),
+            "errores": len(errores)})
+        return ImportacionObjetivosConfirmarResponse(importados=len(creados), errores=errores)
+
+    @staticmethod
+    def _a_create(f: FilaObjetivoPreview, empresa_id: str) -> ObjetivoCreate:
+        """Fila del preview → payload de alta. `parent_id` NO se setea: ver el encabezado."""
+        return ObjetivoCreate(
+            empresa_id=UUID(empresa_id), responsable_id=UUID(f.responsable_id),
+            titulo=f.titulo, descripcion=f.descripcion, prioridad=f.prioridad,
+            fecha_entrega=f.fecha_entrega,  # type: ignore[arg-type]
+            responsables=[UUID(u) for u in f.responsables_ids],
+        )

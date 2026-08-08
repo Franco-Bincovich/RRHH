@@ -1,13 +1,40 @@
 import type { Candidato, CandidatoCreate, EmailCandidato, EtapaPipeline, LinkedinPublicarRequest, LinkedinPublicarResponse, Vacante, VacanteCreate, VacanteUpdate } from "@/types/vacantes"
-import { apiFetch, API_BASE, ApiError, authHeaders, postMultipart } from "@/services/api"
+import {
+  apiFetch, API_BASE, ApiError, authHeaders, descargarArchivo, postMultipart,
+  type FormatoExport,
+} from "@/services/api"
+
+/**
+ * Traducción filtros → query params. FUENTE ÚNICA del listado y del export.
+ *
+ * 🔴 Que los dos pasen por acá es lo que hace estructuralmente imposible que un filtro quede
+ * en una sola de las dos puntas. El bug clásico es sumar un filtro al listado y que el archivo
+ * salga con MÁS filas de las que se ven, sin error y sin aviso.
+ */
+function queryVacantes(estado?: string): Record<string, string | undefined> {
+  return { estado }
+}
 
 export async function fetchVacantes(estado?: string, empresaIdOverride?: string): Promise<Vacante[]> {
   const params = new URLSearchParams()
-  if (estado) params.set("estado", estado)
+  for (const [k, v] of Object.entries(queryVacantes(estado))) {
+    if (v) params.set(k, v)
+  }
   const query = params.toString() ? `?${params}` : ""
   return apiFetch<Vacante[]>(
     `/api/vacantes${query}`,
     empresaIdOverride ? { headers: { "X-Empresa-Id": empresaIdOverride } } : {},
+  )
+}
+
+/** Exporta el listado con el MISMO estado y la MISMA empresa que muestra la pantalla. */
+export function exportarVacantes(
+  formato: FormatoExport, estado?: string, empresaIdOverride?: string,
+): Promise<void> {
+  return descargarArchivo(
+    "/api/vacantes/exportar", formato, "vacantes",
+    empresaIdOverride ? { "X-Empresa-Id": empresaIdOverride } : undefined,
+    queryVacantes(estado),
   )
 }
 

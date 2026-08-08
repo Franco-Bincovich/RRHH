@@ -12,8 +12,20 @@ from utils.errors import AppError
 _USERS = "users"
 _EMPLEADOS = "empleados"
 
+# Proyección del listado. Sin credenciales ni estado de sesión (ver services/_usuarios_export).
+_SELECT_LISTA = "id, nombre, apellido, email, username, rol"
+
 
 class UsuarioRepo:
+    def listar_activos(self) -> list[dict]:
+        """Usuarios activos del sistema, ordenados por apellido.
+
+        🔴 Esta query VIVÍA EN EL ROUTER. Bajó acá sin cambiarle nada al traer el export: el
+        listado y el archivo salen del MISMO lugar, o divergen sin que nada avise.
+        """
+        res = supabase_admin.table(_USERS).select(_SELECT_LISTA).eq("activo", True).order("apellido").execute()
+        return res.data or []
+
     def email_existe(self, email: str) -> bool:
         """True si ya hay un usuario con ese email (chequeo dirigido)."""
         res = supabase_admin.table(_USERS).select("id").eq("email", email).limit(1).execute()

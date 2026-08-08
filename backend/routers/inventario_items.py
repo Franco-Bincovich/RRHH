@@ -1,7 +1,10 @@
 """
-Router de ítems de inventario. Montado en /api/inventario/items.
+Router de ítems de inventario — LECTURAS. Montado en /api/inventario/items.
 Sección: "inventario" (identificador estable para la futura capa de permisos).
-empresa_id para lecturas: X-Empresa-Id. Para crear: explícito en el body.
+empresa_id para lecturas: X-Empresa-Id.
+
+Las escrituras (POST/PUT/DELETE) viven en routers/inventario_items_escrituras.py, montado en
+el MISMO prefijo: las rutas no cambiaron. El porqué del corte está en el docstring de ese archivo.
 """
 from typing import Literal, Optional
 from uuid import UUID
@@ -9,10 +12,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
-from schemas.inventario import ItemCreate, ItemListResponse, ItemResponse, ItemUpdate
+from schemas.inventario import ItemListResponse, ItemResponse
 from services.inventario_items_service import InventarioItemsService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.INVENTARIO
@@ -31,7 +35,9 @@ async def list_items(
     return service.get_all(get_empresa_id(request), estado, area_id)
 
 
+# ⚠️ ANTES de /{id}: si fuera después, "exportar" matchearía como un id y daría 422 de UUID.
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
 async def exportar_items(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), estado: Optional[str] = Query(None), area_id: Optional[UUID] = Query(None), service: InventarioItemsService = Depends(_svc)) -> Response:
     d = service.exportar(get_empresa_id(request), formato, estado, area_id)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
@@ -52,28 +58,3 @@ async def get_historial(
 ):
     from services.inventario_asignaciones_service import InventarioAsignacionesService
     return InventarioAsignacionesService().get_historial(id, get_empresa_id(request))
-
-
-@router.post("", response_model=ItemResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def create_item(
-    request: Request, body: ItemCreate,
-    service: InventarioItemsService = Depends(_svc),
-) -> ItemResponse:
-    return service.create(body, request.state.user.get("id", "system"))
-
-
-@router.put("/{id}", response_model=ItemResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def update_item(
-    id: UUID, request: Request, body: ItemUpdate,
-    service: InventarioItemsService = Depends(_svc),
-) -> ItemResponse:
-    return service.update(id, body, get_empresa_id(request))
-
-
-@router.delete("/{id}", status_code=200, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def delete_item(
-    id: UUID, request: Request,
-    service: InventarioItemsService = Depends(_svc),
-) -> dict:
-    service.delete(id, get_empresa_id(request))
-    return {"ok": True}

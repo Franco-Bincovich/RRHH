@@ -3,7 +3,7 @@ import type {
   VacacionPendienteCreate,
   VacacionPendienteListResponse,
 } from "@/types/vacaciones"
-import { apiFetch } from "@/services/api"
+import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
 
 /**
  * Días de vacaciones NO tomados. Endpoint propio (/api/vacaciones-pendientes) y no anidado
@@ -19,6 +19,21 @@ export async function fetchVacacionesPendientes(
 ): Promise<VacacionPendienteListResponse> {
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
   return apiFetch<VacacionPendienteListResponse>(`/api/vacaciones-pendientes?${params}`)
+}
+
+/**
+ * Exporta los días pendientes — los MISMOS que muestra la pantalla.
+ *
+ * No manda query params, igual que `fetchVacacionesPendientes` (que solo pasa page/page_size,
+ * y el export no se pagina por diseño). 🔴 El día que la pantalla gane la barra de filtros que
+ * el endpoint ya acepta (area_id / empleado_id / proyecto_id), los dos tienen que armar sus
+ * params con UNA función de traducción compartida — molde: `queryVacaciones` en vacaciones.ts.
+ *
+ * El recorte que de verdad importa acá no viaja por la URL: el backend acota por OWNERSHIP a
+ * partir del token, así que un mando medio recibe solo a su gente.
+ */
+export function exportarVacacionesPendientes(formato: FormatoExport): Promise<void> {
+  return descargarArchivo("/api/vacaciones-pendientes/exportar", formato, "vacaciones_pendientes")
 }
 
 export async function createVacacionPendiente(

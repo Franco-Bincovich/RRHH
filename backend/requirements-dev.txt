@@ -5,9 +5,15 @@
 # Lección aprendida: mezclar deps de test en producción
 # infló la imagen de deploy y expuso surface de ataque innecesaria.
 
-pytest>=8.3.0
-pytest-asyncio>=0.24.0
+# Versiones EXACTAS, no `>=`. Con rangos abiertos cada máquina resolvió una
+# combinación distinta (Mac: pytest 9.1.1 + pytest-asyncio 1.4.0 · Windows:
+# pytest-asyncio 0.23.8, que ni siquiera cumplía el `>=0.24.0` que había acá).
+# Esa divergencia es la causa raíz de que en Windows los tests `async def` se
+# saltearan en silencio: la suite dependía de qué tenía instalado cada uno.
+pytest==9.1.1
+pytest-asyncio==1.4.0
 
 # httpx ya está en requirements.txt (lo usa el SDK de Supabase),
 # pero se declara acá para que los tests sean autocontenidos.
-httpx>=0.27.2
+# Misma versión exacta que producción, para no testear contra otro cliente.
+httpx==0.27.2

@@ -42,6 +42,15 @@ MAX_SIZE_LOGO = 2 * 1024 * 1024  # 2 MB
 ALLOWED_TYPES_CERTIFICADO = ("application/pdf", "image/jpeg", "image/png", "image/webp")
 ALLOWED_TYPES_IMAGEN = ("image/jpeg", "image/png", "image/webp")
 ALLOWED_TYPES_CSV = ("text/csv", "text/plain", "application/vnd.ms-excel", "application/octet-stream")
+# .xlsx es un ZIP: algunos navegadores mandan el MIME largo de OOXML, otros `octet-stream`, y
+# `vnd.ms-excel` aparece cuando el sistema lo asocia al Excel viejo. Los tres se aceptan porque
+# el MIME lo declara el CLIENTE y no es verificable; quien de verdad valida el formato es
+# `_import_excel.abrir`, que falla con un mensaje claro si el archivo no es un Excel legible.
+ALLOWED_TYPES_EXCEL = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "application/octet-stream",
+)
 # Adjuntos genéricos: PDF, Word (.docx), Excel (.xlsx) e imágenes.
 ALLOWED_TYPES_ADJUNTO = (
     "application/pdf",

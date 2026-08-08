@@ -103,8 +103,17 @@ class ProcesosService:
         )
 
     def _count(self, tabla: str, estado: str, eid: Optional[str]) -> int:
-        """Cuenta registros por estado y empresa."""
+        """Cuenta registros por estado y empresa.
+
+        🔴 EN `objetivos` CUENTA SOLO LAS RAÍCES (`parent_id IS NULL`). Desde la migración 095
+        los subobjetivos son filas de la MISMA tabla, así que sin este filtro un objetivo con 3
+        subtareas contaría como 4 y el tablero de Procesos pasaría de decir "12 objetivos" a
+        decir "12 objetivos y subtareas" sin que nadie lo haya decidido — el número no rompe,
+        cambia de significado en silencio, que es peor.
+        """
         q = supabase_admin.table(tabla).select("id", count="exact").eq("estado", estado)
+        if tabla == "objetivos":
+            q = q.is_("parent_id", "null")
         if eid:
             q = q.eq("empresa_id", eid)
         return q.execute().count or 0

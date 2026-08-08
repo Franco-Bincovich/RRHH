@@ -8,14 +8,17 @@ empresa_id: header X-Empresa-Id (None = todas las empresas, vista consolidada).
 user_id: sale del request y es el SUJETO DE LA VISIBILIDAD pública/privada. Sin él el service
 no puede resolver qué plantillas alcanza este usuario, así que va en todos los endpoints.
 """
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import Response
 
 from schemas.onboarding import TemplateResponse
 from services.onboarding_templates_service import OnboardingTemplatesService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.ONBOARDING
@@ -36,6 +39,16 @@ def sujeto(request: Request) -> tuple[str | None, str | None]:
 @router.get("", response_model=list[TemplateResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def list_templates(request: Request, svc: OnboardingTemplatesService = _Svc) -> list[TemplateResponse]:
     return svc.get_templates(get_empresa_id(request), *sujeto(request))
+
+
+# ⚠️ ANTES de /{template_id}: si fuera después, "exportar" matchearía como un id y daría 422.
+# 🔴 Pasa `sujeto(request)` igual que el listado: sin eso el archivo traería las plantillas
+# privadas de otros usuarios. Acá el universo lo acota quién sos, no un Query.
+@router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+async def exportar_templates(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), svc: OnboardingTemplatesService = _Svc) -> Response:
+    d = svc.exportar(get_empresa_id(request), *sujeto(request), formato)
+    return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 
 @router.get("/{template_id}", response_model=TemplateResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])

@@ -38,6 +38,19 @@ export async function fetchTemplates(): Promise<OnboardingTemplate[]> {
   return apiFetch<OnboardingTemplate[]>("/api/onboarding/templates")
 }
 
+/**
+ * Exporta las plantillas — las MISMAS que muestra la pantalla.
+ *
+ * Ninguna de las dos puntas manda query params y las dos mandan `X-Empresa-Id` por
+ * `authHeaders()`, así que traen el mismo conjunto. 🔴 Y el recorte que de verdad importa acá
+ * no es la empresa sino la VISIBILIDAD: el backend resuelve qué plantillas ve este usuario a
+ * partir de su token (públicas de su empresa + privadas propias). Por eso el archivo no puede
+ * traer las privadas de otro aunque el pedido salga de la misma pantalla.
+ */
+export function exportarTemplates(formato: FormatoExport): Promise<void> {
+  return descargarArchivo("/api/onboarding/templates/exportar", formato, "plantillas_onboarding")
+}
+
 export async function fetchTemplate(id: string): Promise<OnboardingTemplate> {
   return apiFetch<OnboardingTemplate>(`/api/onboarding/templates/${id}`)
 }

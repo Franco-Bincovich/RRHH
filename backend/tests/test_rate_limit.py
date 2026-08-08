@@ -37,6 +37,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from fastapi.routing import APIRoute
 from starlette.requests import Request
 
 import main as main_mod
@@ -251,19 +252,40 @@ class TestFranjaImport:
         assert {lim.scope for lim in _limites(modulo, funcion)} == {"import"}
 
 
+# Sufijos con los que el repo nombra un endpoint de export. MISMA definición que
+# tests/test_paridad_list_export.py: dos criterios distintos de "qué es un export" darían
+# dos barridos que cubren conjuntos distintos.
+_SUFIJOS_EXPORT = ("/exportar", "/export")
+
+# Guarda contra el falso verde: si la derivación se rompe, el barrido devuelve 0 endpoints
+# y TODOS los tests parametrizados de abajo desaparecen sin fallar. Piso, no conteo exacto:
+# un export nuevo tiene que quedar cubierto sin tocar este número.
+_MINIMO_EXPORTS = 15
+
+
+def _endpoints_export() -> list[tuple[str, str]]:
+    """(módulo, función) de cada ruta de export MONTADA, sacado de app.routes.
+
+    🔴 Por introspección y no por lista escrita a mano, y no es una preferencia de estilo: la
+    lista que había acá enumeraba 10 endpoints cuando la app ya tenía 19 montados. Los 9 que
+    faltaban (areas, candidatos, capacitaciones, equipo, onboarding, periodos, proyectos y los
+    dos de esta tanda) no estaban exentos de nada — simplemente nadie los verificaba, que es
+    peor que no tener el test, porque la clase entera se lee como cubierta.
+    """
+    vistos = {
+        (r.endpoint.__module__.removeprefix("routers."), r.endpoint.__name__)
+        for r in main_mod.app.routes
+        if isinstance(r, APIRoute) and "GET" in r.methods and r.path.endswith(_SUFIJOS_EXPORT)
+    }
+    return sorted(vistos)
+
+
 class TestFranjaExport:
-    ENDPOINTS = [
-        ("empleados", "exportar_empleados"),
-        ("vacaciones", "exportar_vacaciones"),
-        ("ausencias", "exportar_ausencias"),
-        ("ev_instancias", "exportar_instancias"),
-        ("asignaciones_capacitacion", "exportar_asignaciones"),
-        ("inventario_asignaciones", "exportar_asignaciones"),
-        ("reportes", "exportar_reporte"),
-        ("evaluaciones_resultados_export", "exportar"),
-        ("costos", "exportar_nomina"),
-        ("auditoria", "exportar_auditoria"),
-    ]
+    ENDPOINTS = _endpoints_export()
+
+    def test_el_barrido_encuentra_los_exports(self) -> None:
+        """Sin esto, una derivación rota deja los parametrizados en 0 casos y todo pasa."""
+        assert len(self.ENDPOINTS) >= _MINIMO_EXPORTS
 
     @pytest.mark.parametrize("modulo,funcion", ENDPOINTS)
     def test_valor(self, modulo: str, funcion: str) -> None:
@@ -277,15 +299,53 @@ class TestFranjaExport:
         ("objetivos", "exportar_objetivos"),
         ("inventario_items", "exportar_items"),
     ])
-    def test_los_dos_pendientes_siguen_sin_decorador(self, modulo: str, funcion: str) -> None:
-        """Quedaron bajo el baseline porque el decorador los pasaba del límite de 80 líneas.
-        Cuando esos routers se dividan, este test falla y recuerda agregarles la franja.
+    def test_los_dos_que_estaban_pendientes_ya_llevan_la_franja(
+        self, modulo: str, funcion: str
+    ) -> None:
+        """Estos dos corrían bajo el baseline de 300/min porque el decorador más su import los
+        pasaba del límite de 80 líneas del router. Se dividieron los routers (las escrituras
+        salieron a `*_escrituras.py`) y ahora la llevan.
 
-        Eran TRES: evaluaciones_resultados se cerró al dividir su router (B4). Ojo con cómo se
-        cierra el próximo — si el endpoint cambia de módulo, la clave de _limites cambia con él
-        y este assert pasa a ser vacuo. Por eso el que se cierra se MUEVE a TestFranjaExport,
-        donde se verifica que el decorador esté, en vez de solo borrarlo de acá."""
-        assert not _limites(modulo, funcion)
+        🔴 ESTE TEST ESTÁ ACÁ Y NO BORRADO A PROPÓSITO. Antes afirmaba lo contrario —que NO
+        tenían decorador— y vivía como recordatorio. Borrarlo al cerrarlo dejaría el cierre sin
+        nada que lo verifique. Y la razón de que el export se quedara en su router original es
+        exactamente esta clave: `_limites` busca `routers.<módulo>.<función>`, así que mudar el
+        export a `*_escrituras.py` habría cambiado la clave y este assert miraría una clave
+        inexistente — pasando en verde sin comprobar nada. (El barrido de arriba ya no tiene ese
+        problema: saca módulo y función del objeto de ruta vivo, no de un string.)"""
+        assert _valores(modulo, funcion) == {"30 per 1 hour"}
+        assert {lim.scope for lim in _limites(modulo, funcion)} == {"export"}
+
+    def test_ningun_export_quedo_bajo_el_baseline(self) -> None:
+        """La otra mitad: que no exista un export montado SIN franja. El baseline (300/min) no
+        avisa cuando se aplica — un export nuevo sin decorador se ve exactamente igual que uno
+        cubierto hasta que alguien se baja 300 archivos por minuto."""
+        sin_franja = [f"{m}.{f}" for m, f in self.ENDPOINTS if not _limites(m, f)]
+        assert not sin_franja, f"Exports montados sin la franja: {sin_franja}"
+
+    def test_un_solo_contador_para_todos_los_exports(self) -> None:
+        """🔴 Lo que el decorador NO alcanza a probar: que la cuota sea COMPARTIDA.
+
+        Ver el decorador puesto no distingue 30/hora repartidos entre los 19 de 30/hora PARA
+        CADA UNO (570/hora reales, 19× el techo que se quiso poner). La diferencia está en cómo
+        slowapi arma la clave del bucket: `limit_scope = lim.scope or endpoint`
+        (slowapi/extension.py). Con scope, el endpoint desaparece de la clave.
+
+        Acá se consume desde UN export y se mide el saldo desde OTRO, con el mismo mecanismo
+        que usa el middleware. Si alguien sacara `scope=` de un decorador, ese endpoint pasaría
+        a tener bucket propio y el saldo medido acá volvería a estar intacto."""
+        limiter.reset()
+        emisor = _limites("empleados", "exportar_empleados")[0]
+        otro = _limites("objetivos", "exportar_objetivos")[0]
+        ip = "203.0.113.77"
+        assert emisor.scope == otro.scope  # la clave no lleva el endpoint
+        limiter.limiter.hit(emisor.limit, ip, emisor.scope)
+        restante = limiter.limiter.get_window_stats(otro.limit, ip, otro.scope).remaining
+        limiter.reset()
+        assert restante == 29, (
+            "Exportar empleados no descontó del saldo de objetivos: cada export tiene su propia "
+            "cuota de 30/hora en vez de compartir una."
+        )
 
 
 class TestFranjaCostoExterno:

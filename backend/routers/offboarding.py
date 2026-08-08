@@ -1,19 +1,22 @@
 """
-Router de offboarding — listado, creación y actualización de activos.
+Router de offboarding — LECTURAS (listado de activos y export).
 Rutas protegidas por AuthMiddleware.
 empresa_id para lecturas: header X-Empresa-Id (filtro de vista, None = todas).
-empresa_id para CREATE: heredada del empleado (el service la resuelve internamente).
+
+Las escrituras (alta del proceso, devolución de activos y entrevista de salida) viven en
+routers/offboarding_escrituras.py, montado en el MISMO prefijo: las rutas no cambiaron. El
+porqué del corte está en el docstring de ese archivo.
 """
-from uuid import UUID
+from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import Response
 
-from schemas.offboarding import (
-    ActivoUpdate, EntrevistaUpdate, OffboardingCreate, OffboardingResponse,
-)
+from schemas.offboarding import OffboardingResponse
 from services.offboarding_service import OffboardingService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.OFFBOARDING
@@ -32,47 +35,10 @@ async def list_offboardings(
     return service.get_offboardings_activos(empresa_id)
 
 
-@router.post("", response_model=OffboardingResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def crear_offboarding(
-    body: OffboardingCreate,
-    request: Request,
-    service: OffboardingService = Depends(_service),
-) -> OffboardingResponse:
-    return service.iniciar_offboarding(body, get_empresa_id(request), request.state.user.get("id", "system"))
-
-
-@router.put(
-    "/{instancia_id}/activos/{activo_id}",
-    response_model=dict,
-    dependencies=[Depends(require_permission(SECCION, Accion.WRITE))],
-)
-async def actualizar_activo(
-    instancia_id: UUID,
-    activo_id: UUID,
-    body: ActivoUpdate,
-    request: Request,
-    service: OffboardingService = Depends(_service),
-) -> dict:
-    service.marcar_activo_devuelto(
-        instancia_id, activo_id, body.devuelto,
-        request.state.user.get("id", "system"), get_empresa_id(request),
-    )
-    return {"ok": True}
-
-
-@router.put(
-    "/{instancia_id}/entrevista",
-    response_model=dict,
-    dependencies=[Depends(require_permission(SECCION, Accion.WRITE))],
-)
-async def registrar_entrevista(
-    instancia_id: UUID,
-    body: EntrevistaUpdate,
-    request: Request,
-    service: OffboardingService = Depends(_service),
-) -> dict:
-    service.registrar_entrevista(
-        instancia_id, body.entrevista_salida, body.notas_entrevista,
-        request.state.user.get("id", "system"), get_empresa_id(request),
-    )
-    return {"ok": True}
+# ⚠️ ANTES de cualquier ruta con parámetro: si un GET /{instancia_id} se agregara arriba,
+# "exportar" matchearía como un id y este endpoint devolvería 422 en vez de un archivo.
+@router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+async def exportar_offboardings(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), service: OffboardingService = Depends(_service)) -> Response:
+    d = service.exportar(get_empresa_id(request), formato)
+    return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})

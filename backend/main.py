@@ -24,6 +24,7 @@ from routers.empleados import router as empleados_router
 from routers.empleados_catalogos import router as empleados_catalogos_router
 from routers.empresa import router as empresa_router
 from routers.offboarding import router as offboarding_router
+from routers.offboarding_escrituras import router as offboarding_escrituras_router
 from routers.onboarding import router as onboarding_router
 from routers.onboarding_templates import router as onboarding_templates_router
 from routers.onboarding_templates_escrituras import router as onboarding_templates_escrituras_router
@@ -34,6 +35,7 @@ from routers.importacion_nomina_empleados import router as importacion_nomina_em
 from routers.mail_historial import router as mail_historial_router
 from routers.plantillas import router as plantillas_router
 from routers.importacion_nomina import router as importacion_nomina_router
+from routers.importacion_objetivos import router as importacion_objetivos_router
 from routers.integraciones import router as integraciones_router
 from routers.reportes import router as reportes_router
 from routers.sucesion import router as sucesion_router
@@ -47,6 +49,7 @@ from routers.vacaciones_pendientes import router as vacaciones_pendientes_router
 from routers.equipo import router as equipo_router
 from routers.dashboard_equipo import router as dashboard_equipo_router
 from routers.vacantes import router as vacantes_router
+from routers.vacantes_escrituras import router as vacantes_escrituras_router
 from routers.capacitaciones import router as capacitaciones_router
 from routers.asignaciones_capacitacion import router as asignaciones_cap_router
 from routers.ev_plantillas import router as ev_plantillas_router
@@ -57,9 +60,12 @@ from routers.evaluaciones_import import router as evaluaciones_import_router
 from routers.evaluaciones_resultados import router as evaluaciones_resultados_router
 from routers.evaluaciones_resultados_export import router as evaluaciones_resultados_export_router
 from routers.inventario_items import router as inventario_items_router
+from routers.inventario_items_escrituras import router as inventario_items_escrituras_router
 from routers.inventario_asignaciones import router as inventario_asignaciones_router
 from routers.objetivos import router as objetivos_router
+from routers.objetivos_escrituras import router as objetivos_escrituras_router
 from routers.usuarios import router as usuarios_router
+from routers.usuarios_escrituras import router as usuarios_escrituras_router
 from routers.procesos import router as procesos_router
 from routers.proyectos import router as proyectos_router
 from routers.proyecto_asignaciones import router as proyecto_asignaciones_router
@@ -128,11 +134,13 @@ app.include_router(vacaciones_pendientes_router, prefix="/api/vacaciones-pendien
 app.include_router(equipo_router, prefix="/api/equipo", tags=["equipo"])
 app.include_router(dashboard_equipo_router, prefix="/api/dashboard-equipo", tags=["dashboard"])
 app.include_router(vacantes_router, prefix="/api/vacantes", tags=["vacantes"])
+app.include_router(vacantes_escrituras_router, prefix="/api/vacantes", tags=["vacantes"])  # mismo prefijo: las rutas no cambian
 app.include_router(candidatos_router, prefix="/api/candidatos", tags=["candidatos"])
 app.include_router(onboarding_templates_router, prefix="/api/onboarding/templates", tags=["onboarding"])
 app.include_router(onboarding_templates_escrituras_router, prefix="/api/onboarding/templates", tags=["onboarding"])
 app.include_router(onboarding_router, prefix="/api/onboarding", tags=["onboarding"])
 app.include_router(offboarding_router, prefix="/api/offboarding", tags=["offboarding"])
+app.include_router(offboarding_escrituras_router, prefix="/api/offboarding", tags=["offboarding"])  # mismo prefijo: las rutas no cambian
 app.include_router(costos_router, prefix="/api/costos", tags=["costos"])
 app.include_router(costos_escrituras_router, prefix="/api/costos", tags=["costos"])
 app.include_router(sucesion_router, prefix="/api/sucesion", tags=["sucesion"])
@@ -151,6 +159,7 @@ app.include_router(importacion_nomina_empleados_router, prefix="/api/importacion
 app.include_router(plantillas_router, prefix="/api/plantillas", tags=["plantillas"])
 app.include_router(mail_historial_router, prefix="/api/mails", tags=["plantillas"])  # historial de envíos
 app.include_router(importacion_nomina_router, prefix="/api/importacion", tags=["importacion"])
+app.include_router(importacion_objetivos_router, prefix="/api/importacion", tags=["importacion"])
 app.include_router(integraciones_router, prefix="/api/integraciones", tags=["integraciones"])
 app.include_router(configuracion_router, prefix="/api/configuracion", tags=["configuracion"])
 app.include_router(capacitaciones_router, prefix="/api/capacitaciones", tags=["capacitaciones"])
@@ -163,9 +172,12 @@ app.include_router(evaluaciones_import_router, prefix="/api/evaluaciones/importa
 app.include_router(evaluaciones_resultados_export_router, prefix="/api/evaluaciones/resultados", tags=["evaluaciones"])
 app.include_router(evaluaciones_resultados_router, prefix="/api/evaluaciones/resultados", tags=["evaluaciones"])
 app.include_router(inventario_items_router, prefix="/api/inventario/items", tags=["inventario"])
+app.include_router(inventario_items_escrituras_router, prefix="/api/inventario/items", tags=["inventario"])  # mismo prefijo: las rutas no cambian
 app.include_router(inventario_asignaciones_router, prefix="/api/inventario/asignaciones", tags=["inventario"])
 app.include_router(objetivos_router, prefix="/api/objetivos", tags=["objetivos"])
+app.include_router(objetivos_escrituras_router, prefix="/api/objetivos", tags=["objetivos"])  # mismo prefijo: las rutas no cambian
 app.include_router(usuarios_router, prefix="/api/usuarios", tags=["usuarios"])
+app.include_router(usuarios_escrituras_router, prefix="/api/usuarios", tags=["usuarios"])  # mismo prefijo: las rutas no cambian
 app.include_router(procesos_router, prefix="/api/procesos", tags=["procesos"])
 app.include_router(proyectos_router, prefix="/api/proyectos", tags=["proyectos"])
 app.include_router(proyecto_asignaciones_router, prefix="/api/proyectos", tags=["proyectos"])

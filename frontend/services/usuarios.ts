@@ -1,4 +1,4 @@
-import { apiFetch } from "@/services/api"
+import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
 import type { EmpleadoListResponse } from "@/types/empleado"
 
 /** Usuario del sistema, para selectores (espeja GET /api/usuarios del backend). */
@@ -44,6 +44,22 @@ export interface EmpleadoLider {
 /** Lista los usuarios activos del sistema (para el selector de operador en filtros). */
 export async function fetchUsuarios(): Promise<UsuarioListResponse> {
   return apiFetch<UsuarioListResponse>("/api/usuarios")
+}
+
+/**
+ * Exporta el listado de usuarios — las MISMAS filas que muestra la pantalla.
+ *
+ * `fetchUsuarios` no manda ningún query param, y este tampoco: no hay filtros que puedan
+ * quedar en una sola de las dos puntas. 🔴 El día que el listado gane un filtro, NO se lo
+ * agregue solo acá ni solo allá: los dos tienen que armar sus params con UNA función de
+ * traducción compartida (molde: `queryProyectos` en services/proyectos.ts). Si el filtro
+ * queda solo en el listado, el archivo sale con más filas de las que se ven, sin aviso.
+ *
+ * Tampoco viaja `X-Empresa-Id`: los usuarios no cuelgan de una empresa (decisión de producto),
+ * así que el selector del sidebar no aplica a esta pantalla.
+ */
+export function exportarUsuarios(formato: FormatoExport): Promise<void> {
+  return descargarArchivo("/api/usuarios/exportar", formato, "usuarios")
 }
 
 /** Crea un usuario mandos_medios; devuelve la contraseña temporal (no recuperable). */

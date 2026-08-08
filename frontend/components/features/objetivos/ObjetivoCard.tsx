@@ -50,7 +50,12 @@ export function ObjetivoCard({ objetivo: obj, canWrite, onEdit, onDelete, deleti
           </div>
         )}
       </div>
-      <p className="mb-2 text-xs text-muted-foreground">{obj.responsable_nombre ?? "—"}</p>
+      {/* El dueño con nombre y, si hay más, cuántos: la lista completa no entra en una
+          tarjeta de 288px y el dueño es quien responde por el objetivo. */}
+      <p className="mb-2 text-xs text-muted-foreground">
+        {obj.responsable_nombre ?? "—"}
+        {obj.responsables.length > 1 && ` +${obj.responsables.length - 1}`}
+      </p>
       <div className="flex items-center gap-2">
         <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${PRIORIDAD_CLASS[obj.prioridad]}`}>
           {PRIORIDAD_LABEL[obj.prioridad]}
@@ -58,6 +63,17 @@ export function ObjetivoCard({ objetivo: obj, canWrite, onEdit, onDelete, deleti
         {obj.fecha_entrega && (
           <span className={`text-[11px] ${atrasado ? "font-semibold text-destructive" : "text-muted-foreground"}`}>
             {atrasado ? "⚠ " : ""}{formatDate(obj.fecha_entrega)}
+          </span>
+        )}
+        {/* 🔴 Los subobjetivos NO son tarjetas: se cuentan acá. Una tarjeta por hijo llenaría
+            la columna de tareas sueltas y el contador del kanban dejaría de decir cuántos
+            objetivos hay. El detalle de cada hijo vive en la vista de Lista. */}
+        {obj.hijos.length > 0 && (
+          <span
+            className="inline-flex items-center rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground"
+            title={`${obj.hijos.length} subobjetivo${obj.hijos.length !== 1 ? "s" : ""}`}
+          >
+            ⌄ {obj.hijos.length}
           </span>
         )}
       </div>

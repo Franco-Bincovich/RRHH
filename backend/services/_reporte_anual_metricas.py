@@ -77,7 +77,10 @@ def actividad(eid: Optional[str], ini: str, fin: str, ini_ts: str, fin_ts: str) 
     if eid:
         cap_q = cap_q.eq("empresa_id", eid)
 
-    obj_q = supabase_admin.table("objetivos").select("id", count="exact").eq("estado", "terminado").gte("updated_at", ini_ts).lte("updated_at", fin_ts)
+    # 🔴 SOLO RAÍCES: los subobjetivos son filas de la misma tabla desde la 095. Sin el filtro,
+    # "objetivos cumplidos en el año" pasaría a contar también las subtareas y el número del
+    # reporte anual dejaría de ser comparable con el del año pasado.
+    obj_q = supabase_admin.table("objetivos").select("id", count="exact").eq("estado", "terminado").is_("parent_id", "null").gte("updated_at", ini_ts).lte("updated_at", fin_ts)
     if eid:
         obj_q = obj_q.eq("empresa_id", eid)
 
