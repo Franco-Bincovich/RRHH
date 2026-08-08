@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { CapacitacionModal } from "@/components/features/capacitaciones/CapacitacionModal"
-import { fetchCapacitaciones, deleteCapacitacion } from "@/services/capacitaciones"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { fetchCapacitaciones, deleteCapacitacion, exportarCatalogoCapacitaciones } from "@/services/capacitaciones"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Capacitacion } from "@/types/capacitacion"
@@ -83,6 +84,11 @@ export function CatalogoTab({ canWrite }: { canWrite: boolean }) {
             <input type="checkbox" checked={soloActivos} onChange={(e) => setSoloActivos(e.target.checked)} className="h-4 w-4 rounded border border-input accent-primary" />
             Solo activos
           </label>
+          {/* Los MISMOS filtros que el listado (empresa + solo activos): el archivo no puede
+              traer las inactivas que la tabla está ocultando. */}
+          <ExportMenu
+            onExport={(f) => exportarCatalogoCapacitaciones(f, empresaActivaId ?? empresaFiltro ?? undefined, soloActivos)}
+          />
         </div>
         {canWrite && (
           <Button className="min-h-11" onClick={() => { setEditing(null); setModalOpen(true) }}>

@@ -1,8 +1,17 @@
-import { apiFetch } from "@/services/api"
+import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
 import type { OnboardingDetalle, OnboardingInstancia, OnboardingTemplate, TemplateTarea } from "@/types/onboarding"
 
 export async function fetchOnboardings(): Promise<OnboardingInstancia[]> {
   return apiFetch<OnboardingInstancia[]>("/api/onboarding")
+}
+
+/**
+ * Exporta los onboardings activos. El listado no tiene filtros propios (la empresa viaja por el
+ * header, igual que en `fetchOnboardings`), así que las dos puntas traen el mismo conjunto por
+ * construcción: no hay query params que puedan divergir.
+ */
+export function exportarOnboardings(formato: FormatoExport): Promise<void> {
+  return descargarArchivo("/api/onboarding/exportar", formato, "onboarding")
 }
 
 export async function fetchOnboardingEmpleado(empleadoId: string): Promise<OnboardingDetalle> {

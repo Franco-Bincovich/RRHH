@@ -9,7 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { PeriodoForm } from "@/components/features/periodos/PeriodoForm"
 import { PeriodoList } from "@/components/features/periodos/PeriodoList"
 import { useCanWrite } from "@/hooks/useCanWrite"
-import { fetchPeriodos, reabrirPeriodo } from "@/services/periodos"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { exportarPeriodos, fetchPeriodos, reabrirPeriodo } from "@/services/periodos"
 import { fetchUsuariosActivos } from "@/services/objetivos"
 import type { Periodo } from "@/types/periodo"
 
@@ -56,6 +57,7 @@ export default function PeriodosPage() {
       <PageHeader
         title="Períodos"
         description="Cerrá un período para impedir cambios en registros con fecha dentro de ese rango."
+        action={<ExportMenu onExport={exportarPeriodos} />}
       />
       <div className="space-y-4">
         {canWrite && <PeriodoForm onCreated={load} />}

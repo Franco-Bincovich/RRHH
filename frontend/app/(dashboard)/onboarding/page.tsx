@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { OnboardingChecklist } from "@/components/features/onboarding/OnboardingChecklist"
 import { fetchEmpleados } from "@/services/empleados"
-import { fetchOnboardingEmpleado, fetchOnboardings, fetchTemplates, iniciarOnboarding } from "@/services/onboarding"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { exportarOnboardings, fetchOnboardingEmpleado, fetchOnboardings, fetchTemplates, iniciarOnboarding } from "@/services/onboarding"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Empleado } from "@/types/empleado"
@@ -306,6 +307,8 @@ export default function OnboardingPage() {
           description={`${onboardings.length} colaboradores en proceso`}
         />
         <div className="absolute right-0 top-0 flex items-center gap-2">
+          {/* Exportar es LECTURA: no va detrás de canWrite. */}
+          <ExportMenu onExport={exportarOnboardings} />
           <Link
             href="/onboarding/templates"
             className="flex min-h-10 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

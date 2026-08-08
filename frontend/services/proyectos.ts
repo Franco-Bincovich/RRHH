@@ -1,4 +1,4 @@
-import { apiFetch } from "./api"
+import { apiFetch, descargarArchivo, type FormatoExport } from "./api"
 import type {
   Asignacion, AsignacionAreaCreate, AsignacionBulkCreate, AsignacionBulkResult,
   AsignacionCreate, AsignacionListResponse, AsignacionUpdate,
@@ -25,6 +25,22 @@ export interface ProyectosFiltros {
 /** Traducción filtros → query params. Fuente única. */
 function queryProyectos(f: ProyectosFiltros): Record<string, string | undefined> {
   return { estado: f.estado, area_id: f.areaId }
+}
+
+/**
+ * Exporta el listado con los MISMOS filtros que la pantalla.
+ *
+ * 🔴 Usa `queryProyectos`, la misma traducción que `fetchProyectos`. Es lo que hace
+ * estructuralmente imposible que un filtro quede en una sola de las dos puntas — el bug clásico
+ * es sumar un filtro al listado y que el archivo salga con MÁS filas de las que se ven, sin
+ * error y sin aviso. `test_paridad_list_export.py` lo verifica del lado del backend.
+ */
+export function exportarProyectos(formato: FormatoExport, filtros: ProyectosFiltros = {}): Promise<void> {
+  return descargarArchivo(
+    `${BASE}/exportar`, formato, "proyectos",
+    filtros.empresaIdOverride ? { "X-Empresa-Id": filtros.empresaIdOverride } : undefined,
+    queryProyectos(filtros),
+  )
 }
 
 export function fetchProyectos(filtros: ProyectosFiltros = {}): Promise<ProyectoListResponse> {

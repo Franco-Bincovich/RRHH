@@ -7,6 +7,9 @@ from uuid import UUID
 
 from repositories.area_repo import AreaRepo
 from schemas.area import AreaCreate, AreaResponse, AreaUpdate
+from services._areas_export import construir_filas_export
+from services._limite_export import verificar_limite_export
+from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -27,6 +30,15 @@ class AreaService:
             Lista de AreaResponse ordenada por nombre.
         """
         return self._repo.find_all(empresa_id)
+
+    def exportar(self, empresa_id: Optional[str] = None, formato: str = "excel") -> Descarga:
+        """Exporta el listado de áreas (columnas legibles, sin UUIDs) con el MISMO filtro que el
+        listado. Va por el mismo `find_all`, así que el archivo no puede traer filas que la
+        pantalla no muestre. None = todas las empresas. El motor genérico no se toca."""
+        items = self._repo.find_all(empresa_id)
+        verificar_limite_export(len(items))
+        datos = {"Áreas": construir_filas_export(items)}
+        return build_export(nombre="Áreas", datos=datos, filename_base="areas", formato=formato)
 
     def get_area(self, id: UUID, empresa_id: Optional[str] = None) -> AreaResponse:
         """

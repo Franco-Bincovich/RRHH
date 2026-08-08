@@ -1,7 +1,16 @@
-import { apiFetch } from "@/services/api"
+import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
 import type { Periodo, PeriodoListResponse } from "@/types/periodo"
 
 const BASE = "/api/periodos"
+
+/**
+ * Exporta los períodos cerrados. El listado no tiene filtros propios (la empresa viaja por el
+ * header, igual que en `fetchPeriodos`), así que las dos puntas traen el mismo conjunto por
+ * construcción: no hay query params que puedan divergir.
+ */
+export function exportarPeriodos(formato: FormatoExport): Promise<void> {
+  return descargarArchivo(`${BASE}/exportar`, formato, "periodos")
+}
 
 /** Módulos que se pueden cerrar. "Todos" se representa como null (modulo omitido). */
 export const MODULO_LABEL: Record<string, string> = {

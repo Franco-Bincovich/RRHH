@@ -1,10 +1,11 @@
 """Router de catálogo de capacitaciones. Sección: 'capacitaciones'.
 empresa_id en lecturas: X-Empresa-Id. En escrituras: viene explícito en el body.
 """
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import Response
 
 from schemas.capacitacion import (
     CapacitacionCreate, CapacitacionListResponse, CapacitacionResponse, CapacitacionUpdate,
@@ -12,6 +13,7 @@ from schemas.capacitacion import (
 from services.capacitacion_service import CapacitacionService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.CAPACITACIONES
@@ -28,6 +30,14 @@ async def list_capacitaciones(
     service: CapacitacionService = Depends(_svc),
 ) -> CapacitacionListResponse:
     return service.get_all(get_empresa_id(request), solo_activos)
+
+
+# ⚠️ ANTES de /{id}: si fuera después, "exportar" matchearía como un id y daría 422 de UUID.
+@router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+async def exportar_capacitaciones(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), solo_activos: bool = Query(True), service: CapacitacionService = Depends(_svc)) -> Response:
+    d = service.exportar(get_empresa_id(request), formato, solo_activos)
+    return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 
 @router.get("/{id}", response_model=CapacitacionResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])

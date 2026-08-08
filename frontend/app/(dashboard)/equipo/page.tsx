@@ -10,7 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import { fetchEquipo } from "@/services/equipo"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { exportarEquipo, fetchEquipo } from "@/services/equipo"
 import type { EquipoMiembro } from "@/types/equipo"
 
 function TableSkeleton() {
@@ -51,6 +52,7 @@ export default function EquipoPage() {
             ? "Cargando..."
             : `${miembros.length} ${miembros.length === 1 ? "persona" : "personas"} a cargo`
         }
+        action={<ExportMenu onExport={exportarEquipo} />}
       />
 
       {loading && <TableSkeleton />}

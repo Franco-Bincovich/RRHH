@@ -11,7 +11,10 @@ from integrations.supabase_client import supabase_admin
 from repositories.candidato_repo import CandidatoRepo
 from repositories.vacante_repo import VacanteRepo
 from schemas.vacante import CandidatoGrupoResponse
+from services._candidatos_export import construir_filas_export
+from services._limite_export import verificar_limite_export
 from services.audit_service import AuditService
+from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -31,6 +34,15 @@ class CandidatoService:
         self._candidato_repo = candidato_repo or CandidatoRepo()
         self._vacante_repo = vacante_repo or VacanteRepo()
         self._audit = audit or AuditService()
+
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel") -> Descarga:
+        """Exporta los candidatos por el MISMO camino que el listado (columnas legibles, sin
+        UUIDs), así el archivo no puede traer filas que la pantalla no muestre. El motor
+        genérico no se toca."""
+        items = self.listar_todos_candidatos(empresa_id)
+        verificar_limite_export(len(items))
+        datos = {"Candidatos": construir_filas_export(items)}
+        return build_export(nombre="Candidatos", datos=datos, filename_base="candidatos", formato=formato)
 
     def listar_todos_candidatos(self, empresa_id: Optional[UUID] = None) -> List[CandidatoGrupoResponse]:
         """

@@ -15,6 +15,7 @@ from middleware.security_headers import SecurityHeadersMiddleware
 from utils.errors import AppError
 from utils.rate_limit import limiter, rate_limit_handler
 from routers.areas import router as areas_router
+from routers.areas_escrituras import router as areas_escrituras_router
 from routers.auth import router as auth_router
 from routers.cesiones import router as cesiones_router
 from routers.costos import router as costos_router
@@ -115,6 +116,7 @@ async def health_check():
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 app.include_router(areas_router, prefix="/api/areas", tags=["areas"])
+app.include_router(areas_escrituras_router, prefix="/api/areas", tags=["areas"])  # mismo prefijo: las rutas no cambian
 app.include_router(empleados_catalogos_router, prefix="/api/empleados", tags=["empleados"])  # ANTES de empleados (rutas estáticas vs /{id})
 app.include_router(empleados_router, prefix="/api/empleados", tags=["empleados"])
 app.include_router(cesiones_router, prefix="/api", tags=["cesiones"])

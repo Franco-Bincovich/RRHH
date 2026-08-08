@@ -26,7 +26,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { AreaModal } from "@/components/features/areas/AreaModal"
-import { fetchAreas, deleteArea } from "@/services/areas"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { fetchAreas, deleteArea, exportarAreas } from "@/services/areas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Area } from "@/types/area"
@@ -123,12 +124,21 @@ export default function AreasPage() {
         title="Áreas"
         description={`${areas.length} área${areas.length !== 1 ? "s" : ""}`}
         action={
-          canWrite ? (
-            <Button className="min-h-11" onClick={openCreate}>
-              <Plus />
-              Nueva área
-            </Button>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {/* El MISMO filtro de empresa que el listado. ⚠️ El buscador de abajo es
+                CLIENT-SIDE, así que el archivo trae todas las áreas de la empresa, no las que
+                el buscador deja a la vista. Con 12 áreas es tolerable; el día que crezca, ese
+                `search` tiene que pasar al backend (regla del bloque B). */}
+            <ExportMenu
+              onExport={(formato) => exportarAreas(formato, getEmpresaActivaId() ?? undefined)}
+            />
+            {canWrite && (
+              <Button className="min-h-11" onClick={openCreate}>
+                <Plus />
+                Nueva área
+              </Button>
+            )}
+          </div>
         }
       />
 

@@ -3,10 +3,11 @@ Router de proyectos. Montado en /api/proyectos.
 empresa_id para lecturas: header X-Empresa-Id (empresa dueña). None = consolidado.
 Para crear: empresa_id explícito en el body (el usuario selecciona la empresa dueña).
 """
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import Response
 
 from schemas.proyectos import (
     ProyectoCreate, ProyectoListResponse, ProyectoResponse, ProyectoUpdate,
@@ -14,6 +15,7 @@ from schemas.proyectos import (
 from services.proyectos_service import ProyectosService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
+from utils.rate_limit import limiter
 
 router = APIRouter()
 SECCION = Seccion.PROYECTOS
@@ -31,6 +33,14 @@ async def list_proyectos(
     service: ProyectosService = Depends(_svc),
 ) -> ProyectoListResponse:
     return service.get_all(get_empresa_id(request), estado, area_id)
+
+
+# ⚠️ ANTES de /{id}: si fuera después, "exportar" matchearía como un id y daría 422 de UUID.
+@router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+async def exportar_proyectos(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), estado: Optional[str] = Query(None), area_id: Optional[UUID] = Query(None), service: ProyectosService = Depends(_svc)) -> Response:
+    d = service.exportar(get_empresa_id(request), formato, estado, area_id)
+    return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 
 @router.get("/{id}", response_model=ProyectoResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])

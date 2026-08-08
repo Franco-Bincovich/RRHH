@@ -12,7 +12,10 @@ from uuid import UUID
 from repositories.periodo_repo import PeriodoRepo
 from schemas.periodo import PeriodoListResponse, PeriodoResponse
 from services._audit_payloads_rrhh import payload_cierre_periodo, payload_reapertura_periodo
+from services._limite_export import verificar_limite_export
+from services._periodos_export import construir_filas_export
 from services.audit_service import AuditService
+from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -26,6 +29,14 @@ class PeriodoService:
         """Retorna los períodos de una empresa (todos los estados). None = todas las empresas."""
         items = self._repo.listar(empresa_id)
         return PeriodoListResponse(items=items, total=len(items))
+
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel") -> Descarga:
+        """Exporta los períodos cerrados por el MISMO `listar` del repo que usa la pantalla, así
+        el archivo no puede traer filas que el listado no muestre. El motor genérico no se toca."""
+        items = self._repo.listar(empresa_id)
+        verificar_limite_export(len(items))
+        datos = {"Períodos": construir_filas_export(items)}
+        return build_export(nombre="Períodos cerrados", datos=datos, filename_base="periodos", formato=formato)
 
     def cerrar(
         self, empresa_id: UUID, modulo: Optional[str], desde: date, hasta: date, usuario_id: Optional[str]

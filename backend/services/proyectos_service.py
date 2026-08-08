@@ -10,6 +10,9 @@ from repositories.proyectos_repo import ProyectosRepo
 from schemas.proyectos import (
     ProyectoCreate, ProyectoListResponse, ProyectoResponse, ProyectoUpdate,
 )
+from services._limite_export import verificar_limite_export
+from services._proyectos_export import construir_filas_export
+from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -29,6 +32,15 @@ class ProyectosService:
         """
         items = self._repo.find_all(empresa_id, estado, area_id)
         return ProyectoListResponse(items=items, total=len(items))
+
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", estado: Optional[str] = None, area_id: Optional[UUID] = None) -> Descarga:
+        """Exporta el listado de proyectos (columnas legibles, sin UUIDs) con los MISMOS filtros
+        que el listado. Va por el mismo `find_all`, así que el archivo no puede traer filas que
+        la pantalla no muestre. None = consolidado. El motor genérico no se toca."""
+        items = self._repo.find_all(empresa_id, estado, area_id)
+        verificar_limite_export(len(items))
+        datos = {"Proyectos": construir_filas_export(items)}
+        return build_export(nombre="Proyectos", datos=datos, filename_base="proyectos", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> ProyectoResponse:
         """

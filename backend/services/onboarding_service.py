@@ -9,7 +9,10 @@ from repositories.empleado_repo import EmpleadoRepo
 from repositories.onboarding_repo import OnboardingRepo
 from repositories.onboarding_templates_repo import OnboardingTemplatesRepo
 from schemas.onboarding import InstanciaDetalleResponse, InstanciaResponse
+from services._limite_export import verificar_limite_export
+from services._onboarding_export import construir_filas_export
 from services._onboarding_iniciar import iniciar
+from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -33,6 +36,14 @@ class OnboardingService:
             Lista de InstanciaResponse con progreso calculado por empleado.
         """
         return self._repo.find_instancias_activas(empresa_id)
+
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel") -> Descarga:
+        """Exporta los onboardings activos por el MISMO repo que el listado, así el archivo no
+        puede traer filas que la pantalla no muestre. El motor genérico no se toca."""
+        items = self._repo.find_instancias_activas(empresa_id)
+        verificar_limite_export(len(items))
+        datos = {"Onboardings": construir_filas_export(items)}
+        return build_export(nombre="Onboardings activos", datos=datos, filename_base="onboarding", formato=formato)
 
     def get_onboarding_empleado(self, empleado_id: UUID, empresa_id: Optional[UUID] = None) -> InstanciaDetalleResponse:
         """

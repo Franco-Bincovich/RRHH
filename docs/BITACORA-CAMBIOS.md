@@ -41,6 +41,125 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-07 · Export en /equipo — el único que puede filtrar datos · commit pendiente
+
+**Qué cambió:** **`GET /api/equipo/exportar`**. Los exports pasan de 18 a **19**. Va solo, sin
+juntarlo con otros módulos, por un motivo: es el ÚNICO export del repo donde equivocarse **filtra
+datos**, no filas de más.
+
+🔴 **En todos los demás módulos el universo lo acota un Query** (`estado`, `area_id`,
+`empresa_id`) y el peor caso es un archivo con más filas de las que se ven. **Acá lo acota el
+OWNERSHIP** (`ids_empleados_visibles(user_id, rol)`), así que un export con consulta propia le
+entregaría a un `mandos_medios` la nómina de gente que no puede ver en ninguna otra pantalla — sin
+error y con el archivo ya bajado. Por eso `EquipoService.exportar` **llama a `get_equipo`**, no
+reconstruye nada: el conjunto sale del mismo lugar en las dos superficies.
+
+**Dos propiedades que quedaron fijadas por test, no por comentario:**
+- **El ownership CRUZA empresas y el export no lo recorta.** Un mando puede tener subordinados de
+  otra empresa del grupo (`_alcance_mandos.py`), y el repo filtra solo por `in_("id", ids)`.
+  Sumarle un `.eq("empresa_id")` "por consistencia" haría desaparecer a esa persona del archivo.
+- **El export expone TRES columnas** (Apellido · Nombre · Empresa) y nada más. `mandos_medios`
+  llega a /equipo **sin** permiso de EMPLEADOS: agregarle cargo, área o fecha de ingreso
+  convertiría este export en la puerta de atrás a la ficha del empleado.
+
+**Verificado por mutación:** reemplazando `get_equipo(user_id, rol)` por una consulta propia sin
+filtro, **7 tests rojean** — incluido el paramétrico que compara listado y export por
+comportamiento para los 6 pares (usuario, rol).
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias
+ni buckets. ⚠️ Un endpoint nuevo dentro del prefijo `/api/equipo` que ya existía; entra en la
+cuota compartida de export (30/hora por IP, **por proceso** mientras el store sea `memory://`).
+🔴 **Para el que monte AWS:** este endpoint es el que peor tolera un error de identidad —
+si el JWT resolviera mal el `user_id` o el `rol`, el archivo sale con el universo equivocado y
+nada lo delata. El gate es `Seccion.VACACIONES + READ`, el mismo que el listado.
+
+## 2026-08-07 · Export en candidatos, períodos, catálogo de capacitaciones y onboarding · commit pendiente
+
+**Qué cambió:** cuatro exports nuevos, todos con el molde de `inventario/items`. Los exports pasan
+de 14 a **18**. Ninguno de los cuatro obligó a dividir un archivo.
+
+- `GET /api/candidatos/exportar` · `GET /api/periodos/exportar` ·
+  `GET /api/capacitaciones/exportar` (CATÁLOGO) · `GET /api/onboarding/exportar`.
+- Los cuatro con `shared_limit("30/hour", scope="export")` y `verificar_limite_export`, y
+  `/exportar` declarado **antes** de `/{id}`.
+
+**Tres cosas que no eran obvias y condicionan el resultado:**
+- 🔴 **`capacitaciones` SÍ tenía filtro** (`solo_activos`), al contrario de lo que decía el
+  relevamiento. El export lo acepta: sin él, el archivo traería las capacitaciones inactivas que
+  la tabla oculta. Los otros tres no tienen filtros, así que la invariante sale gratis.
+- 🔴 **`InstanciaResponse.fecha_inicio` es un `str`, no un `date`.** El `_fecha` que usan los
+  otros exports (llama a `.strftime`) reventaría con `AttributeError`. `_onboarding_export` parsea
+  el ISO y cae al crudo si no matchea.
+- ⚠️ **`periodos` no exporta `cerrado_por` / `reabierto_por`**: son UUIDs de `users` y el repo no
+  resuelve el nombre. El "quién" está en `auditoria`, que sí lo resuelve al renderizar.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias
+ni buckets. ⚠️ **Cuatro endpoints nuevos**, todos dentro de prefijos que ya existían. Entran en la
+cuota compartida de export (30/hora por IP), que sigue siendo **por proceso** mientras
+`RATE_LIMIT_STORAGE_URI` sea `memory://` — ahora la comparten 18 endpoints en vez de 14.
+🔴 **Los cuatro módulos tienen 0 o 1 fila en producción**, así que estos exports **no se pueden
+verificar contra datos reales**: las columnas se eligieron leyendo el schema y lo que muestra cada
+pantalla, y la única red que tienen son los tests.
+
+## 2026-08-07 · Corte de areas.py + export de áreas · commit pendiente
+
+**Dos cambios, en este orden.**
+
+**1 · Refactor.** `routers/areas.py` estaba en 72/80 y el export mide +10, así que primero se
+partió: **`routers/areas_escrituras.py`** se lleva POST/PUT/DELETE y se monta en el **MISMO
+prefijo** `/api/areas`. Molde: `costos_escrituras.py` y `onboarding_templates_escrituras.py`.
+**Las rutas no cambiaron**: mismo path, mismo método y mismo gate — verificado ejercitando cada
+dependency con `gerencia_lectura`, no leyendo el decorador. `_empresa_str` se importa de
+`routers.areas` en vez de duplicarse (patrón `sujeto` de onboarding_templates_escrituras).
+Movimiento verbatim: cero lógica reescrita. `areas.py` 72 → **46**, escrituras **64**, `main.py`
+173 → **175**. La suite quedó en 2157, el mismo número que antes del corte.
+
+**2 · Feature.** **`GET /api/areas/exportar`**, con el filtro `empresa_id` — el mismo que el
+listado — y proyección propia en `services/_areas_export.py`. Los exports pasan de 13 a **14**.
+Lleva `shared_limit("30/hour", scope="export")` y `verificar_limite_export`; los dos barridos lo
+incorporaron solos.
+
+**Dos límites conocidos, anotados en el código:**
+- ⚠️ **El export de áreas NO tiene columna "Empresa".** `AreaResponse` no trae `empresa_nombre`
+  —solo el UUID, que no puede salir—, así que en modo consolidado el archivo mezcla las áreas de
+  las dos empresas sin distinguirlas, y **hay un "Sistemas" por empresa**. El workaround es
+  exportar con el filtro. Cerrarlo es sumar `empresa_nombre` al SELECT de `area_repo`: cambio
+  propio, toca schema + mapper.
+- ⚠️ **El buscador de `/areas` es CLIENT-SIDE**, así que el archivo trae todas las áreas de la
+  empresa, no las que el buscador deja a la vista. Con 12 áreas es tolerable (mismo criterio que
+  el listado de evaluaciones); el día que crezca, ese `search` tiene que pasar al backend.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias
+ni buckets. ⚠️ **`main.py` monta un router más sobre `/api/areas`** — si hay reglas de ruteo por
+path del lado de la infra, el prefijo no cambió, solo el módulo que atiende POST/PUT/DELETE.
+🔴 **Para el que porte a asyncpg:** `areas_escrituras.py` importa `_empresa_str` de `areas.py`,
+así que los dos archivos se mueven juntos.
+
+## 2026-08-07 · Export de proyectos (y por qué areas quedó afuera) · commit pendiente
+
+**Qué cambió:** **`GET /api/proyectos/exportar`** — el módulo de proyectos ya exporta en pdf /
+excel / csv / word, con los MISMOS filtros que el listado (`estado`, `area_id`) y la misma empresa
+del header. Cadena copiada del molde `inventario/items`: router → service → proyección propia
+(`services/_proyectos_export.py`) → `build_export`. Los exports pasan de 12 a **13**.
+
+- El costeo (`CosteoResumen`, objeto anidado) **se aplana en tres columnas** — el motor renderiza
+  escalares, así que sin aplanar la celda saldría con el `repr` de Python; y "costo acumulado" y
+  "presupuesto restante" son justo lo que alguien abre el Excel para mirar.
+- `% consumido` sale **vacío**, no `0%`, cuando el presupuesto es 0: no hay contra qué medir, y
+  "cero por ciento consumido" es una afirmación distinta y falsa.
+- Lleva `shared_limit("30/hour", scope="export")` y `verificar_limite_export`. Los dos barridos
+  (`test_paridad_list_export`, `test_limite_export`) lo incorporaron **solos**, sin tocarlos.
+
+🔴 **`areas` NO se implementó, por límite de líneas.** `routers/areas.py` está en **72/80** y el
+bloque de export mide **+10** (2 imports + endpoint de 5 líneas + 2 blancos + el comentario de
+orden de rutas) → **82/80**. La medición salió del delta real de `proyectos.py` (66 → 76), no de
+una estimación. **El corte propuesto está abajo y no se escribió.**
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias
+ni buckets. ⚠️ **Un endpoint nuevo montado** (`GET /api/proyectos/exportar`), dentro del prefijo
+`/api/proyectos` que ya existía. Entra en la cuota compartida de export (30/hora por IP), que
+sigue siendo **por proceso** mientras `RATE_LIMIT_STORAGE_URI` sea `memory://`.
+
 ## 2026-08-07 · Cobertura del módulo de mails: guardado de plantillas e idempotencia · commit pendiente
 
 **Qué cambió:** solo tests — **cero líneas de producción**. Se cerraron los dos huecos que el plan

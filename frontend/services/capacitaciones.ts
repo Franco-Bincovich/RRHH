@@ -15,14 +15,44 @@ const BASE_AS = `${BASE}/asignaciones`
 
 // ── Catálogo ──────────────────────────────────────────────────────────────────
 
+/** Traducción filtros → query params del catálogo. Fuente ÚNICA: la usan el listado y el export. */
+function queryCatalogo(soloActivos: boolean): Record<string, string> {
+  return { solo_activos: String(soloActivos) }
+}
+
 export async function fetchCapacitaciones(
   empresaIdOverride?: string,
   soloActivos = true,
 ): Promise<CapacitacionListResponse> {
-  const q = new URLSearchParams({ solo_activos: String(soloActivos) })
+  const q = new URLSearchParams(queryCatalogo(soloActivos))
   return apiFetch<CapacitacionListResponse>(
     `${BASE}?${q}`,
     empresaIdOverride ? { headers: { "X-Empresa-Id": empresaIdOverride } } : {},
+  )
+}
+
+/**
+ * Exporta el CATÁLOGO con el MISMO filtro que la pantalla.
+ *
+ * 🔴 SE LLAMA `exportarCatalogoCapacitaciones`, NO `exportarCapacitaciones`: ese nombre ya lo usa
+ * el export de ASIGNACIONES (más abajo). Son dos listados distintos, en dos pestañas distintas y
+ * con dos endpoints distintos — el catálogo dice qué cursos existen, las asignaciones quién hizo
+ * cuál. El archivo baja con nombre "catalogo-capacitaciones" por el mismo motivo.
+ *
+ * 🔴 `soloActivos` viaja por la misma `queryCatalogo` que el listado: sin él, el archivo traería
+ * las capacitaciones inactivas que la tabla está ocultando. Es el bug exacto que la invariante
+ * list↔export existe para evitar, y acá era posible porque este listado SÍ tiene un filtro
+ * (el checkbox "Solo activos").
+ */
+export function exportarCatalogoCapacitaciones(
+  formato: FormatoExport,
+  empresaIdOverride?: string,
+  soloActivos = true,
+): Promise<void> {
+  return descargarArchivo(
+    `${BASE}/exportar`, formato, "catalogo-capacitaciones",
+    empresaIdOverride ? { "X-Empresa-Id": empresaIdOverride } : undefined,
+    queryCatalogo(soloActivos),
   )
 }
 

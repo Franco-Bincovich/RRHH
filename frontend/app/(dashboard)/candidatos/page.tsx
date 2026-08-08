@@ -4,6 +4,8 @@ import { useMemo, useState } from "react"
 import { UserSearch } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
+import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { exportarCandidatos } from "@/services/candidatos"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -23,6 +25,7 @@ export default function CandidatosPage() {
       <PageHeader
         title="Candidatos"
         description={loading ? "Cargando..." : `${candidatos.length} candidato${candidatos.length !== 1 ? "s" : ""}`}
+        action={<ExportMenu onExport={exportarCandidatos} />}
       />
 
       {loading && (
