@@ -46,6 +46,8 @@ from uuid import UUID, uuid4
 from repositories.candidato_screening_repo import CandidatoScreeningRepo
 from repositories.vacante_repo import VacanteRepo
 from schemas.screening import CandidatoClasificado, ScreeningLoteResponse
+from services._busqueda_prompt import bloque_busqueda
+from services._clasificador_prompt import _limpio
 from services._presupuesto import Presupuesto
 from services._screening_candidato import clasificar_uno
 from services.audit_service import AuditService
@@ -91,6 +93,22 @@ class CvScreeningService:
         # no del header. En modo consolidado el header es None y auditar con él dejaría el evento
         # fuera del filtro por empresa de /auditoria.
         empresa = str(vacante.empresa_id) if vacante.empresa_id else None
+
+        # 🔴 Una búsqueda con solo título se SALTEA entera en vez de clasificarse igual: el
+        # porqué, y por qué el chequeo es por vacante y no por candidato, está en el encabezado
+        # de `_busqueda_prompt`. 🚨 Va DESPUÉS de la barrera de empresa, nunca antes: un 422
+        # sobre una vacante ajena confirmaría que existe.
+        busqueda = bloque_busqueda(vacante, _limpio)
+        if busqueda.sin_contenido:
+            raise AppError(
+                "La búsqueda no tiene contenido cargado: completá al menos uno de Funciones, "
+                "Requisitos, Formación, Experiencia o Conocimientos técnicos antes de "
+                "clasificar. Con solo el título el sistema no tiene contra qué comparar los CVs.",
+                "VACANTE_SIN_CONTENIDO", 422)
+        if busqueda.truncado:
+            logger.warning("La búsqueda excede el tope del prompt y se truncó",
+                           extra={"vacante_id": vacante_id})
+
         criterio = self._config.get_criterio(vacante.empresa_id)
 
         pendientes = self._repo.find_para_clasificar(vacante_id, empresa)
@@ -101,11 +119,11 @@ class CvScreeningService:
         detalle = [clasificar_uno(fila, vacante, criterio, empresa, repo=self._repo,
                                   cliente=self._cliente) for fila in reloj.con_margen(tanda)]
         return self._resumen(detalle, reloj, excedente, tope_alcanzado, vacante_id, empresa,
-                             usuario_id)
+                             usuario_id, busqueda.truncado)
 
     def _resumen(self, detalle: List[CandidatoClasificado], reloj: Presupuesto, excedente: int,
                  tope: bool, vacante_id: str, empresa: Optional[str],
-                 usuario_id: Optional[str]) -> ScreeningLoteResponse:
+                 usuario_id: Optional[str], busqueda_truncada: bool) -> ScreeningLoteResponse:
         clasificados = sum(1 for d in detalle if d.clasificacion)
         errores = sum(1 for d in detalle if d.error)
         respuesta = ScreeningLoteResponse(
@@ -115,7 +133,7 @@ class CvScreeningService:
             # reintentables: el botón vuelve a tomarlos porque siguen en NULL.
             sin_procesar=reloj.sin_procesar + excedente,
             parcial=reloj.parcial, tope_alcanzado=tope, segundos=reloj.transcurridos(),
-            detalle=detalle)
+            busqueda_truncada=busqueda_truncada, detalle=detalle)
         # UN evento por lote, nunca uno por CV: una corrida es UNA acción de RRHH. Regla propia
         # del repo. `registro_id` es un uuid4 de EVENTO — la corrida no persiste fila con id.
         self._audit.registrar(

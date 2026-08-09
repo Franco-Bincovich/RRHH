@@ -55,6 +55,13 @@ export function ClasificarCvsButton({ vacanteId, onListo }: { vacanteId: string;
           {r.errores > 0 && (
             <p className="text-destructive">{r.errores} con error: quedaron sin clasificar, se pueden reintentar.</p>
           )}
+          {r.busqueda_truncada && (
+            <p>
+              La descripción de la búsqueda es muy larga y se procesó solo una parte. Acortá los
+              campos de <strong className="text-foreground">Información del puesto</strong> para
+              que el criterio entre completo.
+            </p>
+          )}
           {r.sin_procesar > 0 && (
             <p>
               Quedaron <strong className="text-foreground">{r.sin_procesar}</strong> sin procesar

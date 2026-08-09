@@ -55,6 +55,14 @@ export interface ScreeningLoteResponse {
   sin_procesar: number
   parcial: boolean
   tope_alcanzado: boolean
+  /**
+   * La descripción de la búsqueda pasó el tope del prompt y el modelo vio solo una parte.
+   *
+   * 🔴 Lo tiene que ver RRHH: es quien puede acortarla, y el aviso que va dentro del prompt lo
+   * lee el modelo, no la persona. Un truncado silencioso hace que el modelo evalúe contra media
+   * frase y nadie se entere.
+   */
+  busqueda_truncada: boolean
   segundos: number
   detalle: CandidatoClasificado[]
 }

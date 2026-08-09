@@ -26,6 +26,7 @@ from schemas.vacante import CandidatoResponse
 from services._screening_candidato import PREFIJO_FALLO
 from services.cv_screening_service import CvScreeningService
 from services.screening_correccion_service import ScreeningCorreccionService
+from tests._vacante_fake import vacante_completa
 from utils.errors import AppError
 
 E1, E2 = "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"
@@ -165,7 +166,7 @@ class _VacanteRepo:
     def find_by_id(self, vacante_id, empresa_id=None):
         if vacante_id != VAC or (empresa_id and str(empresa_id) != E1):
             return None
-        return SimpleNamespace(id=VAC, titulo="Contador", descripcion=None, empresa_id=E1)
+        return vacante_completa(id=VAC, empresa_id=E1)  # los siete campos: ver _vacante_fake
 
 
 class _LoteRepo:

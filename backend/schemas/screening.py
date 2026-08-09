@@ -92,5 +92,8 @@ class ScreeningLoteResponse(BaseModel):
     sin_procesar: int
     parcial: bool
     tope_alcanzado: bool
+    #: La descripción de la búsqueda pasó el tope del prompt y el modelo vio solo una parte.
+    #: Lo tiene que ver RRHH: es quien puede acortarla, y no lee el prompt.
+    busqueda_truncada: bool = False
     segundos: float
     detalle: List[CandidatoClasificado]

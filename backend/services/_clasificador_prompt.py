@@ -41,6 +41,7 @@ armarlo. Es barato y cierra el único agujero que el sanitizado por patrones no 
 import re
 from typing import Optional
 
+from services._busqueda_prompt import bloque_busqueda
 from services._sanitizar_ia import sanitizar
 
 # El orden importa: es el que ve el modelo y el que usa la validación de salida.
@@ -48,7 +49,8 @@ CATEGORIAS = ("relevante", "dudoso", "no_relevante")
 
 # Ver `_sanitizar_ia`: el CV ya viene topeado por `_cv_texto.MAX_CARACTERES`; esto es la red.
 MAX_CV = 20_000
-# El mismo número que el CHECK `ps_largos_check` de la migración 100.
+# El CHECK `ps_largos_check` de la mig 100. ⚠️ Solo aplica al CRITERIO: los topes de la búsqueda
+# viven en `_busqueda_prompt` (uno por campo y uno del bloque), porque ahí son siete y no dos.
 MAX_CONFIG = 2_000
 
 _SYSTEM = """\
@@ -57,6 +59,13 @@ Sos un asistente de preselección de CVs para un equipo de Recursos Humanos.
 TU TAREA
 Recibís el texto de un CV y la descripción de una búsqueda laboral. Clasificás el CV en \
 exactamente una de estas tres categorías: relevante, dudoso, no_relevante.
+
+EL BLOQUE BUSQUEDA VIENE POR SECCIONES ROTULADAS
+Puesto, Área, Funciones, Requisitos, Formación, Experiencia y Conocimientos técnicos. Cada \
+rótulo dice qué tipo de exigencia es la que sigue, y pesan distinto: lo que está bajo Requisitos \
+es lo que la búsqueda pide, lo que está bajo Funciones es lo que la persona va a hacer. \
+**Solo aparecen las secciones que RRHH completó.** Que una falte no significa que no importe ni \
+que esté vacía como criterio: significa que no se cargó, y no debe inferirse nada de su ausencia.
 
 QUÉ ES ESTO Y QUÉ NO ES
 Esto es un FILTRO DE DESCARTE, no una decisión. No estás eligiendo a nadie, no estás puntuando \
@@ -109,13 +118,14 @@ def _limpio(texto: Optional[str], tope: int) -> str:
     return _sin_delimitadores(sanitizar(texto or "", tope)).strip()
 
 
-def armar_user(cv_texto: str, vacante_titulo: str, vacante_descripcion: Optional[str],
-               criterio) -> str:
+def armar_user(cv_texto: str, vacante, criterio) -> str:
     """El mensaje `user`: todo lo no confiable, rotulado como datos.
 
     Args:
         cv_texto: texto extraído del CV (`_cv_texto.extraer`).
-        vacante_titulo / vacante_descripcion: la búsqueda contra la que se compara.
+        vacante: la `VacanteResponse` ENTERA. 🔴 Antes esta firma tomaba `titulo` y `descripcion`
+            sueltos, y ahí se perdían los cinco campos de "Información del puesto" que RRHH sí
+            completa. El objeto ya estaba disponible un escalón más arriba. Ver `_busqueda_prompt`.
         criterio: `ScreeningCriterio` — las tres definiciones y las instrucciones opcionales,
             tal como las escribió RRHH. Se insertan como dato, ver el encabezado.
     """
@@ -131,10 +141,7 @@ def armar_user(cv_texto: str, vacante_titulo: str, vacante_descripcion: Optional
     partes += [
         "</criterio>",
         "",
-        "<busqueda>",
-        f"Puesto: {_limpio(vacante_titulo, MAX_CONFIG)}",
-        f"Descripción: {_limpio(vacante_descripcion, MAX_CONFIG) or '(sin descripción)'}",
-        "</busqueda>",
+        bloque_busqueda(vacante, _limpio).texto,
         "",
         "<cv>",
         _limpio(cv_texto, MAX_CV),

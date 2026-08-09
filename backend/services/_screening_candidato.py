@@ -63,8 +63,7 @@ def clasificar_uno(fila: dict, vacante, criterio, empresa: Optional[str],
     if fila.get("screening_warning") or not (fila.get("cv_texto") or "").strip():
         return CandidatoClasificado(**base, error=None)
     try:
-        r = clasificador.clasificar(fila["cv_texto"], vacante.titulo, vacante.descripcion,
-                                    criterio, cliente=cliente)
+        r = clasificador.clasificar(fila["cv_texto"], vacante, criterio, cliente=cliente)
     except Exception as exc:  # noqa: BLE001 — ver el docstring
         logger.error("Fallo al clasificar un CV",
                      extra={"candidato_id": base["candidato_id"], "error": str(exc)})

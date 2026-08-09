@@ -41,6 +41,82 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-09 · El clasificador lee la búsqueda entera, no solo el título · commit pendiente
+
+**Qué cambió:** el prompt del clasificador se armaba con `vacante.titulo` y `vacante.descripcion`,
+y nada más. Los **cinco campos de "Información del puesto"** —funciones, requisitos, formación,
+experiencia, conocimientos técnicos— **no llegaban al modelo**, ni el área. Ahora entran los
+SIETE, cada uno con su rótulo.
+
+🔴 **Era peor de lo que suena.** `descripcion` no tiene UI para cargarlo (la ficha lo oculta
+cuando está vacío), así que el único campo con contenido que el clasificador leía era inalcanzable
+para el usuario. En producción, la única vacante tiene los cinco campos cargados y `descripcion`
+vacío: el prompt real decía `Puesto: Analista contable / Descripción: (sin descripción)`. **El
+modelo clasificaba CVs contra un título y nada más**, mientras RRHH creía que estaba usando los
+requisitos que había escrito.
+
+### Las decisiones que quedaron escritas
+
+🔴 **Cada campo con su rótulo, no concatenado.** "Excel avanzado" pesa distinto bajo *Requisitos*
+que bajo *Conocimientos técnicos*, y "Contador Público" es otra cosa como *Formación* que como
+*Funciones*. Los rótulos son **los mismos que muestra la UI**: si el prompt dijera "Requisitos
+excluyentes" y el formulario dijera "Requisitos", el modelo estaría interpretando una exigencia
+que nadie declaró.
+
+🔴 **Los vacíos se OMITEN**, sin relleno tipo "(sin requisitos)". Y el system prompt ahora avisa
+que las secciones son variables y que **de una ausencia no se infiere nada** — sin eso, un modelo
+que ve tres de siete rótulos puede leer el hueco como una señal.
+
+🔴 **Con solo título, la corrida se saltea entera** (`VACANTE_SIN_CONTENIDO`, 422). No se
+clasifica igual: el modelo devolvería una de las tres categorías con un motivo redactado con
+seguridad, y **un veredicto convincente derivado de nada no se distingue de uno fundado**. El
+chequeo es por VACANTE y una sola vez por corrida, no por candidato: los N fallarían idénticamente,
+así cuesta cero llamadas en vez de N y deja un mensaje sobre la búsqueda en lugar de N mensajes
+sobre personas. 🚨 Va **después** de la barrera de empresa — un 422 sobre una vacante ajena
+confirmaría que existe.
+
+🔴 **Dos topes, no uno.** `MAX_CAMPO` 2.000 (para que un pegado de medio manual en *Funciones* no
+deje *Requisitos* afuera) y `MAX_BLOQUE` 6.000 (acota el costo: este texto viaja en CADA llamada
+del lote). Un truncado **se avisa dos veces**: dentro del prompt, para que el modelo no evalúe
+media frase creyendo que es la frase entera; y en la respuesta del botón, porque quien tiene que
+acortar la búsqueda es RRHH y no lee el prompt.
+
+⚠️ `descripcion` se conserva, **último y solo si tiene contenido**: es legacy y hoy no hay dónde
+escribirlo, pero queda contemplado si algún día se expone.
+
+### Por qué pasó desapercibido, y qué lo impide ahora
+
+**No había un solo test que mirara la forma del bloque `<busqueda>`** — grep de `busqueda>`,
+`Puesto:` o `sin descripción` sobre `tests/` no devolvía nada. Y los fakes de vacante de todos los
+tests se construían con `SimpleNamespace(titulo=..., descripcion=...)`: **reproducían el bug**, así
+que sacar cinco de los siete campos pasaba en verde.
+
+`tests/test_busqueda_prompt.py` (53 tests) ancla qué campos entran, con un fake
+(`tests/_vacante_fake.py`) que trae los siete con frases **distintas y reconocibles**. Al agregar
+el chequeo de contenido, **30 tests existentes se pusieron en rojo** porque sus vacantes falsas
+solo tenían título y descripción — la prueba de que el fake venía tapando el problema.
+
+**Mutación: 20 mutantes, 20 muertos.** Los siete campos sacados de `CAMPOS`, los siete
+*declarados pero no renderizados* (la versión sutil, que es la que mide si las aserciones de
+contenido muerden), más relleno en los vacíos, sin sanitizar, orden invertido, truncado sin aviso,
+sin detección de vacante vacía, y `descripcion` primero. Cada campo lo nombra su propio test.
+
+**Impacto en infraestructura:**
+
+- **Sin migraciones.** Las siete columnas ya existían y ya llegaban al schema: el corte estaba en
+  la firma de `clasificar()`, que tomaba dos strings sueltos teniendo el objeto disponible un
+  escalón más arriba.
+- **Código nuevo:** `services/_busqueda_prompt.py`. Firmas cambiadas: `clasificar()` y
+  `armar_user()` toman la `VacanteResponse` entera.
+- **Endpoint:** ninguno nuevo. `POST /api/screening/vacantes/{id}` ahora puede devolver **422
+  `VACANTE_SIN_CONTENIDO`** y su respuesta suma `busqueda_truncada: bool`.
+- **Costo por CV:** sube. Antes viajaban ~2 líneas de búsqueda, ahora hasta 6.000 caracteres
+  (~1.500 tokens) por llamada, que se pagan una vez por candidato. Es el costo de que el modelo
+  tenga contra qué comparar; el `MAX_BLOQUE` es lo que le pone techo.
+- **Variables de entorno, dependencias, buckets, auth, CORS:** sin cambios.
+
+---
+
 ## 2026-08-09 · Los tres huecos del CV screening · commit pendiente
 
 **Qué cambió:** el módulo prometía tres cosas que no cumplía. (A) La clasificación **ya se puede

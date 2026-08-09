@@ -18,6 +18,7 @@ La corrida completa del clasificador: presupuesto, CVs sin texto, errores y barr
 from types import SimpleNamespace
 
 from services.cv_screening_service import TOPE_POR_CORRIDA, CvScreeningService
+from tests._vacante_fake import vacante_completa
 from utils.errors import AppError
 
 import pytest
@@ -44,8 +45,9 @@ class _VacanteRepo:
             return None
         if empresa_id and str(empresa_id) != self.empresa:
             return None  # 🔴 HONRA el parámetro. Sin esto la barrera no se puede desmentir.
-        return SimpleNamespace(id=VAC, titulo="Contador", descripcion="Estudio",
-                               empresa_id=self.empresa)
+        # 🔴 Los SIETE campos cargados. Antes este fake devolvía solo título y descripción —
+        # o sea, reproducía el bug: el prompt leía dos campos y el fake le pasaba esos dos.
+        return vacante_completa(id=VAC, empresa_id=self.empresa)
 
 
 class _ScreeningRepo:

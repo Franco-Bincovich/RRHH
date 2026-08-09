@@ -30,7 +30,7 @@ meses. Un contador de errores en la respuesta se ve en la primera corrida.
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from integrations.anthropic_client import anthropic_client
 from services import _clasificador_prompt as prompt
@@ -54,11 +54,13 @@ class Clasificacion:
     motivo: str
 
 
-def clasificar(cv_texto: str, vacante_titulo: str, vacante_descripcion: Optional[str],
-               criterio, cliente: Any = None) -> Clasificacion:
+def clasificar(cv_texto: str, vacante, criterio, cliente: Any = None) -> Clasificacion:
     """Clasifica UN CV contra UNA búsqueda.
 
     Args:
+        vacante: la `VacanteResponse` ENTERA — los SIETE campos de la búsqueda entran al prompt.
+            Ver `_busqueda_prompt`: esta firma tomaba dos strings y por eso los otros cinco no
+            llegaban al modelo.
         cliente: cliente Anthropic. Inyectable para test — el fake tiene que registrar `system`
             y `messages` por separado, o no se puede desmentir que el CV haya viajado en el
             system prompt.
@@ -76,7 +78,7 @@ def clasificar(cv_texto: str, vacante_titulo: str, vacante_descripcion: Optional
         system=prompt.system_prompt(),
         messages=[{
             "role": "user",
-            "content": prompt.armar_user(cv_texto, vacante_titulo, vacante_descripcion, criterio),
+            "content": prompt.armar_user(cv_texto, vacante, criterio),
         }],
     )
     return _validar(_texto_de(respuesta))
