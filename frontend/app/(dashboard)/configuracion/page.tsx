@@ -7,6 +7,7 @@ import { IntegracionesSection } from "@/components/features/configuracion/Integr
 import { OAuthPopupHandler } from "@/components/features/configuracion/OAuthPopupHandler"
 import { PerfilSection } from "@/components/features/configuracion/PerfilSection"
 import { ReglasSections } from "@/components/features/configuracion/ReglasSections"
+import { ScreeningSection } from "@/components/features/configuracion/ScreeningSection"
 import { TiposAusenciaSection } from "@/components/features/configuracion/TiposAusenciaSection"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { useCanRead, useCanWrite } from "@/hooks/useCanWrite"
@@ -70,6 +71,10 @@ export default function ConfiguracionPage() {
                   se MANDAN mails, y eso es operación, no configuración. */}
               <ReglasSections editable={puedeEditarReglas} />
               <TiposAusenciaSection editable={puedeEditarReglas} />
+              {/* Mismo criterio de gate que las otras reglas: en solo lectura sin permiso de
+                  escritura. El criterio con el que se preseleccionan CVs es información que
+                  explica por qué un candidato quedó marcado como quedó. */}
+              <ScreeningSection editable={puedeEditarReglas} />
             </>
           )}
           {puedeIntegraciones && <IntegracionesSection />}

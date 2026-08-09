@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { VacanteModal } from "@/components/features/vacantes/VacanteModal"
 import { VacantesTable } from "@/components/features/vacantes/VacantesTable"
+import { RevisarCasillaButton } from "@/components/features/vacantes/RevisarCasillaButton"
+import { MailsPendientes } from "@/components/features/vacantes/MailsPendientes"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { exportarVacantes, fetchVacantes } from "@/services/vacantes"
 import { fetchEmpresas } from "@/services/empresas"
@@ -99,6 +101,9 @@ export default function VacantesPage() {
             {!loading && !error && vacantes.length > 0 && (
               <ExportMenu onExport={(f) => exportarVacantes(f, estadoFilter || undefined, empresaFiltro || undefined)} />
             )}
+            {/* Revisa la CASILLA entera, no esta pantalla: cada mail elige su vacante por el
+                código del asunto. Por eso vive en el listado y no en la ficha de una vacante. */}
+            {canWrite && <RevisarCasillaButton />}
             {canWrite && (
               <Button className="min-h-11" onClick={() => setModalOpen(true)}>
                 <Plus />
@@ -156,6 +161,9 @@ export default function VacantesPage() {
           onAbrir={(id) => router.push(`/vacantes/${id}`)}
         />
       )}
+
+      {/* Los mails que no matchearon: se releen de la casilla, no hay estado propio. */}
+      {canWrite && <MailsPendientes />}
 
       <VacanteModal
         open={modalOpen}

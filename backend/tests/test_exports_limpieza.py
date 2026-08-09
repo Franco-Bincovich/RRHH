@@ -448,7 +448,7 @@ _VACANTE_TEXTO_LARGO = "Se busca perfil con experiencia. " * 12
 
 def _vacante_row(**kw) -> VacanteResponse:
     base = dict(
-        id=str(uuid4()), empresa_id=str(uuid4()), empresa_nombre="Karstec",
+        id=str(uuid4()), codigo="VAC-0001", empresa_id=str(uuid4()), empresa_nombre="Karstec",
         titulo="Dev Backend", area_id=str(uuid4()), area_nombre="Sistemas", estado="con_candidatos",
         tipo_contrato="Tiempo indeterminado", modalidad="Híbrido", jornada="Full time",
         ubicacion="CABA", email_contacto="rrhh@karstec.com",

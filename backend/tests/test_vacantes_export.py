@@ -41,6 +41,7 @@ for _k, _v in _TEST_ENV.items():
     os.environ.setdefault(_k, _v)
 
 from datetime import date, datetime  # noqa: E402
+from itertools import count  # noqa: E402
 from types import SimpleNamespace  # noqa: E402
 from uuid import uuid4  # noqa: E402
 
@@ -59,9 +60,16 @@ EMPRESA = uuid4()
 _TEXTO_LARGO = "Se busca perfil con experiencia. " * 12
 
 
+_SEQ = count(1)
+
+
 def _vac(titulo: str, estado: str, area: str, **kw) -> VacanteResponse:
+    # El código sale de un contador, igual que la secuencia real de la base: si todas las
+    # vacantes del catálogo compartieran uno, un export que emitiera SIEMPRE el mismo valor
+    # pasaría igual y la columna nueva no probaría nada.
     base = dict(
-        id=str(uuid4()), empresa_id=str(EMPRESA), empresa_nombre="Karstec", titulo=titulo,
+        id=str(uuid4()), codigo=f"VAC-{next(_SEQ):04d}",
+        empresa_id=str(EMPRESA), empresa_nombre="Karstec", titulo=titulo,
         area_id=str(uuid4()), area_nombre=area, estado=estado,
         tipo_contrato="Tiempo indeterminado", modalidad="Híbrido", jornada="Full time",
         ubicacion="CABA", email_contacto="rrhh@karstec.com",
@@ -181,9 +189,20 @@ class TestColumnas:
 
     def test_son_las_esperadas_y_en_orden(self) -> None:
         assert list(construir_filas_export(_CATALOGO)[0]) == [
-            "Empresa", "Título", "Área", "Estado", "Tipo de contrato", "Modalidad",
+            "Código", "Empresa", "Título", "Área", "Estado", "Tipo de contrato", "Modalidad",
             "Jornada", "Ubicación", "Email de contacto", "Fecha de apertura", "Creada",
         ]
+
+    def test_cada_vacante_sale_con_su_propio_codigo(self) -> None:
+        """El código del aviso viaja al archivo, y uno por fila — no el de la primera repetido.
+
+        ¿Qué tendría que ser distinto en el fake para que falle? Que `_vac` diera el MISMO código
+        a todas: ahí un export que emitiera una constante pasaría igual. Por eso la factory usa
+        un contador, como la secuencia real de la base."""
+        filas = construir_filas_export(_CATALOGO)
+        codigos = [f["Código"] for f in filas]
+        assert codigos == [v.codigo for v in _CATALOGO]
+        assert len(set(codigos)) == len(codigos), "el export repite el mismo código en varias filas"
 
     def test_sin_uuids_crudos(self) -> None:
         for original, fila in zip(_CATALOGO, construir_filas_export(_CATALOGO)):

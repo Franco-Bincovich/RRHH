@@ -52,6 +52,14 @@ SET standard_conforming_strings = on;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ============================================================================
+-- SECUENCIAS (las que NO crea un serial/identity)
+-- ============================================================================
+
+-- Contador del codigo de vacante (VAC-0001). Va antes de las tablas porque el DEFAULT de
+-- vacantes.codigo la referencia. Migracion 097.
+CREATE SEQUENCE IF NOT EXISTS public.vacantes_codigo_seq AS BIGINT START WITH 1 INCREMENT BY 1;
+
+-- ============================================================================
 -- TABLAS
 -- ============================================================================
 
@@ -187,7 +195,24 @@ CREATE TABLE public.candidatos (
     empresa_anterior character varying(200),
     score_ia numeric(4,2),
     empresa_id uuid NOT NULL,
-    busqueda_congelada text
+    busqueda_congelada text,
+    -- Identidad del CV que entro por mail (mig 098). Nullable: los candidatos cargados a mano
+    -- no la tienen. La clave de idempotencia es el HASH del contenido y NO el attachmentId de
+    -- Gmail, que no es estable entre lecturas del mismo mensaje.
+    gmail_message_id text,
+    cv_sha256 text,
+    -- Texto plano extraido del CV y el POR QUE no se pudo (mig 099). El warning es texto y no un
+    -- flag: cada motivo pide una accion distinta (pedir la contrasena, pedirlo en otro formato).
+    cv_texto text,
+    screening_warning text,
+    -- Filtro de descarte del screening (mig 100): relevante | dudoso | no_relevante. NULL = sin
+    -- clasificar. NO es una decision: un humano revisa siempre, incluidos los no_relevante.
+    clasificacion_ia text,
+    clasificacion_motivo text,
+    -- Quien puso la clasificacion vigente: modelo | humano (mig 101). NULL = no hay
+    -- clasificacion. El veredicto ORIGINAL del modelo, cuando un humano lo pisa, queda en
+    -- datos_anteriores del evento correccion_clasificacion.
+    clasificacion_origen text
 );
 CREATE TABLE public.capacitaciones (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -619,6 +644,19 @@ CREATE TABLE public.parametros_empresa (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
+-- Criterio configurable del clasificador de CVs (mig 100). Tabla PROPIA y no columnas de
+-- parametros_empresa: el upsert de aquella desengancharia a la empresa de las reglas globales
+-- de vacaciones al guardar screening. empresa_id NULL = fila global.
+CREATE TABLE public.parametros_screening (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    empresa_id uuid,
+    def_relevante text NOT NULL,
+    def_dudoso text NOT NULL,
+    def_no_relevante text NOT NULL,
+    instrucciones text NOT NULL DEFAULT ''::text,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
 CREATE TABLE public.periodos_cerrados (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     empresa_id uuid NOT NULL,
@@ -900,7 +938,11 @@ CREATE TABLE public.vacantes (
     funciones text,
     formacion text,
     experiencia text,
-    conocimientos_tecnicos text
+    conocimientos_tecnicos text,
+    -- Token del aviso de LinkedIn ("asunto [VAC-0001]") y clave del matcher de CVs.
+    -- El DEFAULT es lo que garantiza que TODA fila nazca con código, venga del backend o de un
+    -- INSERT a mano: nextval es atómico, así que no hay condición de carrera. Ver migración 097.
+    codigo text NOT NULL DEFAULT ('VAC-'::text || lpad((nextval('vacantes_codigo_seq'::regclass))::text, 4, '0'::text))
 );
 
 
@@ -948,6 +990,7 @@ ALTER TABLE public.onboarding_progreso ADD CONSTRAINT onboarding_progreso_pkey P
 ALTER TABLE public.onboarding_tareas ADD CONSTRAINT onboarding_tareas_pkey PRIMARY KEY (id);
 ALTER TABLE public.onboarding_templates ADD CONSTRAINT onboarding_templates_pkey PRIMARY KEY (id);
 ALTER TABLE public.parametros_empresa ADD CONSTRAINT parametros_empresa_pkey PRIMARY KEY (id);
+ALTER TABLE public.parametros_screening ADD CONSTRAINT parametros_screening_pkey PRIMARY KEY (id);
 ALTER TABLE public.periodos_cerrados ADD CONSTRAINT periodos_cerrados_pkey PRIMARY KEY (id);
 ALTER TABLE public.planes_carrera ADD CONSTRAINT planes_carrera_pkey PRIMARY KEY (id);
 ALTER TABLE public.planes_carrera_hitos ADD CONSTRAINT planes_carrera_hitos_pkey PRIMARY KEY (id);
@@ -1038,7 +1081,8 @@ ALTER TABLE public.assessment_resultados ADD CONSTRAINT assessment_resultados_ti
 ALTER TABLE public.auditoria ADD CONSTRAINT auditoria_accion_check CHECK (((accion)::text = ANY ((ARRAY['INSERT'::character varying, 'UPDATE'::character varying, 'DELETE'::character varying])::text[])));
 ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_estado_check CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying, 'descartado'::character varying, 'contratado'::character varying, 'en_espera'::character varying])::text[])));
 ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_etapa_check CHECK (((etapa)::text = ANY ((ARRAY['postulado'::character varying, 'assessment'::character varying, 'entrevista_rrhh'::character varying, 'entrevista_tecnica'::character varying, 'oferta'::character varying])::text[])));
-ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_fuente_check CHECK (((fuente)::text = ANY ((ARRAY['linkedin'::character varying, 'referido'::character varying, 'web'::character varying, 'consultora'::character varying, 'espontanea'::character varying, 'otra'::character varying])::text[])));
+-- 'gmail' se sumo en la mig 098: sin el, el INSERT del candidato creado desde la casilla falla.
+ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_fuente_check CHECK ((fuente::text = ANY (ARRAY['linkedin', 'referido', 'web', 'consultora', 'espontanea', 'otra', 'gmail']::text[])));
 ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_puntuacion_check CHECK (((puntuacion >= 1) AND (puntuacion <= 10)));
 ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_score_ia_check CHECK (((score_ia >= (0)::numeric) AND (score_ia <= (10)::numeric)));
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_anio_check CHECK (((anio >= 2000) AND (anio <= 2100)));
@@ -1110,6 +1154,8 @@ ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_nivel_
 ALTER TABLE public.users ADD CONSTRAINT users_rol_check CHECK (((rol)::text = ANY ((ARRAY['admin_rrhh'::character varying, 'gerencia_lectura'::character varying, 'mandos_medios'::character varying])::text[])));
 ALTER TABLE public.vacantes ADD CONSTRAINT chk_rango_salarial CHECK (((rango_salarial_max IS NULL) OR (rango_salarial_min IS NULL) OR (rango_salarial_max >= rango_salarial_min)));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_cantidad_puestos_check CHECK ((cantidad_puestos > 0));
+-- `{4,}` y no `{4}`: lpad no trunca, la vacante 10.000 emite VAC-10000. Ver migracion 097.
+ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_codigo_formato CHECK ((codigo ~ '^VAC-[0-9]{4,}$'::text));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_estado_check CHECK (((estado)::text = ANY ((ARRAY['nueva'::character varying, 'en_proceso'::character varying, 'con_candidatos'::character varying, 'cerrada'::character varying])::text[])));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_modalidad_check CHECK (((modalidad)::text = ANY ((ARRAY['presencial'::character varying, 'remoto'::character varying, 'hibrido'::character varying])::text[])));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_nivel_check CHECK (((nivel)::text = ANY ((ARRAY['junior'::character varying, 'semi_senior'::character varying, 'senior'::character varying, 'lider'::character varying, 'manager'::character varying, 'director'::character varying, 'c_level'::character varying])::text[])));
@@ -1124,6 +1170,12 @@ ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_vac_hasta_check CHECK ((
 ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_primer_anio_mes_check CHECK (((primer_anio_mes_corte >= 1) AND (primer_anio_mes_corte <= 12)));
 ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_primer_anio_dias_check CHECK ((primer_anio_dias >= 0));
 ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_vencimiento_check CHECK ((vencimiento_anios > 0));
+ALTER TABLE public.parametros_screening ADD CONSTRAINT ps_def_relevante_check CHECK ((length(TRIM(BOTH FROM def_relevante)) > 0));
+ALTER TABLE public.parametros_screening ADD CONSTRAINT ps_def_dudoso_check CHECK ((length(TRIM(BOTH FROM def_dudoso)) > 0));
+ALTER TABLE public.parametros_screening ADD CONSTRAINT ps_def_no_relevante_check CHECK ((length(TRIM(BOTH FROM def_no_relevante)) > 0));
+ALTER TABLE public.parametros_screening ADD CONSTRAINT ps_largos_check CHECK (((length(def_relevante) <= 2000) AND (length(def_dudoso) <= 2000) AND (length(def_no_relevante) <= 2000) AND (length(instrucciones) <= 2000)));
+ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_clasificacion_ia_check CHECK ((clasificacion_ia = ANY (ARRAY['relevante'::text, 'dudoso'::text, 'no_relevante'::text])));
+ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_clasificacion_origen_check CHECK ((clasificacion_origen = ANY (ARRAY['modelo'::text, 'humano'::text])));
 ALTER TABLE public.reglas_vacaciones_escala ADD CONSTRAINT rve_antiguedad_check CHECK (((antiguedad_anios >= 0) AND (antiguedad_anios <= 60)));
 ALTER TABLE public.reglas_vacaciones_escala ADD CONSTRAINT rve_dias_check CHECK (((dias > 0) AND (dias <= 365)));
 ALTER TABLE public.adjuntos ADD CONSTRAINT adjuntos_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
@@ -1280,6 +1332,7 @@ ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_area_id_fkey FOREIGN KEY (ar
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_responsable_id_fkey FOREIGN KEY (responsable_id) REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE public.parametros_empresa ADD CONSTRAINT parametros_empresa_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
+ALTER TABLE public.parametros_screening ADD CONSTRAINT parametros_screening_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
 ALTER TABLE public.reglas_vacaciones_escala ADD CONSTRAINT reglas_vacaciones_escala_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
 ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
 
@@ -1428,6 +1481,15 @@ CREATE INDEX idx_esp_empresa ON public.empleado_superior_pendiente USING btree (
 -- solapamientos parciales, solo el duplicado exacto.
 CREATE UNIQUE INDEX uq_ausencia_empleado_rango_tipo ON public.solicitudes_ausencia USING btree (empleado_id, fecha_desde, fecha_hasta, tipo_id);
 CREATE UNIQUE INDEX uq_integracion_remitente_sistema ON public.usuario_integraciones USING btree ((es_remitente_sistema)) WHERE es_remitente_sistema;
+-- Codigo de vacante (mig 097): GLOBAL, no por empresa —la casilla que recibe los CVs es una
+-- sola—, y sobre upper() porque el lookup del matcher es case-insensitive. Si la unicidad no
+-- usara el mismo criterio que la consulta, VAC-0001 y vac-0001 coexistirian y el lookup
+-- encontraria DOS filas, que en maybe_single() es un 500.
+CREATE UNIQUE INDEX vacantes_codigo_uq ON public.vacantes USING btree (upper(codigo));
+-- Idempotencia de la ingesta de CVs (mig 098). PARCIAL: solo indexa lo que vino de Gmail, asi
+-- los candidatos manuales —que tienen los dos campos en NULL— conviven sin colisionar.
+CREATE UNIQUE INDEX candidatos_cv_gmail_uq ON public.candidatos USING btree (empresa_id, gmail_message_id, cv_sha256) WHERE ((gmail_message_id IS NOT NULL) AND (cv_sha256 IS NOT NULL));
+CREATE INDEX idx_candidatos_gmail_message ON public.candidatos USING btree (gmail_message_id) WHERE (gmail_message_id IS NOT NULL);
 CREATE UNIQUE INDEX uq_plantilla_empresa_clave ON public.plantillas_mail USING btree (empresa_id, clave) WHERE (empresa_id IS NOT NULL);
 CREATE UNIQUE INDEX uq_plantilla_global_clave ON public.plantillas_mail USING btree (clave) WHERE (empresa_id IS NULL);
 CREATE INDEX idx_mail_enviado_idempotencia ON public.mail_enviado USING btree (plantilla_clave, empleado_id, created_at DESC);
@@ -1442,6 +1504,9 @@ CREATE INDEX idx_vacantes_responsable ON public.vacantes USING btree (responsabl
 -- filas y lo que no puede repetirse es el punto de corte.
 CREATE UNIQUE INDEX ux_parametros_empresa_por_empresa ON public.parametros_empresa USING btree (empresa_id) WHERE (empresa_id IS NOT NULL);
 CREATE UNIQUE INDEX ux_parametros_empresa_global ON public.parametros_empresa USING btree (((empresa_id IS NULL))) WHERE (empresa_id IS NULL);
+CREATE UNIQUE INDEX ux_parametros_screening_por_empresa ON public.parametros_screening USING btree (empresa_id) WHERE (empresa_id IS NOT NULL);
+CREATE UNIQUE INDEX ux_parametros_screening_global ON public.parametros_screening USING btree (((empresa_id IS NULL))) WHERE (empresa_id IS NULL);
+CREATE INDEX idx_candidatos_clasificacion ON public.candidatos USING btree (clasificacion_ia) WHERE (clasificacion_ia IS NOT NULL);
 CREATE UNIQUE INDEX ux_escala_por_empresa ON public.reglas_vacaciones_escala USING btree (empresa_id, antiguedad_anios) WHERE (empresa_id IS NOT NULL);
 CREATE UNIQUE INDEX ux_escala_global ON public.reglas_vacaciones_escala USING btree (antiguedad_anios) WHERE (empresa_id IS NULL);
 CREATE UNIQUE INDEX ux_tipos_ausencia_nombre_por_empresa ON public.tipos_ausencia USING btree (empresa_id, nombre) WHERE (empresa_id IS NOT NULL);

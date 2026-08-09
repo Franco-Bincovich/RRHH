@@ -366,14 +366,32 @@ CVs entran o no según quién apretó el botón, y un proceso automático no pue
 **El CV no es un adjunto polimórfico**: es `candidatos.cv_storage_path`, bucket `cvs`, y ya existe
 todo el camino de Storage. Meterlo en `adjuntos` daría dos lugares desde donde borrar un CV.
 
-### F2.4 🖥️ Idempotencia — hoy es un bug vivo
+### F2.4 ✅ Idempotencia — RESUELTO, y distinto de como se planteó acá
 
-`crear_candidato_desde_email` no registra qué mail procesó: **llamarlo dos veces con el mismo mail
-crea dos candidatos**, ya con el botón manual. Migración **093**:
-`candidatos.gmail_message_id TEXT` + `UNIQUE (empresa_id, gmail_message_id)`. La constraint hace
-la idempotencia atómica y sirve para el `on_conflict` de PostgREST — mismo razonamiento que la 089.
-🔴 **Resolver `D5` antes de escribirla**: si es un candidato por adjunto, la clave lleva
-`attachment_id` y la constraint es otra.
+**Esta entrada describía un bug de `crear_candidato_desde_email`. Esa función ya no existe**: la
+sesión del matcher la borró junto con `get_emails_candidatos`, sus dos endpoints, `EmailsSection`
+y `EmailCandidatoRow`. No conviven dos criterios de alta desde un mail. Lo que sigue es cómo
+quedó, para que nadie implemente de nuevo lo que está abajo.
+
+**La migración salió como 098, no como 093**, y la clave es **`(empresa_id, gmail_message_id,
+cv_sha256)`**, no `(empresa_id, gmail_message_id)`. La diferencia es la respuesta a `D5`, que
+efectivamente había que resolver primero: **la unidad es el CV, no el mail**. Un mismo mensaje
+puede traer dos adjuntos y crear dos candidatos, así que una clave por mensaje habría rechazado
+el segundo CV en silencio.
+
+🔴 **Y el hash es del CONTENIDO, no el `attachmentId` de Gmail** —que era la otra opción que esta
+entrada contemplaba—: ese id **no es estable entre lecturas del mismo mensaje**, así que como
+clave de idempotencia habría dejado entrar duplicados en cada relectura de la casilla. Está
+verificado contra la documentación de Google, y escrito en el encabezado de la 098.
+
+⚠️ El índice es **PARCIAL** (`WHERE gmail_message_id IS NOT NULL AND cv_sha256 IS NOT NULL`): los
+candidatos cargados a mano no tienen ninguna de las dos columnas y no deben caer bajo la
+restricción.
+
+⚠️ **Lo que la idempotencia NO cubre, y sigue abierto:** dedupea por MENSAJE, no por persona. La
+misma persona mandando el mismo CV a la misma búsqueda en **dos mails distintos** crea dos
+candidatos — `candidatos.email` tiene índice pero no es UNIQUE. Nadie decidió todavía si eso es
+un problema.
 
 ### F2.5 🖥️ Mails sin match — visibles, nunca en silencio
 

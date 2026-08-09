@@ -10,7 +10,8 @@ from uuid import UUID
 from integrations.supabase_client import supabase_admin
 from repositories.candidato_repo import CandidatoRepo
 from repositories.vacante_repo import VacanteRepo
-from schemas.vacante import CandidatoGrupoResponse
+from schemas.vacante import CandidatoGrupoResponse, CandidatoResponse
+from services import _candidato_acciones as _acciones
 from services._candidatos_export import construir_filas_export
 from services._limite_export import verificar_limite_export
 from services.audit_service import AuditService
@@ -35,16 +36,22 @@ class CandidatoService:
         self._vacante_repo = vacante_repo or VacanteRepo()
         self._audit = audit or AuditService()
 
-    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel") -> Descarga:
+    def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel",
+                 sin_vacante: bool = False, clasificacion: Optional[str] = None) -> Descarga:
         """Exporta los candidatos por el MISMO camino que el listado (columnas legibles, sin
         UUIDs), así el archivo no puede traer filas que la pantalla no muestre. El motor
-        genérico no se toca."""
-        items = self.listar_todos_candidatos(empresa_id)
+        genérico no se toca.
+
+        🔴 `sin_vacante` viaja hasta el repo, igual que en el listado: si el filtro se aplicara
+        acá y no en el WHERE, el archivo saldría con más filas de las que se ven en pantalla."""
+        items = self.listar_todos_candidatos(empresa_id, sin_vacante, clasificacion)
         verificar_limite_export(len(items))
         datos = {"Candidatos": construir_filas_export(items)}
         return build_export(nombre="Candidatos", datos=datos, filename_base="candidatos", formato=formato)
 
-    def listar_todos_candidatos(self, empresa_id: Optional[UUID] = None) -> List[CandidatoGrupoResponse]:
+    def listar_todos_candidatos(self, empresa_id: Optional[UUID] = None,
+                                sin_vacante: bool = False,
+                                clasificacion: Optional[str] = None) -> List[CandidatoGrupoResponse]:
         """
         Lista todos los candidatos de la empresa (con y sin vacante), resolviendo el nombre
         del grupo y si la búsqueda sigue activa.
@@ -54,8 +61,12 @@ class CandidatoService:
 
         Args:
             empresa_id: filtra por empresa. None = todas (vista consolidada).
+            sin_vacante: solo los huérfanos. Se resuelve EN EL WHERE del repo, no acá.
+            clasificacion: relevante | dudoso | no_relevante | sin_clasificar. También en el
+                WHERE, y el export lo acepta igual: si viviera acá o en el cliente, el archivo
+                saldría con más filas de las que muestra la pantalla, sin error y sin aviso.
         """
-        candidatos = self._candidato_repo.find_all_candidatos(empresa_id)
+        candidatos = self._candidato_repo.find_all_candidatos(empresa_id, sin_vacante, clasificacion)
         ids_vivos = {c.vacante_id for c in candidatos if c.vacante_id}
         titulos = {
             v.id: _grupo_vivo(v.titulo, v.area_nombre)
@@ -86,28 +97,14 @@ class CandidatoService:
         )
         return res["signedURL"]
 
-    def delete_candidato(self, candidato_id: str, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> None:
-        """Elimina un candidato HUÉRFANO (sin búsqueda) y su CV del Storage. Solo huérfanos: los de
-        búsqueda viva se gestionan desde la vacante. Si el remove físico del CV falla → log y sigue
-        con el borrado de la fila. Raises CANDIDATO_NOT_FOUND (404), CANDIDATO_ACTIVO (400)."""
-        cand = self._candidato_repo.find_by_id(candidato_id, empresa_id)
-        if not cand:
-            raise AppError("Candidato no encontrado", "CANDIDATO_NOT_FOUND", 404)
-        if cand.vacante_id is not None:
-            raise AppError("No se puede eliminar un candidato de una búsqueda activa", "CANDIDATO_ACTIVO", 400)
-        if cand.cv_storage_path:  # guard: nunca remove sobre key vacía; usa la key de la DB tal cual
-            try:
-                supabase_admin.storage.from_(_CV_BUCKET).remove([cand.cv_storage_path])
-            except Exception as exc:  # storage falló: se conserva el flujo, objeto huérfano en Storage
-                logger.error("Storage remove falló (CV)", extra={"candidato_id": candidato_id, "error": str(exc)})
-        self._candidato_repo.delete(candidato_id, empresa_id)
-        # 🔴 La empresa del evento sale del CANDIDATO (leído arriba), no del header: auditar es
-        # una ACCIÓN y la empresa sale de la entidad afectada. Con el header, una baja hecha en
-        # modo consolidado (empresa_id=None) grababa el evento sin empresa aunque el candidato
-        # sí la tuviera — ya pasó una vez en producción. Ver "Vista vs Acción" en CLAUDE.md.
-        self._audit.registrar(
-            usuario_id=usuario_id, entidad="candidato", registro_id=candidato_id, accion="DELETE",
-            evento="baja_candidato", empresa_id=cand.empresa_id,
-            datos_anteriores={"nombre": f"{cand.nombre} {cand.apellido}", "email": cand.email}, datos_nuevos=None,
-        )
-        logger.info("Candidato eliminado", extra={"candidato_id": candidato_id})
+    def delete_candidato(self, candidato_id: str, empresa_id: Optional[UUID] = None,
+                         usuario_id: Optional[str] = None) -> None:
+        """Baja de un candidato huérfano. Delegado a _candidato_acciones.borrar."""
+        _acciones.borrar(self._candidato_repo, self._audit, candidato_id, empresa_id, usuario_id)
+
+    def asignar_vacante(self, candidato_id: str, vacante_id: str,
+                        empresa_id: Optional[UUID] = None,
+                        usuario_id: Optional[str] = None) -> CandidatoResponse:
+        """Asigna una vacante a un candidato huérfano. Delegado a _candidato_acciones."""
+        return _acciones.asignar_vacante(self._candidato_repo, self._vacante_repo, self._audit,
+                                         candidato_id, vacante_id, empresa_id, usuario_id)

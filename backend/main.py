@@ -43,6 +43,8 @@ from routers.candidatos import router as candidatos_router
 from routers.ausencias import router as ausencias_router
 from routers.ausencias_tipos import router as ausencias_tipos_router
 from routers.configuracion import router as configuracion_router
+from routers.screening import router as screening_router
+from routers.screening_criterio import router as screening_criterio_router
 from routers.vacaciones import router as vacaciones_router
 from routers.vacaciones_empleado import router as vacaciones_empleado_router
 from routers.vacaciones_pendientes import router as vacaciones_pendientes_router
@@ -50,6 +52,7 @@ from routers.equipo import router as equipo_router
 from routers.dashboard_equipo import router as dashboard_equipo_router
 from routers.vacantes import router as vacantes_router
 from routers.vacantes_escrituras import router as vacantes_escrituras_router
+from routers.vacantes_integraciones import router as vacantes_integraciones_router
 from routers.capacitaciones import router as capacitaciones_router
 from routers.asignaciones_capacitacion import router as asignaciones_cap_router
 from routers.ev_plantillas import router as ev_plantillas_router
@@ -135,6 +138,7 @@ app.include_router(equipo_router, prefix="/api/equipo", tags=["equipo"])
 app.include_router(dashboard_equipo_router, prefix="/api/dashboard-equipo", tags=["dashboard"])
 app.include_router(vacantes_router, prefix="/api/vacantes", tags=["vacantes"])
 app.include_router(vacantes_escrituras_router, prefix="/api/vacantes", tags=["vacantes"])  # mismo prefijo: las rutas no cambian
+app.include_router(vacantes_integraciones_router, prefix="/api/vacantes", tags=["vacantes"])  # ídem: LinkedIn y Gmail
 app.include_router(candidatos_router, prefix="/api/candidatos", tags=["candidatos"])
 app.include_router(onboarding_templates_router, prefix="/api/onboarding/templates", tags=["onboarding"])
 app.include_router(onboarding_templates_escrituras_router, prefix="/api/onboarding/templates", tags=["onboarding"])
@@ -162,6 +166,8 @@ app.include_router(importacion_nomina_router, prefix="/api/importacion", tags=["
 app.include_router(importacion_objetivos_router, prefix="/api/importacion", tags=["importacion"])
 app.include_router(integraciones_router, prefix="/api/integraciones", tags=["integraciones"])
 app.include_router(configuracion_router, prefix="/api/configuracion", tags=["configuracion"])
+app.include_router(screening_router, prefix="/api/screening", tags=["screening"])
+app.include_router(screening_criterio_router, prefix="/api/screening/criterio", tags=["screening"])
 app.include_router(capacitaciones_router, prefix="/api/capacitaciones", tags=["capacitaciones"])
 app.include_router(asignaciones_cap_router, prefix="/api/capacitaciones/asignaciones", tags=["capacitaciones"])
 app.include_router(ev_plantillas_router, prefix="/api/evaluaciones/plantillas", tags=["evaluaciones"])

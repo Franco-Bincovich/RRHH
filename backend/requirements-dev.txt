@@ -17,3 +17,14 @@ pytest-asyncio==1.4.0
 # pero se declara acá para que los tests sean autocontenidos.
 # Misma versión exacta que producción, para no testear contra otro cliente.
 httpx==0.27.2
+
+# 🔴 ruff es DEPENDENCIA DE LA SUITE, no solo una herramienta de escritorio.
+# `tests/test_nombres_definidos.py` lo invoca para barrer nombres sin definir (F821/F822/F823),
+# una clase de error que la suite sola no puede ver: un nombre libre no falla al importar, falla
+# cuando esa línea corre, y si el camino no está cubierto nadie se entera. Pasó dos veces el
+# 8/8/2026 (`_TA` en _ausencia_row, `user_id` en gmail_service).
+# Ese test FALLA si ruff no está —no se saltea—, por la misma lección que explica el bloque de
+# arriba: un skip silencioso deja la máquina sin la dependencia en verde y sin barrer nada.
+# ⚠️ NO se usa `ruff format` en este repo (ver CLAUDE.md): el código está en estilo compacto y
+# reformatearlo rompería los límites de líneas ya medidos. Acá se usa SOLO `ruff check`.
+ruff==0.16.0

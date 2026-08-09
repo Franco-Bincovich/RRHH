@@ -1,38 +1,29 @@
 """
 Repositorio de candidatos. Acceso a Supabase con supabase_admin.
-Interfaz pública: find_candidatos · find_all_candidatos · save_candidato · update_etapa_candidato
+Interfaz pública: find_candidatos · find_all_candidatos · find_by_id · save_candidato ·
+asignar_vacante · update_etapa_candidato · delete · congelar_busqueda
 Todas las operaciones reciben empresa_id opcional para filtrado multiempresa.
+
+El mapper de fila vive en `_candidato_row.py`, el write path en `_candidato_write.py` y las dos
+lecturas de la ingesta por mail en `_candidato_gmail.py` — el repo estaba en 100/100 exacto.
+Molde: `empleado_repo`.
 """
 from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories import _candidato_gmail as _g
+from repositories import _candidato_write as _w
+from repositories._candidato_row import _crow
 from schemas.vacante import CandidatoCreate, CandidatoResponse
-from utils.errors import AppError
-from utils.logger import logger
 
 _C = "candidatos"
 
 
-def _crow(r: dict) -> CandidatoResponse:
-    vid = r.get("vacante_id")
-    emp = r.get("empresa_id")
-    return CandidatoResponse(
-        id=str(r["id"]), vacante_id=str(vid) if vid else None,
-        # El `select("*")` ya la traía; el mapper la descartaba. La necesita el evento de
-        # auditoría de la baja (empresa DEL REGISTRO, no del header).
-        empresa_id=str(emp) if emp else None,
-        nombre=r["nombre"], apellido=r["apellido"], email=r["email"],
-        telefono=r.get("telefono"),
-        cargo_anterior=r.get("cargo_anterior"), empresa_anterior=r.get("empresa_anterior"),
-        etapa_pipeline=r.get("etapa", "postulado"), score_ia=r.get("score_ia"),
-        busqueda_congelada=r.get("busqueda_congelada"),
-        cv_storage_path=r.get("cv_storage_path"),
-        created_at=r["created_at"],
-    )
-
-
 class CandidatoRepo:
+
+    # ── Lecturas ──────────────────────────────────────────────────────────────
+
     def find_candidatos(self, vacante_id: str, empresa_id: Optional[UUID] = None) -> List[CandidatoResponse]:
         """Retorna candidatos de una vacante, filtrados por empresa si se provee."""
         q = supabase_admin.table(_C).select("*").eq("vacante_id", vacante_id).order("created_at")
@@ -40,12 +31,26 @@ class CandidatoRepo:
             q = q.eq("empresa_id", str(empresa_id))
         return [_crow(r) for r in (q.execute().data or [])]
 
-    def find_all_candidatos(self, empresa_id: Optional[UUID] = None) -> List[CandidatoResponse]:
-        """Retorna TODOS los candidatos de la empresa (con y sin vacante_id), más recientes primero.
-        NO filtra por vacante_id: incluye los huérfanos de búsquedas borradas."""
+    def find_all_candidatos(self, empresa_id: Optional[UUID] = None,
+                            sin_vacante: bool = False,
+                            clasificacion: Optional[str] = None) -> List[CandidatoResponse]:
+        """TODOS los candidatos de la empresa (con y sin vacante), más recientes primero.
+
+        🔴 `sin_vacante` filtra EN EL WHERE (`.is_("vacante_id", "null")`), no en Python. Es la
+        invariante del Bloque B: el export va por este mismo método, y un filtro aplicado en la
+        capa de arriba haría que el archivo saliera con más filas de las que muestra la pantalla,
+        sin error y sin aviso.
+        """
         q = supabase_admin.table(_C).select("*").order("created_at", desc=True)
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
+        if sin_vacante:
+            q = q.is_("vacante_id", "null")
+        # En el WHERE, no en Python. `sin_clasificar` es un valor; `None` = no filtres.
+        if clasificacion == "sin_clasificar":
+            q = q.is_("clasificacion_ia", "null")
+        elif clasificacion:
+            q = q.eq("clasificacion_ia", clasificacion)
         return [_crow(r) for r in (q.execute().data or [])]
 
     def find_by_id(self, candidato_id: str, empresa_id: Optional[UUID] = None) -> Optional[CandidatoResponse]:
@@ -56,40 +61,40 @@ class CandidatoRepo:
         res = q.maybe_single().execute()
         return _crow(res.data) if res and res.data else None
 
-    def save_candidato(self, vacante_id: str, data: CandidatoCreate, empresa_id: str) -> CandidatoResponse:
-        """Inserta un candidato con el empresa_id heredado de su vacante."""
-        payload = data.model_dump(exclude_none=True)
-        payload["vacante_id"] = vacante_id
-        payload["empresa_id"] = empresa_id
-        payload["etapa"] = "postulado"
-        res = supabase_admin.table(_C).insert(payload).execute()
-        if not res.data:
-            logger.error("Supabase insert vacío en candidatos")
-            raise AppError("Error al crear candidato", "DB_ERROR", 500)
-        return _crow(res.data[0])
+    def existe_cv_de_gmail(self, empresa_id: str, message_id: str, sha256: str) -> bool:
+        """Delegado a _candidato_gmail.existe_cv (idempotencia por adjunto)."""
+        return _g.existe_cv(empresa_id, message_id, sha256)
+
+    def message_ids_procesados(self, message_ids) -> set:
+        """Delegado a _candidato_gmail.message_ids_procesados (idempotencia por mensaje)."""
+        return _g.message_ids_procesados(message_ids)
+
+    # ── Escrituras (delegadas a _candidato_write) ─────────────────────────────
+
+    def save_candidato(self, vacante_id: str, data: CandidatoCreate, empresa_id: str,
+                       origen: Optional[dict] = None) -> CandidatoResponse:
+        """Alta de candidato. Delegado a _candidato_write.guardar."""
+        return _w.guardar(vacante_id, data, empresa_id, origen)
 
     def set_cv(self, candidato_id: str, cv_storage_path: str) -> None:
-        """Guarda el storage_path del CV en la fila del candidato (bucket privado 'cvs')."""
-        supabase_admin.table(_C).update({"cv_storage_path": cv_storage_path}).eq("id", candidato_id).execute()
+        """Delegado a _candidato_write.set_cv."""
+        _w.set_cv(candidato_id, cv_storage_path)
 
-    def update_etapa_candidato(self, candidato_id: str, etapa: str, empresa_id: Optional[UUID] = None) -> Optional[CandidatoResponse]:
-        """Actualiza la etapa del pipeline de un candidato."""
-        q = supabase_admin.table(_C).update({"etapa": etapa}).eq("id", candidato_id)
-        if empresa_id:
-            q = q.eq("empresa_id", str(empresa_id))
-        res = q.execute()
-        return _crow(res.data[0]) if res.data else None
+    def asignar_vacante(self, candidato_id: str, vacante_id: str,
+                        empresa_id: Optional[UUID] = None) -> Optional[CandidatoResponse]:
+        """Asigna una vacante a un candidato huérfano. Delegado a _candidato_write."""
+        return _w.asignar_vacante(candidato_id, vacante_id, empresa_id)
+
+    def update_etapa_candidato(self, candidato_id: str, etapa: str,
+                               empresa_id: Optional[UUID] = None) -> Optional[CandidatoResponse]:
+        """Delegado a _candidato_write.update_etapa."""
+        return _w.update_etapa(candidato_id, etapa, empresa_id)
 
     def delete(self, candidato_id: str, empresa_id: Optional[UUID] = None) -> None:
-        """Borra FÍSICAMENTE la fila del candidato (filtra por empresa si se provee, fail-closed)."""
-        q = supabase_admin.table(_C).delete().eq("id", candidato_id)
-        if empresa_id:
-            q = q.eq("empresa_id", str(empresa_id))
-        q.execute()
+        """Delegado a _candidato_write.borrar."""
+        _w.borrar(candidato_id, empresa_id)
 
-    def congelar_busqueda(self, vacante_id: str, texto: str, empresa_id: Optional[UUID] = None) -> None:
-        """Graba busqueda_congelada en todos los candidatos de una vacante (antes de borrarla)."""
-        q = supabase_admin.table(_C).update({"busqueda_congelada": texto}).eq("vacante_id", vacante_id)
-        if empresa_id:
-            q = q.eq("empresa_id", str(empresa_id))
-        q.execute()
+    def congelar_busqueda(self, vacante_id: str, texto: str,
+                          empresa_id: Optional[UUID] = None) -> None:
+        """Delegado a _candidato_write.congelar_busqueda."""
+        _w.congelar_busqueda(vacante_id, texto, empresa_id)

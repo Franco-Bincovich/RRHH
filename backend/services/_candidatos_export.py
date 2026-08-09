@@ -38,6 +38,15 @@ def construir_filas_export(items: List[CandidatoGrupoResponse]) -> List[dict]:
             "Empresa anterior": c.empresa_anterior,
             "Etapa": c.etapa_pipeline,
             "Score IA": c.score_ia,
+            # Las DOS columnas, no solo la etiqueta: el archivo es lo que RRHH mira fuera del
+            # sistema, y una etiqueta sin su motivo es exactamente la lectura que este módulo no
+            # quiere provocar. "Sin clasificar" explícito, no vacío: vacío se lee como error.
+            "Clasificación": c.clasificacion_ia or "Sin clasificar",
+            "Motivo": c.clasificacion_motivo,
+            # La columna que separa lo que dijo el modelo de lo que decidió una persona. Sin
+            # ella, un archivo que mezcla las dos no sirve para evaluar si el filtro funciona.
+            "Clasificado por": {"modelo": "Sistema", "humano": "Revisión manual"}.get(
+                c.clasificacion_origen or "", ""),
             "Cargado": _fecha(c.created_at),
         }
         for c in items

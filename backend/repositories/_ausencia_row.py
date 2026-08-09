@@ -15,6 +15,16 @@ from typing import List
 from integrations.supabase_client import supabase_admin
 from schemas.ausencias import AusenciaResponse
 
+# 🔴 VIVE ACÁ, NO EN `ausencias_repo`, y no se importa de allá: aquel importa ESTE módulo
+# (`from repositories._ausencia_row import _build`), así que el import de vuelta sería circular.
+# Al dividir el repo (migración 088) se mudó el uso y la constante quedó atrás en un
+# `_T, _TA = ...`: `_TA` pasó a ser un nombre libre y `_build` levantaba `NameError` con
+# cualquier lista de filas NO vacía. No falló nunca porque `solicitudes_ausencia` está en 0 en
+# producción. Bajarla acá —donde está su ÚNICO consumidor— es lo que cierra el agujero sin
+# duplicar el literal en dos módulos, que es como se vuelven a separar.
+_TA = "tipos_ausencia"
+
+
 def _q(table: str, cols: str, ids: list) -> list:
     return supabase_admin.table(table).select(cols).in_("id", ids).execute().data or []
 

@@ -6,9 +6,11 @@ from typing import List, Optional
 from uuid import UUID
 
 from repositories.candidato_repo import CandidatoRepo
+from repositories.integracion_remitente_repo import IntegracionRemitenteRepo
 from repositories.vacante_repo import VacanteRepo
-from schemas.vacante import CandidatoCreate, CandidatoResponse, VacanteCreate, VacanteResponse, VacanteUpdate
+from schemas.vacante import AvisoPostulacionResponse, CandidatoCreate, CandidatoResponse, VacanteCreate, VacanteResponse, VacanteUpdate
 from services._limite_export import verificar_limite_export
+from services._vacante_aviso import aviso as _aviso
 from services._vacante_candidatos import agregar, mover
 from services._vacantes_export import construir_filas_export
 from services._vacante_write import actualizar as _actualizar
@@ -21,12 +23,13 @@ from services.export import Descarga, build_export
 from utils.errors import AppError
 
 class VacanteService:
-    def __init__(self, repo: Optional[VacanteRepo] = None, candidato_repo: Optional[CandidatoRepo] = None, cv_service: Optional[CvService] = None, adjunto_service: Optional[AdjuntoService] = None, audit: Optional[AuditService] = None) -> None:
+    def __init__(self, repo: Optional[VacanteRepo] = None, candidato_repo: Optional[CandidatoRepo] = None, cv_service: Optional[CvService] = None, adjunto_service: Optional[AdjuntoService] = None, audit: Optional[AuditService] = None, remitente_repo: Optional[IntegracionRemitenteRepo] = None) -> None:
         self._repo = repo or VacanteRepo()
         self._candidato_repo = candidato_repo or CandidatoRepo()
         self._cv = cv_service or CvService()
         self._adjuntos = adjunto_service or AdjuntoService()
         self._audit = audit or AuditService()
+        self._remitente_repo = remitente_repo or IntegracionRemitenteRepo()
 
     def get_vacantes(self, estado: Optional[str] = None, empresa_id: Optional[UUID] = None) -> List[VacanteResponse]:
         """
@@ -77,6 +80,10 @@ class VacanteService:
                        usuario_id: Optional[str] = None) -> VacanteResponse:
         """Actualización parcial de la vacante. Ver services/_vacante_write.actualizar."""
         return _actualizar(self._repo, self._audit, id, data, empresa_id, usuario_id)
+
+    def get_aviso(self, id: UUID, empresa_id: Optional[UUID] = None) -> AvisoPostulacionResponse:
+        """Texto listo para pegar en el aviso de LinkedIn. Ver services/_vacante_aviso."""
+        return _aviso(self._repo, self._remitente_repo, id, empresa_id)
 
     def get_candidatos(self, vacante_id: UUID, empresa_id: Optional[UUID] = None) -> List[CandidatoResponse]:
         """Candidatos de una vacante por fecha. Raises VACANTE_NOT_FOUND (404) si no existe/otra empresa."""

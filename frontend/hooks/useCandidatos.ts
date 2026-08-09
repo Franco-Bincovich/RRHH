@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 
-import { getCandidatos } from "@/services/candidatos"
+import { getCandidatos, type CandidatosFiltros } from "@/services/candidatos"
 import type { CandidatoConGrupo } from "@/types/candidato"
 
 interface UseCandidatos {
@@ -13,7 +13,7 @@ interface UseCandidatos {
 }
 
 /** Fetching de la lista de candidatos con loading/error/refetch (patrón del proyecto). */
-export function useCandidatos(): UseCandidatos {
+export function useCandidatos(filtros: CandidatosFiltros = {}): UseCandidatos {
   const [candidatos, setCandidatos] = useState<CandidatoConGrupo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -22,13 +22,13 @@ export function useCandidatos(): UseCandidatos {
     setLoading(true)
     setError(false)
     try {
-      setCandidatos(await getCandidatos())
+      setCandidatos(await getCandidatos(filtros))
     } catch {
       setError(true)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [filtros.sinVacante, filtros.clasificacion])
 
   useEffect(() => {
     load()

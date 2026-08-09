@@ -41,6 +41,1011 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-09 · Los tres huecos del CV screening · commit pendiente
+
+**Qué cambió:** el módulo prometía tres cosas que no cumplía. (A) La clasificación **ya se puede
+corregir a mano**, y la corrección queda marcada como humana y auditada individualmente. (B) El
+**fallo del clasificador ahora persiste** y se distingue en pantalla de "todavía no se clasificó"
+y de "el CV no se pudo leer". (C) Se puede **abrir el CV desde la ficha de la vacante**, que es
+donde ocurre todo el flujo del screening.
+
+### Las decisiones que quedaron escritas
+
+🔴 **Cómo se registra que corrigió un humano: columna + evento, y ninguno sobra.**
+`clasificacion_origen` ('modelo'|'humano') se escribe en el MISMO update que la clasificación —
+`AuditService` se traga los errores por diseño, así que si el único marcador fuera el evento, un
+insert fallido volvería a mezclar la corrección con las del modelo sin que nadie se entere; y la
+pregunta "¿cuántos los puso el modelo?" es un filtro sobre `candidatos`, no sobre `auditoria`.
+El **evento** hace falta igual porque la corrección PISA `clasificacion_ia`: el veredicto original
+del modelo solo sobrevive en `datos_anteriores`, y sin ese par no se puede medir en qué dirección
+se equivoca el filtro.
+
+🔴 **El fallo se persiste en `clasificacion_motivo` con la clasificación en NULL, NO en
+`screening_warning`.** Aquella columna **gatea el salteo**: escribir el fallo ahí lo volvería
+permanente e irreintentable, justo al revés de lo que hace falta. Con `clasificacion_ia` en NULL,
+`find_para_clasificar` lo vuelve a tomar solo. Y significan cosas distintas: `screening_warning`
+es "el archivo no se pudo leer" (pedir otro CV) y esto es "la llamada falló" (reintentar).
+
+🔴 **Una corrección no la pisa ninguna corrida posterior**, porque `find_para_clasificar` filtra
+`clasificacion_ia IS NULL`. No es un efecto lateral afortunado: es la garantía que hace que
+corregir valga la pena, y tiene test propio.
+
+⚠️ **`CandidatoCard` perdió `cursor-pointer` y `hover:shadow-md`**: nunca tuvo `onClick`, así que
+prometía un click inexistente. Las acciones ahora son botones explícitos debajo.
+
+### Divisiones
+
+`cv_screening_service.py` 149/150 → **131** (`_screening_candidato.py`, 76) ·
+`routers/screening.py` 75/80 → **61** (`routers/screening_criterio.py`, 52; **las URLs no
+cambiaron**). Las dos con la suite verde antes de seguir.
+
+🚩 Al extraer `_uno`, la escritura salió del alcance de `test_auditoria_coherente` —que solo mira
+módulos que YA emiten eventos— y su excepción declarada se borró (el barrido lo exigió). La regla
+"un evento por lote" no cambió; lo que se perdió es que un barrido la vigile. Queda escrito en el
+encabezado de `_screening_candidato.py`.
+
+### Mutación: 8 mutantes, 3 sobrevivieron a la primera vuelta
+
+Los tres eran el mismo error: los fakes de repo implementaban `set_correccion`, `set_fallo` y
+`find_para_clasificar` a mano, así que los tests afirmaban sobre el FAKE y no sobre el repo.
+Sobrevivían: marcar la corrección como 'modelo', que el fallo cayera a 'dudoso', y sacar el
+`.is_("clasificacion_ia","null")`. Se cerró con `TestLoQueEscribeElRepoDeVerdad`, que faltea el
+cliente de Supabase y captura lo que el repo manda (molde: `TestElOrdenLoPoneLaQuery`). Los 8
+mueren.
+
+**Impacto en infraestructura:**
+
+- 🔴 **Migración 101 (`101_clasificacion_origen.sql`) — PENDIENTE.** No destructiva, idempotente.
+  Agrega `candidatos.clasificacion_origen` con CHECK ('modelo','humano') y **backfillea a
+  'modelo' las filas que ya tenían clasificación**. **Va DESPUÉS de la 100.** La cola pendiente
+  es ahora **095 → 096 → 097 → 098 → 099 → 100 → 101**, en ese orden.
+- **`db/schema.sql`** actualizado con la columna y su CHECK.
+- **Endpoint nuevo (1, con auth):** `PUT /api/screening/candidatos/{candidato_id}/clasificacion`
+  (`Seccion.CANDIDATOS + WRITE`). **Sin rate limit propio, a propósito**: no gasta tokens, y
+  limitar a un humano que revisa de a uno castigaría justo el uso que el módulo pide.
+- **Router nuevo:** `routers/screening_criterio.py`, montado en `/api/screening/criterio`. Es una
+  división del anterior: **ninguna URL cambió**.
+- **Variables de entorno, dependencias, buckets:** ninguna nueva. Auth, CORS y dominios sin cambios.
+- **Export de candidatos:** columna nueva **"Clasificado por"** (Sistema | Revisión manual).
+- **`docs/PLAN-DE-TRABAJO.md` §F2.4 reescrito:** describía `crear_candidato_desde_email` como bug
+  vivo y proponía una migración 093 con `UNIQUE (empresa_id, gmail_message_id)`. Esa función se
+  borró, la migración salió como **098** y la clave lleva además `cv_sha256` (la unidad es el CV,
+  no el mail). No se borró la entrada: dice cómo quedó.
+
+---
+
+## 2026-08-09 · Clasificador de CVs (fase 3 de 3 del screening) · commit pendiente
+
+**Qué cambió:** cada CV que entra se clasifica contra su vacante en **relevante / dudoso /
+no_relevante**, con un motivo en una frase. Es un **filtro de descarte, no una decisión**: no
+rankea, no puntúa, no elige, y un humano revisa siempre —incluidos los `no_relevante`, que la
+pantalla no oculta ni colapsa—. El criterio de las tres categorías es configurable por empresa
+desde /configuracion, con restauración a los valores generales. Se corre desde un botón propio en
+la vacante, NO desde la ingesta de mails.
+
+**Impacto en infraestructura:**
+
+- 🔴 **Migración 100 (`100_cv_screening_clasificacion.sql`) — PENDIENTE, no corrida.** No
+  destructiva e idempotente. Agrega `candidatos.clasificacion_ia` (TEXT nullable con CHECK de las
+  tres categorías) y `candidatos.clasificacion_motivo`, más un índice parcial; y crea la tabla
+  **`parametros_screening`** (criterio configurable, `empresa_id NULL` = fila global, dos índices
+  parciales, trigger `updated_at`, fila global sembrada con los defaults). **Va después de la
+  099**, que también sigue pendiente.
+- 🔴 **`db/schema.sql` estaba desactualizado y se corrigió**: le faltaban `cv_texto` y
+  `screening_warning` de la **migración 099** (la sesión anterior no lo tocó). Ahora refleja 099 y
+  100. Quien reconstruya desde cero no puede usar una copia previa a hoy.
+- 🔴 **`migracionAWS/.../077_recrear_triggers_updated_at.sql`**: se le agregó el trigger de
+  `parametros_screening`. Sin eso, la reconstrucción en RDS dejaría esa tabla con `updated_at`
+  congelado en el alta — corrupción silenciosa, que es justo lo que la 077 vino a evitar.
+- **Variables de entorno:** ninguna nueva. Usa el `ANTHROPIC_API_KEY` que ya existe.
+- **Dependencias:** ninguna nueva. Usa el `anthropic==0.34.2` ya fijado.
+- **Modelo de IA:** `claude-haiku-4-5` (alias **sin fecha**, ver la mina ya desactivada de los
+  strings con fecha). Es el segundo consumidor real de Anthropic después de `reporte_adhoc`.
+- **Endpoints nuevos (4, todos con auth):** `POST /api/screening/vacantes/{vacante_id}` ·
+  `GET|PUT /api/screening/criterio` · `POST /api/screening/criterio/restaurar`. Router propio
+  montado en `main.py` con prefijo `/api/screening`. Ninguno público.
+- ⏱️ **Rate limit propio del botón: 20/hora** (`limiter.limit`), mismo criterio y mismo número que
+  `POST /reportes/generar`: cada corrida son N llamadas a Claude y cada una cuesta plata.
+- **Serverless:** la corrida tiene **presupuesto de tiempo propio de 240 s** (`_presupuesto.py`),
+  por debajo del `maxDuration: 300` de `vercel.json`, más un **tope de 200 CVs por corrida**. Los
+  dos cortes se REPORTAN (`parcial`, `tope_alcanzado`, `sin_procesar`) y son reintentables: el
+  backend pide `clasificacion_ia IS NULL`, así que volver a apretar el botón no reclasifica ni
+  recobra nada ya hecho. **No corre en la ingesta de mails a propósito** — aquella ya usa sus
+  240 s en Gmail y Storage, y sumarle N llamadas al modelo la cortaría a la mitad.
+- **Costos:** el control es el tope por corrida + los topes de entrada/salida (20.000 caracteres
+  de CV, 300 tokens de respuesta), **no** un cupo diario por usuario. El `check_usage_limit` de
+  `SEGURIDAD-PENTEST.md` §6.2 defiende la repetición del usuario, que acá ya está cerrada por
+  idempotencia; además su `usage_repo` no existe en el repo.
+- **Buckets de Storage:** ninguno nuevo.
+- **Auth / claims / CORS / dominios:** sin cambios.
+
+---
+
+## 2026-08-09 · Extracción del texto de los CVs (fase 2 de 3 del screening) · commit pendiente
+
+**Qué cambió:** los CVs que entran ahora se leen. El texto queda en `candidatos.cv_texto` y, si no
+se pudo, el motivo en `candidatos.screening_warning`. Es la ENTRADA del clasificador (fase 3).
+
+🔴 **MIGRACIÓN 099 — NO CORRIDA.** Pendientes: 095, 096, 097, 098 y 099.
+
+### La dependencia nueva, verificada antes de fijarla
+
+`pypdf==5.1.0`: wheel **`py3-none-any`** (297 KB, 1,16 MB descomprimido), **sin binarios
+nativos** —así que `@vercel/python` no compila nada— y **cero dependencias obligatorias en 3.11+**
+(el único `Requires-Dist` sin extra es `typing_extensions`, y solo para `python<3.11`). Licencia
+**BSD**. PyMuPDF quedó descartado por AGPL.
+⚠️ Los PDF cifrados con AES necesitan `cryptography`, que **ya está** por `PyJWT[crypto]` y
+`python-jose[cryptography]` (49.0.0 instalada). No se agregó el extra `pypdf[crypto]` para no
+duplicar el pin.
+
+### Las decisiones que quedaron escritas
+
+🔴 **`screening_warning` es TEXTO, no un booleano.** Un flag obliga a abrir el archivo para saber
+qué pasó, que es el trabajo que esto viene a evitar. Los motivos no son intercambiables: "protegido
+con contraseña" → pedirle la contraseña; "formato .doc" → pedirlo en PDF; "sin texto extraíble" →
+es un escaneo, abrirlo a mano. Cada uno tiene una acción distinta.
+🔴 **Tope de 20.000 caracteres (~5.000 tokens).** Esto viaja a Claude y los tokens se pagan: un CV
+de 15 páginas pasa los 40.000 y el excedente casi nunca decide una preselección. **Se trunca, no
+se descarta**, y el truncado se avisa. Constante de módulo, no env var — subirlo es una decisión
+de costo.
+🔴 **Piso de 200 caracteres** para llamarlo legible: un escaneo devuelve basura corta (un número de
+página), no vacío, así que "hay algo" no sirve como criterio.
+⚠️ **Sin OCR y sin `.doc` viejo**, los dos a propósito: Tesseract son ~50 MB y binarios nativos;
+`.doc` pide `antiword` o `textract` para un formato que Word exporta a PDF en dos clicks.
+⚠️ **`cv_texto` NO se expone en `CandidatoResponse`**: pesa hasta 20 KB por fila y engordaría todos
+los listados sin que nadie lo mire. Solo viaja `screening_warning`.
+
+Se engancha en `_cv_alta.py`, el módulo que ya comparten la ingesta automática y la asignación
+manual — **una sola implementación**. El texto viaja en el MISMO INSERT (los bytes ya están en
+memoria), así que no hay un update posterior que pueda fallar y dejar al candidato mudo.
+
+### 🔴 DOS BUGS ENCONTRADOS Y ARREGLADOS, los dos míos de esta sesión
+
+1. **`extra={"filename": ...}` en un `logger.warning` levanta `KeyError`.** `filename` es un
+   atributo RESERVADO de `LogRecord`; pasarlo en `extra` explota **dentro del manejador de
+   errores**, o sea justo cuando algo ya salió mal. Es la misma familia que el `user_id` muerto en
+   un `logger.error` de la sesión 3B. Barrí el backend entero por AST buscando las 20 claves
+   reservadas en `extra=`: **era el único**. Corregido a `archivo`.
+2. **El warning genérico pisaba al específico.** Un PDF cifrado devuelve texto vacío, así que caía
+   en la rama de "menos de 200 caracteres" y salía como "sin texto extraíble" — perdiendo el
+   motivo justo en el caso donde más sirve. Ahora el aviso específico gana. Lo encontró el test.
+
+### Verificación
+
+**Siete mutaciones:** el archivo roto propaga → **22 rojos** · el genérico pisa al específico
+(el bug 2) → **1** · sin tope de tamaño → **1** · el docx no lee tablas → **1** · el motivo del
+`.doc` se vuelve genérico → **1** · el mapper descarta el warning → **1** · el texto no se
+persiste → **2**.
+
+🔴 **Los PDF de los tests son PDF de verdad**, generados con `reportlab` (que ya estaba) y cifrados
+con `pypdf`. Ni un mock: un doble que devolviera `"texto de prueba"` no puede desmentir si el
+parser está bien invocado, si el cifrado se detecta o si un truncado revienta.
+🔴 **El test del lote usa DOS CVs, uno bueno y uno roto.** Con uno solo, "el lote sigue" y "el lote
+se cortó" son indistinguibles — las dos implementaciones dejarían 0 o 1 candidato.
+
+**Backend 2844 passed, 0 skipped** (eran 2823; +21). Los ocho barridos: **487**. `tsc --noEmit` en
+**0**, front **523 passed, 0 skipped**. `ruff F401/F811/F821` limpio.
+✅ De paso bajaron los warnings de la suite de 5 a **3**: un docstring no-raw con `\\d` que había
+quedado en `test_cv_matcher.py`.
+⚠️ `CandidatoDetailPanel.tsx` llegó a 154/150 al sumarle el aviso → salió `CandidatoCv.tsx`; quedó
+en **145**. `_cv_texto.py` **140/150** y `_cv_pendientes.py` **135/150**: poco margen.
+
+**Impacto en infraestructura:**
+- 🔴 **Migración 099 PENDIENTE.** Dos columnas nullable, no destructiva, en transacción. Sin
+  backfill (`candidatos` está en 0). **El backend la necesita corrida antes de deployar**: sin las
+  columnas, el INSERT del candidato falla.
+- 🔴 **DEPENDENCIA NUEVA DE PRODUCCIÓN: `pypdf==5.1.0` en `requirements.txt`.** Es la primera de
+  esta rama del proyecto que va al runtime. Pura Python, sin build step; el deploy de Vercel no
+  necesita nada extra. Para AWS, lo mismo: entra en el `pip install` normal.
+- ⚠️ **Costo de CPU en la ingesta**: parsear un PDF de varias páginas son décimas de segundo por
+  archivo. Entra dentro del presupuesto de 240 s de la corrida, pero se suma al de red — si el
+  lote empieza a cortarse por tiempo, este es el segundo sospechoso después de Gmail.
+- Sin variables de entorno, buckets ni endpoints nuevos.
+
+---
+
+## 2026-08-09 · Fase 6: los CVs sin match pasan a ser utilizables · commit pendiente
+
+**Qué cambió:** un CV que no matcheó ninguna vacante ahora se puede asignar. Antes se veían los
+huérfanos y no había NINGUNA forma de asignarlos — ni endpoint, ni método de repo, ni UI.
+
+### 🔴 LA VERIFICACIÓN DE VIABILIDAD, ANTES DE IMPLEMENTAR
+
+El diseño (no persistir los pendientes, releer la casilla) dependía de poder saber qué
+`message_id` ya se procesaron **sin bajar sus adjuntos**. **Tal como estaba, NO se podía**: el
+chequeo de idempotencia (`existe_cv_de_gmail`) corre DESPUÉS de descargar, porque su clave es el
+sha256 del CONTENIDO. Releer la casilla habría re-descargado todo lo ya resuelto en cada apertura.
+
+Lo que lo vuelve viable, y por eso el diseño se sostiene: `candidatos.gmail_message_id` **ya tiene
+índice** (mig 098), así que una query batch `.in_(...)` sobre los ≤50 ids listados responde
+"¿cuáles ya se procesaron?" antes de tocar la red. Y para ESTA pantalla la granularidad por
+mensaje es **exacta**, no una aproximación: un pendiente es por construcción un mail que creó
+CERO candidatos.
+⚠️ **La ingesta automática CONSERVA su chequeo por sha**, y la diferencia importa: ahí un mail sí
+puede quedar procesado a medias (un CV creado y otro fallado), y saltearlo entero por mensaje
+perdería el segundo para siempre. Son dos métodos distintos a propósito
+(`_candidato_gmail.existe_cv` vs `message_ids_procesados`).
+
+**Efecto colateral buscado:** "cuántos adjuntos válidos trae" se cuenta con lo que el mensaje ya
+declara (`filename`, `mimeType`, `body.size` — lo mismo que mira `cv_service.validar`), así que la
+pantalla cuesta **N+1 llamadas y CERO descargas**. Los bytes recién se piden al asignar.
+
+### Las divisiones (paso propio, suite verde antes de seguir)
+
+`candidato_repo.py` estaba en **100/100 exacto**: salieron el write path a `_candidato_write.py` y
+las dos lecturas de la ingesta a `_candidato_gmail.py` → **94**. Y `_cv_ingesta_mail.py` cedió el
+alta a **`_cv_alta.py`**, que es exactamente lo que comparten los dos caminos: desde que hay
+vacante para adelante, la ingesta automática y la asignación manual no tienen una sola diferencia.
+`cv_ingesta_service` se partió además en un `cv_pendientes_service` propio — son casos de uso
+distintos (procesar sola la casilla vs mostrarle a RRHH lo que quedó afuera).
+
+### Lo nuevo
+
+**Pantalla de pendientes** (`MailsPendientes`, en el listado de vacantes): remitente, asunto,
+fecha, cuántos CVs trae y por qué no matcheó, con selector de búsqueda y botón de asignar. Un mail
+con 0 CVs válidos no se puede asignar — no crearía nada.
+**Al asignar**: mismo orden y mismo criterio que la ingesta (`_cv_alta.crear_de_un_cv`), con la
+empresa **de la vacante elegida**. Un mail con varios CVs crea varios candidatos sobre la misma
+búsqueda.
+**Filtro "sin vacante asignada"** en listado Y export, con el `.is_("vacante_id","null")` **en el
+WHERE** y el traductor único `queryCandidatos` en `services/candidatos.ts` (que no existía; molde
+`queryVacantes`). `test_paridad_list_export` pasaba TRIVIALMENTE mientras candidatos no tenía
+ningún query param — ahora tiene uno y el barrido lo verifica de verdad.
+**Asignar un candidato ya creado**: `PUT /api/candidatos/{id}/vacante`.
+🔴 **La barrera son DOS comprobaciones y las dos hacen falta**: que el candidato sea alcanzable
+desde el header, y que la vacante sea **de la empresa del CANDIDATO** — esto último no se puede
+delegar al header, porque en modo consolidado vale `None` y no restringe nada. Sin ese chequeo se
+podría mover un candidato de Karstec a una búsqueda de Dosuba.
+
+### Verificación
+
+**Siete mutaciones:** no saltear los procesados → **2 rojos** · saltear DESPUÉS de pedir el
+mensaje (mismo resultado, doble costo) → **1** · la vacante deja de validarse contra la empresa
+(en los dos caminos) → **1 + 1** · el filtro sale del WHERE → **1** · contar todos los adjuntos en
+vez de los que parecen CV → **2** · reasignar a alguien que ya tiene búsqueda → **1**.
+
+🔴 **El fake tiene un mail YA procesado y otro no.** Con uno solo, "saltea" y "trae todo" son
+indistinguibles. Y **cuenta las llamadas a Gmail**: la mutación 2 produce la misma lista con el
+doble de costo, así que sin afirmar sobre `mensajes_pedidos` pasaría desapercibida. El fake de
+candidatos trae con vacante y sin vacante — con solo huérfanos, el filtro no se puede desmentir.
+
+**Backend 2823 passed, 0 skipped** (eran 2793; +30). Los ocho barridos: **487**. `tsc --noEmit` en
+**0**. Front **523 passed, 0 skipped** (+1, explicado: el barrido `loadingSeApaga` descubrió
+`MailsPendientes.tsx` — verificado en su reporte). Rutas **226 → 229** (+3). Gate ejercitado:
+`/casilla/pendientes` es READ (pasa gerencia_lectura), las dos escrituras dan **403** para todo lo
+que no sea admin.
+⚠️ `_cv_pendientes.py` **135/150**, `routers/vacantes_integraciones.py` **77/80** y
+`CandidatoDetailPanel.tsx` **145/150**: poco margen.
+⚠️ `vacantes/page.tsx` 174 → **178**: deuda previa declarada.
+
+**Impacto en infraestructura:**
+- **Sin migraciones nuevas.** Usa las columnas y los índices de la 098, que **sigue pendiente**
+  junto con 095, 096 y 097.
+- **Endpoints nuevos (3):** `GET /api/vacantes/casilla/pendientes` (READ),
+  `POST /api/vacantes/casilla/asignar` (WRITE), `PUT /api/candidatos/{id}/vacante` (WRITE).
+- **Query param nuevo** `sin_vacante` en `GET /api/candidatos` y `/exportar`.
+- ⚠️ **La pantalla de pendientes pega a Gmail en cada apertura** (1 + N mails no procesados). No
+  baja adjuntos, pero es tráfico contra la API: si el volumen crece, el techo es la cuota de
+  Gmail, no el nuestro.
+- Sin variables de entorno, dependencias ni buckets nuevos.
+
+---
+
+## 2026-08-09 · Fase 5: el matcher y la creación del candidato con su CV · commit pendiente
+
+**Qué cambió:** el flujo entero de ingesta. Un botón lee la casilla del sistema, busca el código
+de vacante en el asunto de cada mail, baja los adjuntos válidos y crea un candidato por CV con su
+archivo en Storage.
+
+🔴 **MIGRACIÓN 098 — NO CORRIDA. La corre Franco.** Pendientes: 095, 096, 097 y 098.
+
+### La migración
+
+`candidatos.gmail_message_id` + `cv_sha256` (los dos nullable), índice único **parcial**
+`(empresa_id, gmail_message_id, cv_sha256) WHERE ... IS NOT NULL`, y `'gmail'` sumado al CHECK de
+`fuente` (sin eso el INSERT falla y el CV se pierde). No es destructiva: amplía el CHECK, no lo
+restringe.
+
+🔴 **La clave es el HASH del contenido, no el `attachmentId`.** El candidato obvio era
+`(empresa_id, gmail_message_id, attachment_id)` y **no sirve**: el `attachmentId` está scopeado a
+UNA lectura del mensaje, así que la segunda corrida traería otro valor, la constraint no chocaría
+y se crearía el duplicado. Compila, se lee razonable y no protege nada.
+⚠️ **El índice es parcial y tolera NULLs**: los candidatos cargados a mano no tienen ninguno de
+los dos campos, y en Postgres dos NULL no son iguales, así que N candidatos manuales conviven. El
+`WHERE` deja escrita la intención para que nadie lo "corrija" a `NULLS NOT DISTINCT` y rompa el
+alta manual desde el segundo candidato.
+
+### El matcher (`_gmail_matcher.py`)
+
+Permisivo en la escritura: `vac-0001`, `VAC 0001`, `VAC0001`, `[vac-0001]`, con texto alrededor.
+Quien escribe el asunto copia de un aviso desde el teléfono; exigir el formato exacto manda a
+revisión manual CVs que traen el código a la vista, y eso no falla con un error.
+🔴 **Pero se exigen 4 dígitos como mínimo, y ahí la permisividad se corta.** `VAC-12` NO se
+completa a `VAC-0012`: eso haría que un código tipeado a medias resuelva **a otra vacante real**.
+Un CV en la búsqueda equivocada no da error y no se detecta nunca.
+🔴 **Dos códigos distintos → sin match.** Elegir el primero es una decisión invisible sobre la
+carrera de alguien. El mismo código repetido NO cuenta como dos (`[VAC-0001] re: vac 0001` es uno).
+
+### El flujo
+
+`_cv_ingesta_mail.procesar_mail` copia el orden de `_vacante_candidatos.agregar`: validar → crear
+→ subir → `set_cv`, y **si Storage falla después de crear, el candidato se conserva sin CV**.
+Revertirlo perdería la postulación entera por un problema de disco.
+🔴 **Sin match NO se crea nada.** `candidatos.empresa_id` es NOT NULL y sin vacante no hay de
+dónde heredarla — el remitente es alguien de afuera. El mail queda listado como pendiente con su
+motivo (`sin_codigo`, `codigo_ambiguo`, `vacante_desconocida`, `sin_adjuntos`, `sin_cv_valido`).
+🔴 **Un evento de auditoría POR LOTE**, con `empresa_id=None` porque una corrida puede tocar
+vacantes de varias empresas. Molde: `payload_importacion_nomina`, no el de costos.
+
+### El presupuesto de tiempo (P2 del plan, ya no postergable)
+
+Se extrajo `services/_presupuesto.py` de `_lote_mails.py` y ahora lo usan los dos. Son 2+ llamadas
+a Gmail por CV y `vercel.json` corta a los 300 s sin decir cuál mitad quedó hecha; con presupuesto
+se chequea el margen antes de cada mail y se reporta `parcial` + `sin_procesar`. La idempotencia
+hace el resto: apretar de nuevo completa el lote sin duplicar.
+⚠️ **Queda una TERCERA copia sin migrar: `_nomina_lote.py`.** Mismo cálculo, otro vocabulario. Es
+el próximo caller natural; no se tocó por alcance.
+
+### 🔴 El botón nuevo REEMPLAZA al viejo — y eso borró código
+
+`get_emails_candidatos` y `crear_candidato_desde_email` (con sus 2 endpoints, `EmailsSection.tsx`,
+`EmailCandidatoRow.tsx` y `test_gmail_candidatos.py`) **se borraron**. No conviven dos criterios
+sobre la misma casilla: el viejo listaba con `format=metadata` —que ni siquiera trae los
+adjuntos— y decidía qué era una postulación con `_is_cv_email`, un filtro por palabras clave que
+descarta en silencio mails que sí traen el código. `gmail_service` quedó con lo que no dependía
+de ese caso de uso —hablar con la API— y bajó de 148 a **97**.
+⚠️ Los tests del parseo del `From` NO se fueron con él: la función sigue viva y ahora corre sobre
+TODOS los mails. Se movieron verbatim a `test_gmail_from_header.py`.
+⚠️ El botón vive en el LISTADO de vacantes, no en la ficha: la corrida es sobre la casilla entera
+y cada mail elige su búsqueda por el código. Una pasada puede tocar varias vacantes de empresas
+distintas.
+
+### Verificación
+
+**Seis mutaciones:** la clave pasa a ser el `attachmentId` → **2 rojos** · el matcher exige el
+formato canónico → **4** · acepta menos de 4 dígitos → **3** · con dos códigos elige el primero →
+**1** · un fallo de Storage tumba el alta → **1** · un evento de auditoría por mail → **1**.
+
+🔴 **El fake de Gmail devuelve un `attachmentId` DISTINTO en cada lectura con los MISMOS bytes.**
+Es lo que hace que el test de idempotencia pruebe algo: con un id estable, la implementación
+correcta y la que usa el attachmentId como clave son indistinguibles. El fake de candidatos
+modela el índice único, no solo la escritura.
+
+✅ **`test_callers_huerfanos` cerró el ciclo que quedó escrito**: las declaraciones de
+`descargar_cvs` y `find_by_codigo` decían "borrar al conectarlo" — se conectaron y se borraron.
+`codigo_unico` nació sin caller y se borró en vez de declararse.
+✅ **`vacante_repo.find_by_ids` (punto 6) pasó a tener datos con esta sesión** y se cubrió. Su
+declaración decía "urgente con la primera vacante con candidatos": el disparador se cumplió.
+
+**Rutas 226 → 226**: +2 (`/casilla/revisar`, `/aviso`) −2 (los dos viejos). Gate ejercitado sobre
+`app.routes`: **403** para gerencia_lectura, mandos_medios y sin rol.
+**Backend 2793 passed, 0 skipped** (eran 2761; +32). Los ocho barridos: **486**. `tsc --noEmit` en
+**0**, front **522 passed, 0 skipped**. `ruff F401/F811/F821` limpio sobre todo lo tocado (los 11
+hallazgos del repo son preexistentes, en archivos que esta sesión no abrió).
+⚠️ `_gmail_adjuntos.py` **148/150** y `candidato_repo.py` **100/100**: sin margen.
+⚠️ `vacantes/page.tsx` 170 → **174**: deuda previa declarada.
+
+**Impacto en infraestructura:**
+- 🔴 **Migración 098 PENDIENTE.** No destructiva, en transacción, sobre una tabla con 0 filas.
+  **El backend la necesita corrida antes de deployar**: sin `'gmail'` en el CHECK de `fuente`, la
+  primera ingesta falla al insertar.
+- **Endpoint nuevo:** `POST /api/vacantes/casilla/revisar`, autenticado, gate `VACANTES + WRITE`.
+  **Dos endpoints borrados** (`GET /{id}/emails-candidatos`, `POST /{id}/candidatos-desde-email`).
+- ⚠️ **Requisito operativo:** la ingesta EXIGE una casilla designada como remitente del sistema y
+  el scope `gmail.readonly` ya concedido. Hoy los dos están.
+- ⚠️ **Duración:** la corrida puede tardar minutos con 50 mails. El presupuesto es de 240 s contra
+  el `maxDuration: 300` de `vercel.json` — si ese techo baja, hay que bajar `PRESUPUESTO_SEGUNDOS`.
+- Sin variables de entorno, dependencias ni buckets nuevos (usa `cvs`, que ya existía).
+
+---
+
+## 2026-08-09 · Los 5 mappers sin ejercitar que sí tenían riesgo (18/22) · commit pendiente
+
+**Qué cambió:** SOLO TESTS. **Cero código de producción tocado.** Se cerraron los 5 mappers con
+riesgo real de los 9 que quedaban; los otros 4 quedan declarados con el disparador que los
+volvería urgentes.
+
+### La clasificación, con evidencia del catálogo vivo (9/8/2026)
+
+**CON DATOS HOY → urgente (cubiertos):**
+| Mapper | Tabla | Filas |
+|---|---|---|
+| `evaluacion_repo.find_resultados_por_evaluados` | `evaluacion_resultados` | **307** |
+| `audit_repo._build` | `auditoria` | **143** |
+| `proyecto_asignaciones_repo._build` | `proyecto_asignaciones` | **31** |
+
+**VAN A TENER DATOS EN EL BLOQUE I → importante (cubiertos):**
+`_vacaciones_utils.enriquecer` (`solicitudes_vacaciones` 0) · `inventario_asignaciones_repo._build`
+(`inventario_asignaciones` 0). Se cubren **antes** de que haya datos a propósito: es la situación
+exacta en la que estaba `_ausencia_row` cuando se le encontró el `NameError`. Esperar significa
+que el primer usuario que abra la pantalla es el que descubre el bug.
+
+**SIN DATOS Y FUERA DEL BLOQUE I → declarados (no cubiertos):**
+`capacitacion_repo._build` y `asignacion_repo._build` (capacitaciones, 0 filas, no entran en el
+bloque I) · `horas_repo._build` (0 filas; depende del link público de horas, E4 EN PAUSA) ·
+`vacante_repo.find_by_ids` (0 filas; 🚩 se vuelve urgente con la primera vacante con candidatos).
+
+🔴 **CORRECCIÓN DE LA SESIÓN ANTERIOR, y es la parte que más importa.**
+`evaluacion_repo.find_resultados_por_evaluados` estaba declarado como *"módulo ev_* congelado"*.
+**Es falso.** `evaluacion_repo` es el módulo NUEVO de resultados importados
+(`evaluacion_lotes`/`_evaluados`/`_resultados`), completo y en producción; el congelado es `ev_*`
+(`ev_ciclos`, `ev_plantillas`, `ev_instancias`), que son OTRAS tablas y están en 0. La confusión
+por el prefijo del módulo dejó al mapper con **más datos de todo el sistema** declarado como
+intocable. La regla quedó escrita en el barrido: **mirar la tabla que lee, no el prefijo.**
+
+### Hallazgos
+
+**Ninguno.** Los cinco mappers funcionan correctamente al ejercitarlos por primera vez. Un
+sospechoso descartado con evidencia, para que no se re-investigue: `.order("orden")` en
+`find_resultados_por_evaluados` es válido — `evaluacion_resultados` **tiene** la columna `orden`
+(NOT NULL), verificado en el catálogo.
+
+### Los tests
+
+`test_mappers_con_datos` (18) y `test_mappers_bloque_i` (13). En los dos, la respuesta a *"¿qué
+tendría que ser distinto para que no puedan fallar?"* es la misma y está escrita: **que la lista
+estuviera vacía**. Cada bloque tiene su `test_la_lista_vacia_no_prueba_nada` y el anclaje del
+early-return por AST.
+
+Lo que los fakes SÍ pueden desmentir: filas de **dos empresas**, personas distintas, y el campo
+opcional en null en cada caso —la fila legacy de auditoría con `entidad`/`evento`/`usuario`/
+`empresa` en NULL (que ejercita el fallback `entidad ← tabla`, `evento ← acción`), el empleado sin
+área en vacaciones, el ítem sin número de serie en inventario—. Todas las aserciones comparan
+contenido de SU fila, nunca el largo de la lista.
+
+🔴 **`FakeSupabase` ganó `.order()` que REGISTRA y NO ORDENA.** Un doble que ordenara dejaría
+pasar un repo que se olvidó del `.order(...)`: el test vería las filas ordenadas igual. Es el caso
+#3 de la regla del repo. El orden se afirma sobre lo que VIAJA EN LA QUERY. Molde:
+`test_historial_salarial::TestElOrdenLoPoneLaQuery`.
+
+### Verificación
+
+**Medición final instrumentando la suite: 18/22 ejercitados** (eran 13/22). Los 4 restantes son
+exactamente los declarados, todos con tabla en 0.
+
+**Backend 2761 passed, 0 skipped** (eran 2730; +31). Los ocho barridos: **485**.
+`ruff --select F821` limpio sobre `repositories/` y `services/`; `F401/F811/F821` limpio sobre los
+archivos nuevos.
+
+**Impacto en infraestructura:** **Ninguno.** Solo tests. Sin migraciones, variables de entorno,
+dependencias, buckets ni endpoints. **No se tocó una sola línea de `repositories/` ni de
+`services/`.**
+
+---
+
+## 2026-08-09 · Los cinco mappers que nunca se ejecutaron + octavo barrido · commit pendiente
+
+**Qué cambió:** SOLO TESTS. **Cero código de producción tocado.** Se ejercitaron por primera vez
+los cinco mappers que faltaban, apareció un bug real en uno de ellos, y la clase quedó cubierta
+por un barrido.
+
+### 🔴 EL HALLAZGO — `_ev_instancias_row.enrich_rows` descarta el nombre de la empresa
+
+```python
+emp_empresa_map = {e["id"]: e.get("empresa_nombre") for e in supabase_admin.table("empresas")
+                   .select("id,nombre").in_("id", ...).execute().data or []}
+```
+
+El `select` pide `id,nombre`; el dict lee **`empresa_nombre`**, una clave que la fila NO tiene. La
+query se hace, los datos vuelven, y se descartan leyendo la clave equivocada: **`empresa_nombre`
+sale `None` para TODA instancia de evaluación, siempre**. No hay error, solo una columna
+permanentemente vacía. Es la misma familia que el `_TA` de `_ausencia_row`: código que nunca corrió
+bajo test.
+
+⚠️ **NO SE ARREGLÓ, por decisión previa**: `ev_*` está congelado, con las tablas en 0 filas y los
+routers montados, y se limpia en el cutover a AWS. `test_pendiente_conocido_empresa_nombre_siempre_sale_None`
+**fija el comportamiento y documenta que es un bug**; el día que se arregle (o se borre el módulo)
+ese test tiene que ROMPERSE y moverse, no borrarse. **Los otros cuatro mappers funcionan bien.**
+
+⚠️ **Un falso positivo descartado, para que no se re-investigue:** `_proyectos_enrich.enriquecer`
+hace `float(r.get("presupuesto") or 0)` —anticipa `None`— pero pasa el `None` crudo por `**r` a un
+campo `float`. Verificado contra el catálogo vivo: `proyectos.presupuesto` es **NOT NULL DEFAULT 0**
+y 0 de 8 filas son nulas, así que esa rama no puede dispararse desde la base. No es bug y no se
+testea el caso imposible.
+
+### Los tests
+
+`test_objetivo_row` (10) · `test_proyectos_enrich` (11) · `test_ev_row_mappers` (13), más dos
+helpers compartidos: `_fake_supabase.py` (un doble que **devuelve datos** y **honra la columna del
+`in_`** — `_objetivo_row` consulta la puente por `objetivo_id`, no por `id`) y
+`_mappers_early_return.py` (detección del patrón por AST).
+
+En los tres, la respuesta a *"¿qué tendría que ser distinto para que no puedan fallar?"* es la
+misma y está escrita: **que la lista estuviera vacía**. Cada archivo tiene su
+`test_la_lista_vacia_no_prueba_nada` y su anclaje del early-return.
+⚠️ **El anclaje se hacía leyendo líneas y estaba mal**: salteaba lo que empieza con comilla, así
+que fallaba con cualquier docstring de más de una línea (dio un falso rojo en `enriquecer`). Ahora
+es por AST —el docstring es un nodo que se descarta por lo que ES— y los tres archivos previos se
+migraron a la misma primitiva.
+
+### El octavo barrido — `tests/test_mappers_ejercitados.py`
+
+🔴 **El descubrimiento por AST encontró 22 mappers con el patrón, no 8.** La clase era mucho más
+grande de lo que se había medido. El barrido los descubre solos (nunca contra una lista escrita a
+mano) y exige que cada uno esté declarado: **ejercitado** (con el módulo de test, cuyo vínculo se
+verifica) o **sin ejercitar CON su razón**. Un mapper nuevo rompe el test hasta que alguien decida.
+
+**Estado real, medido instrumentando la suite: 13/22 ejercitados, 9 no.** Esos 9 quedan declarados
+y VISIBLES —hoy eran invisibles—, ordenados por riesgo: `audit_repo._build` es el peor
+(`auditoria` tiene 133 filas en producción), seguido de capacitaciones, inventario y proyectos.
+`_vacaciones_utils.enriquecer` está en la misma situación exacta que estaba ausencias antes del bug:
+0 filas en la tabla y el cuerpo sin ejecutar nunca.
+
+🔴 **Qué NO prueba, escrito en su encabezado:** que la lista fuera no vacía. Eso es dinámico y no
+se lee del código; lo garantiza el `test_la_lista_vacia_no_prueba_nada` de cada mapper, que es el
+molde que el barrido obliga a escribir. Es el mismo proxy que acepta `test_limite_export`.
+**Por qué no se hizo dinámico**, que sería la medición real: exigiría envolver los 22 durante toda
+la sesión y afirmar al final, y entonces `pytest tests/un_archivo.py` fallaría siempre. Un barrido
+que solo sirve corriendo la suite entera se termina desactivando.
+
+### Verificación
+
+**Mutaciones del barrido:** mapper nuevo sin declarar → rojo · declaración apuntando a un mapper
+inexistente → rojo · test declarado que no menciona su mapper → rojo. Guarda de mínimo: 18.
+
+**Medición final (item 4): los 8 mappers del planteo original quedaron TODOS ejercitados con
+listas no vacías** — `_ausencia_row._build` (3), `_objetivo_row._build` (3),
+`_proyectos_enrich.enriquecer` (3), `_ev_instancias_row.enrich_rows` (2), `_ev_plantillas_row.enrich`
+(2), `_inventario_items_row._build` (4), `_evaluacion_lotes_enrich.enriquecer_lotes` (2), más
+`resultados` (que no tiene early-return y también estaba sin ejercitar).
+
+**Backend 2730 passed, 0 skipped** (eran 2691; +39). Los **ocho** barridos: **485**.
+`ruff --select F401,F811,F821` limpio sobre los seis archivos nuevos.
+
+**Impacto en infraestructura:** **Ninguno.** Solo tests: sin migraciones, variables de entorno,
+dependencias, buckets ni endpoints. Sin cambios de auth ni de CORS. **No se tocó una sola línea de
+`repositories/` ni de `services/`.**
+
+---
+
+## 2026-08-09 · `NameError` latente en el mapper de ausencias + séptimo barrido (F821) · commit pendiente
+
+**Qué cambió:** se arregló un `NameError` que iba a reventar con la primera ausencia cargada, y la
+clase entera pasó a estar cubierta por un barrido que corre con `pytest`.
+
+### El fix
+
+`repositories/_ausencia_row.py` usaba `_TA` sin definirlo ni importarlo: al dividir el repo
+(migración 088) el USO se mudó al satélite y la constante quedó atrás en un
+`_T, _TA = "solicitudes_ausencia", "tipos_ausencia"`. `_build` levantaba
+`NameError: name '_TA' is not defined` con **cualquier lista de filas no vacía**, o sea el
+listado entero de ausencias.
+
+🔴 **El import de vuelta habría sido circular** (`ausencias_repo` importa `_ausencia_row`), así
+que la constante BAJÓ al satélite, que es su único consumidor. Duplicar el literal en los dos
+módulos era la otra opción y es como se vuelven a separar. `ausencias_repo` quedó solo con `_T`.
+
+### 🔴 El hallazgo que importa: 6 de 8 mappers de lista nunca se ejercitan con filas
+
+Instrumentando la suite entera (no suponiendo), el largo máximo de lista con que se llamó a cada
+mapper de `repositories/`:
+
+| Mapper | Máximo |
+|---|---|
+| `_ausencia_row._build` | **0 — nunca con filas** |
+| `_ev_instancias_row.enrich_rows` | **0** |
+| `_ev_instancias_row.resultados` | **0** |
+| `_ev_plantillas_row.enrich` | **0** |
+| `_objetivo_row._build` | **0** |
+| `_proyectos_enrich.enriquecer` | **0** |
+| `_inventario_items_row._build` | ok (4 filas) |
+| `_evaluacion_lotes_enrich.enriquecer_lotes` | ok (2 filas) |
+
+**Todos empiezan con `if not rows: return []`, así que llamarlos con `[]` no ejecuta una sola
+línea del cuerpo.** Tienen tests y el cuerpo está sin probar. Es exactamente el escondite donde
+vivió este bug. Los cinco restantes **quedaron sin tocar** (fuera de scope): ninguno tiene hoy un
+nombre libre —el barrido nuevo lo garantiza—, pero sus cuerpos siguen sin ejercitarse. `ev_*`
+tiene las tablas vacías en producción y `objetivos`/`proyectos` no.
+
+### El séptimo barrido — `tests/test_nombres_definidos.py`
+
+Un nombre libre **no falla al importar**: falla cuando la línea corre. Si el camino no está
+cubierto, la suite entera puede estar verde con la bomba puesta. Pasó DOS veces en la sesión
+anterior y ninguna la vio ningún test: este `_TA`, y un `user_id` vivo en el `logger.error` de
+`gmail_service` después de sacar el parámetro de la firma —un `NameError` **dentro del handler de
+error**—.
+
+**Llama a ruff en vez de reimplementarlo.** Resolver scopes bien (comprensiones, closures,
+`global`/`nonlocal`, `TYPE_CHECKING`) ya está hecho y mejor; una segunda implementación tendría
+falsos positivos que alguien terminaría silenciando, y un barrido que se silencia deja de barrer.
+Lo que agrega este archivo no es la detección: es que **corra sola**, como los otros seis.
+
+🔴 **Dos guardas, las dos verificadas por mutación:**
+1. **Si ruff falta, FALLA — no se saltea.** Simulado: el mensaje dice qué instalar. Un `skip` acá
+   reproduciría el bug de los 61 tests `async def` que se salteaban en silencio según qué tuviera
+   instalado cada máquina.
+2. **Se cuenta cuántos archivos miró** (539 hoy, mínimo 400). **`ruff check ./ruta_inexistente`
+   responde "All checks passed!" y sale con 0** — comprobado. Sin el conteo, un barrido mal
+   apuntado o un `exclude` nuevo darían verde sin haber leído nada.
+
+Cubre `F821` · `F822` · `F823` — la familia "el nombre no existe cuando la línea corre". **Ninguna
+regla de estilo a propósito**: el repo NO está formateado con ruff y mezclarlo lo volvería
+inmantenible.
+
+### Verificación
+
+**Barrido F821/F822/F823 sobre los 539 archivos del backend: UN solo hallazgo, el `_TA`.** Nada
+grande escondido. `F811`, `F701` y `E999` también en cero.
+
+**Mutaciones:** `_TA` como nombre libre → **5 rojos** en `test_ausencia_row` + el barrido nuevo ·
+early-return borrado → **2 rojos** (la guarda de "lista vacía no prueba nada" deja de mentir) ·
+barrido apuntado a una ruta inexistente → **2 rojos** por el conteo mínimo · ruff ausente →
+falla con instrucciones.
+
+⚠️ **`ruff==0.16.0` se agregó a `requirements-dev.txt`**, pineado como el resto. Estaba instalado
+ad hoc solo en el venv de la Mac. **En una máquina sin él la suite ahora da rojo hasta reinstalar
+los dev requirements** — que es la intención: el rojo es la señal, el verde silencioso era el bug.
+
+**Backend 2691 passed, 0 skipped** (eran 2681; +10). Los **siete** barridos: **480**.
+
+**Impacto en infraestructura:**
+- **Dependencia de desarrollo nueva: `ruff==0.16.0` en `requirements-dev.txt`.** NO va a
+  producción (`requirements.txt` sin tocar) y no cambia el deploy. El dev que monte AWS tiene que
+  instalar los dev requirements para correr la suite.
+- Sin migraciones, variables de entorno, buckets ni endpoints. Sin cambios de auth ni de CORS.
+
+---
+
+## 2026-08-08 · La lectura de Gmail sale de la casilla del sistema + bajada de adjuntos · commit pendiente
+
+**Qué cambió:** dos cosas, "de dónde y cómo saco los bytes". **Todavía NO se crea ningún candidato
+ni se sube nada a Storage**: la sesión termina en "tengo los bytes del CV en memoria y sé de qué
+mail vienen".
+
+### A — la casilla
+
+🔴 `gmail_service` pedía el token con `access_token_valido(IntegracionRepo(), user_id)`: la cuenta
+de quien apretaba el botón. **Pasaba desapercibido por accidente**: hay UNA sola integración en la
+base y esa fila es a la vez la del usuario y la marcada `es_remitente_sistema`, así que "lee la del
+sistema" y "lee la del usuario" resolvían al mismo buzón y eran indistinguibles. Con un segundo
+usuario conectado, el mismo botón sobre la misma vacante habría devuelto listas distintas según
+quién lo apretara, **sin ningún error**. Y un proceso automático no tiene `user_id`: la
+automatización futura era imposible.
+
+La resolución se extrajo a **`services/_casilla_sistema.py`**, compartida por el envío y la
+lectura. 🔴 **El corte es por lo que se comparte, no por líneas**: si la lectura se copiaba su
+versión, el próximo arreglo del remitente quedaba hecho en un lado solo — el argumento con el que
+`_google_token` se extrajo en su momento. De paso `mailer/engine.py` bajó de 141 a **108**.
+⚠️ **Los dos métodos YA NO RECIBEN `user_id`.** Que el parámetro siguiera en la firma sería
+afirmar que la lectura depende de quién pregunta. Los dos routers dejaron de pasarlo.
+⚠️ Error propio **`GMAIL_SIN_CASILLA` (400)** con mensaje accionable (molde `MAIL_SIN_REMITENTE`);
+el envío conserva su code y su mensaje. Los mensajes difieren a propósito: nombran la consecuencia
+concreta de cada camino. El front dejó de hardcodear "conectá tu cuenta de Google" —que ya no es
+cierto— y **muestra el mensaje del backend**, que se escribe en un solo lugar.
+
+### B — bajar el adjunto
+
+Las cuatro piezas, ninguna existía: `format=full` (metadata no trae `parts[]`), recorrido
+**recursivo** de `parts[]`, `GET /messages/{id}/attachments/{id}`, y `urlsafe_b64decode` con el
+padding repuesto.
+
+**Dónde quedó cada cosa, y por qué:** el recorrido y el decode son funciones PURAS sobre el dict
+del mensaje → `_gmail_mensaje.py`. La descarga es la única que abre una conexión → satélite propio
+**`_gmail_adjuntos.py`**, que era el corte anotado desde el principio y que se crea recién ahora
+porque hasta hoy no tenía nada adentro.
+
+🔴 **El recorrido es recursivo porque anidar es lo NORMAL**: el caso típico es `multipart/mixed`
+conteniendo un `multipart/alternative` MÁS el adjunto, y cada cliente anida distinto. Un recorrido
+de un nivel funciona con el ejemplo que uno arma a mano y **falla en silencio con los mails
+reales**: no da error, simplemente no encuentra el CV.
+🔴 **Se modela el adjunto INLINE además del referenciado.** Gmail manda los chicos embebidos en
+`body.data` y solo los grandes por `attachmentId`. Ir siempre a `/attachments` daría 404 y un CV
+de pocos KB se perdería sin rastro.
+🔴 **Cada adjunto se valida en su propio `try`** (B5): `validar` levanta 400/413, pensados para un
+upload HTTP donde abortar es correcto. En un lote no lo es — un `.png` de firma haría fallar la
+revisión entera. Lo que no pasa va a `descartados` CON su motivo.
+🔴 **"Traía adjuntos y ninguno servía" es un estado propio** (B6): `sin_cv_util` lo separa de "no
+adjuntó nada". Los dos tienen `cvs == []` y piden respuestas distintas.
+⚠️ La firma de imagen se descarta **por extensión antes de bajarla**, reusando el criterio de
+`cv_service` (importado, no duplicado): ahorra una llamada a Gmail por logo, y en un lote de 20
+mails eso es la diferencia con el rate limit.
+
+### Verificación
+
+**Seis mutaciones, cada una restaurando el archivo:** recorrido no recursivo → **14 rojos** ·
+`b64decode` estándar → **1** (el test del alfabeto url; el del padding no lo ve, y es correcto que
+sean dos tests distintos) · leer la casilla del usuario → **8** · sin captura por adjunto → **2** ·
+ignorar el inline → **2** · bajar todo incluida la firma → **1**.
+
+🔴 **El fake de la casilla tiene DOS integraciones con tokens distintos** (`get_remitente` →
+TOKEN_SISTEMA, `get_by_user_and_tipo` → TOKEN_USUARIO). Con una sola, "lee la del sistema" y "lee
+la del usuario" son indistinguibles — que es exactamente por qué el bug sobrevivió meses. Hay un
+test punta a punta que mira el `Authorization` real que sale hacia la API.
+🔴 **Los árboles MIME del fake son ANIDADOS**, incluidos `mixed>alternative`, tres niveles, uno con
+firma además del CV y uno con adjuntos y ningún CV válido. Con un solo árbol plano, un recorrido no
+recursivo pasa todos los tests.
+
+✅ **`test_callers_huerfanos` detectó `descargar_cvs` en el bucket peligroso** (la suite lo
+ejercita, producción no lo alcanza). **Se declaró con razón y con la instrucción de borrar la
+declaración al conectarlo** — la sesión termina ahí a propósito: mezclarla con la creación del
+candidato habría dado un camino de escritura sin tests del recorrido MIME.
+
+**Backend 2681 passed, 0 skipped** (eran 2651; +30). Los seis barridos: **477**. `tsc --noEmit` en
+**0**, front **522 passed, 0 skipped**. `test_mailer_punto_unico` verde (se tocó `engine.py`).
+⚠️ `EmailsSection.tsx` quedó en **150/150 exacto** y `_gmail_adjuntos.py` en **148/150**.
+
+🔴 **`ruff --select F821` encontró un `NameError` latente que la suite no ve**: al sacar `user_id`
+quedó una referencia en el `logger.error` de `get_emails_candidatos` — o sea, un fallo DENTRO del
+handler de error. Corregido. **El barrido de imports huérfanos por AST no lo veía: cubre imports,
+no nombres libres.** Vale como regla: las dos herramientas cubren cosas distintas.
+
+⚠️ **BUG PREEXISTENTE ENCONTRADO Y NO ARREGLADO (fuera de scope):**
+`repositories/_ausencia_row.py:31` usa `_TA`, que **no está definido ni importado en ese módulo**
+(vive en `ausencias_repo.py`). Verificado empíricamente: `_build` levanta
+`NameError: name '_TA' is not defined` con cualquier lista de filas no vacía. **No falla hoy porque
+`solicitudes_ausencia` tiene 0 filas en producción; va a fallar con la primera ausencia cargada**,
+y se lleva puesto el listado entero. Es un `import` de una línea. Quedó sin tocar por la regla de
+no modificar archivos fuera del scope — **decidilo vos**.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets ni endpoints nuevos — las 227 rutas son las mismas. Sin cambios de auth ni de CORS.
+⚠️ **Sí cambia un requisito operativo:** la lectura de postulaciones ahora EXIGE que haya una
+casilla designada como remitente del sistema. Hoy la hay (`franbincovich@gmail.com`); si se
+desconecta, la revisión de mails deja de funcionar con `GMAIL_SIN_CASILLA` en vez de caer a la
+cuenta del usuario. Es la intención.
+
+---
+
+## 2026-08-08 · Código de vacante (VAC-0001) y texto listo para el aviso · commit pendiente
+
+**Qué cambió:** cada vacante tiene ahora un código propio, y la ficha muestra la frase completa
+para pegar en LinkedIn. Cierra las fases 2 y 3 del flujo de CV screening.
+
+🔴 **MIGRACIÓN 097 — NO CORRIDA. La corre Franco.** Es la única pendiente junto con la 095 y la
+096 (esas dos tampoco están en producción, verificado contra el catálogo).
+
+### El contador: secuencia de Postgres en un DEFAULT
+
+Las tres opciones y por qué gana esta:
+1. **El service lee el máximo y suma uno** — descartada: es una condición de carrera de manual.
+   Dos altas simultáneas leen el mismo máximo y emiten el mismo código. Con una sola persona
+   cargando casi nunca se ve; con dos, aparece y es irreproducible.
+2. **Trigger BEFORE INSERT** — igual de atómico, pero agrega PL/pgSQL para lo que un DEFAULT
+   resuelve en una línea, y este repo ya dropeó sus triggers de negocio en la 058.
+3. **Secuencia + DEFAULT** ✅ — `nextval` es atómico y nunca repite, sin locks. No hay ventana
+   entre leer y escribir porque no hay lectura.
+
+Y el motivo que decide aparte de la concurrencia: **con el DEFAULT en la base, toda fila nace con
+código venga de donde venga** —backend, INSERT a mano, import futuro—. Si lo pusiera la app,
+cualquier alta que no pasara por ella dejaría una vacante muda que nunca podría recibir un CV.
+
+⚠️ **La secuencia deja huecos y está bien**: un INSERT fallido consume el número igual. El código
+es un identificador, no un conteo; cerrar los huecos costaría exactamente la carrera que se evita.
+⚠️ **El CHECK es `[0-9]{4,}` y no `{4}`**: `lpad` no trunca, así que la vacante 10.000 emite
+`VAC-10000`. Con `{4}` exacto el CHECK la rechazaría y el alta fallaría sin explicación.
+🔴 **El UNIQUE va sobre `upper(codigo)` y es GLOBAL, no por empresa.** Global porque la casilla que
+recibe los CVs es UNA para todo el sistema: con un código por empresa, DOSUBA y KARSTEC emiten el
+mismo `VAC-0001` y el matcher no puede desempatar —el remitente es alguien de afuera, no aporta
+empresa—. Sobre `upper()` porque el lookup es case-insensitive: con un UNIQUE sensible,
+`VAC-0001` y `vac-0001` coexistirían y el lookup encontraría DOS filas, que en `maybe_single()`
+es un 500, no un 404. **La unicidad tiene que definirse con el mismo criterio con el que se
+consulta.**
+
+**Backfill escrito aunque producción tenga 0 vacantes**: el orden add-nullable → backfill → NOT
+NULL es el que sobrevive si esto corre sobre una base con datos (un entorno de prueba, un backup
+restaurado). Sin backfill, el `SET NOT NULL` falla y la migración queda a medias.
+
+### Lo demás
+
+`VacanteResponse.codigo: str` **obligatorio y ausente de `VacanteCreate`/`VacanteUpdate`**: RRHH no
+lo elige ni lo edita, y si la app pudiera mandarlo le ganaría al DEFAULT. `find_by_codigo` en el
+repo (`ilike`, case-insensitive, **sin `empresa_id`** por lo de arriba) — es el lookup del matcher.
+Columna "Código" primera en el export.
+
+**El texto del aviso lo arma el BACKEND** (`services/_vacante_aviso.py`, endpoint
+`GET /api/vacantes/{id}/aviso`, gate `VACANTES + READ`): es la instrucción que va a leer un
+candidato, y de que se escriba igual todas las veces depende que el código matchee. Si la armara
+el front —o peor, si RRHH la tipeara— cada aviso saldría con una variante ("ref VAC 0001", "poner
+el código en el asunto"), el mail entraría igual, el código no matchearía y el CV terminaría en
+"sin asignar" sin que nada falle visiblemente. Los corchetes son parte del token, no decoración.
+⚠️ **Sin casilla del sistema designada, `texto` sale en `null` y la pantalla dice qué falta
+configurar.** Un aviso que diga "Enviá tu CV a None" se publica y nadie se entera hasta que no
+llega ni un CV. El código se muestra igual: no depende de ninguna integración.
+
+**Front:** `CodigoPostulacion.tsx` (115) en la ficha, arriba de la publicación. Dos botones de
+copiar — el grande copia **la frase entera**, el chico solo el código. `page.tsx` +4 líneas.
+
+### Verificación
+
+**Seis mutaciones, cada una restaurando el archivo** (`__pycache__` borrado entre cada una):
+schema sin `codigo` obligatorio → **2 rojos** · lookup con `eq` en vez de `ilike` → **4** · export
+sin la columna → **2** · la frase sin corchetes → **1** · UNIQUE por empresa → **1** · la app
+mandando el código en el INSERT → **2** (uno de ellos por el índice único del propio fake).
+
+🔴 **El fake de Supabase modela la secuencia Y el índice único, y hay un test que fuerza la
+colisión a propósito** (`test_un_codigo_repetido_lo_rechaza_la_base`). Sin él, un fake permisivo
+se vería idéntico a uno estricto y todo el archivo estaría afirmando sobre algo que no puede
+fallar. El test del código llegando al front corre contra el **mapper real** (`_vrow`), no contra
+un fake del service — es la lección de las tres veces que el select traía la columna y el schema
+la descartaba en silencio.
+
+✅ **`test_callers_huerfanos` detectó los dos cabos sueltos** y los dos se resolvieron distinto:
+`/aviso` se conectó al front (era el plan), y `find_by_codigo` **se DECLARÓ con razón y con la
+instrucción de borrar la declaración al construir el matcher** — la columna y su UNIQUE se crean
+primero a propósito, porque las vacantes que RRHH cree mientras tanto tienen que nacer con código.
+
+**Backend 2651 passed, 0 skipped** (eran 2621; +30). Los seis barridos: **477**. Rutas **226 →
+227** (solo `/aviso`), gate ejercitado sobre `app.routes`: PASA admin y gerencia_lectura, **403**
+mandos_medios y sin rol. Front **522 passed, 0 skipped** (sin cambios) y `tsc --noEmit` en **0**.
+Imports huérfanos por AST + `ruff --select F401,F811,F821`: cero.
+⚠️ `vacante_repo.py` quedó en **100/100 exacto** — el próximo cambio ahí exige dividir primero.
+⚠️ `[id]/page.tsx` 434 → **438**: sigue siendo deuda previa declarada, su corte es tanda propia.
+**No se corrió `ruff format` ni `prettier`.**
+
+**Impacto en infraestructura:**
+- 🔴 **Migración 097 PENDIENTE** (`vacantes.codigo`). Crea la secuencia `vacantes_codigo_seq`,
+  la columna NOT NULL con DEFAULT, el índice `vacantes_codigo_uq` sobre `upper(codigo)` y el CHECK
+  de formato. **NO es destructiva.** Corre en una transacción. Con 0 vacantes no puede fallar.
+  **El backend la necesita corrida antes de deployar**: `VacanteResponse.codigo` es obligatorio,
+  así que sin la columna el listado de vacantes revienta al mapear.
+- **`db/schema.sql` actualizado** (secuencia + columna + CHECK + índice), que es la fuente de
+  reconstrucción.
+- **Endpoint nuevo**: `GET /api/vacantes/{id}/aviso`. Autenticado, gate `VACANTES + READ`. No es
+  público.
+- **AWS/RDS**: es Postgres estándar (secuencia + DEFAULT + índice funcional), sin nada propio de
+  Supabase. La secuencia queda `OWNED BY` la columna, así que un DROP TABLE se la lleva.
+- Sin variables de entorno, dependencias ni buckets nuevos. Sin cambios de auth ni de CORS.
+
+---
+
+## 2026-08-08 · Cinco divisiones para hacerle lugar al CV screening (refactor puro) · commit pendiente
+
+**Qué cambió:** cero funcionalidad. Cinco archivos sin margen se partieron porque ninguna línea
+del CV screening entraba. **La suite quedó en 2621 después de cada una de las cinco**, y las 226
+rutas de `app.routes` son idénticas a las del baseline en path, método, gate, query y status.
+
+| Origen | Antes | Ahora | Satélite nuevo | |
+|---|---|---|---|---|
+| `services/gmail_service.py` | 145/150 | **131** | `_gmail_mensaje.py` (53) | |
+| `repositories/vacante_repo.py` | 98/100 | **87** | `_vacante_row.py` (38) | |
+| `repositories/candidato_repo.py` | 95/100 | **80** | `_candidato_row.py` (40) | |
+| `routers/vacantes_escrituras.py` | 79/80 | **67** | `vacantes_integraciones.py` (50) | |
+| `app/(dashboard)/vacantes/[id]/page.tsx` | 577 | **434** | `EmailsSection.tsx` (149) + `EmailCandidatoRow.tsx` (48) | |
+
+🔴 **`_gmail_adjuntos.py` NO se creó, y es la desviación que hay que leer.** El corte anotado era
+llevarse *"el recorrido MIME, la descarga del adjunto y el decode base64url"*. **Ese código no
+existe**: `gmail_service` pide los mensajes con `format=metadata`, que ni siquiera trae
+`payload.parts[]`, así que no había una sola línea de esas tres cosas para mover y el satélite
+habría nacido vacío. Se cortó por el criterio que sí divide el archivo hoy —**la red**—:
+`_gmail_mensaje.py` se lleva lo que se sabe de un mensaje sin volver a hablar con Gmail
+(`_parse_from_header`, `_is_cv_email`), y `gmail_service` queda con las dos conversaciones HTTP y
+el caso de uso. **Es el mismo lugar donde aterrizan dos de las tres piezas pendientes**: recorrer
+`parts[]` y el decode base64url son funciones puras sobre el dict del mensaje. La única que no es
+la llamada a `/attachments/{id}`, y si algún día pesa, **ESA** justifica un `_gmail_adjuntos.py`.
+
+**El corte del router salió por la costura que su propio docstring ya describía**, no por conteo:
+`publicar_linkedin` y `candidato_desde_email` son las únicas escrituras del módulo que **no pasan
+por `VacanteService`** —llaman directo a Zernio y Gmail, que resuelven la vacante y su empresa por
+su cuenta— y es donde crece el CV screening.
+🔴 **Verificado ANTES de moverlos que ninguno de los dos está en `limiter._route_limits`**, ni
+bajo su clave vieja ni bajo la nueva. La clave es `routers.<módulo>.<función>`: mudar de archivo
+un endpoint decorado le resetea el contador en silencio. Los únicos decorados del módulo son
+`exportar_vacantes` y `exportar_candidatos`, y **no se tocaron**.
+
+⚠️ **`EmailsSection` necesitó un segundo corte y no estaba previsto:** movida verbatim quedaba en
+**165/150**. Salió la card a `EmailCandidatoRow.tsx`, que es el corte presentacional que el repo
+ya usa en `CandidatoGrupo`/`CandidatoRow` y `HistorialImportaciones`/`HistorialTable` — el
+orquestador tiene el estado, la fila dibuja. El JSX se movió verbatim; lo único nuevo son los
+props que antes eran variables del closure. **`EmailsSection` quedó en 149/150: sin margen. El
+próximo agregado ahí exige dividir de nuevo.**
+
+⚠️ **`page.tsx` sigue en 434, muy por encima de 150.** Es deuda previa declarada: su corte es una
+tanda propia (molde `components/features/sucesion/`, 855 → 85). Lo que esta sesión saca es
+exactamente el bloque donde iba a crecer el CV screening.
+
+**Verificación.** Imports huérfanos por AST, archivo por archivo (cada nombre importado contra los
+`Name`/`Attribute` del cuerpo que queda), con `ruff --select F401,F811,F821` como segunda opinión:
+**cero** en los 9 archivos backend. Rutas por introspección de `app.routes`: **226 → 226**, sin una
+sola diferencia de gate, query, status ni nombre; los 2 únicos endpoints que cambiaron de módulo
+son los dos sin decorador.
+🔴 **El gate se EJERCITÓ, no se leyó:** se invocó el callable real que cuelga de `app.routes`
+(filtrando por `_verificar`) con cuatro roles. Los 16 endpoints del módulo dan la matriz esperada
+— los dos movidos responden **403 FORBIDDEN** para `gerencia_lectura`, `mandos_medios` y sin rol,
+idéntico al resto de las escrituras, y las lecturas siguen pasando para `gerencia_lectura`.
+✅ **`test_selects_repos` sigue RESOLVIENDO el embed de vacantes a través del import nuevo** (no
+solo pasando): se verificó que devuelve `tabla=vacantes, spec=*, areas!vacantes_area_id_fkey(...)`
+en las 3 queries. El barrido ya seguía `ImportFrom` — el precedente es `_empleado_row`.
+✅ **`test_contrato_repos` (el barrido nuevo) aguantó su primera división real**: sigue viendo
+**320 llamadas en 55 archivos, 216 pares (clase, método)** — los mismos números que antes de
+partir nada. `test_callers_huerfanos` verde.
+
+**Backend 2621 passed, 0 skipped** (sin cambios). Los seis barridos estructurales: **465 passed**.
+`tsc --noEmit` en **0**.
+⚠️ **Front 522 passed (eran 521), y el +1 está explicado y verificado**: `loadingSeApaga.test.ts`
+descubre archivos por barrido, y `EmailsSection.tsx` pasó a ser un archivo propio con su
+`setLoading(true)` — se confirmó que aparece como caso nuevo en el reporte del test. Es el barrido
+cubriendo automáticamente al componente nuevo, que es para lo que existe.
+⚠️ Los 2 hallazgos de eslint en los archivos tocados son **preexistentes y viajaron con su código**
+(`no-unescaped-entities` por las comillas de `"Revisar emails"`, que estaban en `page.tsx`; y el
+`set-state-in-effect` de `page.tsx`, que dispara **105 veces** repo-wide). Baseline del front sin
+cambios: 138 problemas. **No se corrió `ruff format` ni `prettier`.**
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets ni endpoints nuevos — las 226 rutas son las mismas. Sin cambios de auth ni de CORS.
+El único archivo de arranque tocado es `main.py`, que suma un `include_router` sobre el prefijo
+`/api/vacantes` que ya existía.
+
+---
+
+## 2026-08-08 · El alta de candidato desde Gmail le pedía el método al repo equivocado · commit pendiente
+
+**Qué cambió:** `services/gmail_service.py` llamaba a `self._vacante_repo.save_candidato(...)`.
+Ese método **no existe en `VacanteRepo`**: vive en `CandidatoRepo` y lleva **tres** argumentos
+`(vacante_id, data, empresa_id)`. La llamada quedaba fuera del try/except, así que el endpoint
+`POST /api/vacantes/{id}/candidatos-desde-email` moría con `AttributeError` → handler global →
+**500**. El botón "Agregar como candidato" de `/vacantes/[id]` **estuvo roto en producción desde
+que los dos repos se separaron**.
+
+🔴 **Nadie lo notó porque `crear_candidato_desde_email` era el ÚNICO método del módulo sin un solo
+test.** El resto está cubierto por 8 archivos (`test_vacante_auditoria`, `test_vacantes_export`,
+`test_google_token`, `test_assessment_vacantes_scope`…). El punto ciego era quirúrgico: el
+barrido de empresa ejercita `get_emails_candidatos`, nunca su hermano de escritura.
+
+**El fix:** `GmailService` instancia además `CandidatoRepo`, y el alta se le pide a él con la
+firma real. **La empresa sale de la VACANTE, no del header** — `candidatos.empresa_id` es NOT
+NULL y en modo consolidado el header vale `None`: heredarlo haría fallar el insert justo en la
+vista más usada. Es Vista vs Acción, misma fuente que el hermano `_vacante_candidatos.agregar`.
+Para eso `find_by_id` ahora retiene la fila en vez de evaluarse como bool.
+
+🔴 **El alta NO se metió dentro del try/except, y está escrito por qué.** Ese bloque traduce
+cualquier excepción a `GMAIL_ERROR` 502 ("Error al obtener el email de Gmail"): un fallo del
+INSERT reportado ahí mandaría a revisar la integración de Google por un problema de base. Es el
+mismo error de diagnóstico que `_google_token` documenta como su bug 2. El repo ya trae su propio
+contrato (`DB_ERROR` 500 si el insert vuelve vacío), así que ensanchar el try no agregaría un
+error del sistema: lo reemplazaría por uno que miente.
+
+**Barrido nuevo — `tests/test_contrato_repos.py` (el sexto estructural).** Verifica por AST que
+**todo `self.<attr>.<metodo>()` de un service exista en la clase que el `__init__` ata a ese
+atributo**. Mapea atributo → clase leyendo el `__init__` (molde: `_barrido_auditoria`). Cubre
+**320 llamadas en 55 archivos, 216 pares (clase, método) distintos**, con guarda de mínimo. Cierra
+la CLASE de bug, no la instancia: es un fallo de división de archivos —el import resuelve, el
+atributo existe, y Python solo se entera al ejecutar esa línea— y volvería a producirse con el
+próximo corte de un repo. **Confirmado de paso que no había ninguna otra llamada rota en todo el
+backend.**
+
+⚠️ **Lo que el barrido NO cubre, declarado en su encabezado:** los colaboradores que llegan por
+parámetro (`def crear(repo, audit, ...)`, el molde de los satélites `_*_write.py`) y los atributos
+que el `__init__` no ata a un constructor. Ahí el tipo lo elige el caller; afirmar contra una
+clase concreta sería inventar un contrato que el código no declara. **Es una red sobre el patrón
+que produjo el bug, no una red completa.** Tampoco verifica aridad — eso lo cubre el fake.
+
+**Tests nuevos — `tests/test_gmail_candidatos.py` (17).** Alta con los datos parseados · la
+empresa sale de la vacante y no del header · barrera de empresa (vacante ajena no crea nada) ·
+ajena indistinguible de inexistente · consolidado no restringe · 8 casos del header `From`
+parametrizados.
+🔴 **El fake de `CandidatoRepo` tiene la firma EXACTA de tres posicionales, sin `**kwargs`**: uno
+permisivo habría aceptado la llamada rota y estos tests estarían verdes con el bug puesto. Un test
+propio compara la firma del doble contra la del repo real con `inspect.signature`, así el doble no
+se despega. Y `save_candidato` construye la respuesta **a partir de lo que recibe**.
+⚠️ Un test fija como **pendiente conocido** que los headers RFC 2047 (`=?UTF-8?Q?Jos=C3=A9?=`)
+llegan sin decodificar: documenta el agujero, no lo arregla. Cuando se decodifique, ese test tiene
+que romperse y **moverse**, no borrarse.
+
+**Verificación por mutación (4, cada una restaurando el archivo):** repo equivocado —el bug
+original— **6 rojos** (4 unit + 2 del barrido, las dos capas lo atrapan por separado) · repo
+correcto con aridad vieja **4 rojos** (solo el fake; el barrido mira existencia, no aridad) ·
+empresa del header **2 rojos** · barrera desactivada **2 rojos**. `__pycache__` borrado entre cada
+una (la mina documentada en CLAUDE.md).
+
+**Verificación.** Backend **2621 passed, 0 skipped, 0 failed** (eran 2601; +20). Los seis barridos
+estructurales verdes (**465**). `gmail_service.py` **145/150** — 5 líneas de margen, el próximo
+cambio ahí exige dividir primero. `ruff check` sobre los tres archivos solo devuelve los códigos
+ambientales del repo (`UP006`/`UP035`/`UP045`/`E402`), idénticos a los del molde
+`_barrido_auditoria.py`; **no se corrió `ruff format`**.
+
+⚠️ **Lo que este fix NO hace, a propósito (queda anotado, no resuelto):** el alta desde mail
+**sigue sin emitir evento de auditoría** —el hermano manual emite `alta_candidato`— y **sigue sin
+guardar el `gmail_message_id`**, así que llamarla dos veces con el mismo mail crea dos candidatos.
+Las dos son del CV screening (bloque E), no de este bug. Tampoco se tocó el orden de los gates:
+`access_token_valido` corre antes de la barrera de empresa, lo cual **no filtra nada** (su error
+es del usuario, no del recurso) pero va contra la regla de "la barrera primero".
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets ni endpoints nuevos — el endpoint ya estaba publicado, solo que devolvía 500. Sin cambios
+de auth ni de CORS.
+
+---
+
 ## 2026-08-08 · La pantalla del import de objetivos: el cable conectado (E2-11) · commit pendiente
 
 **Qué cambió:** solo frontend. Los dos endpoints del import de objetivos —que existían, estaban

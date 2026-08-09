@@ -1,18 +1,43 @@
 import { apiFetch, API_BASE, ApiError, authHeaders, descargarArchivo, type FormatoExport } from "@/services/api"
-import type { CandidatoConGrupo } from "@/types/candidato"
+import type { CandidatoConGrupo, FiltroClasificacion } from "@/types/candidato"
 
-/** Lista todos los candidatos de la empresa activa (con y sin vacante), con su grupo resuelto. */
-export function getCandidatos(): Promise<CandidatoConGrupo[]> {
-  return apiFetch<CandidatoConGrupo[]>("/api/candidatos")
+export interface CandidatosFiltros {
+  /** Solo los huérfanos: los que entraron sin matchear ninguna búsqueda. */
+  sinVacante?: boolean
+  /** Corte por resultado del screening. `undefined` = todos, sin filtrar. */
+  clasificacion?: FiltroClasificacion
 }
 
 /**
- * Exporta los candidatos. El listado no tiene filtros propios —la empresa viaja por el header
- * `X-Empresa-Id` que pone `apiFetch`, igual que en `getCandidatos`—, así que las dos puntas
- * traen el mismo conjunto por construcción: no hay query params que puedan divergir.
+ * Traducción filtros → query params. FUENTE ÚNICA del listado y del export.
+ *
+ * 🔴 Que los dos pasen por acá es lo que hace estructuralmente imposible que un filtro quede en
+ * una sola de las dos puntas. El bug clásico es sumar un filtro al listado y que el archivo salga
+ * con MÁS filas de las que se ven, sin error y sin aviso. Molde: `queryVacantes`.
  */
-export function exportarCandidatos(formato: FormatoExport): Promise<void> {
-  return descargarArchivo("/api/candidatos/exportar", formato, "candidatos")
+function queryCandidatos(f: CandidatosFiltros): Record<string, string | undefined> {
+  return { sin_vacante: f.sinVacante ? "true" : undefined, clasificacion: f.clasificacion }
+}
+
+/** Lista los candidatos de la empresa activa, con su grupo resuelto. */
+export function getCandidatos(filtros: CandidatosFiltros = {}): Promise<CandidatoConGrupo[]> {
+  const params = new URLSearchParams()
+  for (const [k, v] of Object.entries(queryCandidatos(filtros))) if (v) params.set(k, v)
+  const query = params.toString() ? `?${params}` : ""
+  return apiFetch<CandidatoConGrupo[]>(`/api/candidatos${query}`)
+}
+
+/** Exporta con los MISMOS filtros que muestra la pantalla, por el mismo traductor. */
+export function exportarCandidatos(formato: FormatoExport, filtros: CandidatosFiltros = {}): Promise<void> {
+  return descargarArchivo("/api/candidatos/exportar", formato, "candidatos", undefined,
+                          queryCandidatos(filtros))
+}
+
+/** Asigna una vacante a un candidato huérfano. La vacante tiene que ser de SU empresa. */
+export function asignarVacanteACandidato(id: string, vacanteId: string): Promise<CandidatoConGrupo> {
+  return apiFetch<CandidatoConGrupo>(`/api/candidatos/${id}/vacante`, {
+    method: "PUT", body: JSON.stringify({ vacante_id: vacanteId }),
+  })
 }
 
 /** Devuelve una signed URL temporal para abrir el CV del candidato (bucket privado). */

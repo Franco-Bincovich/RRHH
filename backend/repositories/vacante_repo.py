@@ -2,30 +2,19 @@
 Repositorio de vacantes. Acceso a Supabase con supabase_admin.
 Interfaz: find_all · find_by_id · save · update · update_estado · save_linkedin_data
 Todas las operaciones de lectura/escritura reciben empresa_id opcional (multiempresa).
+
+El SELECT con joins (`_JOIN`) y el mapper (`_vrow`) viven en `repositories/_vacante_row.py`.
 """
 from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._vacante_row import _JOIN, _vrow
 from schemas.vacante import VacanteCreate, VacanteResponse, VacanteUpdate
 from utils.errors import AppError
 from utils.logger import logger
 
 _V = "vacantes"
-_JOIN = "*, areas!vacantes_area_id_fkey(nombre), empresas(nombre)"
-
-
-def _vrow(r: dict) -> VacanteResponse:
-    # requisitos es TEXT plano (migración 070); fluye tal cual, sin parseo de array.
-    area = r.get("areas")
-    empresa = r.get("empresas")
-    data = {k: v for k, v in r.items() if k not in ("areas", "empresas")}
-    data["area_id"] = str(data["area_id"])
-    data["area_nombre"] = area["nombre"] if isinstance(area, dict) else None
-    if data.get("empresa_id"):
-        data["empresa_id"] = str(data["empresa_id"])
-    data["empresa_nombre"] = empresa["nombre"] if isinstance(empresa, dict) else None
-    return VacanteResponse.model_validate(data)
 
 
 class VacanteRepo:
@@ -52,6 +41,19 @@ class VacanteRepo:
             q = q.eq("empresa_id", str(empresa_id))
         res = q.maybe_single().execute()
         return _vrow(res.data) if res.data else None
+
+    def find_by_codigo(self, codigo: str) -> Optional[VacanteResponse]:
+        """Busca vacante por su código (`VAC-0001`). CASE-INSENSITIVE. None si no existe.
+
+        `ilike` y no `eq`: el código llega del ASUNTO DE UN MAIL escrito por un candidato, así
+        que `[vac-0001]` tiene que resolver igual que `[VAC-0001]`. Con `eq` ese fallo no da
+        error — manda el CV a "sin asignar" sin motivo visible. Sin comodines es igualdad exacta
+        (el CHECK de formato solo admite `VAC-` + dígitos, así que `%`/`_` no pueden aparecer).
+        🔴 NO RECIBE `empresa_id`, Y NO ES UN OLVIDO: el código es ÚNICO EN TODO EL SISTEMA
+        (mig 097): la casilla es una sola y quien manda el mail no aporta empresa. La empresa se
+        DERIVA de la vacante encontrada — Vista vs Acción."""
+        res = supabase_admin.table(_V).select(_JOIN).ilike("codigo", codigo).maybe_single().execute()
+        return _vrow(res.data) if res and res.data else None
 
     def save(self, data: VacanteCreate) -> VacanteResponse:
         """Inserta una vacante con estado='nueva' y devuelve el registro con joins."""

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Briefcase, ExternalLink, Mail, Plus, RefreshCw, Share2 } from "lucide-react"
+import { ArrowLeft, Briefcase, ExternalLink, Plus, Share2 } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { EmptyState } from "@/components/ui/EmptyState"
@@ -13,8 +13,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { CandidatoAccionesPipeline } from "@/components/features/screening/CandidatoAccionesPipeline"
 import { CandidatoCard } from "@/components/features/vacantes/CandidatoCard"
 import { CandidatoModal } from "@/components/features/vacantes/CandidatoModal"
+import { CodigoPostulacion } from "@/components/features/vacantes/CodigoPostulacion"
+import { ClasificarCvsButton } from "@/components/features/screening/ClasificarCvsButton"
 import { EliminarVacanteButton } from "@/components/features/vacantes/EliminarVacanteButton"
 import { InformacionPuestoSection } from "@/components/features/vacantes/InformacionPuestoSection"
 import { PublicacionSection } from "@/components/features/vacantes/PublicacionSection"
@@ -22,14 +25,12 @@ import { VacanteImagenes } from "@/components/features/vacantes/VacanteImagenes"
 import { ApiError, getSession } from "@/services/api"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import {
-  crearCandidatoDesdeEmail,
   fetchCandidatos,
-  fetchEmailsCandidatos,
   fetchVacante,
   moverCandidato,
   publicarLinkedin,
 } from "@/services/vacantes"
-import type { Candidato, EmailCandidato, EstadoVacante, EtapaPipeline, Vacante } from "@/types/vacantes"
+import type { Candidato, EstadoVacante, EtapaPipeline, Vacante } from "@/types/vacantes"
 
 const ETAPAS: EtapaPipeline[] = [
   "postulado",
@@ -203,148 +204,6 @@ function LinkedinModal({ open, vacanteId, defaultEmail, onClose, onSuccess }: Li
   )
 }
 
-// ── Sección de emails recibidos ───────────────────────────────────────────────
-
-interface EmailsSectionProps {
-  vacanteId: string
-  canWrite: boolean
-  onCandidatoAgregado: () => void
-}
-
-function EmailsSection({ vacanteId, canWrite, onCandidatoAgregado }: EmailsSectionProps) {
-  const router = useRouter()
-  const [emails, setEmails] = useState<EmailCandidato[]>([])
-  const [loading, setLoading] = useState(false)
-  const [cargado, setCargado] = useState(false)
-  const [notConfigured, setNotConfigured] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [agregando, setAgregando] = useState<string | null>(null)
-
-  const cargarEmails = async () => {
-    setLoading(true)
-    setNotConfigured(false)
-    setError(null)
-    try {
-      const data = await fetchEmailsCandidatos(vacanteId)
-      setEmails(data)
-      setCargado(true)
-    } catch (err) {
-      if (err instanceof ApiError && err.code === "GMAIL_NOT_CONFIGURED") {
-        setNotConfigured(true)
-        setCargado(true)
-      } else {
-        setError(err instanceof Error ? err.message : "Error al cargar emails")
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleAgregar = async (emailId: string) => {
-    setAgregando(emailId)
-    try {
-      await crearCandidatoDesdeEmail(vacanteId, emailId)
-      onCandidatoAgregado()
-      setEmails((prev) => prev.filter((e) => e.email_id !== emailId))
-    } catch {
-      // stay in current state
-    } finally {
-      setAgregando(null)
-    }
-  }
-
-  return (
-    <div className="mt-8">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-base font-semibold text-foreground">Emails recibidos</h2>
-        <Button
-          variant="outline"
-          size="sm"
-          className="min-h-10 gap-2"
-          onClick={cargarEmails}
-          disabled={loading}
-        >
-          <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-          {cargado ? "Actualizar" : "Revisar emails"}
-        </Button>
-      </div>
-
-      {!cargado && !loading && (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center">
-          <Mail className="mx-auto mb-3 size-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Hacé click en "Revisar emails" para ver postulaciones recibidas en Gmail.
-          </p>
-        </div>
-      )}
-
-      {loading && (
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
-          ))}
-        </div>
-      )}
-
-      {cargado && !loading && notConfigured && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-          Gmail no está conectado.{" "}
-          <button
-            className="font-medium underline underline-offset-2"
-            onClick={() => router.push("/configuracion")}
-          >
-            Ir a Configuración
-          </button>{" "}
-          para conectar tu cuenta de Google.
-        </div>
-      )}
-
-      {cargado && !loading && !notConfigured && error && (
-        <p className="text-sm text-destructive">{error}</p>
-      )}
-
-      {cargado && !loading && !notConfigured && !error && emails.length === 0 && (
-        <div className="rounded-xl border bg-card p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            No hay emails relacionados con esta vacante.
-          </p>
-        </div>
-      )}
-
-      {cargado && !loading && !notConfigured && !error && emails.length > 0 && (
-        <div className="space-y-2">
-          {emails.map((email) => (
-            <div
-              key={email.email_id}
-              className="flex items-start justify-between gap-4 rounded-lg border bg-card p-4"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{email.remitente}</p>
-                <p className="truncate text-sm text-muted-foreground">{email.asunto}</p>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                  {email.cuerpo_preview}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">{email.fecha}</p>
-              </div>
-              {canWrite && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 min-h-10"
-                  disabled={agregando === email.email_id}
-                  onClick={() => handleAgregar(email.email_id)}
-                >
-                  {agregando === email.email_id ? "Agregando…" : "Agregar como candidato"}
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function VacanteDetailPage() {
@@ -485,11 +344,20 @@ export default function VacanteDetailPage() {
             )}
           </div>
 
+          {/* Va ARRIBA de la publicación: es lo que hay que copiar ANTES de escribir el aviso. */}
+          <CodigoPostulacion vacanteId={id} />
+
           <InformacionPuestoSection vacante={vacante} canWrite={canWrite} onSaved={setVacante} />
 
           <PublicacionSection vacante={vacante} canWrite={canWrite} onSaved={setVacante} />
 
           <VacanteImagenes vacanteId={id} />
+
+          {/* Va pegado al pipeline porque lo que cambia son los candidatos de abajo, y
+              separado del botón de revisar la casilla porque son DOS corridas distintas: aquella
+              trae CVs (Gmail + Storage), esta los clasifica (N llamadas al modelo). Juntarlas
+              cortaría la primera por presupuesto. `onListo` refresca la lista. */}
+          {canWrite && <ClasificarCvsButton vacanteId={id} onListo={load} />}
 
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-semibold text-foreground">Pipeline de selección</h2>
@@ -525,7 +393,14 @@ export default function VacanteDetailPage() {
                             cargoAnterior={buildCargoLabel(c)}
                             fechaAplicacion={formatFecha(c.created_at)}
                             etapa={c.etapa_pipeline}
+                            clasificacion={c.clasificacion_ia}
+                            motivo={c.clasificacion_motivo}
+                            origen={c.clasificacion_origen}
+                            sinTexto={Boolean(c.screening_warning)}
+                            fallo={!c.clasificacion_ia && Boolean(c.clasificacion_motivo)}
                           />
+                          {/* Ver CV + corregir la clasificación SIN salir de esta pantalla. */}
+                          <CandidatoAccionesPipeline candidato={c} onCambio={load} />
                           {canWrite && siguienteEtapa && (
                             <Button
                               variant="ghost"
@@ -551,7 +426,6 @@ export default function VacanteDetailPage() {
             </div>
           </div>
 
-          <EmailsSection vacanteId={id} canWrite={canWrite} onCandidatoAgregado={load} />
 
           <CandidatoModal
             open={modalOpen}

@@ -7,9 +7,13 @@ Barrera de empresa en assessment (2) y en las integraciones externas de vacantes
                 ASSESSMENT_ENABLED) y usa assessment_campanas_repo / assessment_resultados_repo,
                 que están vivos. El legacy sin callers era repositories/assessment_repo.py, que
                 se BORRÓ el 2/8/2026 — apagado por flag no es lo mismo que muerto.
-  · vacantes    publicar-linkedin, emails-candidatos y candidatos-desde-email delegaban en
-                Zernio/Gmail con el id de vacante crudo. Es la fuga con peor consecuencia del
-                lote: el dato sale del sistema hacia un tercero.
+  · vacantes    publicar-linkedin delegaba en Zernio con el id de vacante crudo. Es la fuga con
+                peor consecuencia del lote: el dato sale del sistema hacia un tercero.
+                ⚠️ Los otros dos endpoints que cubría este archivo —emails-candidatos y
+                candidatos-desde-email— SE BORRARON el 9/8/2026: los reemplaza
+                `POST /casilla/revisar`, que NO recibe id de vacante (cada mail elige la suya por
+                el código del asunto), así que no tiene barrera por recurso que verificar. Sus
+                tests se fueron con ellos en vez de quedar apuntando al vacío.
 
 Zernio/Gmail instancian sus repos en __init__ sin inyección, así que acá se monkeypatchea la
 clase VacanteRepo en cada módulo. El fake HONRA empresa_id.
@@ -32,7 +36,6 @@ from uuid import UUID, uuid4
 
 import pytest
 
-import services.gmail_service as gmail_mod
 import services.zernio_service as zernio_mod
 from services.assessment_service import AssessmentService
 from utils.errors import AppError
@@ -143,48 +146,17 @@ class _IntegracionRepo:
 
 @pytest.fixture
 def _patch_repos(monkeypatch):
-    for mod in (zernio_mod, gmail_mod):
-        monkeypatch.setattr(mod, "VacanteRepo", _VacanteRepo)
-        monkeypatch.setattr(mod, "IntegracionRepo", _IntegracionRepo)
+    monkeypatch.setattr(zernio_mod, "VacanteRepo", _VacanteRepo)
+    monkeypatch.setattr(zernio_mod, "IntegracionRepo", _IntegracionRepo)
 
 
 def _zernio(vac_id, empresa=EMPRESA_A):
     return zernio_mod.ZernioService().publicar_en_vacante(str(vac_id), "a@b.com", "u1", empresa)
 
 
-def _emails(vac_id, empresa=EMPRESA_A):
-    return gmail_mod.GmailService().get_emails_candidatos(str(vac_id), "u1", empresa)
 
-
-@pytest.mark.parametrize("llamar,code", [(_zernio, "ZERNIO_NOT_CONFIGURED"),
-                                         (_emails, "VACANTE_NOT_FOUND")],
-                         ids=["publicar_linkedin", "emails_candidatos"])
-def test_vacante_ajena_no_llega_a_la_integracion(_patch_repos, llamar, code):
-    """Con vacante ajena ninguna de las dos alcanza a Zernio/Gmail. publicar_linkedin corta antes
-    por falta de API key (su orden original); emails_candidatos corta por el gate nuevo."""
-    err = _error(lambda: llamar(AJENO))
-    assert err.status_code in (400, 404) and err.code == code
-
-
-def test_emails_candidatos_vacante_ajena_es_404(_patch_repos):
-    err = _error(lambda: _emails(AJENO))
-    assert err.code == "VACANTE_NOT_FOUND" and err.status_code == 404
-
-
-def test_emails_candidatos_ajena_indistinguible_de_inexistente(_patch_repos):
-    ajeno = _error(lambda: _emails(AJENO))
-    inexistente = _error(lambda: _emails(INEXISTENTE))
-    assert (ajeno.code, ajeno.message, ajeno.status_code) == \
-           (inexistente.code, inexistente.message, inexistente.status_code)
-
-
-def test_emails_candidatos_vacante_propia_pasa_el_gate(_patch_repos):
-    """Con la vacante propia el gate deja pasar y el flujo avanza hasta Gmail, que sin
-    credenciales corta con GMAIL_NOT_CONFIGURED — o sea: la barrera no lo frenó."""
-    err = _error(lambda: _emails(PROPIO))
-    assert err.code != "VACANTE_NOT_FOUND"
-
-
-def test_emails_candidatos_consolidado_no_restringe(_patch_repos):
-    err = _error(lambda: _emails(AJENO, empresa=None))
-    assert err.code != "VACANTE_NOT_FOUND"
+def test_vacante_ajena_no_llega_a_la_integracion(_patch_repos):
+    """Con vacante ajena, publicar_linkedin no alcanza a Zernio: corta antes por falta de API key
+    (su orden original), o sea que el dato nunca sale hacia el tercero."""
+    err = _error(lambda: _zernio(AJENO))
+    assert err.status_code in (400, 404) and err.code == "ZERNIO_NOT_CONFIGURED"

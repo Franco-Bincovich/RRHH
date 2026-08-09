@@ -1,6 +1,7 @@
 import { Mail } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { ClasificacionBadge } from "@/components/features/candidatos/ClasificacionBadge"
 import type { EtapaPipeline } from "@/types/vacantes"
 import type { CandidatoConGrupo } from "@/types/candidato"
 
@@ -38,7 +39,15 @@ export function CandidatoRow({ candidato, onSelect }: Props) {
           <p className="truncate text-xs text-muted-foreground">{candidato.cargo_anterior}</p>
         )}
       </div>
-      <Badge variant="secondary">{ETAPA_LABELS[candidato.etapa_pipeline] ?? candidato.etapa_pipeline}</Badge>
+      <div className="flex shrink-0 items-center gap-2">
+        {/* Solo se muestra si ya se clasificó: un "Sin clasificar" en cada fila de una empresa
+            que todavía no usa el screening sería ruido en todas las filas. En la ficha sí
+            aparece siempre, porque ahí la pregunta "¿se corrió?" es pertinente. */}
+        {candidato.clasificacion_ia && (
+          <ClasificacionBadge clasificacion={candidato.clasificacion_ia} />
+        )}
+        <Badge variant="secondary">{ETAPA_LABELS[candidato.etapa_pipeline] ?? candidato.etapa_pipeline}</Badge>
+      </div>
     </div>
   )
 }

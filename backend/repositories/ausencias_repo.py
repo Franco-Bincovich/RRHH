@@ -10,7 +10,9 @@ from schemas.ausencias import AusenciaResponse
 from utils.errors import AppError
 from utils.logger import logger
 
-_T, _TA = "solicitudes_ausencia", "tipos_ausencia"
+# `_TA` (tipos_ausencia) se fue a `_ausencia_row.py`, que es su único consumidor. Acá quedaba
+# como nombre suelto desde la división de la migración 088.
+_T = "solicitudes_ausencia"
 
 
 class AusenciasRepo:

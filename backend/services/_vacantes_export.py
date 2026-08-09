@@ -47,6 +47,10 @@ def construir_filas_export(items: List[VacanteResponse]) -> List[dict]:
     """Proyecta las vacantes a columnas legibles (sin UUIDs crudos)."""
     return [
         {
+            # Primera columna a propósito: es el token que RRHH pega en el aviso y con el que
+            # después identifica de qué búsqueda le está hablando un candidato. En una planilla
+            # de varias vacantes es la columna por la que se busca, no un dato de relleno.
+            "Código": v.codigo,
             "Empresa": v.empresa_nombre,
             "Título": v.titulo,
             "Área": v.area_nombre,

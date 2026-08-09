@@ -1,122 +1,115 @@
-"""Servicio de recepción de emails de candidatos via Gmail API.
+"""Conversación HTTP con la API de mensajes de Gmail. No sabe de vacantes ni de candidatos.
 
-El access_token (y su refresh) vive en `services/_google_token.py`: lo comparte con el envío de
-mails, y una segunda copia divergiría. Este archivo queda solo con el caso de uso de
-reclutamiento.
+🔴 LEE DE LA CASILLA DEL SISTEMA, NO DE LA DEL USUARIO QUE APRETÓ EL BOTÓN.
+
+Hasta el 8/8/2026 el token salía de `access_token_valido(IntegracionRepo(), user_id)`, o sea la
+cuenta de Google de quien disparaba la acción. Pasaba desapercibido porque hay UNA sola
+integración en la base y esa fila es a la vez la del usuario y la marcada `es_remitente_sistema`.
+Con un segundo usuario conectado, el mismo botón habría devuelto listas distintas según quién lo
+apretara, sin ningún error. Y un proceso automático no tiene `user_id`: la automatización era
+imposible. El porqué completo está en `services/_casilla_sistema.py`.
+
+## 🔴 QUÉ SE FUE DE ACÁ, Y POR QUÉ NO VOLVIÓ COMO "MODO VIEJO"
+
+Este archivo tenía dos métodos de caso de uso —`get_emails_candidatos` (listar mails que
+"parecían" postulaciones) y `crear_candidato_desde_email` (alta de a uno, a mano)— que la
+ingesta por código REEMPLAZA. No conviven: el botón viejo listaba con `format=metadata` (que ni
+siquiera trae los adjuntos) y decidía qué era una postulación con `_is_cv_email`, un filtro por
+palabras clave que **descarta en silencio mails que sí traen el código**. Dejar los dos habría
+significado dos criterios distintos sobre la misma casilla.
+
+Lo que queda acá es lo que no dependía de ese caso de uso: hablar con la API. La orquestación
+vive en `services/cv_ingesta_service.py`, el recorrido MIME y el decode en `_gmail_mensaje.py`,
+y la descarga del adjunto en `_gmail_adjuntos.py`.
 """
+from contextlib import contextmanager
+from typing import List
+
 import httpx
 
-from repositories.integracion_repo import IntegracionRepo
-from repositories.vacante_repo import VacanteRepo
-from schemas.vacante import CandidatoCreate, CandidatoResponse, EmailCandidatoResponse
-from services._google_token import access_token_valido
+from repositories.integracion_remitente_repo import IntegracionRemitenteRepo
+from services._casilla_sistema import token_de_lectura
 from utils.errors import AppError
 from utils.logger import logger
 
 _GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
-_CV_KEYWORDS = ("cv", "curriculum", "postulacion", "candidatura", "postulación")
 
-
-def _parse_from_header(from_header: str) -> tuple[str, str, str]:
-    """Extrae (email, nombre, apellido) del header From de un email."""
-    if "<" in from_header and ">" in from_header:
-        name_part = from_header[: from_header.index("<")].strip().strip('"')
-        email_part = from_header[from_header.index("<") + 1 : from_header.index(">")].strip()
-    else:
-        name_part = ""
-        email_part = from_header.strip()
-    parts = name_part.split(maxsplit=1)
-    nombre = parts[0] if parts else email_part.split("@")[0]
-    apellido = parts[1] if len(parts) > 1 else ""
-    return email_part, nombre, apellido
-
-
-def _is_cv_email(subject: str, snippet: str) -> bool:
-    """Retorna True si el email parece una postulación por palabras clave."""
-    return any(kw in f"{subject} {snippet}".lower() for kw in _CV_KEYWORDS)
+# 🔴 El filtro lo hace GMAIL, no nosotros. `has:attachment` descarta del lado del servidor todo
+# lo que no puede traer un CV —notificaciones, respuestas, spam— así que los 50 que vuelven son
+# 50 candidatos reales a procesar y no 50 mails de los cuales sobreviven 3. Es lo contrario del
+# `_is_cv_email` que se sacó: aquel filtraba DESPUÉS de traer, por palabras clave, y descartaba
+# mails con código adentro.
+_QUERY = "has:attachment"
+_MAX_MENSAJES = 50
 
 
 class GmailService:
     def __init__(self) -> None:
-        self._integracion_repo = IntegracionRepo()
-        self._vacante_repo = VacanteRepo()
+        # La casilla del SISTEMA (sin filtro por usuario), no `IntegracionRepo` (scopeado por
+        # user_id). Ver el encabezado del módulo.
+        self._remitente_repo = IntegracionRemitenteRepo()
 
-    def get_emails_candidatos(self, vacante_id: str, user_id: str, empresa_id=None) -> list[EmailCandidatoResponse]:
-        """
-        Obtiene emails de Gmail filtrados por palabras clave de postulación.
-        `empresa_id` acota a qué vacante se puede apuntar (None = consolidado).
+    def token(self) -> str:
+        """Access token vigente de la casilla del sistema.
 
-        Raises:
-            AppError: GMAIL_NOT_CONFIGURED (400) | VACANTE_NOT_FOUND (404) | GMAIL_ERROR (502).
+        Raises: GMAIL_SIN_CASILLA (400) | GMAIL_NOT_CONFIGURED (400) | GMAIL_TOKEN_EXPIRED (401).
         """
-        if not self._vacante_repo.find_by_id(vacante_id, empresa_id):
-            raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
-        access_token = access_token_valido(self._integracion_repo, user_id)
-        headers = {"Authorization": f"Bearer {access_token}"}
+        return token_de_lectura(self._remitente_repo)
+
+    def ids_con_adjunto(self, client, access_token: str) -> List[str]:
+        """Ids de los mensajes con adjunto de la casilla, más recientes primero.
+
+        Devuelve SOLO ids: el contenido se pide por mensaje y con presupuesto de tiempo, así que
+        traerlos todos acá sería trabajo que quizás no se llega a usar.
+        """
+        datos = self._get(client, access_token, f"{_GMAIL_BASE}/messages",
+                          {"q": _QUERY, "maxResults": _MAX_MENSAJES})
+        return [m["id"] for m in (datos.get("messages") or []) if m.get("id")]
+
+    def mensaje_completo(self, client, access_token: str, message_id: str) -> dict:
+        """UN mensaje con `format=full`.
+
+        🔴 `full` y no `metadata`: `metadata` no trae `payload.parts[]`, o sea que con ese
+        formato los adjuntos no existen. Es la primera de las cuatro piezas que faltaban para
+        poder bajar un CV.
+        """
+        return self._get(client, access_token, f"{_GMAIL_BASE}/messages/{message_id}",
+                         {"format": "full"})
+
+    @staticmethod
+    def _get(client, access_token: str, url: str, params: dict) -> dict:
+        """GET contra Gmail, con el error traducido a un code propio.
+
+        El cliente httpx se recibe abierto: una corrida son 1+N llamadas y abrir uno por request
+        multiplicaría el handshake sin ganar nada.
+        """
         try:
-            with httpx.Client(timeout=15.0) as client:
-                resp = client.get(f"{_GMAIL_BASE}/messages", headers=headers, params={"maxResults": 50})
-                resp.raise_for_status()
-                messages = resp.json().get("messages", [])
-                result: list[EmailCandidatoResponse] = []
-                for msg_ref in messages[:20]:
-                    msg_resp = client.get(
-                        f"{_GMAIL_BASE}/messages/{msg_ref['id']}",
-                        headers=headers,
-                        params={"format": "metadata", "metadataHeaders": ["From", "Subject", "Date"]},
-                    )
-                    if not msg_resp.is_success:
-                        continue
-                    msg = msg_resp.json()
-                    hmap = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
-                    subject = hmap.get("Subject", "")
-                    snippet = msg.get("snippet", "")
-                    if not _is_cv_email(subject, snippet):
-                        continue
-                    result.append(EmailCandidatoResponse(
-                        email_id=msg_ref["id"],
-                        remitente=hmap.get("From", "Desconocido"),
-                        asunto=subject or "(sin asunto)",
-                        fecha=hmap.get("Date", ""),
-                        cuerpo_preview=snippet[:200],
-                    ))
-        except AppError:
-            raise
-        except Exception as exc:
-            logger.error("Error al consultar Gmail", extra={"error": str(exc), "user_id": user_id})
+            resp = client.get(url, headers={"Authorization": f"Bearer {access_token}"},
+                              params=params)
+            resp.raise_for_status()
+            return resp.json() or {}
+        except Exception as exc:  # noqa: BLE001 — se traduce, no se propaga crudo
+            logger.error("Error al consultar Gmail", extra={"error": str(exc), "url": url})
             raise AppError("Error al consultar Gmail", "GMAIL_ERROR", 502)
-        logger.info("Emails candidatos obtenidos", extra={"vacante_id": vacante_id, "count": len(result)})
-        return result
 
-    def crear_candidato_desde_email(self, vacante_id: str, email_id: str, user_id: str, empresa_id=None) -> CandidatoResponse:
-        """
-        Extrae datos de un email de Gmail y crea un candidato en la vacante.
-        `empresa_id` acota a qué vacante se puede apuntar (None = consolidado).
 
-        Raises:
-            AppError: GMAIL_NOT_CONFIGURED (400) | VACANTE_NOT_FOUND (404) | GMAIL_ERROR (502).
-        """
-        access_token = access_token_valido(self._integracion_repo, user_id)
-        if not self._vacante_repo.find_by_id(vacante_id, empresa_id):
-            raise AppError("Vacante no encontrada", "VACANTE_NOT_FOUND", 404)
-        try:
-            with httpx.Client(timeout=10.0) as client:
-                resp = client.get(
-                    f"{_GMAIL_BASE}/messages/{email_id}",
-                    headers={"Authorization": f"Bearer {access_token}"},
-                    params={"format": "metadata", "metadataHeaders": ["From", "Subject"]},
-                )
-                resp.raise_for_status()
-                msg = resp.json()
-        except AppError:
-            raise
-        except Exception as exc:
-            logger.error("Error al obtener email de Gmail", extra={"error": str(exc), "email_id": email_id})
-            raise AppError("Error al obtener el email de Gmail", "GMAIL_ERROR", 502)
-        hmap = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
-        email_addr, nombre, apellido = _parse_from_header(hmap.get("From", ""))
-        candidato = self._vacante_repo.save_candidato(
-            vacante_id, CandidatoCreate(nombre=nombre, apellido=apellido, email=email_addr)
-        )
-        logger.info("Candidato creado desde email", extra={"vacante_id": vacante_id, "email": email_addr})
-        return candidato
+def cliente_gmail() -> httpx.Client:
+    """Un cliente httpx para toda la corrida. Timeout por request, no por lote."""
+    return httpx.Client(timeout=15.0)
+
+
+@contextmanager
+def cliente_o(dado):
+    """El cliente httpx de una operación: el que se pasó, o uno propio que se cierra solo.
+
+    Lo comparten los dos casos de uso (ingesta automática y revisión manual) porque los dos son
+    1+N llamadas: abrir un cliente por request multiplicaría el handshake sin ganar nada. El
+    parámetro existe para inyectarlo en test.
+    """
+    propio = dado is None
+    cliente = dado or cliente_gmail()
+    try:
+        yield cliente
+    finally:
+        if propio:
+            cliente.close()

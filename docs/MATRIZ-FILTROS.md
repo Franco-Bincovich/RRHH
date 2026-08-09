@@ -257,9 +257,21 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `candidato_repo.py:39` | `candidato_service.py` | header | — | ❌ sin export |
+| empresa | `candidato_repo.py:44` | `candidato_service.py:65` | header | — | ✅ |
+| sin_vacante | `candidato_repo.py:47` (`.is_`) | ✅ | `candidatos.py:38,48` | `candidatos/page.tsx` | ✅ |
+| clasificación | `candidato_repo.py:52` (`.eq` / `.is_`) | ✅ | `candidatos.py:39,48` | `candidatos/page.tsx` | ✅ |
 
-> Sin filtro por etapa, por vacante ni por fecha, pese a que el pipeline **tiene** etapas.
+> ✅ **Export y los dos filtros al día (fases 5-6 y screening).** Listado y export comparten el
+> traductor `queryCandidatos` (`services/candidatos.ts`), que es lo que hace estructuralmente
+> imposible que un filtro quede en una sola punta.
+>
+> El filtro de **clasificación** acepta las tres categorías del screening más `sin_clasificar`,
+> que es un VALOR del filtro y no su ausencia (`None` ya significa "todos"). 🔴 La opción por
+> defecto es **todas**, y `no_relevante` está en la lista como una más: ocultar o colapsar los no
+> relevantes convertiría el filtro en la decisión que ese módulo justamente no toma.
+>
+> Sigue sin filtro por **etapa**, por vacante ni por fecha, pese a que el pipeline **tiene**
+> etapas.
 
 ### Auditoría
 
@@ -355,10 +367,10 @@ control, el export miente** — salvo que se arregle el wrapper en la misma sesi
 > está, las dos columnas ya salen en el export de empleados, y el patrón de filtros del módulo
 > ya existe.
 
-**Módulos con listado y sin export (9 → 7):** ~~auditoría~~ · proyectos · horas de proyecto ·
-~~costos/nómina~~ · presupuesto · onboarding · offboarding · áreas · vacantes · candidatos ·
-períodos.
-*(auditoría y costos/nómina salieron de esta lista en el bloque C.)*
+**Módulos con listado y sin export (9 → 6):** ~~auditoría~~ · proyectos · horas de proyecto ·
+~~costos/nómina~~ · presupuesto · onboarding · offboarding · áreas · vacantes ·
+~~candidatos~~ · períodos.
+*(auditoría y costos/nómina salieron en el bloque C; candidatos, con las fases 5-6 del CV screening.)*
 
 ---
 

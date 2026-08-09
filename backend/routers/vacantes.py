@@ -12,8 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
-from schemas.vacante import CandidatoResponse, EmailCandidatoResponse, VacanteResponse
-from services.gmail_service import GmailService
+from schemas.vacante import AvisoPostulacionResponse, CandidatoResponse, VacanteResponse
 from services.vacante_service import VacanteService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
@@ -47,11 +46,14 @@ async def get_vacante(id: UUID, request: Request, service: VacanteService = Depe
     return service.get_vacante(id, get_empresa_id(request))
 
 
+# READ y no WRITE: es leer el código de la vacante y la casilla del sistema para copiarlos.
+# La casilla termina publicada en un aviso, así que no es un dato reservado a quien escribe.
+@router.get("/{id}/aviso", response_model=AvisoPostulacionResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+async def get_aviso(id: UUID, request: Request, service: VacanteService = Depends(_svc)) -> AvisoPostulacionResponse:
+    return service.get_aviso(id, get_empresa_id(request))
+
+
 @router.get("/{id}/candidatos", response_model=List[CandidatoResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def list_candidatos(id: UUID, request: Request, service: VacanteService = Depends(_svc)) -> List[CandidatoResponse]:
     return service.get_candidatos(id, get_empresa_id(request))
 
-
-@router.get("/{id}/emails-candidatos", response_model=List[EmailCandidatoResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-async def get_emails_candidatos(id: UUID, request: Request) -> List[EmailCandidatoResponse]:
-    return GmailService().get_emails_candidatos(str(id), request.state.user["id"], get_empresa_id(request))

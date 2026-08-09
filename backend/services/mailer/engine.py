@@ -33,6 +33,10 @@ from typing import Callable, Dict, Optional
 
 from repositories.integracion_remitente_repo import IntegracionRemitenteRepo
 from repositories.mail_enviado_repo import MailEnviadoRepo
+# La resolución de la casilla del sistema se fue a `services/_casilla_sistema.py` cuando pasó a
+# compartirse con la LECTURA de postulaciones. Sin ese corte, la lectura se habría copiado su
+# propia versión y el próximo arreglo del remitente habría quedado hecho en un lado solo.
+from services._casilla_sistema import MSG_ENVIO, fila_o_error, repo_de
 from services._google_token import access_token_valido
 from services.mailer import _gmail
 from services.mailer._markdown import a_html
@@ -71,7 +75,7 @@ def enviar_mail(destinatario: str, asunto: str, cuerpo_md: str, *,
     if enviar is None:
         raise AppError(f"Proveedor de mail no soportado: {proveedor}", "MAIL_PROVEEDOR_INVALIDO", 422)
 
-    remitente = _remitente(remitente_repo or IntegracionRemitenteRepo())
+    remitente = fila_o_error(remitente_repo or IntegracionRemitenteRepo(), MSG_ENVIO, "MAIL_SIN_REMITENTE")
     cuerpo_html = a_html(cuerpo_md)
     log = log_repo or MailEnviadoRepo()
     base = {"empresa_id": str(empresa_id) if empresa_id else None,
@@ -82,7 +86,7 @@ def enviar_mail(destinatario: str, asunto: str, cuerpo_md: str, *,
             "enviado_por": str(enviado_por) if enviado_por else None}
 
     try:
-        token = access_token_valido(_repo_de(remitente), remitente["user_id"])
+        token = access_token_valido(repo_de(remitente), remitente["user_id"])
         mensaje_id = enviar(token, remitente.get("email_cuenta"), destinatario,
                             asunto, cuerpo_html, cuerpo_md)
     except AppError as exc:
@@ -93,43 +97,6 @@ def enviar_mail(destinatario: str, asunto: str, cuerpo_md: str, *,
     _registrar(log, {**base, "estado": "enviado", "gmail_message_id": mensaje_id})
     logger.info("Mail enviado", extra={"destinatario": destinatario, "plantilla": plantilla_clave})
     return {"enviado": True, "mensaje_id": mensaje_id}
-
-
-def _remitente(repo) -> dict:
-    """La casilla del sistema, o un error accionable. Nunca cae a "la del usuario logueado".
-
-    Es deliberado que NO haya fallback: si lo hubiera, el remitente cambiaría según quién apretó
-    el botón —y un proceso automático no tendría ninguno—, que es justamente la ambigüedad que
-    la casilla del sistema vino a cerrar. Mejor un error que dice qué hacer.
-    """
-    fila = repo.get_remitente()
-    if not fila or not fila.get("user_id"):
-        raise AppError(
-            "No hay una casilla de correo configurada para enviar. Conectá una cuenta de Gmail "
-            "en Configuración y marcala como casilla del sistema.",
-            "MAIL_SIN_REMITENTE", 400)
-    return fila
-
-
-def _repo_de(remitente: dict):
-    """Adapta la fila del remitente a lo que `access_token_valido` espera de un repo.
-
-    La fila YA tiene los tokens (`get_remitente` trae la integración entera), así que volver a
-    consultarla por `user_id` sería una query de más en el camino de cada mail de un lote.
-    `actualizar_token` sí delega en el repo real: el token renovado tiene que persistirse.
-    """
-    from repositories.integracion_repo import IntegracionRepo
-
-    real = IntegracionRepo()
-
-    class _Fija:
-        def get_by_user_and_tipo(self, user_id, tipo):
-            return remitente
-
-        def actualizar_token(self, user_id, access_token, token_expiry):
-            real.actualizar_token(user_id, access_token, token_expiry)
-
-    return _Fija()
 
 
 def _registrar(log, fila: dict) -> None:

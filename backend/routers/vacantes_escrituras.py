@@ -1,6 +1,6 @@
 """
-Escrituras del módulo de vacantes: alta/edición/baja de vacante, alta de candidato,
-publicación en LinkedIn y alta de candidato desde un email.
+Escrituras del módulo de vacantes que pasan por `VacanteService`: alta/edición/baja de vacante y
+alta manual de candidato.
 
 Separado de vacantes.py, que estaba en 80/80 —en el techo exacto— y no admitía el endpoint de
 export. Se monta en el MISMO prefijo, así que las rutas no cambian. Molde: areas_escrituras.py,
@@ -12,9 +12,10 @@ dos en el mismo archivo ese orden es local y no depende del orden de include_rou
 módulo ningún endpoint lleva decorador de rate limit, así que la regla de "no mover nada
 decorado" (la clave del limiter es `routers.<módulo>.<función>`) no ata a ninguno acá.
 
-`publicar_linkedin` y `candidato_desde_email` NO pasan por VacanteService: llaman directo a
-ZernioService y GmailService, que resuelven la vacante y su empresa por su cuenta. Se movieron
-igual porque son escrituras; su gate de permisos viaja con ellas.
+`publicar_linkedin` y `candidato_desde_email` SE FUERON a `vacantes_integraciones.py` cuando este
+archivo llegó a 79/80: son las únicas escrituras del módulo que no pasan por `VacanteService`
+—llaman directo a ZernioService y GmailService, que resuelven la vacante y su empresa por su
+cuenta— y es donde crece el CV screening. El porqué completo está en el docstring de ese archivo.
 
 El orden de registro respecto de vacantes.py no es load-bearing.
 """
@@ -24,12 +25,9 @@ from fastapi import APIRouter, Depends, Request
 
 from routers._candidato_form import candidato_form
 from schemas.vacante import (
-    CandidatoDesdeEmailRequest, CandidatoResponse, PublicarLinkedinRequest,
-    PublicarLinkedinResponse, VacanteCreate, VacanteResponse, VacanteUpdate,
+    CandidatoResponse, VacanteCreate, VacanteResponse, VacanteUpdate,
 )
-from services.gmail_service import GmailService
 from services.vacante_service import VacanteService
-from services.zernio_service import ZernioService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
 
@@ -67,13 +65,3 @@ async def add_candidato(
 ) -> CandidatoResponse:
     data, contenido, filename, content_type = form
     return service.add_candidato(id, data, get_empresa_id(request), contenido, filename, content_type, request.state.user.get("id", "system"))
-
-
-@router.post("/{id}/publicar-linkedin", response_model=PublicarLinkedinResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def publicar_linkedin(id: UUID, body: PublicarLinkedinRequest, request: Request) -> PublicarLinkedinResponse:
-    return ZernioService().publicar_en_vacante(str(id), body.email_contacto, request.state.user["id"], get_empresa_id(request))
-
-
-@router.post("/{id}/candidatos-desde-email", response_model=CandidatoResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def candidato_desde_email(id: UUID, body: CandidatoDesdeEmailRequest, request: Request) -> CandidatoResponse:
-    return GmailService().crear_candidato_desde_email(str(id), body.email_id, request.state.user["id"], get_empresa_id(request))

@@ -83,7 +83,7 @@ class TestExportCandidatos:
 
         llamadas: list = []
         svc = CandidatoService.__new__(CandidatoService)
-        svc.listar_todos_candidatos = lambda e=None: (llamadas.append(e) or _CANDIDATOS)  # type: ignore[method-assign]
+        svc.listar_todos_candidatos = lambda e=None, sv=False, cl=None: (llamadas.append(e) or _CANDIDATOS)  # type: ignore[method-assign]
         return svc, llamadas
 
     def test_va_por_el_MISMO_camino_que_el_listado(self) -> None:
@@ -115,7 +115,7 @@ class TestExportCandidatos:
 
     def test_el_limite_muerde(self) -> None:
         svc, _ = self._svc()
-        svc.listar_todos_candidatos = lambda e=None: _CANDIDATOS * LIMITE_FILAS_EXPORT  # type: ignore[method-assign]
+        svc.listar_todos_candidatos = lambda e=None, sv=False, cl=None: _CANDIDATOS * LIMITE_FILAS_EXPORT  # type: ignore[method-assign]
 
         with pytest.raises(AppError) as exc:
             svc.exportar(EMPRESA, "csv")

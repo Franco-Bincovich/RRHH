@@ -1,4 +1,4 @@
-import type { Candidato, CandidatoCreate, EmailCandidato, EtapaPipeline, LinkedinPublicarRequest, LinkedinPublicarResponse, Vacante, VacanteCreate, VacanteUpdate } from "@/types/vacantes"
+import type { AsignacionResultado, AvisoPostulacion, Candidato, CandidatoCreate, EtapaPipeline, IngestaResultado, LinkedinPublicarRequest, LinkedinPublicarResponse, MailPendiente, Vacante, VacanteCreate, VacanteUpdate } from "@/types/vacantes"
 import {
   apiFetch, API_BASE, ApiError, authHeaders, descargarArchivo, postMultipart,
   type FormatoExport,
@@ -40,6 +40,15 @@ export function exportarVacantes(
 
 export async function fetchVacante(id: string): Promise<Vacante> {
   return apiFetch<Vacante>(`/api/vacantes/${id}`)
+}
+
+/**
+ * Texto listo para pegar en el aviso, con el código de la vacante y la casilla del sistema.
+ * Endpoint aparte y no un campo de `Vacante` porque la casilla NO es de la vacante: es una sola
+ * para todo el sistema y sale de la integración designada como remitente.
+ */
+export async function fetchAvisoPostulacion(id: string): Promise<AvisoPostulacion> {
+  return apiFetch<AvisoPostulacion>(`/api/vacantes/${id}/aviso`)
 }
 
 export async function createVacante(data: VacanteCreate): Promise<Vacante> {
@@ -99,13 +108,26 @@ export async function publicarLinkedin(vacanteId: string, data: LinkedinPublicar
   })
 }
 
-export async function fetchEmailsCandidatos(vacanteId: string): Promise<EmailCandidato[]> {
-  return apiFetch<EmailCandidato[]>(`/api/vacantes/${vacanteId}/emails-candidatos`)
+/**
+ * Revisa la casilla del sistema: matchea cada mail por el código del asunto y crea los
+ * candidatos con su CV. NO recibe vacante: la corrida es sobre la casilla entera y cada mail
+ * elige su búsqueda. Reemplaza a fetchEmailsCandidatos + crearCandidatoDesdeEmail.
+ */
+export async function revisarCasilla(): Promise<IngestaResultado> {
+  return apiFetch<IngestaResultado>("/api/vacantes/casilla/revisar", { method: "POST" })
 }
 
-export async function crearCandidatoDesdeEmail(vacanteId: string, emailId: string): Promise<Candidato> {
-  return apiFetch<Candidato>(`/api/vacantes/${vacanteId}/candidatos-desde-email`, {
-    method: "POST",
-    body: JSON.stringify({ email_id: emailId }),
+/**
+ * Mails de la casilla que no matchearon ninguna búsqueda. Se releen de Gmail en cada llamada:
+ * no hay estado persistido, la casilla es la fuente de verdad.
+ */
+export function fetchMailsPendientes(): Promise<MailPendiente[]> {
+  return apiFetch<MailPendiente[]>("/api/vacantes/casilla/pendientes")
+}
+
+/** Crea los candidatos de un mail sobre la vacante que eligió RRHH. */
+export function asignarMail(messageId: string, vacanteId: string): Promise<AsignacionResultado> {
+  return apiFetch<AsignacionResultado>("/api/vacantes/casilla/asignar", {
+    method: "POST", body: JSON.stringify({ message_id: messageId, vacante_id: vacanteId }),
   })
 }

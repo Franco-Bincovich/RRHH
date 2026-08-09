@@ -27,6 +27,7 @@ import time
 from typing import Callable, List, Optional
 
 from config.settings import settings
+from services._presupuesto import Presupuesto
 
 
 class LoteMails:
@@ -45,39 +46,31 @@ class LoteMails:
         self.enviados = 0
         self.omitidos = 0                 # ya se les había mandado (idempotencia)
         self.fallidos: List[dict] = []
-        self.parcial = False
-        self.sin_procesar = 0
-        self._reloj = reloj
-        self._inicio = reloj()
-        self._presupuesto = settings.mail_presupuesto_segundos if presupuesto is None else presupuesto
+        # El reloj y la decisión de seguir viven en `Presupuesto`, COMPUESTO y no heredado: acá
+        # queda el vocabulario del envío (enviados/omitidos/fallidos), que es lo que no se puede
+        # generalizar sin dejar de explicar nada. `parcial` y `sin_procesar` se delegan para que
+        # el contrato que ven los callers no cambie.
+        self._p = Presupuesto(
+            settings.mail_presupuesto_segundos if presupuesto is None else presupuesto, reloj)
+
+    @property
+    def parcial(self) -> bool:
+        return self._p.parcial
+
+    @property
+    def sin_procesar(self) -> int:
+        return self._p.sin_procesar
 
     def segundos(self) -> float:
-        return round(self._reloj() - self._inicio, 3)
+        return self._p.transcurridos()
 
     def hay_margen(self) -> bool:
-        """¿Queda presupuesto para OTRO mail entero?
-
-        Se consulta ANTES de empezar cada uno, nunca en el medio: un mail se manda completo o no
-        se manda. Chequear adentro dejaría un envío a medias —mandado pero sin registrar— y el
-        reintento lo volvería a mandar por no encontrarlo en el log.
-        """
-        if self._presupuesto <= 0:
-            return True
-        return self.segundos() < self._presupuesto
+        """¿Queda presupuesto para OTRO mail entero? Ver `Presupuesto.hay_margen`."""
+        return self._p.hay_margen()
 
     def destinatarios_con_margen(self, destinatarios: list):
-        """Rinde destinatarios mientras haya presupuesto; al agotarse marca el corte y para.
-
-        La guarda vive ACÁ y no en el caller porque el objeto que lleva el reloj es el que tiene
-        que decidir si sigue. Recibe una LISTA y no un iterador: para decir cuántos quedaron sin
-        procesar hay que saber cuántos había.
-        """
-        for i, d in enumerate(destinatarios):
-            if not self.hay_margen():
-                self.parcial = True
-                self.sin_procesar = len(destinatarios) - i
-                return
-            yield d
+        """Rinde destinatarios mientras haya presupuesto. Ver `Presupuesto.con_margen`."""
+        return self._p.con_margen(destinatarios)
 
     def registrar_envio(self) -> None:
         self.enviados += 1

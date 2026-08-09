@@ -228,6 +228,7 @@ CREATE TRIGGER trg_cesiones_updated_at
 --   · parametros_empresa        (mig 085) — ídem.
 --   · reglas_vacaciones_escala  (mig 085) — ídem.
 --   · plantillas_mail           (mig 087) — ídem.
+--   · parametros_screening     (mig 100) — ídem.
 --
 -- Agregarlas no cierra nada por sí solo: la sexta nacería con el mismo agujero. Lo que lo
 -- cierra es `backend/tests/test_triggers_updated_at.py`, que DERIVA la lista de candidatos de
@@ -249,6 +250,11 @@ CREATE TRIGGER trg_usuario_integraciones_updated_at
 DROP TRIGGER IF EXISTS trg_vacaciones_pendientes_updated_at ON public.vacaciones_pendientes;
 CREATE TRIGGER trg_vacaciones_pendientes_updated_at
     BEFORE UPDATE ON public.vacaciones_pendientes
+    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_parametros_screening_updated_at ON public.parametros_screening;
+CREATE TRIGGER trg_parametros_screening_updated_at
+    BEFORE UPDATE ON public.parametros_screening
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 DROP TRIGGER IF EXISTS trg_parametros_empresa_updated_at ON public.parametros_empresa;

@@ -53,6 +53,13 @@ class VacanteUpdate(BaseModel):
 
 class VacanteResponse(BaseModel):
     id: str
+    # 🔴 NO ESTÁ EN VacanteCreate NI EN VacanteUpdate, Y ES A PROPÓSITO: lo genera el DEFAULT de
+    # la base (secuencia `vacantes_codigo_seq`, migración 097). RRHH no lo elige ni lo edita, y
+    # el backend tampoco lo calcula — si lo hiciera, dos altas simultáneas podrían emitir el
+    # mismo, que es el único modo de falla que rompe el matcher de CVs para siempre.
+    # Es NOT NULL en la base, así que acá va sin default: una vacante sin código sería una que
+    # no puede recibir postulaciones, y prefiero que eso explote al mapear y no en silencio.
+    codigo: str
     empresa_id: Optional[str] = None
     empresa_nombre: Optional[str] = None
     titulo: str
@@ -104,6 +111,22 @@ class CandidatoResponse(BaseModel):
     score_ia: Optional[float] = None
     busqueda_congelada: Optional[str] = None  # "Título — Área" congelado al borrar la vacante
     cv_storage_path: Optional[str] = None  # ruta en bucket privado 'cvs'; NULL si no adjuntó CV
+    # POR QUÉ el CV no se pudo procesar (mig 099). Texto legible, no un flag: cada motivo pide
+    # una acción distinta de RRHH. ⚠️ `cv_texto` NO se expone a propósito — es la entrada del
+    # clasificador, puede pesar 20 KB por fila y engordaría todos los listados sin que nadie
+    # lo mire en pantalla.
+    screening_warning: Optional[str] = None
+    # Filtro de descarte del screening (mig 100): relevante | dudoso | no_relevante, o None si
+    # todavía no se clasificó. El MOTIVO viaja al lado y es lo que RRHH lee para decidir si
+    # revisa igual: sin él la etiqueta sola invita a confiar en ella, que es justo lo contrario
+    # de lo que este módulo es. 🔴 Si estas dos líneas faltaran, el `select("*")` traería las
+    # columnas y el schema las descartaría EN SILENCIO — el bug que ya pasó tres veces acá.
+    clasificacion_ia: Optional[str] = None
+    clasificacion_motivo: Optional[str] = None
+    # Quién puso la clasificación vigente: modelo | humano (mig 101). NULL = no hay clasificación.
+    # Viaja al front porque la pantalla tiene que poder decir "esto lo corrigió alguien": sin eso,
+    # el revisor siguiente no sabe si está mirando una salida del modelo o una decisión ya tomada.
+    clasificacion_origen: Optional[str] = None
     created_at: datetime
 
 
@@ -112,6 +135,17 @@ class CandidatoGrupoResponse(CandidatoResponse):
 
     grupo_nombre: Optional[str] = None  # título vivo de la vacante, o busqueda_congelada
     busqueda_activa: bool = False  # True si la vacante sigue viva; False si fue borrada
+
+
+class AvisoPostulacionResponse(BaseModel):
+    """Lo que RRHH copia para pegar en el aviso de LinkedIn. Ver `services/_vacante_aviso.py`.
+
+    `casilla` y `texto` son Optional porque puede no haber casilla del sistema designada. En ese
+    caso `codigo` sale igual —es de la vacante y no depende de ninguna integración— y la pantalla
+    avisa qué falta configurar, en vez de ofrecer un texto con un agujero adentro."""
+    codigo: str
+    casilla: Optional[str] = None
+    texto: Optional[str] = None
 
 
 class EtapaUpdate(BaseModel):

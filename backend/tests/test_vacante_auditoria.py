@@ -65,8 +65,8 @@ VACANTE_ID, CANDIDATO_ID, AREA_ID = str(uuid4()), str(uuid4()), str(uuid4())
 
 
 def _vacante(**kw) -> VacanteResponse:
-    base = dict(id=VACANTE_ID, empresa_id=EMPRESA_ENTIDAD, titulo="Analista", area_id=AREA_ID,
-                estado="nueva", created_at=AHORA)
+    base = dict(id=VACANTE_ID, codigo="VAC-0001", empresa_id=EMPRESA_ENTIDAD, titulo="Analista",
+                area_id=AREA_ID, estado="nueva", created_at=AHORA)
     base.update(kw)
     return VacanteResponse(**base)
 

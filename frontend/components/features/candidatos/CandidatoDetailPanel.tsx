@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { FileText, X } from "lucide-react"
+import { X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { EliminarCandidatoButton } from "@/components/features/candidatos/EliminarCandidatoButton"
+import { CandidatoClasificacion } from "@/components/features/candidatos/CandidatoClasificacion"
+import { CandidatoCv } from "@/components/features/candidatos/CandidatoCv"
+import { CandidatoAcciones } from "@/components/features/candidatos/CandidatoAcciones"
 import { getCandidatoCvUrl } from "@/services/candidatos"
 import type { EtapaPipeline } from "@/types/vacantes"
 import type { CandidatoConGrupo } from "@/types/candidato"
@@ -45,10 +47,11 @@ interface Props {
   open: boolean
   onClose: () => void
   onDeleted?: () => void
+  onAsignada?: () => void
 }
 
 /** Panel lateral (drawer) de solo lectura con el detalle del candidato, en secciones. */
-export function CandidatoDetailPanel({ candidato, open, onClose, onDeleted }: Props) {
+export function CandidatoDetailPanel({ candidato, open, onClose, onDeleted, onAsignada }: Props) {
   const [loadingCv, setLoadingCv] = useState(false)
 
   useEffect(() => {
@@ -121,24 +124,25 @@ export function CandidatoDetailPanel({ candidato, open, onClose, onDeleted }: Pr
             <Badge variant="secondary">{ETAPA_LABELS[c.etapa_pipeline] ?? c.etapa_pipeline}</Badge>
           </Section>
 
-          <Section title="CV">
-            {c.cv_storage_path ? (
-              <Button variant="outline" className="gap-2" onClick={abrirCv} disabled={loadingCv}>
-                <FileText className="size-4" /> {loadingCv ? "Abriendo…" : "Abrir CV"}
-              </Button>
-            ) : (
-              <p className="text-sm text-muted-foreground">Sin CV cargado</p>
-            )}
+          <Section title="Preselección">
+            <CandidatoClasificacion candidato={c} onCorregido={onDeleted} />
           </Section>
 
-          {!c.busqueda_activa && (
-            <Section title="Acciones">
-              <EliminarCandidatoButton
-                candidato={c}
-                onDeleted={() => { onClose(); onDeleted?.() }}
-              />
-            </Section>
-          )}
+          <Section title="CV">
+            <CandidatoCv
+              storagePath={c.cv_storage_path}
+              warning={c.screening_warning}
+              loading={loadingCv}
+              onAbrir={abrirCv}
+            />
+          </Section>
+
+          <CandidatoAcciones
+            candidato={c}
+            onClose={onClose}
+            onDeleted={onDeleted}
+            onAsignada={onAsignada}
+          />
         </div>
       </aside>
     </>
