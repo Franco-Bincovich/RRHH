@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { ApiError } from "@/services/api"
 import { mensajeDeError } from "@/components/features/clientes/erroresCliente"
-import { MAX_NOMBRE, validarNombre } from "@/components/features/clientes/ClienteModal"
+import { MAX_NOMBRE, validarNombre } from "@/components/features/clientes/guardarCliente"
 
 /**
  * Las dos decisiones del formulario, testeadas como funciones puras.
@@ -18,6 +18,10 @@ import { MAX_NOMBRE, validarNombre } from "@/components/features/clientes/Client
  * NO se renderiza `ClienteModal`: usa `Dialog` de Radix, que monta por PORTAL, y con vitest sin
  * jsdom `renderToStaticMarkup` devuelve "". Un test de ese componente pasaría con el formulario
  * entero borrado. Por eso las dos decisiones se exportan sueltas y se prueban acá.
+ *
+ * ⚠️ `validarNombre` y `MAX_NOMBRE` se mudaron de `ClienteModal` a `guardarCliente` al cerrar el
+ * bug del `empresa_id: ""`: ahora TODA la decisión de guardar vive junta. El resto del envío se
+ * prueba en `guardarCliente.test.ts`.
  */
 
 describe("mensajeDeError", () => {

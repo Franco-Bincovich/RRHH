@@ -41,6 +41,71 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-10 · El 422 entra al contrato de errores + el alta de clientes deja de mandar `empresa_id` vacío · commit pendiente
+
+**Qué cambió:** dos cosas, y la primera es MUCHO más ancha que la segunda. (1) `main.py` no
+registraba handler para `RequestValidationError`, así que **todo 422 de todo endpoint salía con
+el `{"detail": [...]}` de Pydantic**, sin `message` ni `code` — y `toApiError`, embudo único del
+front, caía a `"Error del servidor"` / `"UNKNOWN"`. Ahora el 422 sale con el contrato
+`{error, message, code: "VALIDACION_INVALIDA"}` y un mensaje en castellano. (2) `ClienteModal`
+mandaba `empresa_id: getEmpresaActivaId() ?? ""`, que en modo consolidado —el default del
+sidebar— es `""`: el alta de clientes devolvía **422 en producción, siempre**. Ahora el modal
+tiene el `<select>` de empresas que ya tenían `ItemModal` y `CapacitacionModal`.
+
+**Para infraestructura: NO hay acción.** Sin migraciones, sin env vars nuevas, sin dependencias,
+sin buckets, sin endpoints nuevos ni borrados, sin cambios de auth ni de CORS. Nada que correr.
+
+**Lo único que cambia del lado del deploy es el BODY de las respuestas 422** (el status sigue
+siendo 422). Si algún consumidor externo parseaba `detail`, deja de encontrarlo — hoy el único
+consumidor es nuestro front, que buscaba `message`/`code` y ahora sí los encuentra.
+
+### DOS codes distintos en el 422, según quién armó el dato
+
+- `loc[0] == "body"` → **`VALIDACION_INVALIDA`**: lo llenó una persona, se nombra el campo.
+- query / path / header → **`PEDIDO_INVALIDO`**: lo armó el front. **No se nombra el campo**,
+  porque pedirle al usuario que corrija "page size" lo manda a buscar un input que no existe.
+  Es el caso `page_size=200` que ya quemó dos veces. El campo va igual al log completo.
+- `loc` mixto → gana body (la rama accionable).
+
+### 🔗 Hay un archivo GENERADO nuevo: `backend/tests/_contrato_errores.json`
+
+Lo escribe `backend/tests/test_validacion_422.py` capturando respuestas REALES del app, y lo lee
+`frontend/services/api.test.ts` para alimentar a `toApiError`. **No editarlo a mano.** Es lo que
+acopla las dos puntas del contrato: con el body copiado a mano en el test del front, renombrar
+`message` en el backend rojeaba solo el backend — se midió. Implica un orden: si tocás el handler
+y corrés solo vitest, ves verde hasta correr pytest.
+
+`toApiError` pasó a ser `export` en `frontend/services/api.ts` — **solo para poder testearla**;
+sigue sin tener callers fuera del módulo (el barrido #12 la cuenta viva por uso intra-módulo).
+
+### 🔴 Por qué esto vale más que el bug que lo destapó
+
+El 422 de clientes era **un** síntoma. La causa —el 422 fuera del contrato— afectaba a las 27
+pantallas, y ya había quemado dos veces antes sin que se lo identificara: `useDestinatarios` y
+`useCandidatosProyecto` pedían `page_size=200`, el backend respondía 422 y **la pantalla decía
+"no hay datos" con la base llena**. Se cerró aquella vez con `pageSize.test.ts`, que evita que
+alguien pida de más — pero no arreglaba que un 422 fuera indescifrable. Ahora ese mismo caso
+responde `"Revisá los datos del formulario: page size (es demasiado grande)."`
+
+### Qué se muestra y qué solo se loguea (criterio, en `middleware/_mensaje_validacion.py`)
+
+Sale la **hoja** del campo, humanizada, y qué le pasa. **No** sale el `loc` completo (describe el
+anidamiento del schema), **no** sale el valor recibido, **no** salen el `msg`/`type`/`url` de
+Pydantic. Al log van el `loc` completo y el `type` — 🔴 **el `input` no va tampoco al log**: un
+`password` mal formado escribiría la contraseña en claro en los logs de la plataforma.
+
+### 🔴 El hueco de test que esto destapa, y que NO se cerró
+
+Los 30 tests de clientes pasaban con el bug vivo, y **los fakes no tenían nada de malo**: la
+barrera de empresa está genuinamente probada. El problema es otro y es del repo entero — esos
+tests **instancian `ClienteCreate(empresa_id=uuid4(), ...)` a mano**, o sea empiezan del lado de
+adentro de la validación. Se midió el barrido que lo cerraría ("todo endpoint con body tiene un
+test que atraviesa HTTP") y **nace con 77 huérfanos sobre 82 endpoints**: solo **7 de 154**
+archivos de test atraviesan HTTP. No se forzó — declarar 77 excepciones sería una lista que nadie
+mira. **Queda como decisión pendiente de Franco.**
+
+---
+
 ## 2026-08-10 · Limpieza del módulo de horas + barrido de código muerto del FRONT · commit pendiente
 
 **Qué cambió:** nada de runtime. Se cerraron los tres cabos que la verificación previa dejó

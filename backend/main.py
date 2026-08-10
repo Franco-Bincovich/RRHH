@@ -4,13 +4,14 @@ Punto de entrada de la aplicación FastAPI.
 Solo configuración de la app — sin lógica de negocio.
 """
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from config.settings import settings
 from middleware.auth import AuthMiddleware
-from middleware.error_handler import global_error_handler
+from middleware.error_handler import global_error_handler, validation_error_handler
 from middleware.security_headers import SecurityHeadersMiddleware
 from utils.errors import AppError
 from registro_routers import registrar
@@ -48,6 +49,11 @@ app.add_middleware(
 # AppError registrado por TIPO específico → lo atiende el ExceptionMiddleware interno (dentro
 # de CORS), así la respuesta de error reatraviesa el CORSMiddleware y sale con headers CORS.
 app.add_exception_handler(AppError, global_error_handler)
+# 422 de validación. REEMPLAZA el handler que FastAPI registra solo, que responde `{"detail": [...]}`
+# con el volcado de Pydantic: sin `message` ni `code`, el front lo mostraba como "Error del
+# servidor" en las 27 pantallas. El de Exception NO lo cubría — Starlette manda ese al
+# ServerErrorMiddleware y FastAPI conserva el suyo propio para validación. Ver error_handler.py.
+app.add_exception_handler(RequestValidationError, validation_error_handler)
 # Catch-all de 500 inesperados: queda sobre Exception (ServerErrorMiddleware, fuera de CORS).
 app.add_exception_handler(Exception, global_error_handler)
 

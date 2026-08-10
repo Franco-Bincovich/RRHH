@@ -1,0 +1,18 @@
+{
+  "_leeme": "GENERADO por backend/tests/test_validacion_422.py. No editar a mano.",
+  "422_body": {
+    "error": true,
+    "message": "Revisá los datos del formulario: empresa (falta).",
+    "code": "VALIDACION_INVALIDA"
+  },
+  "422_query": {
+    "error": true,
+    "message": "No se pudo completar el pedido. Actualizá la pantalla y volvé a intentar.",
+    "code": "PEDIDO_INVALIDO"
+  },
+  "401_control": {
+    "error": true,
+    "message": "No autorizado",
+    "code": "MISSING_TOKEN"
+  }
+}

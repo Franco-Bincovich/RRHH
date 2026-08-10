@@ -60,7 +60,20 @@ export class ApiError extends Error {
   }
 }
 
-async function toApiError(res: Response): Promise<ApiError> {
+/**
+ * Traduce una respuesta HTTP de error al `ApiError` que ve el resto del front.
+ *
+ * 🔴 EXPORTADA PARA PODER TESTEARLA CONTRA EL CONTRATO DEL BACKEND, no porque alguien de afuera
+ * la llame. Es el embudo ÚNICO de `apiFetch`, `postMultipart` y `descargarArchivo`: lo que esta
+ * función no encuentra en el body, el usuario no lo ve nunca. `services/api.test.ts` la alimenta
+ * con `Response` reales cuyo cuerpo es IDÉNTICO al que assertea
+ * `backend/tests/test_validacion_422.py`, así que si un lado mueve el contrato, el otro rojea.
+ *
+ * ⚠️ El test NO puede reimplementarla ni envolverla. Reimplementada, un `message` que el backend
+ * renombre a `mensaje` seguiría "pasando" en el front, que es exactamente el modo de falla que
+ * este test existe para cubrir: la copia del test acierta y el código de producción no.
+ */
+export async function toApiError(res: Response): Promise<ApiError> {
   try {
     const body = (await res.json()) as { message?: string; code?: string }
     return new ApiError(body.message ?? "Error del servidor", body.code ?? "UNKNOWN", res.status)
