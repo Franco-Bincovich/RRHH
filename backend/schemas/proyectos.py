@@ -2,7 +2,7 @@
 Schemas Pydantic para el módulo de proyectos.
 Proyectos: empresa_id explícito en Create (empresa dueña).
 Asignaciones: empleado_empresa_id NO en Create — el service lo deriva de empleados.empresa_id.
-Horas: valor_hora_snapshot NO en Create — el service lo copia de la asignación al insertar.
+Horas: viven en `schemas/horas.py` desde la migración 103 (ver la nota del final del archivo).
 """
 from datetime import date, datetime
 from typing import List, Optional
@@ -146,30 +146,8 @@ class AsignacionBulkResult(BaseModel):
     ya_asignados: List[AsignacionBulkError] = []
     errores: List[AsignacionBulkError]
 
-
-# ── Horas ──────────────────────────────────────────────────────────────────────
-
-class HoraCreate(BaseModel):
-    asignacion_id: UUID
-    fecha: date
-    horas: float = Field(..., gt=0)
-    descripcion: Optional[str] = None
-
-
-class HoraResponse(BaseModel):
-    id: UUID
-    asignacion_id: UUID
-    proyecto_id: UUID
-    empleado_nombre: Optional[str] = None
-    empleado_empresa_nombre: Optional[str] = None
-    fecha: date
-    horas: float
-    valor_hora_snapshot: float
-    costo: float           # horas × valor_hora_snapshot, calculado en _build()
-    descripcion: Optional[str] = None
-    created_at: datetime
-
-
-class HoraListResponse(BaseModel):
-    items: List[HoraResponse]
-    total: int
+# ── Horas ─────────────────────────────────────────────────────────────────────
+# Se mudaron a `schemas/horas.py` (migración 103): este archivo llegó a 208/200 y, sobre todo,
+# desde la 103 una carga de horas puede no tener proyecto ni asignación — dejó de ser una hija
+# de `proyectos`. Importar desde `schemas.horas`, no desde acá: un re-export dejaría dos rutas
+# válidas para el mismo símbolo y ninguna razón para elegir una.

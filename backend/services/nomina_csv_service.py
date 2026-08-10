@@ -117,4 +117,10 @@ def parse_nomina_csv(content: str, empresa_id: str) -> tuple[list[dict], list[di
 
     except Exception as exc:
         logger.error("Error al parsear CSV de nómina", extra={"error": str(exc)})
-        return [], [{"fila": 0, "campo": "archivo", "error": f"Error al procesar el archivo: {exc}"}]
+        # 🔴 El detalle NO va al usuario: este `except` envuelve TODO el loop, incluidos los
+        # lookups a la base, así que `str(exc)` puede traer un error de httpx/Supabase — texto en
+        # inglés y detalle de infraestructura en la pantalla de RRHH. El crudo está en el log de
+        # arriba, que es donde sirve. Mismo criterio que `_error_ia` y que el handler global.
+        return [], [{"fila": 0, "campo": "archivo",
+                     "error": "No se pudo procesar el archivo. Revisá que sea el CSV de nómina "
+                              "con el formato esperado y volvé a intentar."}]

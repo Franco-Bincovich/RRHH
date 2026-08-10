@@ -99,13 +99,21 @@ _EJERCITADOS: dict[str, str] = {
     # sesión llegó el 9/8/2026 con la ingesta de CVs por mail: la declaración se borró y el test
     # se escribió. Es el ciclo que la lista pretende — cada entrada que se va es un cuerpo probado.
     "vacante_repo.find_by_ids":                 "test_mappers_con_datos",
+    # 🚩 Su declaración estaba en _SIN_EJERCITAR como `horas_repo._build`, con el motivo "depende
+    # del link público de carga de horas (E4), EN PAUSA esperando la reunión de definición". Esa
+    # reunión llegó: la migración 103 abrió la carga directa y el mapper se mudó a `_hora_row.py`
+    # (horas_repo quedaba en 118/100). La entrada NO se borró — se MOVIÓ acá, que es lo que la
+    # doctrina del repo pide para que la aserción restante no se quede sin nada que mirar.
+    # `_mapa` se ejercita TRANSITIVAMENTE desde `build`, igual que los `_nombres` de arriba.
+    "_hora_row.build":                          "test_horas_carga_directa",
+    "_hora_row._mapa":                          "test_horas_carga_directa",
 }
 
 # ── mapper → por qué NO se ejercita todavía ───────────────────────────────────
 # 🚩 Esto NO es una lista de excepciones permanentes: es la deuda, visible. Cada entrada que se
 # borra es un cuerpo de mapper que pasó a estar probado. El orden de prioridad lo da si la tabla
 # tiene datos en producción — un mapper con datos reales es una bomba con la mecha encendida.
-# Los cuatro que quedan tienen su tabla en 0 filas Y no entran en el bloque I. Cada razón dice
+# Los DOS que quedan tienen su tabla en 0 filas Y no entran en el bloque I. Cada razón dice
 # QUÉ los movería a urgente, para que la decisión no haya que rehacerla desde cero.
 _SIN_EJERCITAR: dict[str, str] = {
     "capacitacion_repo._build":
@@ -113,10 +121,6 @@ _SIN_EJERCITAR: dict[str, str] = {
         "inventario). Disparador: que RRHH cargue el primer catálogo de capacitaciones.",
     "asignacion_repo._build":
         "empleado_capacitacion: 0 filas. Cuelga de capacitaciones, así que se mueve con ella.",
-    "horas_repo._build":
-        "horas_proyecto: 0 filas. Depende del link público de carga de horas (E4), que está EN "
-        "PAUSA esperando la reunión de definición. El costeo que las consume SÍ está cubierto "
-        "del lado de _proyectos_enrich.batch_costos.",
 }
 
 

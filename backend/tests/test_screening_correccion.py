@@ -248,14 +248,18 @@ class TestUnaCorreccionNoLaPisaElClasificador:
 class TestElFalloDelClasificadorPersiste:
 
     def test_queda_guardado_el_motivo_con_la_clasificacion_en_NULL(self) -> None:
-        """Antes esto vivía solo en la respuesta del botón y se perdía al recargar."""
+        """Antes esto vivía solo en la respuesta del botón y se perdía al recargar.
+
+        ⚠️ Este test afirmaba `"timeout" in motivo` —o sea, FIJABA la fuga del texto crudo del
+        proveedor a la ficha del candidato—. Ahora afirma lo contrario, que es lo que corresponde:
+        el detalle técnico va al log, el motivo es para RRHH. Ver `_error_ia`."""
         fila = _fila("c1")
-        svc, _ = _lote([fila], cliente=_FakeAnthropic([RuntimeError("timeout")]))
+        svc, _ = _lote([fila], cliente=_FakeAnthropic([RuntimeError("timeout interno del sdk")]))
         r = svc.clasificar_pendientes(VAC, E1)
         assert r.errores == 1
         assert fila["clasificacion_ia"] is None
         assert fila["clasificacion_motivo"].startswith(PREFIJO_FALLO)
-        assert "timeout" in fila["clasificacion_motivo"]
+        assert "timeout interno del sdk" not in fila["clasificacion_motivo"]
 
     def test_se_DISTINGUE_de_nunca_clasificado(self) -> None:
         """Los dos tienen `clasificacion_ia` en NULL; lo que los separa es el motivo."""

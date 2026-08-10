@@ -40,16 +40,18 @@ Se persiste en **`clasificacion_motivo` con `clasificacion_ia` en NULL**, y NO e
 Con `clasificacion_ia` en NULL, `find_para_clasificar` lo sigue tomando: el reintento funciona
 solo, sin ninguna regla nueva. Y los dos no pueden colisionar nunca — un candidato con
 `screening_warning` no llega jamás a la llamada.
+
+🔴 **Lo que se persiste NO es el error del proveedor.** Lo traduce `_error_ia.motivo_de` a un
+texto en castellano que dice qué hacer; el crudo —con su `request_id`— queda en el log. Ver el
+encabezado de ese módulo: en producción llegó a mostrarse "Your credit balance is too low to
+access the Anthropic API…" en la ficha de un candidato.
 """
 from typing import Optional
 
 from schemas.screening import CandidatoClasificado
 from services import _cv_clasificador as clasificador
+from services._error_ia import PREFIJO_FALLO, categoria_de, motivo_de  # noqa: F401 (reexport)
 from utils.logger import logger
-
-# Lo que se guarda en `clasificacion_motivo` cuando la llamada falla. Prefijo fijo para que la
-# pantalla y el export puedan distinguirlo de un motivo real sin depender de la clasificación.
-PREFIJO_FALLO = "No se pudo clasificar"
 
 
 def clasificar_uno(fila: dict, vacante, criterio, empresa: Optional[str],
@@ -65,11 +67,15 @@ def clasificar_uno(fila: dict, vacante, criterio, empresa: Optional[str],
     try:
         r = clasificador.clasificar(fila["cv_texto"], vacante, criterio, cliente=cliente)
     except Exception as exc:  # noqa: BLE001 — ver el docstring
+        # 🔴 EL DETALLE TÉCNICO VA ACÁ Y SOLO ACÁ. `str(exc)` trae el `request_id` del proveedor,
+        # que es lo que permite pedirle que rastree una llamada puntual; la clase y la categoría
+        # hacen greppable el log. Nada de esto llega a la pantalla — ver `_error_ia`.
         logger.error("Fallo al clasificar un CV",
-                     extra={"candidato_id": base["candidato_id"], "error": str(exc)})
-        # Ver el encabezado: el motivo se persiste con la clasificación en NULL, así el estado
-        # sobrevive a un F5 y el candidato sigue siendo reintentable.
-        repo.set_fallo(base["candidato_id"], f"{PREFIJO_FALLO}: {exc}", empresa)
-        return CandidatoClasificado(**base, error=str(exc))
+                     extra={"candidato_id": base["candidato_id"], "error": str(exc),
+                            "excepcion": type(exc).__name__, "categoria": categoria_de(exc)})
+        # El motivo se persiste con la clasificación en NULL, así el estado sobrevive a un F5 y
+        # el candidato sigue siendo reintentable. Es un texto para RRHH, no el error del proveedor.
+        repo.set_fallo(base["candidato_id"], motivo_de(exc), empresa)
+        return CandidatoClasificado(**base, error=motivo_de(exc))
     repo.set_clasificacion(base["candidato_id"], r.clasificacion, r.motivo, empresa)
     return CandidatoClasificado(**base, clasificacion=r.clasificacion, motivo=r.motivo)

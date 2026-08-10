@@ -20,27 +20,13 @@ from utils._sesion_inactividad import sesion_expirada
 from utils.logger import logger
 from utils.usuario_estado import estado_usuario, registrar_actividad
 
-PUBLIC_ROUTES = frozenset([
-    "/health",
-    "/api/auth/login",
-    "/api/auth/refresh",
-    "/api/integraciones/google/callback",
-])
-# Rutas públicas de assessment: links que se le mandan por mail a evaluados externos, que no
-# tienen cuenta en el sistema. La autorización es el token (64 hex, uuid4 doble); la empresa
-# sale de la campaña asociada, nunca del header.
-#
-# Solo cuentan como públicas si el módulo está ENCENDIDO. Apagado, el router tampoco está
-# montado (main.py), así que dejarlas saltear el auth solo cambiaría el 401 por un 404 — y esa
-# diferencia contra el resto de las rutas desconocidas delataría que están contempladas de
-# forma especial. Gateando las dos cosas se comportan como cualquier ruta inexistente.
-# PARA REACTIVARLO: ASSESSMENT_ENABLED=true en el entorno.
-#
-# ⚠️ Acá vivía además _ASSESSMENT_FE_RE = r"^/assessment/[^/]+$", borrado a propósito: era un
-# bypass de auth que no matcheaba nada (el backend monta assessment en /api/assessment, y la
-# página pública del evaluado la sirve el front en /evaluacion/{token}). Inofensivo hoy, pero
-# el día que alguien montara cualquier cosa bajo /assessment/* quedaba pública sin que nadie
-# lo notara. No reponerlo.
+# Las rutas SIN auth viven en `_rutas_publicas.py` — ese archivo es el inventario completo
+# de la superficie sin autenticación del sistema, y explica por qué la quinta está gateada
+# por flag. Se re-exporta `PUBLIC_ROUTES` porque hay tests que lo importan de acá.
+from middleware._rutas_publicas import (  # noqa: F401
+    PUBLIC_ROUTES, RUTA_IDENTIFICACION, rutas_publicas_activas,
+)
+
 _ASSESSMENT_API_RE = re.compile(r"^/api/assessment/evaluacion/[^/]+(/submit)?$")
 
 # JWKS del proyecto: publica las claves públicas vigentes y las rota solo.
@@ -59,7 +45,8 @@ _ALGORITHMS = ["ES256"]
 
 
 def _is_public(path: str) -> bool:
-    if path in PUBLIC_ROUTES:
+    # `rutas_publicas_activas()` ya resuelve el gateo por flag de la ruta de identificación.
+    if path in rutas_publicas_activas():
         return True
     return settings.assessment_enabled and bool(_ASSESSMENT_API_RE.match(path))
 

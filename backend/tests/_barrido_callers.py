@@ -244,16 +244,61 @@ def paths_del_front() -> Set[Tuple[str, str]]:
     return encontrados
 
 
-@lru_cache(maxsize=1)
-def rutas_backend() -> List[Tuple[str, str]]:
-    """(MÉTODO, path) de cada ruta montada. Introspección de `app.routes`, nunca una lista."""
+def _rutas_de(app) -> Set[Tuple[str, str]]:
+    """(MÉTODO, path) de las rutas de UNA app. Introspección, nunca una lista."""
     from fastapi.routing import APIRoute
-    from main import app
-    return sorted(
+    return {
         (m, r.path)
         for r in app.routes if isinstance(r, APIRoute)
         for m in r.methods if m not in ("HEAD", "OPTIONS")
-    )
+    }
+
+
+@lru_cache(maxsize=1)
+def rutas_backend() -> List[Tuple[str, str]]:
+    """(MÉTODO, path) de TODA la superficie HTTP, INCLUIDA la que hoy está apagada por un flag.
+
+    🔴 ESTE BARRIDO ERA CIEGO A LOS MÓDULOS GATEADOS POR FLAG, y no en teoría: `main.app` se
+    construye con la config por DEFAULT, donde `HORAS_PUBLICO_ENABLED` y `ASSESSMENT_ENABLED`
+    están en False y sus routers NO SE MONTAN. Medido: con el default veía 0 de las 3 rutas del
+    link público de horas y 0 de las 7 de assessment. Consecuencia concreta — el link público se
+    construyó ENTERO (tres endpoints, cinco sesiones) sin una sola pantalla que lo llamara, y
+    este barrido, que existe exactamente para detectar eso, nunca dio rojo.
+
+    Un endpoint apagado sigue siendo un endpoint que alguien va a tener que llamar algún día, o
+    declarar como excepción con su razón. Apagarlo no lo exime del barrido: lo esconde.
+
+    LA CORRECCIÓN es genérica y no nombra ningún flag: se enciende TODO campo de `Settings` que
+    termine en `_enabled` y se arma una app aparte con `registrar()`. Un módulo gateado que se
+    agregue mañana entra solo — que es la propiedad que el barrido ya tenía para los módulos NO
+    gateados y que le faltaba para estos.
+
+    ⚠️ NO se recarga `main`: se construye una app NUEVA. Reloadear el módulo global dejaría
+    `main.app` en un estado distinto para los tests que corran después (varios lo reconstruyen
+    ellos mismos en fixtures), y el resultado dependería del orden de la suite.
+
+    ⚠️ Se UNE con las rutas de `main.app` porque `/health` se declara ahí y no en `registrar()`.
+    Sin la unión desaparecería de la superficie y su excepción declarada quedaría "muerta",
+    rompiendo el chequeo de la dirección inversa.
+    """
+    from fastapi import FastAPI
+
+    from config.settings import settings
+    from main import app as app_real
+    from registro_routers import registrar
+
+    flags = [n for n in type(settings).model_fields if n.endswith("_enabled")]
+    previos = {n: getattr(settings, n) for n in flags}
+    try:
+        for n in flags:
+            setattr(settings, n, True)
+        completa = FastAPI()
+        registrar(completa)
+        rutas = _rutas_de(completa) | _rutas_de(app_real)
+    finally:
+        for n, v in previos.items():
+            setattr(settings, n, v)
+    return sorted(rutas)
 
 
 def endpoints_sin_front() -> List[Tuple[str, str]]:

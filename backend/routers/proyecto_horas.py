@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from schemas.proyectos import HoraCreate, HoraListResponse, HoraResponse
+from schemas.horas import HoraCreate, HoraListResponse, HoraResponse
 from services.horas_service import HorasService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission

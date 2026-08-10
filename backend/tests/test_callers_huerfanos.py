@@ -71,10 +71,6 @@ _SIMBOLOS_SIN_CALLER: dict[str, str] = {
         "queda fuera de alcance hasta que se encienda; que un link nunca se marque completado se "
         "revisa ahí, no acá.",
 
-    "services/horas_service.py::HorasService.get_by_asignacion":
-        "posible punta del link público de carga de horas (E4), que está EN PAUSA esperando la "
-        "reunión de definición. No se borra hasta que esa reunión decida.",
-
     "services/mail_envio_service.py::destinatarios_pendientes": _MAILS,
 
     "services/mailer/_variables.py::campos_leidos": _PARA_TESTS,
@@ -90,6 +86,13 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     ("GET", "/api/integraciones/google/callback"):
         "lo invoca el REDIRECT de Google, no el front. Un wrapper en services/ sería incorrecto.",
 
+    # ✅ El link público de carga de horas YA NO ESTÁ ACÁ. Sus cuatro endpoints estuvieron
+    # declarados exactamente una tanda —desde que el barrido dejó de ser ciego a los módulos
+    # gateados por flag hasta que se construyó `app/horas/`— y el disparador escrito en su razón
+    # ("sale de esta lista cuando exista app/horas/") se cumplió. El propio barrido pidió que se
+    # sacaran: `test_las_excepciones_siguen_sin_caller` da rojo cuando algo declarado empieza a
+    # tener caller. Es el ciclo que esta lista pretende, funcionando.
+
     # Completitud REST: quedan publicados a propósito. El front resuelve lo mismo por otra vía
     # (el listado ya filtra, la baja va por offboarding), pero el endpoint es correcto y barato.
     ("DELETE", "/api/empleados/{id}"):
@@ -99,6 +102,11 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
         "completitud REST: el listado ya acepta `empleado_id` como Query y es el que usa el front.",
     ("GET", "/api/ausencias/{id}"): "completitud REST: el front nunca pide una ausencia sola.",
     ("GET", "/api/capacitaciones/{id}"): "completitud REST: el front nunca pide una sola.",
+    ("GET", "/api/clientes/{id}"):
+        "completitud REST: el modal de edición recibe el objeto entero del listado, así que "
+        "pedir la fila de vuelta sería una ida a la red por lo que la pantalla ya tiene. Su "
+        "wrapper `fetchCliente` se borró el 2026-08-10 tras nacer sin caller; este barrido no "
+        "lo vio porque `updateCliente`/`deleteCliente` escriben el MISMO literal de path.",
 
     ("GET", "/api/evaluaciones/ciclos"): _EV,
     ("POST", "/api/evaluaciones/ciclos"): _EV,

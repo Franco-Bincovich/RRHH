@@ -16,7 +16,7 @@ export type Seccion =
   | "assessment" | "organigrama" | "dashboard" | "empresa" | "reportes"
   | "importacion" | "integraciones" | "capacitaciones" | "evaluaciones"
   | "inventario" | "objetivos" | "usuarios" | "procesos" | "proyectos"
-  | "auditoria" | "periodos" | "configuracion"
+  | "auditoria" | "periodos" | "configuracion" | "clientes"
 
 const MANDOS_MEDIOS_SECCIONES: ReadonlySet<Seccion> = new Set<Seccion>([
   "vacaciones",
@@ -76,6 +76,10 @@ const RUTA_SECCION: Readonly<Record<string, Seccion>> = {
   auditoria: "auditoria",
   periodos: "periodos",
   usuarios: "usuarios",
+  clientes: "clientes",
+  // La vista interna de horas gatea con PROYECTOS: el dato son filas de horas_proyecto, cuyo
+  // gate publicado ya es ese. Ver el encabezado de routers/horas_cliente.py.
+  "horas-por-cliente": "proyectos",
   // Plantillas de mail + envío + historial. Ruta propia desde el 7/8/2026; el permiso sigue
   // siendo el de configuración, que es el que gatea esos endpoints en el backend.
   comunicacion: "configuracion",
@@ -115,6 +119,8 @@ const RUTAS_ORDENADAS: ReadonlyArray<{ ruta: string; seccion: Seccion }> = [
   { ruta: "/reportes", seccion: "reportes" },
   { ruta: "/auditoria", seccion: "auditoria" },
   { ruta: "/periodos", seccion: "periodos" },
+  { ruta: "/clientes", seccion: "clientes" },
+  { ruta: "/horas-por-cliente", seccion: "proyectos" },
 ]
 
 /** Primera ruta (en orden de nav) que el rol puede leer, o null si ninguna (fail-closed). */

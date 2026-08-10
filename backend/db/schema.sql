@@ -27,6 +27,21 @@
 -- vieja. Los otros 108 indices de produccion son los que Postgres crea solo por
 -- PK/UNIQUE, y salen de las constraints que este archivo si declara.
 --
+-- ✅ AL DIA CON PRODUCCION (verificado contra el catalogo vivo el 2026-08-10).
+-- Las migraciones 102..107 —el modulo de carga de horas— YA ESTAN CORRIDAS. Se
+-- confirmo una por una: existen las tablas `clientes`, `intentos_identificacion`
+-- y `sesiones_horas`; `horas_proyecto` tiene `cliente_id` e `idempotencia`;
+-- `asignacion_id` es NULLABLE; y la fila del tipo de ausencia "Licencia" (107)
+-- esta sembrada. El catalogo vivo y este archivo declaran 63 tablas.
+--
+-- ⚠️ ESTE BLOQUE DECIA "ESTE ARCHIVO VA POR DELANTE DE PRODUCCION" y era FALSO
+-- desde que Franco corrio las migraciones. Un encabezado que miente sobre si el
+-- archivo adelanta o refleja es peor que no tenerlo: manda a buscar un drift que
+-- no existe, o —al reves— hace confiar en una tabla que todavia no esta.
+-- 🚩 Al escribir una migracion nueva, este bloque vuelve a decir "va por delante"
+-- y se lista lo pendiente; al correrla, vuelve a esto. No hay test que lo cubra:
+-- es prosa, y la unica forma de que no mienta es tocarla en las dos direcciones.
+--
 -- COMO USARLO EN UN REBUILD:
 --   1. Crear una base vacia.
 --   2. Correr este schema.sql (crea todo el esquema 'public').
@@ -232,6 +247,18 @@ CREATE TABLE public.cesiones (
     empresa_id uuid NOT NULL,
     fecha date NOT NULL,
     empresa_cesion text NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+-- Catalogo de clientes por empresa (migracion 102). Es de quien depende cada carga de horas
+-- del modulo nuevo. NO tiene relacion con `proyectos`: ese flujo no participa (ver la 102).
+CREATE TABLE public.clientes (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    empresa_id uuid NOT NULL,
+    nombre text NOT NULL,
+    -- La baja es logica: horas_proyecto.cliente_id es una FK sin ON DELETE, asi que borrar un
+    -- cliente con horas fallaria. Mismo criterio que tipos_ausencia (que por eso no tiene delete).
+    activo boolean NOT NULL DEFAULT true,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
@@ -465,15 +492,51 @@ CREATE TABLE public.evaluacion_resultados (
 );
 CREATE TABLE public.horas_proyecto (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
-    asignacion_id uuid NOT NULL,
-    proyecto_id uuid NOT NULL,
+    -- 🔴 Los TRES nullables desde la migracion 103. La tabla nacio para costear proyectos via
+    -- una asignacion; la carga directa del modulo de horas no pasa por ninguna. El camino viejo
+    -- (POST /api/proyectos/{id}/horas) los sigue escribiendo siempre.
+    asignacion_id uuid,
+    proyecto_id uuid,
     empresa_id uuid NOT NULL,
     empleado_empresa_id uuid NOT NULL,
     fecha date NOT NULL,
     horas numeric(6,2) NOT NULL,
-    valor_hora_snapshot numeric(16,2) NOT NULL,
+    valor_hora_snapshot numeric(16,2),
     descripcion text,
     cargado_por uuid,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    -- Migracion 103. `cliente_id` es NULLABLE aunque la carga nueva lo exija: la obligatoriedad
+    -- la impone el service, porque el camino viejo escribe sin cliente.
+    cliente_id uuid,
+    -- De quien son las horas cuando NO hay asignacion. Sin esto una carga directa queda sin
+    -- dueno: `cargado_por` es FK a users y los empleados no tienen cuenta (empleados.user_id 0/31).
+    empleado_id uuid,
+    -- Vocabulario cerrado 'home_office' | 'on_site' (CHECK abajo). Es del DIA, no del empleado:
+    -- empleados.modalidad_trabajo (presencial|hibrido) es otra cosa y no se reusa.
+    modalidad text,
+    -- Proyecto y tarea son TEXTO LIBRE y opcionales: no hay tabla de tareas ni cascada, y la
+    -- tabla `proyectos` no participa de este flujo.
+    proyecto_texto text,
+    tarea_texto text,
+    -- Migracion 106. Identificador por INTENTO de envio que manda el cliente publico; el indice
+    -- unico parcial de abajo es lo que hace que el DOBLE TAP no cree dos filas. El camino viejo
+    -- no lo manda (queda NULL) y por eso el indice es parcial.
+    idempotencia text
+);
+-- Log de SEGURIDAD del link publico de carga de horas (migracion 104): un intento por cada DNI
+-- escrito en la ruta publica. NO es `auditoria` — ahi hay usuario_id y aca no hay usuario.
+-- El DNI se guarda EN CLARO a proposito (8 digitos: un hash seria reversible en segundos y
+-- destruiria la utilidad forense). Append-only: SIN updated_at, por eso no lleva trigger.
+CREATE TABLE public.intentos_identificacion (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    dni text NOT NULL,
+    -- ok | sin_coincidencia | inactivo | sin_clientes | ambiguo | bloqueado. Distingue adentro lo que la
+    -- respuesta HTTP NO distingue: hacia afuera los cuatro fallos son un rechazo unico.
+    resultado text NOT NULL,
+    empleado_id uuid,
+    empresa_id uuid,
+    ip text,
+    user_agent text,
     created_at timestamp with time zone NOT NULL DEFAULT now()
 );
 CREATE TABLE public.inventario_asignaciones (
@@ -758,6 +821,18 @@ CREATE TABLE public.reportes_generados (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     empresa_id uuid
 );
+-- Sesion del link publico de carga de horas (migracion 105). Sostiene la identidad entre el
+-- paso 1 (identificarse con el DNI) y el paso 2 (cargar). El token se guarda HASHEADO: contra
+-- 256 bits de entropia un SHA-256 sin salt alcanza. Es lo contrario del dni de la 104, que va en
+-- claro porque 8 digitos se revierten en segundos. Ver el encabezado de la 105.
+CREATE TABLE public.sesiones_horas (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    token_hash text NOT NULL,
+    empleado_id uuid NOT NULL,
+    empresa_id uuid NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now()
+);
 CREATE TABLE public.solicitudes_ausencia (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     empresa_id uuid NOT NULL,
@@ -960,6 +1035,7 @@ ALTER TABLE public.auditoria ADD CONSTRAINT auditoria_pkey PRIMARY KEY (id);
 ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_pkey PRIMARY KEY (id);
 ALTER TABLE public.capacitaciones ADD CONSTRAINT capacitaciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.cesiones ADD CONSTRAINT cesiones_pkey PRIMARY KEY (id);
+ALTER TABLE public.clientes ADD CONSTRAINT clientes_pkey PRIMARY KEY (id);
 ALTER TABLE public.configuracion_empresa ADD CONSTRAINT configuracion_empresa_pkey PRIMARY KEY (id);
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_pkey PRIMARY KEY (id);
 ALTER TABLE public.documentos_empleado ADD CONSTRAINT documentos_empleado_pkey PRIMARY KEY (id);
@@ -976,6 +1052,7 @@ ALTER TABLE public.evaluacion_evaluados ADD CONSTRAINT evaluacion_evaluados_pkey
 ALTER TABLE public.evaluacion_lotes ADD CONSTRAINT evaluacion_lotes_pkey PRIMARY KEY (id);
 ALTER TABLE public.evaluacion_resultados ADD CONSTRAINT evaluacion_resultados_pkey PRIMARY KEY (id);
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_pkey PRIMARY KEY (id);
+ALTER TABLE public.intentos_identificacion ADD CONSTRAINT intentos_identificacion_pkey PRIMARY KEY (id);
 ALTER TABLE public.inventario_asignaciones ADD CONSTRAINT inventario_asignaciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_pkey PRIMARY KEY (id);
 ALTER TABLE public.notificaciones ADD CONSTRAINT notificaciones_pkey PRIMARY KEY (id);
@@ -999,6 +1076,7 @@ ALTER TABLE public.proyecto_asignaciones ADD CONSTRAINT proyecto_asignaciones_pk
 ALTER TABLE public.proyectos ADD CONSTRAINT proyectos_pkey PRIMARY KEY (id);
 ALTER TABLE public.reglas_vacaciones_escala ADD CONSTRAINT reglas_vacaciones_escala_pkey PRIMARY KEY (id);
 ALTER TABLE public.reportes_generados ADD CONSTRAINT reportes_generados_pkey PRIMARY KEY (id);
+ALTER TABLE public.sesiones_horas ADD CONSTRAINT sesiones_horas_pkey PRIMARY KEY (id);
 ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_pkey PRIMARY KEY (id);
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT solicitudes_vacaciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_pkey PRIMARY KEY (id);
@@ -1107,6 +1185,14 @@ ALTER TABLE public.ev_plantillas ADD CONSTRAINT ev_plantillas_tipo_escala_check 
 ALTER TABLE public.evaluacion_evaluados ADD CONSTRAINT evaluacion_evaluados_perfil_check CHECK ((perfil = ANY (ARRAY['lider'::text, 'general'::text])));
 ALTER TABLE public.evaluacion_resultados ADD CONSTRAINT evaluacion_resultados_tipo_evaluador_check CHECK ((tipo_evaluador = ANY (ARRAY['AUTOEVALUACION'::text, 'AUTOEVALUACION_LIDER'::text, 'SUPERIOR_INMEDIATO'::text, 'PAR'::text, 'COLABORADOR'::text, 'LIBRES'::text])));
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_horas_check CHECK ((horas > (0)::numeric));
+-- Migracion 104. Los cinco desenlaces posibles de un intento de identificacion.
+ALTER TABLE public.intentos_identificacion ADD CONSTRAINT intentos_identificacion_resultado_check CHECK ((resultado = ANY (ARRAY['ok'::text, 'sin_coincidencia'::text, 'inactivo'::text, 'sin_clientes'::text, 'ambiguo'::text, 'bloqueado'::text])));
+-- Migracion 103. Acepta NULL a proposito: las filas del camino viejo no llevan modalidad.
+ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_modalidad_check CHECK ((modalidad IS NULL OR modalidad = ANY (ARRAY['home_office'::text, 'on_site'::text])));
+-- Migracion 103. La tabla tiene EXACTAMENTE DOS formas de fila: o las tres del costeo por
+-- asignacion, o ninguna. El estado mixto (proyecto sin snapshot) reventaria batch_costos con un
+-- TypeError; asi no se puede representar. Ver el encabezado de la 103.
+ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_forma_check CHECK (((asignacion_id IS NULL AND proyecto_id IS NULL AND valor_hora_snapshot IS NULL) OR (asignacion_id IS NOT NULL AND proyecto_id IS NOT NULL AND valor_hora_snapshot IS NOT NULL)));
 ALTER TABLE public.inventario_asignaciones ADD CONSTRAINT inventario_asignaciones_estado_devolucion_check CHECK (((estado_devolucion = ANY (ARRAY['ok'::text, 'con_daño'::text])) OR (estado_devolucion IS NULL)));
 ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_estado_check CHECK ((estado = ANY (ARRAY['disponible'::text, 'asignado'::text, 'en_reparacion'::text, 'baja'::text])));
 ALTER TABLE public.notificaciones ADD CONSTRAINT notificaciones_tipo_check CHECK (((tipo)::text = ANY ((ARRAY['onboarding_tarea'::character varying, 'offboarding_inicio'::character varying, 'assessment_enviado'::character varying, 'assessment_completado'::character varying, 'vacante_nueva'::character varying, 'candidato_nuevo'::character varying, 'documento_vencimiento'::character varying, 'plan_carrera_hito'::character varying, 'sucesion_alerta'::character varying, 'sistema'::character varying, 'otro'::character varying])::text[])));
@@ -1210,6 +1296,9 @@ ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_vacante_id_fkey FOREIGN 
 ALTER TABLE public.capacitaciones ADD CONSTRAINT capacitaciones_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.cesiones ADD CONSTRAINT cesiones_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
 ALTER TABLE public.cesiones ADD CONSTRAINT cesiones_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
+-- Sin ON DELETE a proposito: borrar una empresa no puede llevarse en silencio los clientes
+-- contra los que hay horas cargadas. Mismo criterio que proyectos. Migracion 102.
+ALTER TABLE public.clientes ADD CONSTRAINT clientes_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.configuracion_empresa ADD CONSTRAINT configuracion_empresa_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_empleado_emp_fkey FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id) ON DELETE RESTRICT;
@@ -1248,6 +1337,16 @@ ALTER TABLE public.evaluacion_lotes ADD CONSTRAINT evaluacion_lotes_importado_po
 ALTER TABLE public.evaluacion_resultados ADD CONSTRAINT evaluacion_resultados_evaluado_id_fkey FOREIGN KEY (evaluado_id) REFERENCES evaluacion_evaluados(id) ON DELETE CASCADE;
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_asignacion_id_fkey FOREIGN KEY (asignacion_id) REFERENCES proyecto_asignaciones(id);
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_cargado_por_fkey FOREIGN KEY (cargado_por) REFERENCES users(id);
+-- Migracion 105. FK COMPUESTA, no dos sueltas: garantiza EN LA BASE que el par empleado/empresa
+-- de una sesion es coherente. Sin ella una sesion podria decir "empleado de ACME, empresa DOSUBA"
+-- y todo lo escrito con ella quedaria imputado a la sociedad equivocada. Molde: sa_empleado_empresa_fk.
+ALTER TABLE public.sesiones_horas ADD CONSTRAINT sesiones_horas_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id) ON DELETE CASCADE;
+-- Migracion 104. SET NULL: un log que desaparece cuando se borra el objeto investigado no sirve.
+ALTER TABLE public.intentos_identificacion ADD CONSTRAINT intentos_identificacion_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE SET NULL;
+ALTER TABLE public.intentos_identificacion ADD CONSTRAINT intentos_identificacion_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE SET NULL;
+-- Migracion 103. Las dos SIN ON DELETE, igual que las otras cinco FKs de la tabla.
+ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_cliente_id_fkey FOREIGN KEY (cliente_id) REFERENCES clientes(id);
+ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id);
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_empleado_empresa_id_fkey FOREIGN KEY (empleado_empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_proyecto_id_fkey FOREIGN KEY (proyecto_id) REFERENCES proyectos(id);
@@ -1411,6 +1510,11 @@ CREATE INDEX idx_hp_asignacion ON public.horas_proyecto USING btree (asignacion_
 CREATE INDEX idx_hp_empresa ON public.horas_proyecto USING btree (empresa_id);
 CREATE INDEX idx_hp_fecha ON public.horas_proyecto USING btree (fecha);
 CREATE INDEX idx_hp_proyecto ON public.horas_proyecto USING btree (proyecto_id);
+-- Migracion 103. Parciales: las filas del camino viejo (sin cliente ni empleado) no los tocan.
+-- idx_hp_cliente sostiene "horas por cliente"; idx_hp_empleado_fecha, "lo que cargo esta
+-- persona en este rango" (la tabla de la semana y la suma del dia del tope de horas).
+CREATE INDEX idx_hp_cliente ON public.horas_proyecto USING btree (cliente_id) WHERE (cliente_id IS NOT NULL);
+CREATE INDEX idx_hp_empleado_fecha ON public.horas_proyecto USING btree (empleado_id, fecha) WHERE (empleado_id IS NOT NULL);
 CREATE INDEX idx_inv_asig_empleado ON public.inventario_asignaciones USING btree (empleado_id);
 CREATE INDEX idx_inv_asig_empresa ON public.inventario_asignaciones USING btree (empresa_id);
 CREATE INDEX idx_inv_asig_item ON public.inventario_asignaciones USING btree (item_id);
@@ -1513,6 +1617,22 @@ CREATE UNIQUE INDEX ux_tipos_ausencia_nombre_por_empresa ON public.tipos_ausenci
 CREATE UNIQUE INDEX ux_tipos_ausencia_nombre_global ON public.tipos_ausencia USING btree (nombre) WHERE (empresa_id IS NULL);
 CREATE INDEX idx_tipos_ausencia_empresa ON public.tipos_ausencia USING btree (empresa_id) WHERE (empresa_id IS NOT NULL);
 CREATE INDEX idx_tipos_ausencia_padre ON public.tipos_ausencia USING btree (padre_id) WHERE (padre_id IS NOT NULL);
+-- Migracion 102. Unicidad CASE-INSENSITIVE: con RRHH tipeando a mano, "Acme" y "ACME" son el
+-- caso normal. El precedente de lo que pasa sin unicidad es `proyectos`, que no tiene ninguna y
+-- por eso deduplica con un cache en memoria de Python (services/_nomina_proyectos.py).
+-- ⚠️ Un indice por expresion no sirve como target de on_conflict; clientes no se upsertea.
+CREATE UNIQUE INDEX ux_clientes_nombre_por_empresa ON public.clientes USING btree (empresa_id, lower(nombre));
+CREATE INDEX idx_clientes_empresa ON public.clientes USING btree (empresa_id);
+-- Migracion 104. Las tres preguntas que la tabla existe para responder: que paso recientemente,
+-- cuantas veces se probo ESTE dni, y cuantos dnis probo ESTA ip.
+-- Migracion 105. La unicidad es lo que hace que un token identifique a UNA sesion.
+CREATE UNIQUE INDEX ux_sesiones_horas_token ON public.sesiones_horas USING btree (token_hash);
+CREATE INDEX idx_sesiones_horas_expira ON public.sesiones_horas USING btree (expires_at);
+-- Migracion 106. Parcial: el camino viejo no manda idempotencia y no lo toca.
+CREATE UNIQUE INDEX ux_hp_idempotencia ON public.horas_proyecto USING btree (idempotencia) WHERE (idempotencia IS NOT NULL);
+CREATE INDEX idx_intentos_created ON public.intentos_identificacion USING btree (created_at DESC);
+CREATE INDEX idx_intentos_dni ON public.intentos_identificacion USING btree (dni, created_at DESC);
+CREATE INDEX idx_intentos_ip ON public.intentos_identificacion USING btree (ip, created_at DESC) WHERE (ip IS NOT NULL);
 
 
 -- ============================================================================

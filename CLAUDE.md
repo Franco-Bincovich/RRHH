@@ -95,13 +95,24 @@ RRHH es el repositorio interno de **HR Karstec**: plataforma de gestión del cic
 - **BLOQUE B — Filtros y exports.** B1 matriz · B2 fundación · B3 filtro por área · B4 filtro por proyecto · B5/B6 filtros expuestos y rango de fechas · B7 límite de export con aviso. Ver "Filtros y exports (Bloque B)".
 - **BLOQUE C — Compromisos del directorio.** C1 historial salarial · C2 exports de nómina y auditoría · C3 entrevista de salida · C4 domicilio desglosado (mig 081) · C5 Áreas al sidebar. **C6 (plantillas públicas/privadas) NO está hecho** — sigue sin alcance definido (§4.3 del Plan).
 
-**Lo que sigue:** entregar usuarios a RRHH para testing sobre datos reales · **BLOQUE D** (evaluaciones cross-lote, bloqueado por tener 1 solo lote) · **BLOQUE E** (CV screening) · handoff a AWS (`migracionAWS/`).
+**Lo que sigue:** **encender el link público de horas** (`HORAS_PUBLICO_ENABLED=true` + cargar al menos un cliente — el código está entero y verde) · entregar usuarios a RRHH para testing sobre datos reales · **BLOQUE D** (evaluaciones cross-lote, bloqueado por tener 1 solo lote) · **BLOQUE E** (CV screening) · handoff a AWS (`migracionAWS/`).
 
 ### 🔴 EL PROBLEMA #1 NO ES CÓDIGO: RRHH no cargó datos
-Verificado contra el catálogo vivo (28/7/2026): **1 empresa, 19 empleados**, y casi todo lo demás vacío:
-- `manager_id` 0/19 · `modalidad_contratacion` 0/19 · `seniority` 4/19
-- `solicitudes_vacaciones` 0 · `solicitudes_ausencia` 0 · `costos_nomina` 0 · `vacantes` 0 · `objetivos` 0
-- Poblado: `fecha_nacimiento` 19/19 (por eso el KPI de cumpleaños muestra datos) · `auditoria` 133 filas · el lote de evaluaciones (10 evaluados, 307 resultados).
+Verificado contra el catálogo vivo (**10/8/2026**): **2 empresas, 31 empleados** (19 + 12), y casi todo lo demás vacío:
+- `manager_id` **11/31** · `seniority` 3/31 · `horas_contrato` **0/31**
+- `solicitudes_vacaciones` 0 · `solicitudes_ausencia` 0 · `costos_nomina` 0 · **`clientes` 0 · `horas_proyecto` 0**
+- Apenas arrancados: `vacantes` 1 · `objetivos` 1 · `candidatos` 2
+- Poblado: `fecha_nacimiento` 31/31 (por eso el KPI de cumpleaños muestra datos) · `areas` 12 · `auditoria` 147 filas · el lote de evaluaciones (10 evaluados, 307 resultados).
+
+> 🟢 **`manager_id` DEJÓ DE ESTAR EN CERO** (0/19 → 11/31). Es el cambio más importante de este
+> bloque y desbloquea dos cosas que estaban declaradas como no probables: el rol
+> **`mandos_medios`** ahora tiene a quién ver (su ownership cuelga de ese campo), y el
+> **desempate por superior** del matcheo de evaluaciones empieza a discriminar de verdad. Los
+> 20 restantes siguen sin cargar, así que probar mandos_medios exige elegir un usuario que sea
+> manager de alguien.
+>
+> 🔴 **`horas_contrato` 0/31 es el nuevo cero que importa:** toda licencia cargada por el link
+> público se calcula con la jornada asumida de 8 h y sale marcada `horas_por_dia_estimadas`.
 
 **Consecuencia:** los reportes y KPIs están correctos pero salen VACÍOS. Antes de entregar a RRHH hay que avisarles explícitamente, o van a abrir pantallas vacías y creer que están rotas. Esto NO es deuda técnica — es un bloqueante de adopción.
 
@@ -109,9 +120,10 @@ Verificado contra el catálogo vivo (28/7/2026): **1 empresa, 19 empleados**, y 
 
 ### Al entregar a testing, decirle a RRHH:
 1. Los reportes/KPIs salen vacíos hasta que carguen dotación, vacaciones, ausencias, costos. No están rotos.
-2. `manager_id` sin cargar → un usuario `mandos_medios` no ve NADA (su ownership depende de ese campo). Todavía no probar ese rol.
-3. Los filtros nuevos (área, proyecto, empleado, rango de fechas) están vivos, pero con 19 empleados y un proyecto que concentra 13, **casi todo filtro devuelve casi todo**. No es un filtro roto: es el reparto real de la gente.
-4. Qué se espera que "traten de romper".
+2. `manager_id` **11/31** → `mandos_medios` YA se puede probar, pero solo con un usuario que sea manager de alguien; los otros 20 empleados siguen sin superior y un manager vacío no ve nada.
+3. Los filtros nuevos (área, proyecto, empleado, rango de fechas) están vivos, pero con 31 empleados y un proyecto que concentra 13, **casi todo filtro devuelve casi todo**. No es un filtro roto: es el reparto real de la gente.
+4. **El link público de horas necesita al menos un cliente cargado** (`clientes` está en 0): sin eso la identificación por DNI rechaza al padrón entero, y por rechazo único el empleado no ve la diferencia con "tu DNI no existe".
+5. Qué se espera que "traten de romper".
 
 ### Fases cerradas (no reabrir)
 - ✅ **FASE 2 — Barrera de empresa (commits `bd95e98` + `9d7baa7`).** **92/92 endpoints con id de recurso donde aplica** validaban empresa, y **13/13 superficies de VACACIONES y AUSENCIAS** componían además el eje de ownership. 8 endpoints quedaron marcados NO APLICA con razón: `usuarios` (`DELETE /{user_id}` — los usuarios no cuelgan de una empresa, por decisión de producto), `empresa` (`GET`/`PUT`/`PATCH /{id}/activa`/`POST /{id}/logo` — la empresa *es* el recurso), `assessment` público (`GET`/`POST /evaluacion/{token}` — sin auth, la autorización es el token) e `integraciones` (`DELETE /{tipo}` — scopeado por `user_id`, no por empresa). **Los 2 de assessment ya ni se montan** (Bloque A1). **La regla permanente está en "Patrón de barrera de empresa" — leerla antes de escribir un endpoint nuevo, y aplicarla a los endpoints que se agregaron después del barrido.**
@@ -198,10 +210,12 @@ La purga de vencidos corre en el camino que **crea** states (el que genera las f
 ## Estructura (backend)
 ```
 backend/
-├── main.py              ← entrada, registro de routers, middleware (171 líneas)
+├── main.py              ← entrada + middleware (65 líneas; el registro se fue a registro_routers.py)
+├── registro_routers.py  ← registrar(app): monta los 69 routers. Es FUNCIÓN, no módulo con efectos:
+│                          los flags se leen AL LLAMARLA, así un test puede encenderlos y re-registrar.
 ├── config/settings.py   ← única fuente de config y env (Settings() se instancia en import)
-├── routers/             ← 52 archivos, 208 rutas montadas, sin lógica (límite 80 líneas)
-├── services/            ← 129 archivos de lógica de negocio (límite 150)
+├── routers/             ← 69 archivos, 247 rutas montadas, sin lógica (límite 80 líneas)
+├── services/            ← 197 archivos de lógica de negocio (220 con submódulos) (límite 150)
 │   ├── _empleado_scope.py     ← barrera de empresa/ownership sobre el empleado target (Fase 2)
 │   ├── _adjunto_padres.py     ← resolver de la entidad padre de un adjunto (Fase 2)
 │   ├── _empleados_write.py    ← altas/ediciones de empleado, extraído por límite
@@ -218,10 +232,20 @@ backend/
 │   ├── _nomina_superiores.py, _superiores_matcher.py ← 2ª pasada del import (mig 086)
 │   ├── _usuario_alta.py, _ev_instancia_crear.py ← altas extraídas por límite
 │   ├── _reporte_anual_metricas.py, _audit_payloads_offboarding.py ← extraídos por límite
+│   ├── cliente_service.py     ← ABM del catálogo de clientes; la baja es LÓGICA (activo=False)
+│   ├── identificacion_service.py ← paso 1 del link público: DNI → sesión. Rechazo ÚNICO + piso de tiempo
+│   ├── _sesion_horas.py       ← el token opaco que lleva la identidad del paso 1 al 2
+│   ├── carga_horas_service.py, _carga_reglas.py, _carga_licencia.py ← la carga: tope 12 h, ventana 30 días, licencia
+│   ├── _semana_publica.py     ← "lo que cargaste esta semana" (lunes a domingo, la decide el backend)
+│   ├── horas_cliente_service.py, _horas_cliente_agrupacion.py ← la vista interna por cliente
 │   ├── mailer/                ← punto de salida ÚNICO de mails; expone solo enviar_mail
 │   ├── export/                ← punto de salida ÚNICO de exports; expone build_export
 │   └── reportes/              ← un submódulo por familia + _common.py
-├── repositories/        ← 69 archivos, único acceso a DB (límite 100, satélites incluidos)
+├── repositories/        ← 87 archivos, único acceso a DB (límite 100, satélites incluidos)
+│   ├── cliente_repo.py        ← catálogo de clientes; `existe_nombre` compara en Python, NO con .ilike()
+│   ├── _hora_row.py           ← mapper de horas_proyecto con lookups por lote (anti-N+1)
+│   ├── identificacion_repo.py, sesion_horas_repo.py ← DNI → empleado · nonces de sesión del link público
+│   ├── _horas_vista_repo.py, _semana_publica_repo.py ← la vista interna · la semana del empleado
 │   ├── _scope_filtros.py      ← "qué empleados caen bajo área/proyecto" (B3/B4, era _area_scope.py)
 │   ├── _rango_fechas.py       ← filtro por período con semántica de SOLAPAMIENTO (B5)
 │   ├── _empleado_write_repo.py, _empleado_row.py, _nomina_row.py, _offboarding_row.py
@@ -232,15 +256,15 @@ backend/
 ├── schemas/             ← Pydantic in/out (+ empleado_out.py y _provincias.py)
 ├── utils/               ← permisos.py, errors.py, logger.py, rate_limit.py, empresas_cache.py
 ├── db/schema.sql        ← FUENTE DE RECONSTRUCCIÓN (58 tablas, 364 constraints, 151 índices)
-├── migrations/          ← 87 archivos SQL; backend va por 089 (075–077 viven en migracionAWS/)
+├── migrations/          ← 105 archivos SQL; backend va por 107 (075–077 viven en migracionAWS/)
 ├── ruff.toml            ← config de ruff (reemplazó pyproject.toml, por Vercel)
 ├── pytest.ini           ← config de pytest (asyncio_mode=auto, testpaths=tests)
 └── tests/               ← 89 archivos test_*.py + _postgrest_schema.py (helper)
 ```
 
-**Env vars obligatorias** (sin default → rompen el import si faltan): `supabase_url`, `supabase_anon_key`, `supabase_service_key`, `jwt_secret`, `anthropic_api_key`, `resend_api_key`. Con default: `assessment_enabled`, `trusted_proxy_hops`, `rate_limit_storage_uri`, `supabase_timeout` (30 s), Google OAuth, `frontend_url`, `allowed_origins`. La migración a AWS agrega `database_url`.
+**Env vars obligatorias** (sin default → rompen el import si faltan): `supabase_url`, `supabase_anon_key`, `supabase_service_key`, `jwt_secret`, `anthropic_api_key`, `resend_api_key`. Con default: `assessment_enabled`, **`horas_publico_enabled`** (`false` — enciende el link público de carga de horas), `trusted_proxy_hops`, `rate_limit_storage_uri`, `supabase_timeout` (30 s), Google OAuth, `frontend_url`, `allowed_origins`. La migración a AWS agrega `database_url`.
 
-**Migraciones y salud de base.** La última del backend es **089** (`ausencias_unicidad`), 87 archivos SQL en total. **082–088 están CORRIDAS en producción; la 089 NO** — es la única pendiente, y hay que correrla **antes de que se cargue el histórico de ausencias** (con la tabla en 0 filas no puede fallar; con duplicados reales, sí). Las 072/073/074 corrigieron drift. **La 084 es la única destructiva** (`DROP COLUMN modalidad_contratacion` y `nivel`). `000_run_all.sql` **deprecado con guard que aborta**. Detalle de reconstrucción desde cero en **`docs/DEPLOY.md`**.
+**Migraciones y salud de base.** La última del backend es **107** (`tipo_ausencia_licencia`), 105 archivos SQL en total. ✅ **Verificado contra el catálogo el 10/8/2026: NO hay migraciones pendientes** — la 089 (`uq_ausencia_empleado_rango_tipo`) y las 102–107 del módulo de horas están todas corridas, y las 4 tablas nuevas coinciden con `schema.sql` columna por columna (19/19 constraints, 10/10 índices). Las 072/073/074 corrigieron drift. **La 084 es la única destructiva** (`DROP COLUMN modalidad_contratacion` y `nivel`). `000_run_all.sql` **deprecado con guard que aborta**. Detalle de reconstrucción desde cero en **`docs/DEPLOY.md`**.
 
 **Contraste schema.sql ↔ catálogo vivo (28/7/2026):**
 
@@ -425,11 +449,15 @@ Dedup por DNI. Dos flujos, ambos gateados `Seccion.IMPORTACION + WRITE` (solo ad
 - **`components/ui/FiltersBar.tsx`** (128 líneas) — presentacional, controlado, sin estado ni fetch ni debounce. **5 tipos:** `select` · `search` · `date` · **`daterange`** (emite un objeto) · **`multiselect`** (checkboxes, *no* `<select multiple>`: el nativo exige ctrl/cmd+click, que es justo lo que un usuario no descubre solo). Si algún filtro llega a decenas de opciones, eso pide un combobox con búsqueda — control distinto, no un ajuste de este.
 - Hooks vivos: `useFiltrosEmpleados` · `useFiltrosVacaciones` · `useFiltrosAusencias` · `useFiltrosProyectos` · `useFiltrosAsignacionesCap` · `useFiltrosAsignacionesInv` · `useFiltrosEvaluadosResultados`.
 
-### Superficie de filtros hoy (12 exports, verificada por introspección de `app.routes`)
+### Superficie de filtros hoy (verificada por introspección de `app.routes`, 10/8/2026)
+
+**27 endpoints con parámetro `formato`** (= exports). **19 aceptan además filtros propios**; los
+otros 8 exportan el listado entero (empresas, equipo, offboarding, onboarding, onboarding/
+templates, períodos, usuarios y el export de un reporte por id). Los que llevan filtros:
 
 | Módulo | Filtros del listado = del export |
 |---|---|
-| empleados | area · proyecto · estado · es_lider · search |
+| empleados | area · proyecto · estado · es_lider · search · sin_manager |
 | vacaciones | area · proyecto · empleado · estado · **fecha_desde/hasta** |
 | ausencias | area · proyecto · empleado · tipo · **fecha_desde/hasta** |
 | auditoría | entidad · evento · usuario · registro · fecha_desde/hasta |
@@ -440,6 +468,12 @@ Dedup por DNI. Dos flujos, ambos gateados `Seccion.IMPORTACION + WRITE` (solo ad
 | costos/nómina | anio · mes |
 | ev_instancias | ciclo · estado |
 | proyectos (listado) | area · estado |
+| **clientes** | incluir_inactivos (la empresa va por header, no como param) |
+| **horas por cliente** | anio · mes — 🔴 **obligatorios**, no opcionales: sin período la consulta sería la tabla entera |
+| vacaciones pendientes | area · empleado · proyecto |
+| capacitaciones (catálogo) | solo_activos |
+| vacantes / candidatos | estado / clasificación · sin_vacante |
+| áreas | empresa |
 
 ### 🔴 DOS TESTS ESTRUCTURALES — son REGLA PERMANENTE, no tests de una feature
 
@@ -572,6 +606,29 @@ Ausencias activas hoy, % ausentismo del mes (base de días hábiles configurable
 ---
 
 ## Otros módulos (referencia rápida)
+- **Carga de horas (migraciones 102–107, TODAS CORRIDAS).** Dos superficies sobre `horas_proyecto`.
+  - **Link público `/horas`** (front fuera de `(dashboard)`, sin AuthGuard) — el empleado se
+    identifica **solo con DNI** (decisión de producto cerrada) y carga horas o una licencia.
+    🔴 **Apagado por `HORAS_PUBLICO_ENABLED` (default `false`), y el flag gatea DOS piezas**: el
+    router no se monta **y** las rutas salen de `PUBLIC_ROUTES`. Gatear las dos es lo que hace que
+    se comporten como una ruta inexistente; solo desmontar el router cambiaría el 401 por un 404 y
+    esa diferencia delataría al módulo. Encendido son **5 rutas públicas nuevas** (4 + las 4 base = 9).
+  - **La identidad entre pasos NO es el DNI**: el paso 1 devuelve un **token opaco de 256 bits**
+    persistido hasheado en `sesiones_horas`, TTL 30 min. Así los pasos 2+ se autentican con algo
+    que el cliente no puede adivinar, y la debilidad del DNI queda confinada al paso 1 — que
+    además tiene rate limit por IP **y** por DNI, rechazo único con piso de tiempo, y log de
+    intentos en `intentos_identificacion` (**DNI en claro**: 8 dígitos hasheados se revierten en
+    segundos y perder el valor forense no compra nada).
+  - **Reglas de carga:** tope **12 h/día**, ventana de **30 días** hacia atrás, `cliente_id`
+    obligatorio, `proyecto`/`tarea` texto libre. El doble-tap está cerrado por `idempotencia` +
+    índice único parcial; la carrera entre cargas concurrentes distintas es **límite conocido
+    declarado** (sin triggers ni transacciones vía PostgREST). La licencia sin `horas_contrato`
+    asume 8 h y lo **avisa** en la respuesta.
+  - **Vista interna "Horas por cliente"** (`/horas-por-cliente`, gate `Seccion.PROYECTOS`) —
+    agrupa por cliente y empleado con período obligatorio, exporta y **borra**. Editar una carga
+    NO está: revocaría la irreversibilidad, es decisión de producto, no una feature faltante.
+  - **Catálogo de clientes** (`/clientes`, gate `Seccion.CLIENTES`) — ABM con **baja lógica**.
+  - 🔴 **Hoy `clientes` está en 0 y sin un cliente el circuito entero rechaza al padrón.**
 - **Vacantes + Candidatos:** `routers/vacantes.py` + `candidatos.py` (+ `_candidato_form.py` público sin auth), `vacante_service.py`, `candidato_service.py`, `cv_service.py`. Integraciones: `zernio_service.py`, `gmail_service.py` (**recepción** de mails de candidatos, 122 líneas). **Vacantes es el patrón canónico de borrado con confirmación** (router DELETE + service con snapshot-antes-de-borrar + fetch crudo por el 204 + `EliminarVacanteButton.tsx` + `ConfirmDialog`). Copiar de acá.
 - **Historial salarial (C1):** `costo_service.get_historial_salarial`. 🔑 **La serie de `costos_nomina` ES el historial** — no hace falta el log de cambios: la tabla tiene `UNIQUE (empleado_id, anio, mes)`, o sea una fila por mes. Con auditoría, el caso más común —sueldos importados por CSV y nunca editados a mano— daría **historial vacío teniendo los sueldos cargados**. **DOS barreras, las dos necesarias y distintas:** la de SECCIÓN (`Seccion.COSTOS + READ`, la aplica el router: quién puede ver sueldos) y la de EMPRESA (se aplica en el service, sobre el EMPLEADO objetivo — el `empresa_id` del repo sale del header y no valida a qué empleado apuntás). El front no renderiza la sección sin permiso de costos: una sección que aparece y falla es peor que una que no aparece.
 - **Entrevista de salida (C3):** `services/_offboarding_entrevista.py`. Las columnas `entrevista_salida` y `notas_entrevista` existían en DB y estaban **muertas**; ahora se escriben y se leen.
@@ -619,12 +676,12 @@ Ausencias activas hoy, % ausentismo del mes (base de días hábiles configurable
   que no es TRUE, así que la fila se cae del WHERE — y como el count viaja en la misma query, **se
   cae también del total**. Un día no tomado no tiene fechas porque nadie faltó ningún día: es un
   saldo, no un hecho del calendario.
-- **Unicidad de ausencias (mig 089, 🔴 PENDIENTE EN PRODUCCIÓN):** índice único
+- **Unicidad de ausencias (mig 089, ✅ CORRIDA — verificado 10/8/2026):** índice único
   `(empleado_id, fecha_desde, fecha_hasta, tipo_id)`. Sostiene la idempotencia del import mensual
   (`on_conflict` de PostgREST **exige** una constraint única). **NO prohíbe solapamientos
-  parciales**, solo el duplicado exacto. 🔴 **Correrla ANTES de que se cargue el histórico**: hoy la
-  tabla tiene 0 filas y no puede fallar; con datos, un duplicado real hace fallar el
-  `CREATE UNIQUE INDEX` y hay que deduplicar a mano.
+  parciales**, solo el duplicado exacto. Se corrió con la tabla en 0 filas, que era la ventana
+  para hacerlo sin riesgo: con histórico cargado, un duplicado real habría hecho fallar el
+  `CREATE UNIQUE INDEX` y habría que deduplicar a mano.
 - **Proyectos:** asignación single (`proyecto_asignaciones.py`) + bulk multi-selección
   (`POST /{id}/asignaciones/bulk`) + **alta de un ÁREA ENTERA** (`POST /{id}/asignaciones/area`).
   Los tres comparten la clasificación en **tres grupos**: `asignados` · `ya_asignados` · `errores`
@@ -675,9 +732,16 @@ Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. C�
 `next dev` con Turbopack transpila sin type-check → errores de tipo pasan desapercibidos pero **`next build` falla**. `vitest` cubre hoy 214 tests en 16 archivos, pero **la mayor parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Regla: `node_modules/.bin/tsc --noEmit` tiene que dar 0. Si aparece un error, es tuyo.**
 > ⚠️ vitest corre con `environment: "node"` y **sin jsdom**: los tests de componentes usan `renderToStaticMarkup` y verifican el **markup**, no la interacción — y **no ejecutan `useEffect`**. Ver el caso #4 de "Un test solo prueba lo que el fake puede desmentir".
 
-### 🚨 Módulos desactivados (assessment y sucesión)
+### 🚨 Módulos desactivados (assessment, sucesión y el link público de horas)
 
-Hay **dos módulos apagados a propósito**. En los dos el código está **entero**: se sacó el punto de entrada, no se borró nada.
+Hay **tres módulos apagados a propósito**. En los tres el código está **entero**: se sacó el punto de entrada, no se borró nada.
+
+> 🔴 **El tercero es distinto de los otros dos y no hay que confundirlos.** Assessment y sucesión
+> están apagados porque **no se usan**; el link público de horas está apagado porque **todavía no
+> se encendió**: es código nuevo, completo y verde, esperando `HORAS_PUBLICO_ENABLED=true` en
+> `sofia-backend` y que RRHH cargue un cliente. Su mecánica de apagado copia la de assessment
+> (router desmontado **+** rutas fuera de `PUBLIC_ROUTES`, las dos con el mismo flag), y está
+> descrita en *Otros módulos → Carga de horas*.
 
 #### 1. Assessment — apagado en el FRONT **y en el BACKEND**
 - **Backend (Bloque A1):** `settings.assessment_enabled: bool = False`. **Dos puntos leen el flag:**
@@ -800,19 +864,37 @@ después del cutover a AWS**, como ya estaba decidido — no ahora.
 - **"Compatibilidad con una posición"** (sucesión): feature nunca construida, no deuda técnica. El ranking es por assessment genérico. Cuando RRHH la reclame, definir qué significa compatibilidad antes de improvisar.
 
 ### Tests
-- **Backend: 1551 passed** en **89 archivos `test_*.py`** (+ `tests/_postgrest_schema.py`, que es helper, no test). `pytest -q` desde `backend/` con `venv`.
-- **Front: `npm test` (= `vitest run`) — 214 tests en 16 archivos.** **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
-- **Los CINCO barridos estructurales** — cada uno cubre automáticamente lo que se agregue después, y **todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una extracción rota devolvería 0 elementos y pasaría en el vacío:
+- **Backend: 3231 passed** en **153 archivos `test_*.py`** (+ `tests/_postgrest_schema.py` y `tests/_barrido_callers.py`, que son helpers, no tests). `pytest -q` desde `backend/` con `venv`. *(Medido el 10/8/2026.)*
+- **Front: `npm test` (= `vitest run`) — 620 tests en 49 archivos.** **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Los DOCE barridos estructurales** — cada uno cubre automáticamente lo que se agregue después, y **todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una extracción rota devolvería 0 elementos y pasaría en el vacío:
   1. `tests/test_paridad_list_export.py` — el export acepta los mismos Query que el listado.
   2. `tests/test_limite_export.py::TestTodosLosExportsChequean` — todo export llama a `verificar_limite_export`.
   3. `tests/test_selects_repos.py` — **todo** `select` con embed del repo, validado con AST contra `db/schema.sql`. Descubrimiento por introspección, nunca una lista.
-  4. `tests/test_espejo_permisos.py` — `frontend/services/permisos.ts` contra `utils/permisos.py`: secciones, acciones, roles y `MANDOS_MEDIOS_SECCIONES`. **Cierra el último espejo manual que no tenía red.**
-  5. `frontend/components/layout/nav-config.test.ts` — `NAV_GROUPS` contra `seccionDeRuta`.
+  4. `tests/test_espejo_permisos.py` — `frontend/services/permisos.ts` contra `utils/permisos.py`: secciones, acciones, roles y `MANDOS_MEDIOS_SECCIONES`.
+  5. `tests/test_callers_huerfanos.py` — símbolos de `services/`+`repositories/` que nadie llama, y endpoints montados que el front nunca pide.
+  6. `tests/test_mappers_ejercitados.py` · 7. `tests/test_contrato_repos.py` · 8. `tests/test_auditoria_coherente.py` · 9. `tests/test_nombres_definidos.py` · 10. `tests/test_triggers_updated_at.py`.
+  11. `frontend/components/layout/nav-config.test.ts` — `NAV_GROUPS` contra `seccionDeRuta`.
+  12. **`frontend/services/barridoFront.test.ts` (NUEVO, 10/8/2026)** — exports de `services/` que ningún componente importa, en dos buckets (huérfano / solo-tests), con excepciones declaradas con razón y verificadas en las dos direcciones.
+
+> 🔴 **POR QUÉ HICIERON FALTA DOS BARRIDOS DE CÓDIGO MUERTO Y NO ALCANZA UNO.** El #5 empareja
+> *(path, método)* contra los **literales de path escritos en el front**; el #12 mira **quién
+> importa a quién**. Son ejes distintos y cada uno ve lo que el otro no puede: un wrapper muerto
+> le sigue "dando caller" a su endpoint en el #5 —`fetchCliente` estuvo cinco sesiones sin caller
+> y el barrido verde, tapada por `updateCliente`/`deleteCliente`, que escriben el mismo literal
+> con otro método—, y el #12 no sabe nada de rutas del backend. Al encenderse, el #12 encontró en
+> el acto que **`POST /api/costos/presupuesto` y la asignación single a un proyecto solo los
+> escribe una función sin caller**: dos features publicadas e inalcanzables desde la UI.
+> ⚠️ Y por eso **un comentario del front NO cita una ruta entre backticks**: el escáner del #5 no
+> distingue un comentario de un template literal, así que escribirla vuelve a tapar el endpoint.
 - Adjuntos: 11 tests unit con `_FakeRepo` + storage monkeypatcheado. **E2E real nunca se ejecutó** (`_BUCKET="documentos"` hardcodeado apunta a prod). Decisión: E2E automatizado en el cutover a AWS/S3.
 - 🚨 **Antes de dar un test por bueno, contestar: ¿qué tendría que ser distinto en el fake para que pueda fallar?** Ver la sección "Un test solo prueba lo que el fake puede desmentir".
 
 ### En pausa
-- **Link público de carga de horas** (E4) — mockup HTML aprobado. Bloqueado: requiere la reunión de definición.
+- ✅ **Link público de carga de horas (E4) — YA NO ESTÁ EN PAUSA: SE CONSTRUYÓ ENTERO.** Esta línea
+  decía *"Bloqueado: requiere la reunión de definición"* y quedó así hasta el 10/8/2026, seis
+  sesiones después de que el módulo empezara. Ver **"Carga de horas"** en *Otros módulos*. Lo único que
+  falta para que funcione en producción no es código: `HORAS_PUBLICO_ENABLED=true` en
+  `sofia-backend` y **al menos un cliente cargado**.
 - **Limpieza general del repo** (Bloque G): lo que queda es el filtro `empresa` duplicado 8× entre repos y el presupuesto de tiempo duplicado entre `_nomina_lote` y `_lote_mails`. **El dead code y los duplicados de la raíz YA SE BORRARON** (2/8/2026). No urgente.
 
 ---

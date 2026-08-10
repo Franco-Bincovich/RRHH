@@ -104,6 +104,8 @@ EXPORTS = [
     ("services.vacaciones_pendientes_service", "VacacionesPendientesService", "exportar"),
     ("services.vacante_service", "VacanteService", "exportar"),
     ("services.offboarding_service", "OffboardingService", "exportar"),
+    ("services.cliente_service", "ClienteService", "exportar"),
+    ("services.horas_cliente_service", "HorasClienteService", "exportar"),
 ]
 
 # Exports que legítimamente NO chequean, con su razón. Si alguno se agrega acá sin
@@ -125,7 +127,7 @@ class TestTodosLosExportsChequean:
     def test_el_barrido_no_esta_vacio(self) -> None:
         """Guarda contra el falso verde: si la lista quedara vacía, todo lo de abajo pasaría
         sin haber mirado nada."""
-        assert len(EXPORTS) >= 17
+        assert len(EXPORTS) >= 19
 
     @pytest.mark.parametrize("modulo,clase,metodo", EXPORTS, ids=lambda v: v.split(".")[-1])
     def test_importa_el_chequeo(self, modulo: str, clase: str, metodo: str) -> None:

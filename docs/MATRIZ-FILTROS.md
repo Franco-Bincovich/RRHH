@@ -133,14 +133,62 @@ ninguna área**, y la resolución de empleados **no se acota por empresa** (un p
 puede tener gente de B — acotar devolvería cero en silencio). La semántica completa está en
 `repositories/_area_scope.py`, que es donde hay que leerla antes de cambiarla.
 
-### Horas de proyecto
+### Clientes
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| — | `horas_repo.py:49` acepta **solo** `proyecto_id` + paginación | — | `proyecto_horas.py:26-27` solo `page`/`page_size` | — | ❌ sin export |
+| empresa | `cliente_repo.py::find_all` | `cliente_service.py:49` | header `X-Empresa-Id` | selector del sidebar | ❌ no viaja como param |
+| incluir_inactivos | `cliente_repo.py::find_all` | ✅ | `clientes.py:35` | botón "Ver bajas" (`clientes/page.tsx:33`) | ✅ `clientes.py:49` |
 
-> **Cero filtros.** No hay corte por fecha, empleado, área ni empresa. Es el módulo de costeo,
-> y hoy no permite ningún análisis. Ver Parte 5.
+> ⚠️ **NO hay filtro de búsqueda por nombre, ni en el backend ni en la UI** — el catálogo es un
+> listado corto por empresa y se lee entero. Si alguna vez pasa de unas decenas de filas, el
+> control que pide es un `search` como el de Empleados, y **tiene que nacer server-side**: uno
+> client-side dejaría el export devolviendo más filas de las que se ven.
+>
+> El filtro de EMPRESA **no viaja como query param, a propósito**: es una VISTA y la manda el
+> selector del sidebar por header. Por eso el export tampoco lo lleva, y el par list↔export
+> sigue siendo idéntico. Está escrito en `services/clientes.ts::queryClientes`, que es la
+> traducción ÚNICA que consumen el listado y el export.
+>
+> La baja es **lógica** (`activo=False`): un cliente dado de baja sale de los selects y las
+> horas ya cargadas contra él quedan intactas. Por eso "incluir_inactivos" es un filtro y no
+> un estado derivado.
+
+### Horas de proyecto (camino viejo, por asignación)
+
+| Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
+|---|---|---|---|---|---|
+| — | `horas_repo.py` acepta **solo** `proyecto_id` + paginación | — | `proyecto_horas.py` solo `page`/`page_size` | — | ❌ sin export |
+
+> **Cero filtros.** No hay corte por fecha, empleado, área ni empresa. Ver Parte 5.
+>
+> ⚠️ **Esto ya NO es el único acceso a `horas_proyecto`.** Desde el módulo de carga de horas
+> existe *Horas por cliente* (abajo), que sí filtra y sí exporta. Son dos vistas de la misma
+> tabla por dos caminos distintos: acá se entra por **asignación a un proyecto** y allá por
+> **cliente + período**. La fila vieja (`asignacion_id`/`proyecto_id`/`valor_hora_snapshot`
+> seteados) y la nueva (`cliente_id`/`empleado_id`) conviven por el CHECK
+> `horas_proyecto_forma_check`.
+
+### Horas por cliente
+
+| Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
+|---|---|---|---|---|---|
+| empresa | `_horas_vista_repo.py` | `horas_cliente_service.py` | header `X-Empresa-Id` | selector del sidebar | ❌ no viaja como param |
+| mes | `_horas_vista_repo.py` | ✅ | `horas_cliente.py:40` **obligatorio** | selector de mes (`horas-por-cliente/page.tsx`) | ✅ `horas_cliente.py:53` |
+| anio | `_horas_vista_repo.py` | ✅ | `horas_cliente.py:41` **obligatorio** | selector de año | ✅ `horas_cliente.py:54` |
+
+> 🔑 **`mes` y `anio` son OBLIGATORIOS, no opcionales como el resto de la matriz.** Es la única
+> entrada del inventario donde el filtro no se puede omitir, y es deliberado: sin período la
+> consulta sería la tabla entera de horas de la empresa, que es justo lo que el tope de export
+> (Parte 1.b) existe para evitar. El período acota **antes** de traer, no después.
+>
+> El **detalle por empleado** (`horas_cliente.py:66`) agrega `empleado_id` sobre el mismo
+> período, pero **no es un listado**: es el drill-down de una celda, con su propio response.
+> Por eso no aparece como filtro del par list↔export y no rompe el invariante.
+>
+> ⚠️ **La vista muestra las horas de los DOS caminos**, viejo y nuevo. Las del camino viejo
+> tienen `empleado_id` en NULL y se agrupan bajo el cliente igual; lo que no pueden es abrir el
+> detalle por empleado. No es un filtro que las excluya: es un dato que esas filas no tienen.
 
 ### Evaluaciones — resultados (evaluados de un lote)
 
@@ -333,7 +381,14 @@ muere antes de llegar al chequeo. Cerrarlo pide un `contar()` por repo: tanda pr
 
 > **Invariante del repo:** *"el endpoint de export acepta los mismos Query que el list"*.
 
-**En el BACKEND el invariante se cumple en los 7 módulos con export.** Verificado par por par:
+**En el BACKEND el invariante se cumple.** Verificado par por par en los módulos cuyo listado
+tiene filtros (los de abajo); el barrido `tests/test_paridad_list_export.py` lo comprueba sobre
+la superficie ENTERA por introspección, no sobre esta tabla.
+
+> 📏 **Los números de hoy, medidos por introspección de `app.routes` el 10/8/2026** (no copiados
+> de otro documento): **27 endpoints con parámetro `formato`**, de los cuales **19 aceptan
+> además filtros propios** y 8 solo el formato (empresas, equipo, offboarding, onboarding,
+> onboarding/templates, períodos, usuarios y el export de un reporte por id).
 
 | Módulo | List | Export | ¿Igual? |
 |---|---|---|---|
@@ -345,6 +400,13 @@ muere antes de llegar al chequeo. Cerrarlo pide un `contar()` por repo: tanda pr
 | Inventario asig. | `empleado_id` | idem (`inventario_asignaciones.py:49`) | ✅ |
 | Ev. resultados | `sector, perfil, con_nota` | idem (`evaluaciones_resultados.py:67-69`) | ✅ |
 | Ev. instancias | `ciclo_id, estado` | idem (`ev_instancias.py:39-40`) | ✅ |
+| Clientes | `incluir_inactivos` | idem (`clientes.py:49`) | ✅ |
+| Horas por cliente | `mes, anio` | idem (`horas_cliente.py:53-54`) | ✅ |
+
+> Los dos últimos entraron con el módulo de carga de horas. **No hizo falta tocar
+> `tests/test_paridad_list_export.py` para cubrirlos**: ese barrido saca los pares por
+> introspección de `app.routes`, así que un export nuevo queda cubierto solo. Esta tabla es el
+> reflejo legible de lo que el test ya verifica, no su fuente.
 
 **🔴 Pero el invariante SÍ está roto en el FRONTEND, en dos módulos.** El backend acepta los
 parámetros y el wrapper de JS nunca se los manda, así que el usuario filtra la pantalla, exporta,

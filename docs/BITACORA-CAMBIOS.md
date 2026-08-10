@@ -41,6 +41,547 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-10 · Limpieza del módulo de horas + barrido de código muerto del FRONT · commit pendiente
+
+**Qué cambió:** nada de runtime. Se cerraron los tres cabos que la verificación previa dejó
+anotados, y uno de ellos abrió un agujero estructural que valía más que el cabo.
+
+**Para infraestructura: NO hay acción.** Sin migraciones, sin env vars nuevas, sin rutas nuevas
+ni borradas. Las condiciones para encender el link público **no cambiaron**:
+`HORAS_PUBLICO_ENABLED=true` en `sofia-backend` y al menos un cliente cargado.
+
+### 🔴 El barrido de endpoints tenía un punto ciego, y se encontró por accidente
+
+`services/clientes.ts::fetchCliente` nació sin un solo caller y sobrevivió cinco sesiones con
+`test_callers_huerfanos.py` en verde. El motivo importa más que el caso: **ese barrido empareja
+(path, método) contra los LITERALES de path escritos en el front**, no contra las funciones que
+de verdad se llaman. `updateCliente` y `deleteCliente` escriben el MISMO literal con otro método,
+así que le seguían "dando caller" al GET. Un wrapper muerto tapa a su endpoint.
+
+**Se borró la función** (el endpoint queda publicado por completitud REST, declarado con su
+razón) **y se escribió el barrido que faltaba**: `frontend/services/barridoFront.test.ts`, que
+mira el otro eje —quién IMPORTA a quién—. Los dos barridos son necesarios: cada uno ve lo que el
+otro no puede.
+
+**Lo que encontró apenas se encendió** (263 exports barridos, 10 huérfanos, todos declarados con
+razón). Dos son features publicadas e **inalcanzables desde la UI**, y ninguna es del módulo de
+horas:
+- 🔴 **`POST /api/costos/presupuesto`** — `setPresupuesto` es el único lugar del front donde se
+  escribe ese path, y nadie la llama. **Fijar un presupuesto no se puede hacer desde la UI.**
+  Encaja con lo que ya estaba verificado en producción: cero eventos `set_presupuesto` en
+  auditoría. Se creía que era falta de uso; es falta de puerta.
+- 🔴 **La asignación SINGLE a un proyecto** — la pantalla usa el bulk y el alta por área, que son
+  otros paths.
+- Más `deleteProyecto`, `fetchEmpresaConfig` (devuelve la PRIMERA empresa: con dos cargadas ya no
+  significa nada estable), `subscribeEmpresaActiva` (store a medias) y `updateVacacion`.
+- Los cuatro falsos positivos que producía —uso dentro del propio módulo, re-exports, colisión de
+  nombres entre módulos, imports de tipo— están resueltos y explicados en el encabezado. Verificado
+  por mutación: función huérfana nueva → rojo; excepción que consigue caller → rojo; escaneo
+  apuntando a un árbol vacío → rojo en las tres guardas de mínimo.
+
+⚠️ **Efecto colateral que hay que conocer antes de escribir un comentario en el front:** el
+escáner de paths no distingue un comentario de un template literal. Citar una ruta entre
+backticks vuelve a taparle el endpoint al barrido. Pasó al documentar este mismo borrado.
+
+### Documentación puesta al día contra la realidad, no contra otro documento
+
+Todo lo de abajo se midió (introspección de `app.routes`, `find`, catálogo vivo), no se copió:
+- **`CLAUDE.md` afirmaba que el link público estaba "Bloqueado: requiere la reunión de
+  definición"** — seis sesiones después de que el módulo empezara. Reescrito, más una sección
+  propia del módulo en *Otros módulos*.
+- Conteos corregidos: routers 52 → **69** · services 129 → **197** · repos 69 → **87** · rutas
+  montadas 208 → **247** · migraciones 87 → **105** (va por la **107**) · suite backend 1551 →
+  **3231** en 153 archivos · front 214 en 16 → **620 en 49** · barridos estructurales "CINCO" →
+  **doce**.
+- **Exports: la doc decía 12.** Medido: **27 endpoints con `formato`, 19 con filtros propios**.
+- ✅ **La migración 089 estaba anotada como PENDIENTE y está CORRIDA** (el índice
+  `uq_ausencia_empleado_rango_tipo` existe en producción). No quedan migraciones pendientes.
+- 🟢 **`manager_id` dejó de estar en cero: 0/19 → 11/31.** Desbloquea probar `mandos_medios` y
+  hace que el desempate por superior del matcheo de evaluaciones discrimine de verdad. La doc
+  todavía decía "todavía no probar ese rol".
+- Padrón actualizado: **2 empresas, 31 empleados** (era 1 y 19). `horas_contrato` **0/31** sigue
+  siendo el cero que importa para las licencias.
+- **`docs/MATRIZ-FILTROS.md`** ahora incluye *Clientes* y *Horas por cliente*. ⚠️ El pedido decía
+  que clientes tenía un filtro `search`: **no existe**, ni en el backend ni en la UI. Se documentó
+  lo que hay (`incluir_inactivos`) y se dejó escrito que si alguna vez hace falta, tiene que nacer
+  server-side.
+
+---
+
+## 2026-08-10 · La pantalla pública de carga de horas (`/horas`) · commit pendiente
+
+**Qué cambió:** el módulo de carga de horas deja de ser backend sin puerta. Se construyó la
+pantalla que faltaba entera. **La URL para los empleados es `https://www.hrkarstec.site/horas`.**
+
+### 🔴 Un endpoint público NUEVO que el front hizo inevitable
+
+`GET /api/horas-publico/clientes` — **la ruta pública número 9**. No estaba planificado y es una
+ampliación de alcance de esta sesión: `cliente_id` es OBLIGATORIO en la carga y
+`GET /api/clientes` exige JWT + `Seccion.CLIENTES`, que un empleado sin cuenta no tiene. **Sin
+esta ruta el select nace vacío y la pantalla es decorativa.** Autenticada por el token de sesión
+y acotada a la empresa del empleado; devuelve solo `{id, nombre}` — ni `empresa_id`, que es
+justo el dato que la identificación se cuida de no dar.
+
+### El token: `sessionStorage`
+
+Sobrevive al refresh (el empleado carga varios renglones y no puede re-tipear el DNI) y muere al
+cerrar la pestaña, que con el TTL de 30 minutos del backend es coherente. `localStorage` lo
+dejaría vivo en una máquina compartida —el escenario real de este link—; memoria pura lo perdería
+con cada F5. El motivo completo está en `components/features/horasPublico/sesionHoras.ts`.
+
+### 🔴 Dos trampas que el front tuvo que esquivar
+
+- **`fetch` directo, NO `apiFetch`.** `apiFetch` pasa por `conRefresh`, que ante un 401 intenta
+  refrescar el JWT y si no puede **manda a `/login`**. Acá el 401 es el token del link: pasar por
+  ahí le vaciaría la sesión de otro usuario del navegador a un empleado sin cuenta y lo dejaría
+  en un login que no le sirve. Mismo motivo por el que `services/assessment.ts` hace lo mismo.
+- **La sesión muerta se detecta por CODE, no por status.** Los DOS rechazos son 401
+  (`SESION_INVALIDA` e `IDENTIFICACION_INVALIDA`). Mirar el status borraría una sesión sana por
+  un dígito mal tipeado.
+
+### ⚠️ El bloqueante de los 0 clientes: qué se puede mostrar y qué no
+
+Verificado contra `identificacion_service._RECHAZO`: los cinco motivos de rechazo salen con el
+MISMO code y mensaje, a propósito. **Desde el front NO se puede distinguir "tu empresa no tiene
+clientes" de "el DNI no existe"** sin romper esa garantía. La salida que no la rompe es un
+complemento **fijo**, mostrado siempre junto al rechazo: *"Si el número es correcto y sigue sin
+funcionar, avisale a Recursos Humanos: puede que tu usuario todavía no esté habilitado."* Al ser
+constante no filtra en qué caso está quien pregunta, y le da al empleado real la acción que sirve.
+
+### ✅ El ciclo del barrido de huérfanos, cerrado
+
+Las cuatro declaraciones del link estuvieron en `_ENDPOINTS_SIN_FRONT` **exactamente una tanda**.
+El disparador escrito en su razón se cumplió y **el propio barrido pidió sacarlas**
+(`test_las_excepciones_siguen_sin_caller` da rojo cuando algo declarado empieza a tener caller).
+
+### Para infraestructura
+
+- **Endpoints:** uno nuevo, **PÚBLICO**. Superficie sin auth: de 8 a **9 rutas** con el flag on.
+- **Migraciones / variables de entorno / dependencias / Storage / CORS / Auth:** sin cambios.
+- 🔴 **Sigue todo apagado por `HORAS_PUBLICO_ENABLED`,** y las dos precondiciones para encenderlo
+  no cambiaron: `RATE_LIMIT_STORAGE_URI=redis://` y que RRHH cargue **al menos un cliente** —con
+  0 clientes la identificación rechaza a todo el padrón.
+
+---
+
+## 2026-08-10 · 🔴 El barrido era ciego a los módulos apagados + GET de la semana · commit pendiente
+
+### 🔴 LO IMPORTANTE: `test_callers_huerfanos` no veía nada detrás de un flag apagado
+
+`rutas_backend()` importaba `main.app`, que se construye con la config por DEFAULT. Con
+`ASSESSMENT_ENABLED` y `HORAS_PUBLICO_ENABLED` en `false`, esos routers **no se montan**, así que
+el barrido no los veía. **Medido: veía 247 rutas de 254.**
+
+**Consecuencia real, no teórica:** el link público de carga de horas se construyó ENTERO —tres
+endpoints, cinco sesiones— sin una sola pantalla que lo llamara, y el barrido que existe
+exactamente para detectar eso **nunca dio rojo**.
+
+**La corrección** arma una app aparte con `registrar()` y **todo campo de `Settings` que termine
+en `_enabled` puesto en True**. Es genérica: no nombra ningún flag, así que un módulo gateado que
+se agregue mañana entra solo. No recarga `main` —construye una app nueva— para no dejar
+`main.app` en un estado distinto según el orden de la suite, y une con las rutas reales porque
+`/health` se declara en `main.py` y no en `registrar()`.
+
+**Verificado por mutación**: revirtiendo el arreglo, el barrido falla desde la otra dirección
+(las excepciones apuntan a rutas que ya no ve). Queda blindado en los dos sentidos.
+
+**Los cuatro endpoints públicos quedan declarados** con la razón *"la PANTALLA es la sesión
+siguiente"* y el disparador para borrarlas: que exista `app/horas/` en el front.
+
+### El GET de "esta semana" — la ruta pública número 8
+
+`GET /api/horas-publico/semana`. Autenticado por el **token de sesión**, nunca por el DNI: leer
+con el DNI sería volver a la parte débil del flujo para devolver datos de una persona. El
+empleado sale de la sesión; el endpoint no recibe ningún identificador de persona.
+
+Devuelve lo mínimo —fecha, cliente, proyecto, tarea, horas, modalidad— **más las licencias del
+período**, que el mockup también muestra. 🔴 **Sin `id`**: el empleado no puede editar ni borrar,
+así que un id no le sirve y solo publicaría la clave de una fila en una ruta pública.
+
+- **Semana lunes a domingo, decidida por el backend.** El endpoint NO acepta fechas: un rango
+  libre lo convertiría en un lector del historial completo. Acotado a la semana, lo peor que
+  puede leer un token robado son siete días — y el token vive 30 minutos.
+- **Las licencias entran por SOLAPAMIENTO**: una del viernes al martes aparece en las dos semanas
+  que cruza. Con contención desaparecería de las dos y la persona vería una semana que dice que
+  trabajó cuando no lo hizo.
+- ⚠️ **El token viaja en la query**, porque es un GET. Eso lo pone en access logs e historial —
+  justo lo que se evitó con el DNI. La diferencia: el token es rotable y dura 30 minutos, el DNI
+  es para siempre. Aun así es el punto más flojo de esta ruta, y por eso la ventana es fija.
+- **`routers/horas_publico.py` se dividió** (estaba en 80/80): las dos escrituras se fueron a
+  `routers/horas_publico_carga.py`, mismo prefijo, rutas sin cambios.
+
+### Dos limpiezas
+
+- **`HorasService.get_by_asignacion` BORRADO**, junto con `HorasRepo.find_by_asignacion`. Su
+  declaración decía "esperando la reunión de definición"; esa reunión ocurrió y el link se
+  construyó consultando por `empleado_id`, no por asignación. Verificado: **cero callers** en
+  backend y front. No se reescribió la razón porque ya no había nada que preservar.
+- **El encabezado de `db/schema.sql` decía "VA POR DELANTE DE PRODUCCION" y era FALSO.** Las
+  migraciones 102..107 ya están corridas —verificado una por una contra el catálogo vivo: las
+  tres tablas existen, `horas_proyecto` tiene `cliente_id` e `idempotencia`, `asignacion_id` es
+  nullable y el tipo "Licencia" está sembrado; 63 tablas de los dos lados—. Corregido, con la
+  nota de que ese bloque hay que moverlo en las DOS direcciones y que no hay test que lo cubra.
+
+**Migraciones / variables de entorno / dependencias / Storage / CORS / Auth:** sin cambios.
+El módulo público sigue apagado por `HORAS_PUBLICO_ENABLED`.
+
+---
+
+## 2026-08-09 · Vista interna "Horas por cliente" + división de `main.py` · commit pendiente
+
+**Qué cambió:** la pantalla que RRHH usa para ver lo que se cargó: KPIs del mes, clientes
+colapsables con el detalle por empleado, "ver detalle" día por día con borrado, filtros de mes y
+empresa, y export. **Sin migraciones.** Todo lo público sigue apagado por `HORAS_PUBLICO_ENABLED`.
+
+### 🔴 `main.py` se dividió — paso propio, con la suite verde antes y después
+
+Estaba en 199/200 y esta tanda le sumaba un router. El inventario de los 50+ `include_router`
+se fue a **`backend/registro_routers.py`**; `main.py` bajó a **65 líneas** y queda solo con lo que
+nadie debe tocar a la ligera: el orden de los middlewares (que es load-bearing), los handlers de
+error y el health check exento.
+
+⚠️ **`registrar()` es una FUNCIÓN y los flags se leen ADENTRO.** Si los `if settings.*_enabled`
+quedaran a nivel de módulo se evaluarían una sola vez al importar, y `importlib.reload(main)`
+—que es como los tests prueban el gateo por flag— dejaría de verlos. El apagado de assessment y
+del link público depende de eso.
+
+### Endpoints nuevos (todos autenticados, gate `Seccion.PROYECTOS`)
+
+`GET /api/horas-cliente` · `GET /api/horas-cliente/exportar` · `GET /api/horas-cliente/detalle` ·
+`DELETE /api/horas-cliente/{hora_id}`.
+
+**Ninguna sección de permisos nueva.** El dato son filas de `horas_proyecto`, cuyo gate publicado
+ya es PROYECTOS. `Seccion.CLIENTES` gatea el CATÁLOGO, que es otra cosa; una sección nueva haría
+que las MISMAS filas tengan dos gates según por qué pantalla se entre.
+
+### 🔴 El DELETE no podía ir por `HorasService`
+
+Ese valida por PROYECTO, y una carga del link público tiene `proyecto_id` NULL — o sea le habría
+dado **404 a todas las filas que esta pantalla muestra**. La baja nueva valida por `empresa_id`,
+que las dos formas de fila tienen NOT NULL, y audita con la empresa de la ENTIDAD.
+
+### Los dos caminos de carga: se muestran los DOS
+
+Las del link tienen `cliente_id`; las del camino viejo no. Filtrar por `cliente_id IS NOT NULL`
+era lo cómodo en una pantalla que agrupa por cliente y **habría hecho desaparecer horas válidas en
+silencio**. Van a un grupo **"Sin cliente"**, que además es la única forma de que RRHH vea que
+existen. El KPI `clientes_con_carga` NO cuenta ese bucket.
+
+### ⚠️ "Editar" NO se implementó, y es deliberado
+
+`HorasService` declara los registros inmutables por decisión escrita. Lo que haría falta está
+enumerado en `services/horas_cliente_service.py::_QUE_FALTARIA_PARA_EDITAR` — cinco puntos, de los
+cuales dos son reglas de negocio que hoy no están decididas. Es una decisión de producto, no una
+feature pendiente.
+
+### Ajuste heredado de la sesión 1
+
+`frontend/types/proyecto.ts` declaraba `costo` y `valor_hora_snapshot` como `number` y desde la
+mig 103 pueden venir `null`. Corregido — y `tsc` encontró **dos usos reales** en `HorasTab.tsx`
+que habrían impreso `$ NaN`. Ahora muestran "—": una carga sin snapshot no se puede costear, que
+no es lo mismo que haber costado cero.
+
+**Migraciones / variables de entorno / dependencias / Storage / CORS / Auth:** sin cambios.
+
+---
+
+## 2026-08-09 · Carga pública de horas y licencias (paso 2) · commit pendiente
+
+**Qué cambió:** el empleado identificado ya puede cargar horas o una licencia. Se suman DOS rutas
+públicas más (`POST /api/horas-publico/horas` y `.../licencia`), las reglas duras (30 días, tope
+de 12 h sumando lo ya cargado) y la sesión que ata el paso 1 con el paso 2. **Todo sigue apagado
+por `HORAS_PUBLICO_ENABLED`**; verificado: con el default, cero rutas montadas.
+
+### 🔴 LA SUPERFICIE PÚBLICA PASA DE 5 A 7 (con el flag encendido)
+
+`/health` · login · refresh · callback de Google · **identificar** · **horas** · **licencia**.
+
+Pero las dos nuevas **NO son tan débiles como la identificación**: exigen un token de sesión de
+256 bits (`secrets.token_urlsafe`), guardado hasheado y con TTL de 30 min. O sea **sí cumplen las
+condiciones #1 y #2** que la identificación no puede cumplir. La debilidad del módulo queda
+CONFINADA al primer paso: adivinar un DNI ya no alcanza para escribir.
+
+### Migraciones — TRES, escritas y NO corridas
+
+- **105 · `sesiones_horas`** `(id, token_hash, empleado_id, empresa_id, expires_at, created_at)`.
+  Índice único sobre `token_hash` + **FK COMPUESTA `(empleado_id, empresa_id) → empleados(id,
+  empresa_id)`** con `ON DELETE CASCADE`. Esa FK compuesta es la que garantiza EN LA BASE que el
+  par de una sesión es coherente — sin ella una sesión podría decir "empleado de ACME, empresa
+  DOSUBA" y todo lo escrito quedaría imputado a la sociedad equivocada. Sin `updated_at`.
+- **106 · `horas_proyecto.idempotencia`** + índice único **parcial**. Cierra el doble tap.
+- **107 · seed del tipo de ausencia "Licencia"** con **UUID FIJO**, global, `cuenta_ausentismo=true`.
+
+🔴 **ORDEN: 102 → 103 → 104 → 105 → 106 → 107.** La 105 depende de `empleados`, la 106 de la 103
+(la columna vive en la tabla que la 103 aflojó) y el service de licencias no funciona sin la 107.
+
+### Cómo se resolvió la carrera del tope
+
+Se partió en dos, porque tienen respuestas distintas:
+- **El doble tap** (misma carga enviada dos veces) — 🟢 **CERRADO** con `idempotencia` + índice
+  único parcial. El reenvío devuelve la carga ya creada, no un error.
+- **Dos cargas DISTINTAS simultáneas** (dos pestañas) — 🔴 **DECLARADO COMO LÍMITE CONOCIDO.** Un
+  trigger lo resolvería pero los triggers de negocio se dropearon repo-wide en la 058; PostgREST
+  no expone transacciones; y un contador denormalizado por (empleado, fecha) se descartó porque
+  habría que mantenerlo en sincronía desde todos los caminos —incluido el "editar y borrar" de la
+  vista interna, que no existe todavía— y un total que driftea miente sin que nadie lo note,
+  mientras que la carrera deja 16 horas VISIBLES y corregibles. 🚩 Se cierra en el cutover a
+  AWS/asyncpg con `SELECT ... FOR UPDATE`.
+
+### Las decisiones de la licencia
+
+- Va a `solicitudes_ausencia`. **La 089 está CORRIDA** (verificado contra el catálogo:
+  `uq_ausencia_empleado_rango_tipo` existe), así que el doble tap de licencia **ya está protegido
+  en la base**; el service solo traduce ese choque a un 409 legible.
+- **Tipo propio "Licencia"**, referenciado **por UUID y no por nombre**: `tipos_ausencia.nombre` lo
+  edita RRHH desde configuración, así que buscar por texto se rompería con un renombre.
+- **`justificada = False` siempre.** Un empleado no puede justificarse a sí mismo. ⚠️ **Consecuencia
+  que hay que saber:** hasta que RRHH lo revise, estas licencias caen en la franja "injustificado"
+  de `_reporte_ausentismo`. Significa "no revisada todavía", y no hay tercer estado porque la
+  columna es booleana.
+- **Sin `horas_contrato` se asumen 8 y se avisa** (`horas_por_dia_estimadas` viaja al cliente). La
+  columna está 0/31: no dejar cargar dejaría la feature inservible para el padrón entero. 🚩 El
+  arreglo de fondo es poblar `horas_contrato`; NO se parsea `empleados.turno`, porque "8 A 17" son
+  9 h de reloj que valen 8 de trabajo y esa conversión es una convención que nadie definió.
+
+### ⚠️ Brecha declarada en el tope de 12
+
+`total_horas_del_dia` cuenta **por `empleado_id`**, o sea solo las cargas del link. Las del camino
+viejo tienen `empleado_id` NULL (se llega por la asignación) y no entran en la suma. Se acepta
+porque `horas_proyecto` tiene 0 filas y ese camino es de costeo de proyecto. 🚩 Revisar si el
+camino viejo empieza a usarse.
+
+**Variables de entorno:** ninguna nueva. **Dependencias / Storage / CORS / Auth:** sin cambios.
+
+---
+
+## 2026-08-09 · 🔴 LA QUINTA RUTA PÚBLICA: identificación por DNI · commit pendiente
+
+**Qué cambió:** se agrega la primera ruta sin autenticación desde el callback de Google.
+`POST /api/horas-publico/identificar` recibe un DNI y devuelve **solo el nombre de pila**. Es la
+identificación del link público de carga de horas; la carga en sí es otra sesión. **Nace APAGADA
+por flag y se entrega apagada.**
+
+### 🔴 LO PRIMERO QUE INFRAESTRUCTURA TIENE QUE SABER
+
+- **Variable de entorno NUEVA: `HORAS_PUBLICO_ENABLED`** (default `false`). Enciende la ruta.
+  **Verificado: con el default, el router no se monta y la ruta no figura entre las públicas.**
+  Encenderla es una decisión de producto y de seguridad, no de deploy.
+- 🔴 **`RATE_LIMIT_STORAGE_URI=redis://…` PASA DE MEJORA A PRECONDICIÓN.** En las otras cuatro
+  rutas públicas hay un autenticador real detrás (contraseña, refresh token rotativo, nonce de un
+  solo uso) y el rate limit solo encarece el abuso. **Acá el rate limit ES la única defensa**, y
+  con `memory://` el contador es por proceso: en serverless cada cold start arranca en cero y con
+  N instancias el límite efectivo es N×. **No encender el flag mientras el store sea `memory://`.**
+- **`TRUSTED_PROXY_HOPS` deja de ser solo cosmético.** La IP que sale de él es a la vez la clave
+  del rate limit y lo que se guarda en el log de intentos. Mal configurado, todo el tráfico
+  colapsa en un contador y el log guarda la misma IP para todos, o sea deja de servir para ver
+  una enumeración.
+- **Migración 104 — `intentos_identificacion`.** Tabla nueva, append-only. Escrita y **NO
+  corrida**. Sin ella el endpoint funciona igual (el log se traga su error por diseño) pero se
+  pierde la única forma de ver que alguien está probando DNIs. **Correrla ANTES de encender el flag.**
+- **Endpoints:** uno, **PÚBLICO**. **Dependencias:** ninguna. **Storage:** ninguno.
+  **Auth:** sin cambios en el token ni en los claims. **Jobs:** ninguno. **CORS:** sin cambios.
+
+### Contenido de la migración 104
+
+`intentos_identificacion (id, dni, resultado, empleado_id, empresa_id, ip, user_agent,
+created_at)`. PK, CHECK de 6 valores para `resultado`, dos FKs con **ON DELETE SET NULL** (un log
+que desaparece cuando se borra el objeto investigado no sirve) y tres índices: `created_at`,
+`(dni, created_at)` y `(ip, created_at)` — las tres preguntas que la tabla existe para responder.
+**Sin `updated_at`**, así que no lleva trigger y queda fuera del barrido de la 077 sola.
+
+🔴 **El DNI se guarda EN CLARO, y es una decisión.** Un SHA-256 de 8 dígitos se revierte en
+segundos (10⁸ hashes), así que no protegería nada, y destruiría la utilidad forense: el punto es
+que RRHH pueda ver *qué* se intentó. 🚩 **PENDIENTE DE PRODUCTO: política de retención/purga.**
+Hoy la tabla crece sin techo con identificadores de personas ajenas a la empresa.
+
+### Lo que se hizo para que la ruta sea lo más segura posible dentro de la restricción
+
+- **Payload mínimo:** solo el nombre de pila. Sin apellido, sin cargo, sin empresa — la empresa
+  era el peor de los tres: al empleado no le sirve y a alguien enumerando le arma el mapa de la
+  organización DNI por DNI. Tampoco vuelve el `empleado_id`.
+- **Rechazo único con UN SOLO `raise` en todo el archivo.** Los cinco motivos (no existe, de
+  baja, empresa sin clientes, DNI en dos empresas, bloqueado por límite) salen con el mismo
+  status, code y mensaje. El log adentro sí los distingue.
+- **Nivelación de timing.** Un DNI inexistente se resuelve con una query y uno que existe dispara
+  dos; esa diferencia es medible y convierte el mensaje uniforme en decorativo. Toda respuesta
+  espera un piso fijo de **300 ms**. 🚩 **Si cambia la latencia de la base (otro proveedor, otra
+  región, el cutover a RDS) hay que RE-MEDIR ese piso**: uno que quedó corto no avisa, deja de
+  nivelar en silencio.
+- **Dos ejes de rate limit:** 10/min por IP (decorador, franja de "público sin auth") y 20/hora
+  por DNI intentado. Son dos ataques distintos y ninguno cubre el del otro.
+
+### ⚠️ Las dos condiciones que esta ruta NO cumple, y no puede cumplir
+
+De las 8 que cumplen las cuatro rutas públicas actuales, fallan las dos primeras: **no tiene un
+autenticador propio** (el DNI es un identificador enumerable, no un secreto) y **el valor que
+viaja no es un nonce** de 256 bits con TTL y un solo uso (tiene que servir todos los días). Las
+dos son consecuencia directa de la decisión de producto de no darle credenciales a los empleados.
+Las otras seis se cumplen. **Esta ruta es, por diseño, la más débil de las cinco.**
+
+---
+
+## 2026-08-09 · ABM de clientes: service, routers, export, auditoría y pantalla · commit pendiente
+
+**Qué cambió:** el catálogo de clientes pasa de ser solo modelo a ser usable por RRHH. Se cablea
+lo que la sesión anterior dejó sin punta: `ClienteService`, router partido lectura/escritura,
+export, auditoría de las tres escrituras, pantalla `/clientes` con su modal, ítem de sidebar y
+sección de permisos propia. Sin migraciones nuevas.
+
+### 🔴 Lo que infraestructura tiene que saber
+
+- **Endpoints nuevos, ninguno público.** `GET /api/clientes`, `GET /api/clientes/exportar`,
+  `GET /api/clientes/{id}`, `POST /api/clientes`, `PUT /api/clientes/{id}`,
+  `DELETE /api/clientes/{id}`. Los seis pasan por `AuthMiddleware` y por
+  `require_permission(Seccion.CLIENTES, …)`. El export lleva `shared_limit("30/hour",
+  scope="export")` — comparte contador con todos los demás exports, no suma franja nueva.
+- **Migraciones:** ninguna. Las 102 y 103 siguen **escritas y sin correr**, y este módulo las
+  necesita: sin la 102 la tabla `clientes` no existe y los seis endpoints dan error de base.
+  🔴 **Correr la 102 antes de habilitar la pantalla.**
+- **Variables de entorno:** ninguna. **Dependencias:** ninguna. **Storage:** ninguno.
+  **Auth:** sin cambios en el token ni en los claims. **Jobs / procesos largos:** ninguno.
+  **CORS / dominios:** sin cambios.
+- **`Seccion.CLIENTES` es nueva**, y toca los dos lados del espejo manual
+  (`backend/utils/permisos.py` y `frontend/services/permisos.ts`). No hay que hacer nada del
+  lado de infraestructura: los roles y sus capacidades no cambian — admin_rrhh escribe,
+  gerencia_lectura lee, mandos_medios no accede, igual que en cualquier sección fuera de
+  vacaciones/ausencias.
+
+### Las dos decisiones que quedaron escritas
+
+- **Sección propia y no reusada.** El precedente contrario es `/comunicacion`, que reusa
+  `configuracion` porque era una ruta de front sobre endpoints que YA existían y ya estaban
+  gateados. Clientes trae routers propios montados en `main.py`, que es justo la invariante que
+  el enum declara ("una por módulo con router real"). El razonamiento completo está en el
+  comentario de `Seccion.CLIENTES`.
+- **La baja es LÓGICA (`activo=False`), no hay DELETE físico.** `horas_proyecto.cliente_id` es
+  una FK **sin ON DELETE**: un borrado real de un cliente con horas cargadas no daría 409,
+  reventaría contra la constraint y saldría como 500. Ese bug existe hoy en
+  `proyectos_service.delete`, que chequea `has_horas` pero **no** las asignaciones — borrar un
+  proyecto con equipo y sin horas pasa las dos validaciones y muere en la base. No se replicó.
+  El endpoint `DELETE` igual responde 204: para quien consume la API el cliente deja de estar.
+
+### ⚠️ Un hueco del barrido de exports, encontrado al usarlo
+
+`tests/test_limite_export.py::EXPORTS` es una lista **explícita**, no por introspección, y su
+guarda de mínimo (`>= 17`) no detecta un export nuevo que nadie agregó: `cliente_service` pasó el
+barrido sin ser mirado hasta que se lo declaró a mano. Se agregó y se subió el mínimo a 18, pero
+**el próximo export nace con el mismo agujero**. El de paridad list↔export (`test_paridad_list_export`)
+sí descubre por introspección de `app.routes` y detectó el par de clientes solo.
+
+---
+
+## 2026-08-09 · Modelo de la carga de horas: tabla `clientes` + carga directa · commit pendiente
+
+**Qué cambió:** solo MODELO (base, schemas y repos) del módulo de carga de horas. Dos migraciones
+**escritas y NO corridas**: la **102** crea el catálogo `clientes` (por empresa, lo edita RRHH) y
+la **103** habilita en `horas_proyecto` la carga que NO pasa por una asignación de proyecto. No hay
+endpoints, ni pantallas, ni ruta pública, ni tope de horas, ni licencia: eso es la sesión siguiente.
+
+### 🔴 Lo que infraestructura tiene que saber
+
+- **Migración 102 — `clientes`.** Tabla nueva: `id, empresa_id, nombre, activo, created_at,
+  updated_at`. PK, FK a `empresas` **sin ON DELETE**, índice único **case-insensitive**
+  `(empresa_id, lower(nombre))` e índice por `empresa_id`. **Lleva trigger `updated_at`.**
+  NO destructiva, idempotente.
+- **Migración 103 — `horas_proyecto`.** Agrega `cliente_id`, `empleado_id`, `modalidad`,
+  `proyecto_texto`, `tarea_texto`; pasa **`asignacion_id`, `proyecto_id` y `valor_hora_snapshot` a
+  NULLABLE**; suma 2 FKs (a `clientes` y a `empleados`, sin ON DELETE), 2 CHECKs y 2 índices
+  parciales. NO destructiva (aflojar un NOT NULL es compatible hacia atrás), idempotente.
+- 🔴 **ORDEN OBLIGATORIO: 102 antes que 103.** La FK `horas_proyecto_cliente_id_fkey` apunta a
+  `clientes`. Y por esa misma dependencia la 102 agrega su PK con un `DO $$ IF NOT EXISTS $$` en
+  vez del `DROP CONSTRAINT + ADD` que usa la 086: con la FK ya creada, el DROP aborta.
+- **Trigger `updated_at` de `clientes` declarado en los TRES archivos**, que es la regla que ya se
+  incumplió dos veces (`usuario_integraciones` en la 032, `plantillas_mail` en la 087, arregladas
+  después con la 091): la migración 102 (Supabase), `migracionAWS/.../077` (RDS, ahora 42 triggers)
+  y `backend/db/schema.sql`.
+- 🔴 **`backend/db/schema.sql` VA POR DELANTE DE PRODUCCIÓN hasta que las dos corran.** Declara 61
+  tablas contra las 60 del catálogo vivo. Está así a propósito: es la fuente que leen
+  `tests/_postgrest_schema.py`, `test_selects_repos.py` y `test_triggers_updated_at.py`, y un
+  `select` que nombre `clientes` sin la tabla ahí hace fallar el barrido. El encabezado del archivo
+  lista las diferencias vigentes.
+- **Variables de entorno:** ninguna. **Dependencias:** ninguna. **Storage:** ninguno.
+  **Endpoints:** ninguno (tampoco públicos). **Auth:** sin cambios. **Jobs / procesos largos:**
+  ninguno.
+
+### Lo que NO se rompe, verificado
+
+El camino viejo (`POST /api/proyectos/{id}/horas`) queda intacto y cubierto de punta a punta.
+Las filas de carga directa tienen `proyecto_id` NULL y **se caen solas** de las dos consultas que
+miran esta tabla desde proyectos (`_proyectos_enrich.batch_costos` usa `.in_()`,
+`ProyectosRepo.has_horas` usa `.eq()`, y un NULL no matchea ninguno de los dos): ni suman al costeo
+de ningún proyecto ni bloquean ningún borrado. El CHECK `horas_proyecto_forma_check` fija que la
+tabla tenga **exactamente dos formas de fila**, con lo que el estado mixto que reventaría
+`batch_costos` con un `TypeError` deja de ser representable.
+
+### ⚠️ Dos cosas para la sesión siguiente
+
+- **`empleado_id` es una columna que el diseño no había enumerado y sin la cual no cierra:** hoy la
+  tabla llega al empleado por `asignacion_id`, y sin asignación la fila quedaba sin dueño
+  (`cargado_por` es FK a `users`, y `empleados.user_id` está 0/31).
+- **El front todavía no acompaña.** `frontend/types/proyecto.ts` declara `costo` y
+  `valor_hora_snapshot` como `number`, y desde la 103 el backend puede devolver `null` en los dos.
+  Hoy no hay ruptura viva porque el único escritor publicado es el camino viejo, que siempre los
+  completa — pero hay que ajustarlo antes de exponer la carga directa.
+
+---
+
+## 2026-08-09 · El error del proveedor deja de verse en la ficha del candidato · commit pendiente
+
+**Qué cambió:** cuando el clasificador falla, RRHH veía el error crudo de Anthropic en la ficha —
+en inglés, sin decir qué hacer, y con `request_id`, tipo de error y nombre de la API expuestos en
+una pantalla de Recursos Humanos. Visto en producción con una corrida sin saldo. Ahora el motivo
+que se persiste está en castellano y dice la acción; el detalle técnico va al log.
+
+### Cuántas causas se pueden distinguir DE VERDAD
+
+Verificado contra el SDK instalado (`anthropic==0.34.2`): **no existe `.type` en las excepciones**
+—esa property es de SDKs posteriores—, así que la distinción sale de las CLASES. Con eso alcanza
+para cuatro de las cinco categorías.
+
+🟡 **La de saldo es la única que NO se puede distinguir por clase, y queda dicho.** El error de
+facturación llega como `BadRequestError` (400) con `error.type='invalid_request_error'`: **el mismo
+par exacto que una request malformada por un bug nuestro**. El único señalizador es el texto del
+proveedor, así que se busca por marcas (`credit balance`, `billing`, `quota`…). Es best-effort y
+**degrada bien**: si el wording cambia, el caso cae en `configuracion`, que igual manda a avisarle
+a quien administra — la acción correcta con menos detalle. Y un 400 nunca cae en "reintentá":
+reintentar un 400 no lo arregla nunca, y mandar a RRHH a apretar diez veces es peor que no decir
+nada.
+
+### Punto 4 — el barrido por la misma clase de fuga
+
+Se barrió `services/`, `routers/`, `repositories/`, `integrations/` y `middleware/` buscando
+excepciones crudas que lleguen al usuario. **El resto del sistema ya estaba bien**: Zernio, Gmail,
+Google OAuth, el token de Google, Storage y el mailer levantan `AppError` con mensajes fijos en
+castellano ("Error al consultar Gmail", "No se pudo enviar el mail"), y el handler global de 500
+ya devuelve un mensaje fijo y loguea el detalle. El clasificador era el outlier porque su fallo
+**se persiste** en vez de levantar, y nadie llevó el criterio hasta ese camino.
+
+Tres de los cuatro candidatos restantes resultaron **falsos positivos**: `objetivos_import_preview`
+y `evaluacion_import_service` reenvían `str(exc)`, pero lo que envuelven (`_import_excel.abrir`,
+`_import_encoding.decodificar`) ya levanta NUESTRO propio mensaje en castellano y accionable.
+
+🔴 **Uno era real y se arregló, por ser de una línea:** `nomina_csv_service.py:120` tenía un
+`except Exception` alrededor de TODO el loop de parseo —**con los lookups a la base adentro**—, y
+metía `{exc}` en una fila de error visible. Podía filtrar un error de httpx/Supabase a la pantalla.
+El crudo ya estaba en el `logger.error` de la línea anterior, así que sacarlo no pierde nada.
+
+**Impacto en infraestructura:**
+
+- **Sin migraciones, sin endpoints nuevos, sin dependencias.** Es traducción de mensajes.
+- **Código nuevo:** `services/_error_ia.py` (categoría + mensaje). `PREFIJO_FALLO` se mudó ahí
+  desde `_screening_candidato` y se re-exporta, así que los callers no cambian.
+- **El log del fallo ahora lleva `excepcion` (la clase) y `categoria`** además del `str(exc)`
+  completo con su `request_id` — el log pasa a ser greppable por causa. **Nada de eso se perdió:
+  hay un test que lo fija.**
+- 🚩 **Operativo, no de código: la cuenta de Anthropic se quedó sin saldo.** Es lo que disparó
+  esta sesión. Hasta que se recargue, toda corrida del clasificador falla y deja el motivo nuevo
+  en cada candidato. Los candidatos quedan reintentables (clasificación en NULL).
+
+**Mutación: 10 mutantes, 10 muertos**, incluido el sutil —concatenar el crudo *al final* del
+mensaje traducido, que es como volvería a colarse en un refactor distraído.
+
+---
+
 ## 2026-08-09 · El clasificador lee la búsqueda entera, no solo el título · commit pendiente
 
 **Qué cambió:** el prompt del clasificador se armaba con `vacante.titulo` y `vacante.descripcion`,

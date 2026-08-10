@@ -63,7 +63,11 @@ export function HorasTab({ proyectoId, onRefresh, canWrite }: Props) {
   }
 
   const totalHoras = horas.reduce((s, h) => s + h.horas, 0)
-  const totalCosto = horas.reduce((s, h) => s + h.costo, 0)
+  // `costo` y `valor_hora_snapshot` son null en las cargas del link público (no tienen
+  // `valor_hora_snapshot` con qué costear). Se suman como 0 —para un TOTAL, "no costeable"
+  // aporta cero— pero abajo NO se imprimen como "$ 0": eso diría que costaron nada, cuando lo
+  // cierto es que no se pueden costear. Ver types/proyecto.ts::Hora.
+  const totalCosto = horas.reduce((s, h) => s + (h.costo ?? 0), 0)
 
   if (loading) return (
     <div className="space-y-2 animate-pulse">
@@ -98,13 +102,15 @@ export function HorasTab({ proyectoId, onRefresh, canWrite }: Props) {
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {formatFecha(h.fecha)} · {h.horas}h · {ARS.format(h.valor_hora_snapshot)}/h
+                  {formatFecha(h.fecha)} · {h.horas}h{h.valor_hora_snapshot !== null ? ` · ${ARS.format(h.valor_hora_snapshot)}/h` : ""}
                   {h.descripcion ? ` · ${h.descripcion}` : ""}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <span className="text-sm font-semibold tabular-nums text-foreground">
-                  {ARS.format(h.costo)}
+                  {/* "—" y no "$ 0": una carga sin `valor_hora_snapshot` no se puede costear,
+                      que no es lo mismo que haber costado cero. */}
+                  {h.costo !== null ? ARS.format(h.costo) : "—"}
                 </span>
                 {canWrite && (
                   <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive"

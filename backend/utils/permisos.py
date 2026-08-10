@@ -67,6 +67,29 @@ class Seccion(str, Enum):
     # mandos_medios tiene WRITE en las dos, y cargar una vacación no es lo mismo que cambiar
     # la regla con la que se calculan todas.
     CONFIGURACION = "configuracion"
+    # Catálogo de clientes (migración 102). SECCIÓN PROPIA, y la decisión merece explicación
+    # porque el repo tiene un precedente que dice lo contrario:
+    #
+    # `/comunicacion` NO creó sección y reusa `configuracion`, con el argumento —correcto— de
+    # que `puede()` es genérica: para cualquier sección fuera de MANDOS_MEDIOS_SECCIONES el
+    # resultado es idéntico (admin escribe, gerencia lee, mandos nada), así que una sección
+    # nueva "daría el mismo resultado a cambio de tocar el espejo manual con permisos.py".
+    #
+    # Lo que distingue este caso: comunicación era una RUTA DE FRONT sobre endpoints que YA
+    # existían y ya estaban gateados con `configuracion`. Clientes es un módulo nuevo con
+    # routers propios montados en main.py, y la invariante declarada de este enum es
+    # justamente "una por módulo con router real registrado en main.py". Reusar acá dejaría el
+    # gate del módulo apuntando a una sección que nombra otra cosa, y el día que alguien quiera
+    # que gerencia vea clientes pero no la configuración de reglas, habría que partirlo con
+    # datos ya cargados.
+    #
+    # NO se reusó PROYECTOS —que es la vecina obvia— porque el diseño de la carga de horas dejó
+    # a `proyectos` explícitamente FUERA de ese flujo: el proyecto ahí es texto libre. Atarlos
+    # por el permiso sugeriría un parentesco que el modelo no tiene.
+    #
+    # El costo es una línea acá y una en `frontend/services/permisos.ts`, y ese espejo NO es a
+    # ciegas: `tests/test_espejo_permisos.py` compara los dos enteros y falla si falta una.
+    CLIENTES = "clientes"
 
 
 # mandos_medios solo opera (R+W) sobre estas secciones; en el resto no puede nada.

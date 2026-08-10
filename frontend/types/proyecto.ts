@@ -1,3 +1,6 @@
+/** Vocabulario cerrado de la modalidad del dia. Espejo del CHECK de la migracion 103. */
+export type Modalidad = "home_office" | "on_site"
+
 export type ProyectoEstado = "activo" | "pausado" | "cerrado" | "cancelado"
 
 export interface CosteoResumen {
@@ -111,17 +114,37 @@ export interface AsignacionBulkResult {
   errores: { empleado_id: string; motivo: string }[]
 }
 
+/**
+ * Una fila de `horas_proyecto`. Espejo de `backend/schemas/horas.py::HoraResponse`.
+ *
+ * 🔴 DESDE LA MIGRACIÓN 103 HAY DOS FORMAS DE FILA, y por eso casi todo es nullable:
+ *   · CAMINO VIEJO (POST /api/proyectos/{id}/horas): asignación + proyecto + snapshot.
+ *   · CARGA DIRECTA (link público de horas): cliente + modalidad + textos, SIN asignación,
+ *     SIN proyecto y SIN `valor_hora_snapshot` — o sea sin nada con qué costear.
+ *
+ * `costo` es `number | null` y NO `number`: null significa "no se puede costear", que no es lo
+ * mismo que "costó cero" (mismo criterio que `CosteoResumen.pct_consumido`). Quedó anotado como
+ * pendiente al crear el modelo; se corrige acá. Todo lo que formatee `costo` tiene que
+ * contemplar el null — un `ARS.format(null)` imprime "$ NaN".
+ */
 export interface Hora {
   id: string
-  asignacion_id: string
-  proyecto_id: string
+  empresa_id: string | null
+  asignacion_id: string | null
+  proyecto_id: string | null
+  empleado_id: string | null
   empleado_nombre: string | null
   empleado_empresa_nombre: string | null
   fecha: string
   horas: number
-  valor_hora_snapshot: number
-  costo: number
+  valor_hora_snapshot: number | null
+  costo: number | null
   descripcion: string | null
+  cliente_id: string | null
+  cliente_nombre: string | null
+  modalidad: Modalidad | null
+  proyecto_texto: string | null
+  tarea_texto: string | null
   created_at: string
 }
 

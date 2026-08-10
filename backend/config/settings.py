@@ -19,6 +19,22 @@ class Settings(BaseSettings):
     # middleware/auth.py (qué rutas se consideran públicas).
     assessment_enabled: bool = False
 
+    # 🔴 LA QUINTA RUTA PÚBLICA DEL SISTEMA, y la más débil de las cinco POR DISEÑO.
+    # Enciende el link público de carga de horas, donde un empleado se identifica SOLO con su
+    # DNI. El DNI es un identificador enumerable, no un secreto: no hay autenticador propio ni
+    # nonce con TTL, que son las dos condiciones que las otras cuatro rutas públicas sí cumplen.
+    # Es una decisión de producto cerrada (la empresa no le da credenciales a los empleados).
+    #
+    # Nace en False y se entrega apagado. Apagado NO es "el módulo responde 403": el router no
+    # se monta y la ruta no es pública, así que se comporta como cualquier path inexistente.
+    # Los DOS puntos que leen este flag son `main.py` (montaje) y `middleware/auth.py`
+    # (`_is_public`). Gatear uno solo delataría el módulo — ver la nota de ASSESSMENT_ENABLED.
+    #
+    # PARA ENCENDERLO: HORAS_PUBLICO_ENABLED=true en el entorno. Nada más, cero cambios de código.
+    # ⚠️ Antes de encenderlo, leer `docs/BITACORA-CAMBIOS.md`: el rate limit por IP y por DNI es
+    # la ÚNICA defensa real de esta ruta, y con `RATE_LIMIT_STORAGE_URI=memory://` es por proceso.
+    horas_publico_enabled: bool = False
+
     # Presupuesto de tiempo del import de nómina, en segundos. Cuando se agota, el import
     # PARA ENTRE FILAS y devuelve el reporte de lo que hizo, en vez de morir en un timeout sin
     # decir nada. Reintentar con el mismo archivo continúa donde quedó (dedup por DNI).

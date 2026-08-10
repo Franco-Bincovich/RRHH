@@ -1,6 +1,6 @@
 -- 077_recrear_triggers_updated_at.sql
 --
--- Recrea la función set_updated_at() + los 41 triggers trg_*_updated_at en la
+-- Recrea la función set_updated_at() + los 42 triggers trg_*_updated_at en la
 -- base nueva (RDS). El snapshot db/schema.sql se generó del catálogo y capturó
 -- tablas/columnas/constraints/índices/defaults, pero 0 funciones y 0 triggers,
 -- así que updated_at se pobla en el alta (por el DEFAULT now()) pero NO se
@@ -30,7 +30,7 @@ BEGIN
 END;
 $$;
 
--- 41 triggers, un trigger por tabla con columna updated_at.
+-- 42 triggers, un trigger por tabla con columna updated_at.
 -- (horas_proyecto, adjuntos, periodos_cerrados y oauth_states NO llevan: son inmutables / sin
 -- updated_at. No hay que declararlos en ningún lado: el barrido DERIVA los candidatos del
 -- schema, así que una tabla sin la columna queda afuera sola.)
@@ -215,6 +215,14 @@ CREATE TRIGGER trg_cesiones_updated_at
     BEFORE UPDATE ON public.cesiones
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
+-- Catálogo de clientes (backend/migrations/102_clientes.sql). El trigger va en TRES archivos:
+-- la 102 (Supabase), este (RDS) y db/schema.sql (la columna, de la que el barrido deriva el
+-- candidato). `test_triggers_updated_at.py` compara schema.sql contra este archivo.
+DROP TRIGGER IF EXISTS trg_clientes_updated_at ON public.clientes;
+CREATE TRIGGER trg_clientes_updated_at
+    BEFORE UPDATE ON public.clientes
+    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
 -- ─────────────────────────────────────────────────────────────────────────────────────────
 -- TABLAS QUE NACIERON DESPUÉS DE QUE SE ESCRIBIERA ESTE SCRIPT
 -- ─────────────────────────────────────────────────────────────────────────────────────────
@@ -272,7 +280,7 @@ CREATE TRIGGER trg_plantillas_mail_updated_at
     BEFORE UPDATE ON public.plantillas_mail
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- Verificación (opcional): debe devolver 41.
+-- Verificación (opcional): debe devolver 42.
 -- SELECT count(*) FROM pg_trigger t
 --   JOIN pg_proc p ON p.oid = t.tgfoid
 --   WHERE p.proname = 'set_updated_at' AND NOT t.tgisinternal;

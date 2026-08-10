@@ -19,7 +19,13 @@ MINIMO_RUTAS = 150
 # tiene dos modos de falla y los dos ya pasaron en la primera corrida de este script: una ruta
 # pública nueva se reporta como "DESPROTEGIDA" (falso positivo ruidoso), y una que dejó de ser
 # pública se reporta OK (falso negativo, el peligroso).
-from middleware.auth import PUBLIC_ROUTES as PUBLICAS  # noqa: E402,F401
+# `rutas_publicas_activas()` y no `PUBLIC_ROUTES`: desde la ruta de identificación por DNI hay
+# rutas públicas GATEADAS POR FLAG, y el frozenset crudo no las incluye. Leerlo directo rompía en
+# las dos direcciones — con el flag encendido, `barrer_auth` reportaría esa ruta como DESPROTEGIDA
+# (falso positivo) y `barrer_publicas` ni la probaría (falso negativo, el peligroso).
+from middleware.auth import rutas_publicas_activas  # noqa: E402
+
+PUBLICAS = rutas_publicas_activas()
 
 # Prefijos que la plataforma REALMENTE enruta al backend, según `backend/vercel.json`
 # (`routes: [/health, /api/(.*)]`). Todo lo demás —`/docs`, `/openapi.json`— existe en la tabla

@@ -3,7 +3,7 @@ import {
   Activity, FolderKanban, LayoutDashboard, Users, UsersRound, GitBranch, Briefcase,
   UserPlus, UserMinus, Umbrella, CalendarX2, DollarSign, TrendingUp,
   BarChart3, GraduationCap, ClipboardCheck, Package, Target, ScrollText,
-  CalendarClock, Settings, Building2, UserCog, UserSearch, Network, Mail,
+  CalendarClock, Settings, Building2, UserCog, UserSearch, Network, Mail, Handshake, Clock,
 } from "lucide-react"
 
 import type { Accion, Seccion } from "@/services/permisos"
@@ -73,6 +73,8 @@ export const NAV_GROUPS: ReadonlyArray<NavGroupDef> = [
     { label: "Procesos", href: "/procesos", icon: Activity, seccion: "procesos" },
     { label: "Proyectos", href: "/proyectos", icon: FolderKanban, seccion: "proyectos" },
     { label: "Inventario", href: "/inventario", icon: Package, seccion: "inventario" },
+    // Gatea con "proyectos", igual que el backend: el dato son filas de horas_proyecto.
+    { label: "Horas por cliente", href: "/horas-por-cliente", icon: Clock, seccion: "proyectos" },
     // Vivía dentro de /configuracion. Se sacó a ruta propia el 7/8/2026: desde ahí ahora se
     // MANDAN mails, y eso es operación recurrente, no configuración. La `seccion` sigue siendo
     // "configuracion" a propósito — es el permiso que el backend ya exige; ver la página.
@@ -91,6 +93,10 @@ export const NAV_GROUPS: ReadonlyArray<NavGroupDef> = [
   { label: "Administración", items: [
     { label: "Empresas", href: "/empresas", icon: Building2, seccion: "empresa" },
     { label: "Áreas", href: "/areas", icon: Network, seccion: "areas" },
+    // Catálogo de clientes (migración 102): master data por empresa que carga RRHH, y el eje
+    // de "Horas por cliente". Va en Administración junto a Áreas, que es el otro catálogo del
+    // mismo tipo — no en Operación, donde vive lo que se USA todos los días.
+    { label: "Clientes", href: "/clientes", icon: Handshake, seccion: "clientes" },
     { label: "Usuarios", href: "/usuarios", icon: UserCog, seccion: "usuarios", accion: "write" },
     { label: "Períodos", href: "/periodos", icon: CalendarClock, seccion: "periodos" },
     { label: "Configuración", href: "/configuracion", icon: Settings, seccion: null },

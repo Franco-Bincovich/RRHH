@@ -13,7 +13,7 @@ from uuid import UUID
 from repositories.horas_repo import HorasRepo
 from repositories.proyecto_asignaciones_repo import AsignacionesRepo
 from repositories.proyectos_repo import ProyectosRepo
-from schemas.proyectos import HoraCreate, HoraListResponse, HoraResponse
+from schemas.horas import HoraCreate, HoraListResponse, HoraResponse
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -41,11 +41,6 @@ class HorasService:
             raise AppError("Proyecto no encontrado", "PROYECTO_NOT_FOUND", 404)
         rows, total = self._repo.find_by_proyecto(str(proyecto_id), page, page_size)
         return HoraListResponse(items=rows, total=total)
-
-    def get_by_asignacion(self, asignacion_id: UUID) -> HoraListResponse:
-        """Horas de una asignación específica."""
-        items = self._repo.find_by_asignacion(str(asignacion_id))
-        return HoraListResponse(items=items, total=len(items))
 
     def cargar(self, proyecto_id: UUID, data: HoraCreate, cargado_por: Optional[str] = None, empresa_id: Optional[UUID] = None) -> HoraResponse:
         """
