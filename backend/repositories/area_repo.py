@@ -70,14 +70,17 @@ class AreaRepo:
         return _to_response(res.data, _counts_by_area())
 
     def save(self, data: AreaCreate) -> AreaResponse:
-        payload = data.model_dump(exclude_none=True)
+        # 🔴 `mode="json"` NO es cosmético: con `empresa_id: UUID`, un `model_dump()` pelado
+        # devuelve el objeto y el cliente de Supabase no lo sabe serializar.
+        payload = data.model_dump(exclude_none=True, mode="json")
         res = supabase_admin.table(_TABLE).insert(payload).execute()
         counts = _counts_by_area()
         return _to_response(res.data[0], counts)
 
     def update(self, id: str, data: AreaUpdate, empresa_id: Optional[str] = None) -> Optional[AreaResponse]:
         """Actualización parcial. empresa_id restringe el WHERE (None = consolidado)."""
-        patch = data.model_dump(exclude_none=True)
+        # `mode="json"` por lo mismo que `save`: `responsable_id` es UUID (verificado ejecutando).
+        patch = data.model_dump(exclude_none=True, mode="json")
         if not patch:
             return self.find_by_id(id, empresa_id)
         q = supabase_admin.table(_TABLE).update(patch).eq("id", id)

@@ -10,14 +10,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { AreaFormFields } from "@/components/features/areas/AreaFormFields"
+import { EMPTY, type FormData, type FormErrors } from "@/components/features/areas/areaForm"
+import { guardarArea } from "@/components/features/areas/guardarArea"
 import { fetchEmpleados } from "@/services/empleados"
-import { createArea, updateArea } from "@/services/areas"
+import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Empleado } from "@/types/empleado"
-import type { Area, AreaCreate } from "@/types/area"
+import type { Empresa } from "@/types/empresa"
+import type { Area } from "@/types/area"
 
 interface AreaModalProps {
   open: boolean
@@ -28,34 +29,14 @@ interface AreaModalProps {
   empresaId?: string
 }
 
-type FormData = {
-  nombre: string
-  descripcion: string
-  responsable_id: string
-}
-
-type FormErrors = Partial<Record<keyof FormData, string>>
-
-const EMPTY: FormData = { nombre: "", descripcion: "", responsable_id: "" }
-
-const SELECT_CLASS =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-
-function validate(form: FormData): FormErrors {
-  const errors: FormErrors = {}
-  if (!form.nombre.trim()) errors.nombre = "El nombre es requerido"
-  else if (form.nombre.trim().length > 100) errors.nombre = "Máximo 100 caracteres"
-  return errors
-}
-
 export function AreaModal({ open, onClose, onSuccess, area, empresaId }: AreaModalProps) {
   const isEdit = Boolean(area)
-  const [form, setForm]             = useState<FormData>(EMPTY)
-  const [errors, setErrors]         = useState<FormErrors>({})
+  const [form, setForm] = useState<FormData>(EMPTY)
+  const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [serverError, setServerError] = useState("")
-  const [empleados, setEmpleados]   = useState<Empleado[]>([])
+  const [empleados, setEmpleados] = useState<Empleado[]>([])
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
 
   useEffect(() => {
     if (!open) return
@@ -65,18 +46,27 @@ export function AreaModal({ open, onClose, onSuccess, area, empresaId }: AreaMod
   }, [open, empresaId])
 
   useEffect(() => {
+    // Solo en el alta: en la edición el select no se muestra (un área no se muda de sociedad).
+    if (!open || area) return
+    fetchEmpresas().then((r) => setEmpresas(r.items.filter((e) => e.activa))).catch(() => {})
+  }, [open, area])
+
+  useEffect(() => {
     if (area) {
       setForm({
+        empresa_id: area.empresa_id ?? "",
         nombre: area.nombre,
         descripcion: area.descripcion ?? "",
         responsable_id: area.responsable_id ?? "",
       })
     } else {
-      setForm(EMPTY)
+      // Preseleccionada con la empresa del contexto (sidebar o tab). En consolidado queda "" y
+      // la validación lo frena: antes salía a la red y volvía como 500.
+      setForm({ ...EMPTY, empresa_id: empresaId ?? getEmpresaActivaId() ?? "" })
     }
     setErrors({})
     setServerError("")
-  }, [area, open])
+  }, [area, open, empresaId])
 
   function handleField(key: keyof FormData) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -88,28 +78,13 @@ export function AreaModal({ open, onClose, onSuccess, area, empresaId }: AreaMod
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const errs = validate(form)
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs)
-      return
-    }
     setSubmitting(true)
     setServerError("")
     try {
-      if (isEdit && area) {
-        await updateArea(area.id, {
-          nombre: form.nombre.trim(),
-          descripcion: form.descripcion.trim() || undefined,
-          responsable_id: form.responsable_id || undefined,
-        })
-      } else {
-        const payload: AreaCreate = {
-          empresa_id: empresaId ?? getEmpresaActivaId() ?? "",
-          nombre: form.nombre.trim(),
-          descripcion: form.descripcion.trim() || undefined,
-          responsable_id: form.responsable_id || undefined,
-        }
-        await createArea(payload)
+      const errs = await guardarArea(form, area)
+      if (errs) {
+        setErrors(errs)
+        return
       }
       onSuccess()
     } catch {
@@ -127,55 +102,8 @@ export function AreaModal({ open, onClose, onSuccess, area, empresaId }: AreaMod
         </DialogHeader>
 
         <form id="area-form" onSubmit={handleSubmit} noValidate>
-          <div className="flex flex-col gap-4 py-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="nombre">
-                Nombre
-                <span className="ml-0.5 text-destructive" aria-hidden>*</span>
-              </Label>
-              <Input
-                id="nombre"
-                value={form.nombre}
-                onChange={handleField("nombre")}
-                aria-invalid={Boolean(errors.nombre)}
-                aria-required
-                maxLength={100}
-              />
-              {errors.nombre && (
-                <p className="text-xs text-destructive" role="alert">{errors.nombre}</p>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="descripcion">Descripción</Label>
-              <Textarea
-                id="descripcion"
-                value={form.descripcion}
-                onChange={handleField("descripcion")}
-                rows={3}
-                className="resize-none"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="responsable_id">
-                Responsable <span className="text-muted-foreground">(opcional)</span>
-              </Label>
-              <select
-                id="responsable_id"
-                value={form.responsable_id}
-                onChange={handleField("responsable_id")}
-                className={SELECT_CLASS}
-              >
-                <option value="">Sin responsable asignado</option>
-                {empleados.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.nombre} {emp.apellido} — {emp.roles?.[0] ?? emp.cargo}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <AreaFormFields form={form} errors={errors} empleados={empleados}
+                          empresas={empresas} isEdit={isEdit} onField={handleField} />
 
           {serverError && (
             <p className="mt-2 text-sm text-destructive" role="alert">{serverError}</p>

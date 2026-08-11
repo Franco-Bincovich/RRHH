@@ -1,8 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { Plus, Search, Layers, Pencil, Trash2 } from "lucide-react"
-import { toast } from "sonner"
+import { Plus, Search, Layers } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { EmptyState } from "@/components/ui/EmptyState"
@@ -10,88 +8,22 @@ import { ErrorState } from "@/components/ui/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { AreaModal } from "@/components/features/areas/AreaModal"
+import { AreasTabla } from "@/components/features/areas/AreasTabla"
+import { useAreas } from "@/components/features/areas/useAreas"
+import { AreaEliminarDialog } from "@/components/features/areas/AreaEliminarDialog"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
-import { fetchAreas, deleteArea, exportarAreas } from "@/services/areas"
+import { exportarAreas } from "@/services/areas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
-import type { Area } from "@/types/area"
 
 export default function AreasPage() {
   const canWrite = useCanWrite()
-  const [areas, setAreas] = useState<Area[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [search, setSearch] = useState("")
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<Area | undefined>(undefined)
-  const [confirmDelete, setConfirmDelete] = useState<Area | null>(null)
-  const [deleting, setDeleting] = useState(false)
-
-  async function load() {
-    setLoading(true)
-    setError(false)
-    try {
-      const data = await fetchAreas(getEmpresaActivaId() ?? undefined)
-      setAreas(data)
-    } catch {
-      setError(true)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { void load() }, [])
-
-  const filtered = useMemo(() => {
-    if (!search.trim()) return areas
-    const q = search.trim().toLowerCase()
-    return areas.filter((a) => a.nombre.toLowerCase().includes(q))
-  }, [areas, search])
-
-  function openCreate() {
-    setEditing(undefined)
-    setModalOpen(true)
-  }
-
-  function openEdit(area: Area) {
-    setEditing(area)
-    setModalOpen(true)
-  }
-
-  function handleModalSuccess() {
-    setModalOpen(false)
-    void load()
-  }
-
-  async function handleDelete() {
-    if (!confirmDelete) return
-    setDeleting(true)
-    try {
-      await deleteArea(confirmDelete.id)
-      setConfirmDelete(null)
-      void load()
-    } catch {
-      toast.error("No se pudo eliminar el área. Intentá de nuevo.")
-    } finally {
-      setDeleting(false)
-    }
-  }
+  const {
+    areas, filtradas, loading, error, search, setSearch,
+    modalOpen, setModalOpen, editing, confirmDelete, setConfirmDelete, deleting,
+    load, handleDelete, openCreate, openEdit, onModalSuccess,
+  } = useAreas()
 
   if (loading) {
     return (
@@ -154,7 +86,7 @@ export default function AreasPage() {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {filtradas.length === 0 ? (
         <EmptyState
           icon={<Layers />}
           title={search ? "Sin resultados" : "Sin áreas"}
@@ -173,99 +105,24 @@ export default function AreasPage() {
           }
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Descripción</TableHead>
-              <TableHead>Responsable</TableHead>
-              <TableHead className="text-right">Empleados</TableHead>
-              <TableHead className="w-24 text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((area) => (
-              <TableRow key={area.id}>
-                <TableCell className="font-medium">{area.nombre}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {area.descripcion ?? <span className="italic text-muted-foreground/60">—</span>}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {area.responsable_nombre ?? <span className="italic text-muted-foreground/60">—</span>}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {area.cantidad_empleados}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    {canWrite && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-9"
-                          aria-label={`Editar ${area.nombre}`}
-                          onClick={() => openEdit(area)}
-                        >
-                          <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-9 text-destructive hover:text-destructive"
-                          aria-label={`Eliminar ${area.nombre}`}
-                          onClick={() => setConfirmDelete(area)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <AreasTabla areas={filtradas} canWrite={canWrite}
+                    onEdit={openEdit} onDelete={setConfirmDelete} />
       )}
 
       <AreaModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onSuccess={handleModalSuccess}
+        onSuccess={onModalSuccess}
         area={editing}
         empresaId={getEmpresaActivaId() ?? undefined}
       />
 
-      <Dialog open={Boolean(confirmDelete)} onOpenChange={(o) => { if (!o) setConfirmDelete(null) }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Eliminar área</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            ¿Estás seguro de que querés eliminar{" "}
-            <span className="font-medium text-foreground">{confirmDelete?.nombre}</span>?
-            Esta acción no se puede deshacer.
-          </p>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="min-h-11"
-              onClick={() => setConfirmDelete(null)}
-              disabled={deleting}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              className="min-h-11"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? "Eliminando..." : "Eliminar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AreaEliminarDialog
+        area={confirmDelete}
+        eliminando={deleting}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }
