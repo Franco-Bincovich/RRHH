@@ -872,9 +872,9 @@ después del cutover a AWS**, como ya estaba decidido — no ahora.
 - **"Compatibilidad con una posición"** (sucesión): feature nunca construida, no deuda técnica. El ranking es por assessment genérico. Cuando RRHH la reclame, definir qué significa compatibilidad antes de improvisar.
 
 ### Tests
-- **Backend: 3231 passed** en **153 archivos `test_*.py`** (+ `tests/_postgrest_schema.py` y `tests/_barrido_callers.py`, que son helpers, no tests). `pytest -q` desde `backend/` con `venv`. *(Medido el 10/8/2026.)*
-- **Front: `npm test` (= `vitest run`) — 620 tests en 49 archivos.** **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
-- **Los DOCE barridos estructurales** — cada uno cubre automáticamente lo que se agregue después, y **todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una extracción rota devolvería 0 elementos y pasaría en el vacío:
+- **Backend: 3280 passed** en **153 archivos `test_*.py`** (+ `tests/_postgrest_schema.py` y `tests/_barrido_callers.py`, que son helpers, no tests). `pytest -q` desde `backend/` con `venv`. *(Medido el 11/8/2026.)*
+- **Front: `npm test` (= `vitest run`) — 647 tests en 53 archivos.** *(Medido el 11/8/2026.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Los TRECE barridos estructurales** — cada uno cubre automáticamente lo que se agregue después, y **todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una extracción rota devolvería 0 elementos y pasaría en el vacío:
   1. `tests/test_paridad_list_export.py` — el export acepta los mismos Query que el listado.
   2. `tests/test_limite_export.py::TestTodosLosExportsChequean` — todo export llama a `verificar_limite_export`.
   3. `tests/test_selects_repos.py` — **todo** `select` con embed del repo, validado con AST contra `db/schema.sql`. Descubrimiento por introspección, nunca una lista.
@@ -883,6 +883,7 @@ después del cutover a AWS**, como ya estaba decidido — no ahora.
   6. `tests/test_mappers_ejercitados.py` · 7. `tests/test_contrato_repos.py` · 8. `tests/test_auditoria_coherente.py` · 9. `tests/test_nombres_definidos.py` · 10. `tests/test_triggers_updated_at.py`.
   11. `frontend/components/layout/nav-config.test.ts` — `NAV_GROUPS` contra `seccionDeRuta`.
   12. **`frontend/services/barridoFront.test.ts` (NUEVO, 10/8/2026)** — exports de `services/` que ningún componente importa, en dos buckets (huérfano / solo-tests), con excepciones declaradas con razón y verificadas en las dos direcciones.
+  13. **`frontend/app/contrasteTokens.test.ts` (NUEVO, 11/8/2026)** — ratio WCAG de los pares fondo/texto del bloque `.dark` de `globals.css`, parseando hex y oklch del archivo real. Vigila que la paleta oscura siga siendo legible: la regla de `option` (`globals.css:154-158`) no elige colores, los toma prestados de `--popover`/`--popover-foreground`, así que un ajuste de paleta puede volver el popup ilegible **sin tocar la regla**. Ancla la fórmula con valores literales antes de medir nada (blanco/negro = 21:1 por hex y por oklch), porque una conversión mal implementada daría ratios inventados que pasan siempre. Excepción declarada y verificada en las dos direcciones: `--primary`/`--primary-foreground` da **3.68:1** en oscuro (6.18:1 en claro) — el botón primario, anotado en `docs/DEUDA-TECNICA.md` §9.
 
 > 🔴 **POR QUÉ HICIERON FALTA DOS BARRIDOS DE CÓDIGO MUERTO Y NO ALCANZA UNO.** El #5 empareja
 > *(path, método)* contra los **literales de path escritos en el front**; el #12 mira **quién

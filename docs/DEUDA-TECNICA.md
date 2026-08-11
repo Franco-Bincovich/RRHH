@@ -104,6 +104,11 @@
 
 > 🔑 Con esto son **cinco** los barridos estructurales del repo (paridad list↔export, límite de
 > export, selects de repos, espejo de permisos, nav↔permisos), **todos con guarda de mínimo**.
+>
+> ⚠️ **Corregido el 11/8/2026: hoy son TRECE, no cinco.** La frase de arriba se deja como quedó
+> escrita —era cierta el 2/8— pero **no la uses como inventario**. La lista completa y al día vive
+> en **`CLAUDE.md` → Tests**, y es el único lugar donde se enumera: un segundo listado en prosa
+> vuelve a divergir, que es exactamente lo que documenta la sección 6 de este archivo.
 
 ---
 
@@ -321,6 +326,53 @@ exactamente lo que dispara la trampa de arriba.
 | **Los 2 hooks del front sobre 80** (`useFiltrosVacaciones` 95, `useFiltrosAsignacionesCap` 89) — quedaron fuera de la tanda de límites del 2/8, que fue de backend | molde: `useOpcionesAusencias` | 🟡 | S |
 | **E2E real de adjuntos nunca ejecutado** (`_BUCKET` hardcodeado a prod) | | 🟡 | — (cutover AWS) |
 | **Reactivar `/configuracion` → desactivar "Otro"** cuando RRHH cargue sus tipos | mig 088 🚩 | ⬜ | — (RRHH) |
+
+---
+
+## 9. Superficies que dibuja el NAVEGADOR y el tema oscuro no alcanza
+
+> **11/8/2026.** Relevado entero al arreglar el contraste del popup de los `<select>`
+> (`app/globals.css:131-158`, regla sobre `option`/`optgroup`). **Ese caso quedó cerrado; estos
+> cuatro NO se tocaron.** Comparten el modo de falla —el navegador o el SO pintan el control con
+> su propio estilo y el tema no llega— pero **cada uno necesita un mecanismo distinto**, y por eso
+> ninguno se resuelve extendiendo la regla que se acaba de escribir.
+
+| Qué | Dónde | Por qué la regla de `option` no lo cubre | Gravedad | Esf. |
+|---|---|---|---|---|
+| **Autofill de Chrome — cero reglas `-webkit-autofill` en TODO el repo** (verificado por grep sobre `.css`/`.tsx`/`.ts`). Chrome pinta su propio fondo claro ENCIMA del campo y el tema no lo saca | `app/login/page.tsx:111` (`autoComplete="username"`) y `:134` (`current-password`) · `components/features/usuarios/CambiarPasswordForm.tsx:78,82,86` | Es un pseudo-elemento del navegador sobre `input`, no un `option`. Pide su propia regla (`:-webkit-autofill` + `box-shadow` interior o `-webkit-text-fill-color`) | 🟠 | S |
+| **8 `<textarea>` crudos sin `placeholder:text-muted-foreground`** — el placeholder cae al color de UA. De los 9 `<textarea>` que no usan el componente, **solo `ProyectoModal.tsx:89` lo declara** | `components/layout/AIPanel.tsx:207` · `features/comunicacion/EnvioLibre.tsx:30` · `features/configuracion/ScreeningSection.tsx:57` · `features/onboarding/NuevoTemplateModal.tsx:109` · `features/onboarding/AddTareaForm.tsx:57` · `features/onboarding/InlineEdit.tsx:74` · `features/screening/CorregirClasificacion.tsx:79` | No es el navegador dibujando: es que esquivan `components/ui/textarea.tsx:11`, que ya trae la clase. **Se arregla migrando al componente `Textarea`, no con CSS global** — el CSS taparía el desvío en vez de corregirlo | 🟡 | S |
+| **132 tooltips nativos (`title=`) en 30+ archivos** — los dibuja el SISTEMA OPERATIVO | `title=` en `app/(dashboard)/` (areas, auditoria, empleados, reportes, costos, empresas, objetivos, offboarding, onboarding, proyectos, … 30 archivos) | 🔴 **No se pueden estilar con CSS de ninguna forma**, ni con `color-scheme`. La única salida es reemplazarlos por un componente de tooltip propio — es una tanda de UX, no un fix de contraste | ⬜ | L |
+| **10 `<input type="checkbox">` sin `accent-color`** — cero usos de `accent-color` en el repo, así que el check se dibuja con el azul del SISTEMA y no con `--primary` | los 10 checkbox del front, incluidos los `multiselect` de `components/ui/FiltersBar.tsx` | Es una propiedad sobre `input`, no sobre `option`. Una línea en `@layer base`, pero es decisión de MARCA (coherencia con `--primary`), no el bug de legibilidad que se arregló | ⬜ | S |
+
+### 🟠 El botón primario en modo oscuro no llega a 4.5:1 — **hallazgo nuevo, 11/8/2026**
+
+Salió al escribir `frontend/app/contrasteTokens.test.ts`, que mide los pares de tokens de verdad:
+
+| par | modo claro | modo oscuro |
+|---|---|---|
+| `--primary` / `--primary-foreground` | `#1a56db` sobre blanco → **6.18:1** ✅ | `#3b82f6` sobre blanco → **3.68:1** 🟠 |
+
+**El azul se aclaró para que el botón resaltara contra el fondo oscuro de la página, y eso bajó
+el contraste del texto que va ENCIMA del botón.** Afecta a todo `variant="default"` de
+`components/ui/button.tsx:11` (`bg-primary text-primary-foreground`) en modo oscuro — o sea, el
+botón primario de cada pantalla. `docs/UX-UI.md:630` pide 4.5:1 para texto normal.
+
+**No se arregló en esta sesión: es una decisión de MARCA**, no un fix mecánico. Las dos salidas
+son oscurecer `--primary` en `.dark` (y perder resalte contra el fondo) o dejar de usar blanco
+puro en `--primary-foreground`. Elegir por nuestra cuenta cambiaría el color del botón principal
+del producto entero.
+
+Mientras tanto **queda vigilado en las dos direcciones**: está declarado en `BRECHAS_DECLARADAS`
+con su ratio medido, así que el test rojea si empeora **y también si mejora** (para que se saque
+la excepción en vez de quedar de adorno).
+
+> ⚠️ **Lo que SÍ debería estar cubierto y no se verificó en navegador:** los **29 `input type="date"`**
+> (ícono `::-webkit-calendar-picker-indicator` y popup del calendario) y los **56 contenedores con
+> `overflow-*-auto`** (scrollbars). Los dos dependen del `color-scheme` que **next-themes escribe
+> inline en `<html>`** (`enableColorScheme` viene en `true` y `components/layout/ThemeProvider.tsx`
+> no lo apaga). **No hay ninguna regla propia en el repo para ellos.** Si en la prueba visual
+> aparecen mal, el diagnóstico cambia de raíz: querría decir que el `color-scheme` inline NO está
+> llegando, y eso es un ítem nuevo — no se arregla con más CSS por control.
 
 ---
 

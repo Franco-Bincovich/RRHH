@@ -40,6 +40,55 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-11 · Contraste del popup de los `<select>` en modo oscuro · commit pendiente
+
+**Qué cambió:** **una sola regla CSS** en `frontend/app/globals.css:131-158`, dentro del
+`@layer base` que ya existía. Le da a `option` y a `optgroup` un `background-color` y un `color`
+propios bajo `.dark`, con los tokens `--popover` / `--popover-foreground` que ya estaban
+definidos. Arregla los **86 `<select>` nativos del front de una vez**: el popup lo dibuja el
+navegador pintando cada `option` con el fondo del `<select>`, y 60 de los 86 declaran
+`bg-transparent`, así que quedaba la superficie blanca de UA con el texto casi blanco heredado
+del tema — **1.04:1, ilegible**. Ahora da **14.01:1**. `docs/DEUDA-TECNICA.md` suma una sección 9
+con las cuatro superficies del mismo tipo que **no** se tocaron (autofill de Chrome, 8 `<textarea>`
+crudos sin clase de placeholder, 132 tooltips nativos, 10 checkbox sin `accent-color`).
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, sin variables de entorno, sin
+dependencias nuevas, sin endpoints, sin cambios de auth ni de CORS. Es un archivo de estilos del
+front: sale por el deploy normal de `sofia-front` y **no requiere tocar `sofia-backend`**.
+
+**Test nuevo:** `frontend/app/contrasteTokens.test.ts` (186 líneas, 1 test) mide el ratio WCAG de
+los 4 pares fondo/texto del bloque `.dark`, parseando los valores REALES del archivo (hex y
+oklch) — no constantes copiadas. La regla de `option` no elige colores, los toma prestados de
+`--popover`/`--popover-foreground`, así que un ajuste de paleta puede volver el popup ilegible sin
+tocar la regla; el test ataja eso. **Descubrió una brecha real: `--primary`/`--primary-foreground`
+en oscuro da 3.68:1** (en claro, 6.18:1) — anotado en `docs/DEUDA-TECNICA.md` §9, no arreglado por
+ser decisión de marca.
+
+**Verificación:** `tsc --noEmit` exit 0 · vitest **647/647 en 53 archivos** (646 + el test nuevo)
+· pytest **3280 passed**. Backend y front sin cambios de comportamiento; el +1 es el test.
+`globals.css` queda en **174/200**.
+
+**Sincronización de docs (misma fecha, solo documentación):** el test nuevo entra como **barrido
+estructural 13**. `CLAUDE.md` → Tests pasa de DOCE a TRECE con su entrada, y se remidieron las dos
+líneas de conteo de la suite (backend 3231→**3280**, front 620/49→**647/53**).
+`docs/ORDEN-SESIONES-CODIGO.md` y `docs/DEUDA-TECNICA.md` §4 tenían conteos viejos (doce y cinco):
+corregidos, y los dos ahora **apuntan a `CLAUDE.md` como único inventario** en vez de repetir la
+lista. En `docs/PLAN-DE-TRABAJO.md` §10.3 se corrigió además un error de fondo: **T12 ya estaba
+hecho** (`tests/test_callers_huerfanos.py`, con alcance más amplio del que pedía el plan) y **T11
+quedó descartado en la forma en que se pidió** — lo que existe es más angosto a propósito, con los
+44 métodos de escritura sin auditoría fuera por construcción.
+
+**Impacto en infraestructura de esta parte:** **Ninguno.** No se tocó una línea de código.
+
+> 🔴 **Lo único que falta es una verificación VISUAL, y decide entre dos arreglos distintos.**
+> En Chromium sobre Windows/Linux `option { background-color }` se respeta desde siempre; en
+> **macOS** el popup del `<select>` fue un menú nativo durante años e **ignoraba los estilos de
+> autor**, y recién se volvió estilable en versiones recientes. Como se trabaja en las dos
+> plataformas, **hay que probarlo en las dos**. Si en la Mac no la toma, el plan B para ese
+> navegador es cambiar `bg-transparent` por `bg-background` en las ~20 constantes que lo declaran
+> (60 sitios) — **no está implementado a propósito**: se decide con el resultado de la prueba.
+
+---
 ## 2026-08-10 · Migraciones 110 y 111 — idempotencia de vacaciones y dedup de objetivos · commits pendientes
 
 **Qué cambió:** dos índices únicos. **Ninguna es destructiva**: solo agregan, no tocan datos ni

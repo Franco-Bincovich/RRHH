@@ -228,6 +228,20 @@ Verificado por grep de cada símbolo contra `tests/`:
 > Con T11-T13 serían **nueve** barridos estructurales. Los seis actuales: paridad list↔export ·
 > límite de export · selects de repos · espejo de permisos · nav↔permisos · loading se apaga.
 > **Todos llevan guarda de mínimo, y el nuevo también tiene que llevarla.**
+>
+> ⚠️ **Este párrafo quedó viejo en las dos mitades (nota del 11/8/2026).** Cuando se escribió había
+> seis barridos; **hoy hay trece** — el inventario al día está en `CLAUDE.md` → Tests. Y **la tabla
+> de arriba tampoco sigue entera**, verificado leyendo los archivos:
+>
+> - **T12 está HECHO** — es `tests/test_callers_huerfanos.py`, y con alcance **más amplio** que el
+>   que pedía este plan: barre `services/` + `repositories/` completo, no solo los `_*.py`. Su
+>   propio docstring cita `set_remitente` como el caso que lo motivó, que es el que figura acá.
+> - **T11 sigue abierto, y la forma en que se pidió acá quedó descartada.** Existe
+>   `tests/test_auditoria_coherente.py`, pero es deliberadamente **más angosto**: verifica que un
+>   módulo que ya audita algo las audite TODAS, no que todo lo que escribe audite. Los **44 métodos
+>   de escritura en módulos sin ninguna auditoría quedan fuera POR CONSTRUCCIÓN**, esperando una
+>   definición de producto que todavía no se tomó. El porqué está en el docstring de ese archivo.
+> - **T13 sigue abierto** (comparar `aplicar_filtro_estado` con `derive_estado`).
 
 ---
 

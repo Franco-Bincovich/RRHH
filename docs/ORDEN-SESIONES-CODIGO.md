@@ -31,7 +31,8 @@
 | **G** ✅ | Link público de carga de horas (`/horas`) · pantalla de clientes · vista de horas por cliente |
 | **422** ✅ | Bug de producción en el alta de clientes + handler de `RequestValidationError`. Las 27 pantallas dejan de mostrar "Error del servidor" ante un 422 |
 
-**Suite:** 3247 backend · 636 front en 51 archivos · doce barridos estructurales · `tsc` limpio.
+**Suite:** 3280 backend · 647 front en 53 archivos · **trece** barridos estructurales · `tsc` limpio.
+*(Remedido el 11/8/2026. La lista de los trece vive en `CLAUDE.md` → Tests; acá solo el número.)*
 **Migraciones:** hasta la 107, todas corridas. `schema.sql` verificado exacto contra el catálogo.
 
 ---

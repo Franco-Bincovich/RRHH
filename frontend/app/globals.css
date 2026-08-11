@@ -127,6 +127,36 @@
   html {
     @apply font-sans;
   }
+
+  /*
+   * 🔴 CONTRASTE DEL POPUP DE LOS <select> NATIVOS EN MODO OSCURO.
+   *
+   * El desplegable de un <select> lo dibuja el navegador, y pinta cada <option> con el
+   * fondo del PROPIO <select>. 60 de los 86 selects del front declaran `bg-transparent`,
+   * así que no se pinta nada: queda la superficie blanca por defecto del navegador con el
+   * `color` casi blanco que el <option> hereda del tema oscuro. Da 1.04:1 — ilegible.
+   *
+   * Darle al <option> su propio `background-color` lo saca de esa dependencia, y por eso
+   * UNA regla cubre los 86 sin tocar ninguno: ningún <option> del repo tiene `className`
+   * (0 de 86) y el `bg-*` del <select> es de otro elemento, así que nada la pisa. Cubre
+   * por igual los tres fondos que hoy conviven — `bg-transparent`, `bg-background` y el
+   * `bg-sidebar-accent` con 80% de alfa del selector de empresa del sidebar.
+   *
+   * `optgroup` va nombrado aparte A PROPÓSITO: es un elemento distinto y `option` no
+   * alcanza el label del grupo. Caso vivo: `features/ausencias/CamposAusencia.tsx:52`.
+   *
+   * Va en @layer base para quedar por debajo de las utilidades de Tailwind: si mañana
+   * alguien estiliza un <option> desde el JSX, gana el JSX y no hace falta un !important.
+   *
+   * 🚨 NO agregar `color-scheme` acá — parecería el arreglo y sería una línea muerta:
+   * next-themes ya lo escribe INLINE en <html> (`enableColorScheme` viene en `true` y
+   * `ThemeProvider.tsx` no lo apaga), y el inline le gana a cualquier hoja de estilo.
+   */
+  .dark select option,
+  .dark select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
 }
 
 @media print {
