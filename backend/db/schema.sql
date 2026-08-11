@@ -250,11 +250,13 @@ CREATE TABLE public.cesiones (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
--- Catalogo de clientes por empresa (migracion 102). Es de quien depende cada carga de horas
--- del modulo nuevo. NO tiene relacion con `proyectos`: ese flujo no participa (ver la 102).
+-- Catalogo GLOBAL de clientes (migracion 102, sin empresa desde la 109). Es de quien depende
+-- cada carga de horas del modulo nuevo. NO tiene relacion con `proyectos`: ese flujo no participa.
+-- Un cliente NO pertenece a ninguna empresa: se ve, se crea y se da de baja con el selector del
+-- sidebar en cualquier modo, y cualquier empleado imputa horas contra cualquiera. Revierte la
+-- decision de la 102 ("no hay clientes globales"); se comporta como `tipos_ausencia`.
 CREATE TABLE public.clientes (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
-    empresa_id uuid NOT NULL,
     nombre text NOT NULL,
     -- La baja es logica: horas_proyecto.cliente_id es una FK sin ON DELETE, asi que borrar un
     -- cliente con horas fallaria. Mismo criterio que tipos_ausencia (que por eso no tiene delete).
@@ -1296,9 +1298,6 @@ ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_vacante_id_fkey FOREIGN 
 ALTER TABLE public.capacitaciones ADD CONSTRAINT capacitaciones_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.cesiones ADD CONSTRAINT cesiones_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
 ALTER TABLE public.cesiones ADD CONSTRAINT cesiones_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
--- Sin ON DELETE a proposito: borrar una empresa no puede llevarse en silencio los clientes
--- contra los que hay horas cargadas. Mismo criterio que proyectos. Migracion 102.
-ALTER TABLE public.clientes ADD CONSTRAINT clientes_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.configuracion_empresa ADD CONSTRAINT configuracion_empresa_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_empleado_emp_fkey FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id) ON DELETE RESTRICT;
@@ -1529,6 +1528,11 @@ CREATE INDEX idx_obj_empresa ON public.objetivos USING btree (empresa_id);
 CREATE INDEX idx_obj_estado ON public.objetivos USING btree (estado);
 CREATE INDEX idx_obj_responsable ON public.objetivos USING btree (responsable_id);
 CREATE INDEX idx_obj_parent ON public.objetivos USING btree (parent_id);
+-- Dedup del import de objetivos (mig 111). La clave natural es lo que identifica una FILA DE LA
+-- PLANILLA: las dos columnas que el import declara requeridas, titulo y responsable. NO va el
+-- titulo solo —dos responsables pueden tener legitimamente el mismo objetivo— ni `fecha_entrega`,
+-- que es NULLABLE y desactivaria el indice en silencio para todo objetivo sin fecha.
+CREATE UNIQUE INDEX ux_objetivo_responsable_titulo ON public.objetivos USING btree (empresa_id, responsable_id, lower(titulo));
 CREATE INDEX idx_obj_resp_user ON public.objetivo_responsables USING btree (user_id);
 CREATE INDEX idx_oauth_states_expires_at ON public.oauth_states USING btree (expires_at);
 CREATE INDEX idx_offboarding_activos_empresa ON public.offboarding_activos USING btree (empresa_id);
@@ -1581,9 +1585,14 @@ CREATE INDEX idx_sucesion_posiciones_empresa ON public.sucesion_posiciones USING
 CREATE INDEX idx_sucesion_titular ON public.sucesion_posiciones USING btree (titular_id);
 CREATE INDEX idx_vacantes_area ON public.vacantes USING btree (area_id);
 CREATE INDEX idx_esp_empresa ON public.empleado_superior_pendiente USING btree (empresa_id);
--- Identidad de una ausencia (mig 089): sostiene la idempotencia del import mensual. NO prohíbe
+-- Identidad de una ausencia (mig 089) y de una vacacion (mig 110): sostienen la idempotencia del
+-- import mensual — `on_conflict` de PostgREST EXIGE una constraint unica. NO prohiben
 -- solapamientos parciales, solo el duplicado exacto.
+-- ⚠️ Las columnas NO son las mismas: en ausencias el tipo es `tipo_id` (FK a tipos_ausencia); en
+-- vacaciones es `tipo` (varchar con CHECK de cuatro valores). Las 8 columnas son NOT NULL, asi
+-- que ningun NULL desactiva los indices en silencio.
 CREATE UNIQUE INDEX uq_ausencia_empleado_rango_tipo ON public.solicitudes_ausencia USING btree (empleado_id, fecha_desde, fecha_hasta, tipo_id);
+CREATE UNIQUE INDEX uq_vacacion_empleado_rango_tipo ON public.solicitudes_vacaciones USING btree (empleado_id, fecha_desde, fecha_hasta, tipo);
 CREATE UNIQUE INDEX uq_integracion_remitente_sistema ON public.usuario_integraciones USING btree ((es_remitente_sistema)) WHERE es_remitente_sistema;
 -- Codigo de vacante (mig 097): GLOBAL, no por empresa —la casilla que recibe los CVs es una
 -- sola—, y sobre upper() porque el lookup del matcher es case-insensitive. Si la unicidad no
@@ -1617,12 +1626,14 @@ CREATE UNIQUE INDEX ux_tipos_ausencia_nombre_por_empresa ON public.tipos_ausenci
 CREATE UNIQUE INDEX ux_tipos_ausencia_nombre_global ON public.tipos_ausencia USING btree (nombre) WHERE (empresa_id IS NULL);
 CREATE INDEX idx_tipos_ausencia_empresa ON public.tipos_ausencia USING btree (empresa_id) WHERE (empresa_id IS NOT NULL);
 CREATE INDEX idx_tipos_ausencia_padre ON public.tipos_ausencia USING btree (padre_id) WHERE (padre_id IS NOT NULL);
--- Migracion 102. Unicidad CASE-INSENSITIVE: con RRHH tipeando a mano, "Acme" y "ACME" son el
--- caso normal. El precedente de lo que pasa sin unicidad es `proyectos`, que no tiene ninguna y
--- por eso deduplica con un cache en memoria de Python (services/_nomina_proyectos.py).
+-- Migracion 102, reemplazado por el GLOBAL en la 108. Unicidad CASE-INSENSITIVE: con RRHH
+-- tipeando a mano, "Acme" y "ACME" son el caso normal. El precedente de lo que pasa sin unicidad
+-- es `proyectos`, que no tiene ninguna y por eso deduplica con un cache en memoria de Python
+-- (services/_nomina_proyectos.py).
+-- 🔴 Desde la 109 el alcance es TODA la tabla, no (empresa, nombre): un cliente no cuelga de
+-- ninguna empresa, asi que "Acme" es uno solo para todo el sistema.
 -- ⚠️ Un indice por expresion no sirve como target de on_conflict; clientes no se upsertea.
-CREATE UNIQUE INDEX ux_clientes_nombre_por_empresa ON public.clientes USING btree (empresa_id, lower(nombre));
-CREATE INDEX idx_clientes_empresa ON public.clientes USING btree (empresa_id);
+CREATE UNIQUE INDEX ux_clientes_nombre_global ON public.clientes USING btree (lower(nombre));
 -- Migracion 104. Las tres preguntas que la tabla existe para responder: que paso recientemente,
 -- cuantas veces se probo ESTE dni, y cuantos dnis probo ESTA ip.
 -- Migracion 105. La unicidad es lo que hace que un token identifique a UNA sesion.

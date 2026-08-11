@@ -137,7 +137,7 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `cliente_repo.py::find_all` | `cliente_service.py:49` | header `X-Empresa-Id` | selector del sidebar | ❌ no viaja como param |
+| ~~empresa~~ | 🔴 **YA NO EXISTE** (bloque L, mig 108/109): el catálogo es GLOBAL y no se acota por empresa por ningún lado — ni query param ni header | | | |
 | incluir_inactivos | `cliente_repo.py::find_all` | ✅ | `clientes.py:35` | botón "Ver bajas" (`clientes/page.tsx:33`) | ✅ `clientes.py:49` |
 
 > ⚠️ **NO hay filtro de búsqueda por nombre, ni en el backend ni en la UI** — el catálogo es un
@@ -173,7 +173,7 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `_horas_vista_repo.py` | `horas_cliente_service.py` | header `X-Empresa-Id` | selector del sidebar | ❌ no viaja como param |
+| ~~empresa~~ | 🔴 **YA NO EXISTE** (bloque L). Las horas de un cliente son del cliente: ninguna de las cuatro superficies (listado, export, detalle, baja) se recorta por sociedad. El reparto se muestra desglosado dentro de cada cliente | | | |
 | mes | `_horas_vista_repo.py` | ✅ | `horas_cliente.py:40` **obligatorio** | selector de mes (`horas-por-cliente/page.tsx`) | ✅ `horas_cliente.py:53` |
 | anio | `_horas_vista_repo.py` | ✅ | `horas_cliente.py:41` **obligatorio** | selector de año | ✅ `horas_cliente.py:54` |
 

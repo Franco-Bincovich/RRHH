@@ -40,6 +40,370 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-10 · Migraciones 110 y 111 — idempotencia de vacaciones y dedup de objetivos · commits pendientes
+
+**Qué cambió:** dos índices únicos. **Ninguna es destructiva**: solo agregan, no tocan datos ni
+columnas. Las dos van DESPUÉS del deploy, pero **no dependen de él** — el código actual no las
+usa; existen para habilitar el import de vacaciones y para tapar un duplicado del de objetivos.
+
+### 🔴 EL ORDEN OPERATIVO COMPLETO
+
+```
+108  (ya corrida, ANTES del deploy)
+  ↓
+DEPLOY del código                     ← L2+L4+L5+L7+L9 y el fix de áreas, en el mismo push
+  ↓
+109  (DESTRUCTIVA — clientes)         ← necesita el código nuevo ARRIBA
+  ↓
+110  (vacaciones)                     ← no dependen del deploy; van después para no mezclar
+  ↓
+111  (objetivos)
+```
+
+**Por qué la 109 va después del deploy:** dropea `clientes.empresa_id`, y el código viejo todavía
+la lee (`SELECT *` con `ClienteResponse.empresa_id` obligatorio) y la escribe. Corriéndola antes,
+el módulo de clientes queda en 500 hasta que salga el código. El detalle de las tres inversiones
+posibles está en la entrada del BLOQUE L.
+
+**Por qué la 110 y la 111 van al final:** no las necesita ningún código desplegado, así que
+mezclarlas con el paso riesgoso solo agrega ruido al diagnóstico si algo falla.
+
+### 110 — `uq_vacacion_empleado_rango_tipo (empleado_id, fecha_desde, fecha_hasta, tipo)`
+
+Sin esto **el import de vacaciones no se puede construir idempotente**: `on_conflict` de PostgREST
+exige una constraint única. Resubir la planilla duplicaría todas las licencias del archivo, sin
+error — los saldos quedan mal y el ausentismo cuenta doble.
+
+✅ **`solicitudes_vacaciones` tiene 0 filas** (verificado hoy): entra sin deduplicar nada. **Ésta
+es la ventana**; con histórico cargado habría que resolver a mano cuál de dos filas idénticas
+sobrevive, sobre licencias de gente real.
+
+Corrige la asimetría con `solicitudes_ausencia`, que lo tiene desde la 089.
+⚠️ **Las columnas no son las mismas:** ausencias usa `tipo_id` (FK); vacaciones usa `tipo`
+(varchar con CHECK). Se verificó en el catálogo, no se dedujo por analogía.
+
+### 111 — `ux_objetivo_responsable_titulo (empresa_id, responsable_id, lower(titulo))`
+
+El import de objetivos **inserta siempre**: `_a_create` no chequea existente y la tabla solo tenía
+`pkey`. Es el único de los cuatro imports del repo sin ninguna defensa.
+
+🔴 **La clave NO es el título solo.** Es lo que identifica una fila de la planilla: las dos
+columnas que el import declara requeridas (`Titulo` + `Responsable`). Dos responsables pueden
+tener legítimamente "Cerrar el trimestre"; con el título solo, el segundo rebota y RRHH tendría
+que inventar títulos distintos para el mismo objetivo de dos personas.
+🔴 **`fecha_entrega` NO entra**, aunque parezca identidad: es NULLABLE, y en Postgres los NULL no
+colisionan — incluirla desactivaría el índice **en silencio** para todo objetivo sin fecha.
+
+✅ **`objetivos` tiene 1 fila y 0 colisiones** bajo esa clave (verificado con el `GROUP BY … HAVING
+count(*) > 1`).
+
+### Verificación posterior
+
+Las dos migraciones traen al final, comentadas, las queries que confirman el resultado — incluida
+**la prueba real de unicidad**: un INSERT duplicado dentro de `BEGIN/ROLLBACK`, que es lo único
+que distingue "el índice existe" de "el índice funciona". Cada una trae además su **contraste**
+(el caso legítimo que NO debe rebotar), sin el cual un índice demasiado ancho pasaría la prueba.
+
+`db/schema.sql` quedó con los dos índices y sus comentarios (1641 → 1651 líneas).
+
+---
+
+## 2026-08-10 · Fix del 500 al crear un área + barrida de ids mal tipados · commits pendientes
+
+**Qué cambió:** crear un área con el sidebar en "Todas las empresas" —el default— tiraba **500**
+en producción. `AreaCreate.empresa_id` estaba tipado `str`, así que el `""` que mandaba el front
+pasaba Pydantic y moría en Postgres. Ahora es `UUID` y sale como 422 legible. `responsable_id`
+también pasó a `UUID | None`.
+
+**Para infraestructura: NO hay acción.** Sin migraciones, sin env vars, sin dependencias, sin
+endpoints nuevos ni borrados. Cambia el CÓDIGO de estado de un camino de error (500 → 422) y el
+tipo de dos campos de un body; el schema de base no se toca.
+
+### El camino completo del 500
+
+```
+areas/page.tsx:236   empresaId={getEmpresaActivaId() ?? undefined}   → undefined en consolidado
+AreaModal.tsx:107    empresa_id: empresaId ?? getEmpresaActivaId() ?? ""   → ""   (sin validación)
+schemas/area.py:12   empresa_id: str          → Pydantic ACEPTA el ""
+Postgres             22P02 invalid input syntax for type uuid   → 500
+```
+
+Es el mismo bug del `empresa_id: ""` de clientes **con un agravante**: allá el schema tipaba
+`UUID` y salía un 422 (feo pero honesto); acá el tipo `str` movía la validación de la frontera al
+motor de base de datos, donde el error ya no es del pedido sino del servidor.
+
+### 🔴 EL ARREGLO DEL TIPO HABRÍA ROTO EL ALTA Y LA EDICIÓN
+
+Cambiar `str → UUID` no alcanza: **`model_dump()` pelado devuelve el objeto UUID**, y el cliente
+de Supabase no lo sabe serializar (`Object of type UUID is not JSON serializable`). Faltaba
+`mode="json"` en **`area_repo.save` Y en `area_repo.update`** — o sea que el fix habría cambiado
+un 500 en el caso vacío por un 500 en **todos los casos buenos**.
+
+🔴 **Solo se vio EJECUTANDO los dos caminos, no leyéndolos.** El `save` se detectó al escribir el
+fix; el `update` recién apareció al tipar `responsable_id` y correr los dos por separado.
+
+### Los 5 campos que quedan mal tipados
+
+`NominaCreate.empleado_id` · `ImportacionNominaConfirmarRequest.empresa_id` ·
+`ImportacionObjetivosConfirmarRequest.empresa_id` · `FilaNominaPreview.empleado_id` ·
+`FilaObjetivoPreview.responsable_id` — todos `str` donde va un UUID.
+
+⚠️ **Están protegidos por CONVENCIÓN DEL FRONT, no por el tipo**: el modal usa un id de una lista,
+o valida el select, o el valor vuelve de un preview. **Esa es exactamente la condición que tenía
+áreas hasta hoy** — hasta que el sidebar en consolidado produjo un caso que el front no cubría.
+
+Fuera de esa lista, ya inventariados: `PresupuestoCreate.area_id` (endpoint sin puerta), los 2 de
+assessment (módulo apagado) y los 3 de Gmail/LinkedIn (correctos como `str`, no son UUIDs).
+
+### 🔴 `ev_plantillas` está ROTO, sin arreglar — y es un argumento para J5
+
+`services/ev_plantillas_service.py:75` arma el payload con `model_dump(exclude_none=True)` sobre
+`PlantillaUpdate`, que tiene `area_id: Optional[UUID]`, y **`ev_plantillas_repo.update:52-57`
+tampoco lo convierte**: el UUID va directo al `.update()`. Editar una plantilla con área da 500.
+
+**No se arregló a propósito** (fuera del alcance de la sesión), pero importa para el handoff:
+
+- El **router está montado y responde**. La UI de `ev_*` se borró, las tablas están vacías, y por
+  eso el bug sobrevivió: **ese camino nunca se ejercitó**.
+- 🚩 **Es un argumento a favor de J5** (drop de las 11 tablas muertas): código publicado que nadie
+  puede alcanzar desde la aplicación y que está roto sin que nadie se entere.
+- 🔴 **Y fija un requisito de orden: los routers `ev_*` se desmontan ANTES del DROP.** Dropear las
+  tablas con los routers montados deja endpoints publicados apuntando a tablas inexistentes.
+
+### La barrida de `model_dump()` sin `mode="json"`
+
+62 apariciones crudas → 6 escrituras sobre schemas con campos UUID → **5 falsos positivos**
+(`_empleado_write_repo` ×2, `inventario_items_repo`, `vacante_repo` ×2): todas convierten los
+UUID **a mano, línea por línea, después del `model_dump()`**. El único real es `ev_plantillas`.
+
+### Verificación
+
+Backend **3280 passed** (era 3275) · Front **646 passed** · doce barridos verdes · `tsc` exit 0.
+
+Cuatro mutaciones, todas rojean: `empresa_id → str` (2 failed) · sin validación en el modal
+(2 failed) · el modal manda la empresa del sidebar (2 failed) · sin `mode="json"` en `save`
+(1 failed) · `responsable_id → str` (3 failed).
+
+### Divisiones que hicieron falta antes del fix
+
+`AreaModal.tsx` **207 → 135** (`areaForm.ts` + `AreaFormFields.tsx` + `guardarArea.ts`) ·
+`areas/page.tsx` **271 → 128** (`useAreas.ts` + `AreasTabla.tsx` + `AreaEliminarDialog.tsx`).
+
+⚠️ **`repositories/area_repo.py` quedó en 100/100** — sumar el `mode="json"` a los dos caminos lo
+dejó en el techo exacto. **Va a la lista de archivos al filo: el próximo cambio ahí exige
+dividirlo primero.**
+
+---
+
+## 2026-08-10 · BLOQUE L · Clientes como catálogo GLOBAL (L1–L9) · commits pendientes
+
+**La decisión:** un cliente **NO pertenece a ninguna empresa**. Se ve, se crea y se da de baja con
+el selector del sidebar en cualquier modo, y cualquier empleado imputa horas contra cualquier
+cliente. `clientes` pasa a comportarse como `tipos_ausencia`.
+
+**El motivo medido:** los 3 clientes de producción son todos de **una** de las dos sociedades, y el
+padrón entero de la otra **no podía ni identificarse** en el link público — el gate lo rechazaba
+con `sin_clientes`.
+
+### 🔴 PARA INFRAESTRUCTURA: SON DOS MIGRACIONES CON EL DEPLOY EN EL MEDIO
+
+```
+108 (preparación, no destructiva)  →  DEPLOY del código  →  109 (cierre, DESTRUCTIVA)
+```
+
+**Ninguno de los tres pasos se puede adelantar:**
+
+| Si se invierte | Qué pasa |
+|---|---|
+| Deploy **antes** de la 108 | El alta de clientes falla con **23502**: el código nuevo no manda `empresa_id` y la columna sigue `NOT NULL`. |
+| 109 **antes** del deploy | El código viejo entra en **500 por dos caminos**: `42703` en el INSERT y `ValidationError` de Pydantic en cada lectura (`SELECT *` con `ClienteResponse.empresa_id` obligatorio). Módulo de clientes caído. |
+| 109 **sin** la 108 | 🔴 **EL PEOR, PORQUE NO FALLA.** Se dropea `ux_clientes_nombre_por_empresa` sin que exista el reemplazo global, y la tabla queda **sin ninguna unicidad de nombre, en silencio**: "Acme" pasa a poder cargarse dos veces y los reportes por cliente se parten. El `existe_nombre` del service sigue devolviendo su 409, así que el 99% de las veces parece funcionar. La 109 lleva una guarda que aborta si no encuentra `ux_clientes_nombre_global`. |
+
+La 108 corrida sola no hace nada (sacar un `NOT NULL` no cambia ninguna fila ni ningún INSERT que
+siga mandando el valor), así que es segura de correr en cualquier momento antes del deploy.
+
+**Sin env vars nuevas, sin dependencias, sin buckets, sin cambios de auth ni de CORS.**
+
+### Las nueve sesiones
+
+| | Qué hizo |
+|---|---|
+| **L1** | Refactor puro previo. `identificacion_service.py` 150/150 → **119** + `_identificacion_resolver.py` **65**, corte entre decisión y orquestación, para que el gate quedara entero en un archivo. `ClienteModal.tsx` **NO** se dividió: L5 le sacaba ~37 líneas y dividir antes obligaba a tocar dos veces el mismo test. |
+| **L2** | Backend de clientes: `empresa_id` sale de schemas, repo, service, routers y auditoría. Migración **108**. Dejó 25 tests rojos a propósito y **rompió el link público** (ver abajo). |
+| **L4** | Cierra lo que L2 rompió + el gate de identificación pasa a preguntar por el SISTEMA, no por la empresa del empleado. |
+| **L5** | Front: el modal pierde el `<select>` de empresas (147 → **112**). |
+| **L6** | Migración **109** + `db/schema.sql` al estado post-109. |
+| **L7** | Reemplaza los 25 rojos, uno por uno. Suite a 0 failed. |
+| **L8** | 🔴 El total de horas por cliente deja de recortarse por empresa, y aparece el **desglose por sociedad** dentro de cada cliente. |
+| **L9** | Cierra la incoherencia que L8 dejó: el detalle y el borrado también dejan de recortarse. Divide `routers/horas_cliente.py` (80/80) en lecturas + escrituras. |
+
+*(No hay L3: la numeración se reservó para el front y quedó absorbida en L5.)*
+
+### Las decisiones del bloque — NO se rediscuten
+
+1. **Un cliente no pertenece a ninguna empresa.** Revierte lo declarado en `102_clientes.sql`:
+   *«`empresa_id` NOT NULL: un cliente es de UNA empresa del grupo. No hay clientes globales.»*
+2. **Unicidad de nombre GLOBAL y case-insensitive** (`ux_clientes_nombre_global` sobre
+   `lower(nombre)`). Es más estricta que antes: dos sociedades ya no pueden tener cada una su "Acme".
+3. **El evento de auditoría de cliente va con `empresa_id` NULL.** Precedente ya establecido por
+   `usuario` (los usuarios no cuelgan de una empresa) y por el lote de nómina. Usar el header como
+   fallback habría mentido sobre de quién es la entidad.
+4. **El gate `sin_clientes` se queda**, ahora a nivel SISTEMA: con cero clientes en todo el sistema
+   nadie puede imputar y devolver `sin_clientes` es honesto. El valor del CHECK no cambia, cambia
+   su condición de disparo.
+5. 🔴 **Las horas de un cliente son del cliente.** Las empresas son sociedades de un mismo grupo
+   económico: **el total nunca se recorta por empresa**, y eso alcanza al listado, al export, al
+   detalle y al borrado. El selector de empresa del sidebar **no manda en esa pantalla**, y la
+   pantalla lo dice con una línea visible. El reparto por sociedad no se pierde: se muestra
+   desglosado dentro de cada cliente.
+
+### 🔴 L2 rompió L4, y la premisa de por qué lo iba a tolerar era falsa
+
+L2 se escribió asumiendo que el link público *"iba a quedar pasando un `empresa_id` que el repo ya
+ignora"*. **Python no ignora posicionales de más.** Verificado ejecutando:
+
+- `carga_horas_service.py:131` → `find_by_id(cliente_id, empresa_id)` → **TypeError** → 500 en toda
+  carga de horas del link público.
+- `carga_horas_service.py:117` → `find_all(empresa_id)` → el UUID liga contra `incluir_inactivos`,
+  que es truthy → 🔴 **no revienta: el select público ofrecía clientes dados de baja.**
+
+El segundo es peor porque no falla, miente. **L2 y L4 van en el mismo push.**
+
+### 🔴 El caso del #21 — por qué los rojos se listan uno por uno y nunca por grupo
+
+`test_el_diff_registra_el_antes_y_el_despues` estaba dentro de `TestAuditoria`, el bloque que
+perdía su objeto. **No era un test de aislamiento**: era el **único test del diff de auditoría de
+clientes en todo el repo**, y afirma que `activo` NO aparece en `datos_nuevos` — el diff fantasma
+que costó **93 eventos falsos** en producción. Borrar el bloque entero se lo hubiera llevado
+puesto **con la suite en verde**.
+
+De los 25: 8 arreglados solo en el fixture, 7 reescritos sobre un caso que sí existe, 1
+**invertido**, 6 reemplazados por `test_clientes_global.py`, y **3 que había que escribir porque
+nada los cubría**.
+
+### 🔴 Tests VERDES con la premisa muerta — 18 casos en cinco sesiones
+
+Los rojos son los fáciles: se ven. Lo caro es lo que queda en verde afirmando un mundo que ya no
+existe.
+
+| Sesión | Qué |
+|---|---|
+| **L4** (1) | `test_el_cliente_se_valida_contra_la_empresa_de_la_sesion` — el fake devolvía `None` comparando contra `EMPRESA_IMPOSTORA`; con `empresa_id=None` **sigue dando `None`**, así que pasaba por un motivo que ya no existía. |
+| **L5** (3) | `ClientesTabla.test.tsx` rompía `tsc` y su test *"sin colapsar homónimos"* se apoyaba en *"el índice único es POR empresa"* · `erroresCliente` citaba un literal que el backend dejó de emitir · `clientes/page.tsx` decía *"la empresa la pone el header"*. |
+| **L7** (4) | Cuatro **docstrings de falsabilidad** describían la barrera de empresa como el modo de falla a vigilar: son las instrucciones para el próximo que toque el archivo. |
+| **Diagnóstico** (7) | `CLAUDE.md:125, 235, 245, 471, 631` · `MATRIZ-FILTROS.md:140, 176`. Corregidos en este cierre. |
+| **L8/L9** (3) | `_horas_vista_repo.py` decía que el filtro era por `fecha` y `empresa_id`; los docstrings del detalle y la baja hablaban de una barrera que se sacó. |
+
+### 🔴 Dos agujeros de cobertura que solo aparecieron por mutación
+
+Ninguno se veía leyendo el código ni el nombre de los tests.
+
+- **L8 — el export no estaba cubierto.** Recortar `svc.exportar` por empresa dejó **34 tests en
+  verde**: los dos tests de export armaban las filas a mano con
+  `construir_filas_export(repo.find_por_periodo(...))` y **nunca entraban al service**.
+- **L9 — la query no estaba cubierta.** Volver a filtrar por empresa en el `find_by_id` REAL dejó
+  **37 tests en verde**: los tests del borrado cruzado van por el service, que corre contra
+  `_RepoFalso`. El service estaba cubierto; la query no.
+
+Los dos están cerrados con tests que atraviesan la capa mutada. Ver `DEUDA-TECNICA.md §5`.
+
+### Números
+
+| | Antes | Después |
+|---|---|---|
+| Backend | 3247 passed | **3271 passed**, 0 failed, 0 skipped |
+| Front | 636 passed | **637 passed**, 0 skipped |
+
+Doce barridos verdes. `tsc --noEmit` exit 0. `ruff check` sin hallazgos nuevos en los tocados.
+
+### Archivos de migración
+
+- **`108_clientes_global_preparacion.sql`** — `DROP NOT NULL` + `CREATE UNIQUE INDEX
+  ux_clientes_nombre_global (lower(nombre))`. No destructiva.
+- **`109_clientes_global_cierre.sql`** — dropea `ux_clientes_nombre_por_empresa`,
+  `idx_clientes_empresa`, `clientes_empresa_id_fkey` y la columna. Guarda contra correrse sin la
+  108, y al final las **queries de verificación posterior** comentadas.
+
+**`horas_proyecto.cliente_id` y su FK NO se tocan**, ni `horas_proyecto.empresa_id` /
+`empleado_empresa_id`: se rastrearon los dos caminos de inserción y **ninguno toma la empresa del
+cliente** (salen del empleado y del proyecto).
+
+### ⚠️ CONSECUENCIAS ASUMIDAS — decididas, no olvidadas
+
+1. **Los eventos de auditoría de cliente solo se ven en modo consolidado.** `audit_repo.py:78-79`
+   hace `.eq("empresa_id", X)` y en Postgres eso excluye los NULL. El consolidado **es el default
+   del sidebar**, así que el camino normal funciona — pero un operador que selecciona una empresa
+   para investigar algo **deja de ver los eventos de cliente y nada se lo avisa**. No hay leyenda
+   ni contador de "N eventos ocultos".
+2. **El mensaje "Ya existe un cliente con ese nombre" queda mudo si el cliente existente está dado
+   de baja.** `existe_nombre` incluye los inactivos a propósito (el índice único tampoco los
+   excluye), pero el listado los esconde por defecto (`clientes/page.tsx:33`). El operador recibe
+   el 409 sobre algo que **no puede encontrar**, y nada le sugiere tocar "Ver bajas". Es
+   **preexistente** —pasaba igual dentro de una empresa— pero el catálogo global lo hace **más
+   frecuente**: ahora el cliente que bloquea el nombre puede ser uno que la otra sociedad dio de
+   baja y que este operador nunca vio.
+
+### Pendientes que el bloque deja abiertos
+
+- **El desglose por empresa renderizado no tiene test de front.** Vive dentro del panel colapsado y
+  `ClientesColapsables` arranca cerrado, así que `renderToStaticMarkup` nunca lo expande. Cubierto
+  por los 5 tests de backend y por `tsc`, no por render.
+- **Ningún test de la vista de horas por cliente pega por HTTP.** Es el hueco de los 82 endpoints
+  ya medido (K7), no algo que L9 introdujo.
+- **`_usuario_id` quedó del lado de las escrituras** en `horas_cliente_escrituras.py`, distinto de
+  `clientes.py`, donde quedó del lado de las lecturas por razones históricas. El criterio bueno es
+  el nuevo: el helper vive donde se usa.
+
+## 2026-08-10 · L1 · División de `identificacion_service.py` (refactor puro, cero cambio de comportamiento) · commit pendiente
+
+**Qué cambió:** nada de comportamiento. Es la sesión previa al bloque que convierte clientes en
+catálogo global (L4/L5): ese bloque toca archivos que estaban en el límite de líneas, así que la
+división va antes y en commit propio.
+
+**Se dividió UNO de los dos previstos.**
+
+**Para infraestructura: NO hay acción.** Sin migraciones, sin env vars, sin dependencias, sin
+endpoints nuevos ni borrados, sin cambios de auth ni de CORS. Un archivo nuevo en `services/`.
+
+### `identificacion_service.py` 150/150 → **119** + `_identificacion_resolver.py` **65**
+
+**El corte es entre la DECISIÓN y la ORQUESTACIÓN**, no por cantidad de líneas. Salió
+`_resolver` —los cinco desenlaces posibles de una identificación, incluido el gate
+`hay_clientes_activos`— como `decidir(repo, limitador, dni)`. Quedó en el service el `identificar`:
+registrar el intento, nivelar el tiempo, levantar el `AppError` único y emitir la sesión.
+
+Es la única costura donde ninguno de los dos lados necesita saber del otro: el resolver no conoce
+excepciones, logs ni tiempo; el orquestador no conoce los cinco motivos. **El gate que toca L4
+quedó entero en un solo archivo**, que era el objetivo de hacer esto antes y no después.
+
+🔴 **`_PISO_SEGUNDOS` NO se movió, a propósito.** Tres tests lo monkeypatchean sobre el módulo:
+`test_identificacion_publica.py:128` y `:329`, y `test_identificacion_rate_limit.py:72`. Moverlo
+al archivo nuevo los habría roto sin que cambiara ni una línea de comportamiento.
+
+### 🔴 `ClienteModal.tsx` NO se dividió — y la razón vale más que la división
+
+Estaba en 147/150, o sea **al filo, no sobre el límite**. Dos motivos para dejarlo:
+
+1. **L5 lo resuelve solo.** Al sacar el `<select>` de empresas, L5 borra de ese archivo los 3
+   imports de empresa, los 2 `useState`, el `useEffect` de `fetchEmpresas`, la línea de siembra
+   con sus comentarios, el bloque del `<select>` y el `const SEL`: **≈37 líneas**. Queda en
+   **~110/150**, cómodo.
+2. **Dividir antes obligaba a modificar `guardarCliente.test.ts` DOS veces**, y la primera para
+   adaptarlo a una estructura que L5 desarma. Ver la anotación en `DEUDA-TECNICA.md §5`.
+
+### Verificación de que es refactor y no otra cosa
+
+- **Backend 3247 passed · Front 636 passed · 0 skipped** — exactamente los mismos números que
+  antes de la sesión. **Cero tests tocados**, ni siquiera una línea de import.
+- Los doce barridos verdes (521 backend + 36 front). `tsc --noEmit` exit 0.
+- **Mutación de control:** romper el gate (`hay_clientes_activos` siempre disponible) rojea
+  **5 tests antes de dividir y 5 después**. Mismo número ⇒ la lógica movida sigue enteramente
+  bajo el alcance de la suite, sin código huérfano.
+- `ruff check`: **6 hallazgos antes, 6 después**, mismos códigos (`I001`, `UP006`, `UP035`,
+  `UP045`×3), solo redistribuidos entre los dos archivos. No se corrigieron: son deuda de estilo
+  preexistente y arreglarlos habría salido del refactor.
+
+---
 
 ## 2026-08-10 · El 422 entra al contrato de errores + el alta de clientes deja de mandar `empresa_id` vacío · commit pendiente
 

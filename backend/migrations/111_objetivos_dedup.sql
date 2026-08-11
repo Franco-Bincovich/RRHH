@@ -1,0 +1,110 @@
+-- 111_objetivos_dedup.sql
+--
+-- QUÉ HACE: índice único sobre `objetivos`. NO destructiva: solo agrega.
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- PARA QUÉ EXISTE
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- El import de objetivos **duplica**. `objetivos_import_service._a_create` arma un
+-- `ObjetivoCreate` y lo inserta sin chequear si ya existe, y la tabla no tiene más constraint
+-- única que su `pkey` (que es el `id` autogenerado, o sea que no impide nada). Resubir la misma
+-- planilla crea todo de nuevo.
+--
+-- A diferencia de los otros tres imports del repo, éste no tiene NINGUNA defensa:
+--   · nómina de empleados → dedup por `empleados_empresa_dni_uq`
+--   · nómina de costos    → upsert sobre `costos_nomina_empleado_id_anio_mes_key`
+--   · evaluaciones        → pisa el período (UNIQUE (empresa_id, periodo))
+--   · objetivos           → 🔴 nada
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- 🔴 QUÉ COLUMNAS, Y POR QUÉ NO ES EL TÍTULO SOLO
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+--                    (empresa_id, responsable_id, lower(titulo))
+--
+-- **La clave natural es lo que identifica una FILA DE LA PLANILLA**, y eso son las dos columnas
+-- que el import declara REQUERIDAS (`_objetivos_import_transforms`): "Titulo" y "Responsable".
+-- Las otras cuatro —prioridad, fecha de entrega, descripción, responsables adicionales— son
+-- OPCIONALES: son atributos del objetivo, no lo que lo identifica.
+--
+-- 🔴 POR QUÉ NO `(empresa_id, lower(titulo))` A SECAS. Un objetivo es de UNA persona
+-- (`responsable_id` NOT NULL). "Cerrar el trimestre" o "Reducir la rotación" son títulos que dos
+-- responsables distintos pueden tener legítimamente el mismo año. Con el título solo, el segundo
+-- rebota con 409 y RRHH tiene que inventar títulos distintos para el mismo objetivo de dos
+-- personas — una constraint que obliga a ensuciar el dato para poder cargarlo.
+-- Una clave MÁS ANGOSTA que lo que identifica una fila rechaza datos buenos; una MÁS ANCHA no
+-- deduplica. Ésta es exactamente lo que el archivo trae.
+--
+-- 🔴 POR QUÉ NO ENTRA `fecha_entrega`, aunque parezca parte de la identidad. Dos motivos, y el
+-- segundo solo:
+--   1. Es opcional y editable. Si alguien resube la planilla con una fecha corregida, incluirla
+--      haría que la fila NO colisione y se cree un duplicado — justo el caso que el índice existe
+--      para atrapar.
+--   2. Es NULLABLE, y en Postgres los NULL no colisionan entre sí. Un índice único que la
+--      incluyera **dejaría de deduplicar en silencio** para todo objetivo sin fecha. Es la misma
+--      trampa de NULL que está documentada en la 108/109.
+--
+-- `lower()`: el título lo escribe RRHH a mano. "Cerrar trimestre" y "cerrar trimestre" son el
+-- mismo objetivo. Mismo criterio, y mismo motivo, que `ux_clientes_nombre_global`.
+-- ⚠️ Un índice por expresión NO sirve como target de `on_conflict` de PostgREST. Acá alcanza: lo
+-- que se busca es que el INSERT REBOTE, no un upsert — el service ya traduce el 23505 a su error.
+--
+-- 🟢 El borrado de objetivos es FÍSICO (`objetivo_repo.delete` hace `.delete()`, y el service lo
+-- documenta: "no hay historial que preservar"). Por eso el índice va sobre la tabla entera y no
+-- necesita ser parcial: una fila borrada libera su clave de verdad.
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- ✅ VERIFICADO CONTRA PRODUCCIÓN HOY
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- `objetivos` tiene **1 fila** ("búsqueda líder de equipo"), y la consulta de colisiones
+--
+--     SELECT empresa_id, responsable_id, lower(titulo), count(*)
+--     FROM objetivos GROUP BY 1,2,3 HAVING count(*) > 1;
+--
+-- devuelve **0 filas**: el índice entra sin deduplicar nada. Con objetivos ya cargados en volumen
+-- habría que resolver a mano cuál de dos filas iguales sobrevive.
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_objetivo_responsable_titulo
+    ON public.objetivos USING btree (empresa_id, responsable_id, lower(titulo));
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- VERIFICACIÓN POSTERIOR — correr DESPUÉS, a mano.
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+--
+-- 1. El índice existe y es ÚNICO:
+--
+--    SELECT indexname, indexdef FROM pg_indexes
+--    WHERE schemaname = 'public' AND tablename = 'objetivos' ORDER BY indexname;
+--    -- ESPERADO: aparece ux_objetivo_responsable_titulo con UNIQUE y
+--    --           (empresa_id, responsable_id, lower(titulo)).
+--
+-- 2. La única fila sigue ahí (un CREATE INDEX no puede perder datos, pero confirma que se corrió
+--    contra la base correcta):
+--
+--    SELECT id, titulo FROM objetivos ORDER BY created_at;
+--    -- ESPERADO (medido antes): 1 fila, "búsqueda líder de equipo".
+--
+-- 3. 🔴 LA PRUEBA QUE IMPORTA: que el índice FUNCIONE. Hace ROLLBACK — no dejarlo corrido.
+--    Usa el objetivo que ya existe, así que no hace falta inventar ids.
+--
+--    BEGIN;
+--    INSERT INTO objetivos (empresa_id, responsable_id, titulo)
+--    SELECT empresa_id, responsable_id, upper(titulo) FROM objetivos LIMIT 1;
+--    -- ESPERADO: falla con
+--    --   ERROR 23505 duplicate key value violates unique constraint
+--    --               "ux_objetivo_responsable_titulo"
+--    -- El `upper()` es a propósito: prueba de una sola vez la unicidad Y que sea
+--    -- case-insensitive. Si entra, o el índice no está o le falta el lower().
+--    ROLLBACK;
+--
+-- 4. El contraste — el MISMO título para OTRO responsable SÍ tiene que entrar. Sin esta, un
+--    índice sobre `(empresa_id, lower(titulo))` pasaría el punto 3 y estaría rompiendo el caso
+--    legítimo que motivó elegir la clave de tres columnas. También hace ROLLBACK.
+--
+--    BEGIN;
+--    INSERT INTO objetivos (empresa_id, responsable_id, titulo)
+--    SELECT o.empresa_id, u.id, o.titulo
+--    FROM objetivos o, users u
+--    WHERE u.id <> o.responsable_id LIMIT 1;
+--    -- ESPERADO: entra sin error.
+--    ROLLBACK;

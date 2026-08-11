@@ -122,7 +122,7 @@ Verificado contra el catálogo vivo (**10/8/2026**): **2 empresas, 31 empleados*
 1. Los reportes/KPIs salen vacíos hasta que carguen dotación, vacaciones, ausencias, costos. No están rotos.
 2. `manager_id` **11/31** → `mandos_medios` YA se puede probar, pero solo con un usuario que sea manager de alguien; los otros 20 empleados siguen sin superior y un manager vacío no ve nada.
 3. Los filtros nuevos (área, proyecto, empleado, rango de fechas) están vivos, pero con 31 empleados y un proyecto que concentra 13, **casi todo filtro devuelve casi todo**. No es un filtro roto: es el reparto real de la gente.
-4. **El link público de horas necesita al menos un cliente cargado** (`clientes` está en 0): sin eso la identificación por DNI rechaza al padrón entero, y por rechazo único el empleado no ve la diferencia con "tu DNI no existe".
+4. **El link público de horas necesita al menos un cliente cargado EN EL SISTEMA** (hay 3, verificado el 10/8/2026): con CERO clientes la identificación por DNI rechaza al padrón entero, y por rechazo único el empleado no ve la diferencia con "tu DNI no existe". 🔴 **El gate es de SISTEMA, no por empresa** (bloque L): antes bastaba con que la sociedad de esa persona no tuviera clientes propios para dejarla afuera con el sistema lleno.
 5. Qué se espera que "traten de romper".
 
 ### Fases cerradas (no reabrir)
@@ -232,7 +232,7 @@ backend/
 │   ├── _nomina_superiores.py, _superiores_matcher.py ← 2ª pasada del import (mig 086)
 │   ├── _usuario_alta.py, _ev_instancia_crear.py ← altas extraídas por límite
 │   ├── _reporte_anual_metricas.py, _audit_payloads_offboarding.py ← extraídos por límite
-│   ├── cliente_service.py     ← ABM del catálogo de clientes; la baja es LÓGICA (activo=False)
+│   ├── cliente_service.py     ← ABM del catálogo GLOBAL de clientes; la baja es LÓGICA (activo=False)
 │   ├── identificacion_service.py ← paso 1 del link público: DNI → sesión. Rechazo ÚNICO + piso de tiempo
 │   ├── _sesion_horas.py       ← el token opaco que lleva la identidad del paso 1 al 2
 │   ├── carga_horas_service.py, _carga_reglas.py, _carga_licencia.py ← la carga: tope 12 h, ventana 30 días, licencia
@@ -242,7 +242,7 @@ backend/
 │   ├── export/                ← punto de salida ÚNICO de exports; expone build_export
 │   └── reportes/              ← un submódulo por familia + _common.py
 ├── repositories/        ← 87 archivos, único acceso a DB (límite 100, satélites incluidos)
-│   ├── cliente_repo.py        ← catálogo de clientes; `existe_nombre` compara en Python, NO con .ilike()
+│   ├── cliente_repo.py        ← catálogo GLOBAL (sin empresa); `existe_nombre` compara TODO el catálogo en Python, NO con .ilike()
 │   ├── _hora_row.py           ← mapper de horas_proyecto con lookups por lote (anti-N+1)
 │   ├── identificacion_repo.py, sesion_horas_repo.py ← DNI → empleado · nonces de sesión del link público
 │   ├── _horas_vista_repo.py, _semana_publica_repo.py ← la vista interna · la semana del empleado
@@ -468,7 +468,7 @@ templates, períodos, usuarios y el export de un reporte por id). Los que llevan
 | costos/nómina | anio · mes |
 | ev_instancias | ciclo · estado |
 | proyectos (listado) | area · estado |
-| **clientes** | incluir_inactivos (la empresa va por header, no como param) |
+| **clientes** | incluir_inactivos (🔴 **no hay filtro de empresa**: el catálogo es global) |
 | **horas por cliente** | anio · mes — 🔴 **obligatorios**, no opcionales: sin período la consulta sería la tabla entera |
 | vacaciones pendientes | area · empleado · proyecto |
 | capacitaciones (catálogo) | solo_activos |
@@ -627,8 +627,16 @@ Ausencias activas hoy, % ausentismo del mes (base de días hábiles configurable
   - **Vista interna "Horas por cliente"** (`/horas-por-cliente`, gate `Seccion.PROYECTOS`) —
     agrupa por cliente y empleado con período obligatorio, exporta y **borra**. Editar una carga
     NO está: revocaría la irreversibilidad, es decisión de producto, no una feature faltante.
-  - **Catálogo de clientes** (`/clientes`, gate `Seccion.CLIENTES`) — ABM con **baja lógica**.
-  - 🔴 **Hoy `clientes` está en 0 y sin un cliente el circuito entero rechaza al padrón.**
+  - **Catálogo GLOBAL de clientes** (`/clientes`, gate `Seccion.CLIENTES`) — ABM con **baja
+    lógica**. 🔴 **Un cliente NO pertenece a ninguna empresa** (bloque L, migraciones 108/109):
+    se ve y se edita con el sidebar en cualquier modo, y el nombre es único en TODO el sistema
+    (`ux_clientes_nombre_global`, case-insensitive). Revierte lo declarado en `102_clientes.sql`.
+  - **Hoy hay 3 clientes cargados** (10/8/2026). Con CERO, el gate de identificación —que es de
+    SISTEMA, no por empresa— rechaza al padrón entero.
+  - 🔴 **Las horas de un cliente son del cliente**: la vista "Horas por cliente" NO se recorta por
+    empresa en ninguna de sus cuatro superficies (listado, export, detalle, baja). El reparto por
+    sociedad se muestra desglosado adentro de cada cliente, y la pantalla avisa que el selector
+    del sidebar no manda ahí.
 - **Vacantes + Candidatos:** `routers/vacantes.py` + `candidatos.py` (+ `_candidato_form.py` público sin auth), `vacante_service.py`, `candidato_service.py`, `cv_service.py`. Integraciones: `zernio_service.py`, `gmail_service.py` (**recepción** de mails de candidatos, 122 líneas). **Vacantes es el patrón canónico de borrado con confirmación** (router DELETE + service con snapshot-antes-de-borrar + fetch crudo por el 204 + `EliminarVacanteButton.tsx` + `ConfirmDialog`). Copiar de acá.
 - **Historial salarial (C1):** `costo_service.get_historial_salarial`. 🔑 **La serie de `costos_nomina` ES el historial** — no hace falta el log de cambios: la tabla tiene `UNIQUE (empleado_id, anio, mes)`, o sea una fila por mes. Con auditoría, el caso más común —sueldos importados por CSV y nunca editados a mano— daría **historial vacío teniendo los sueldos cargados**. **DOS barreras, las dos necesarias y distintas:** la de SECCIÓN (`Seccion.COSTOS + READ`, la aplica el router: quién puede ver sueldos) y la de EMPRESA (se aplica en el service, sobre el EMPLEADO objetivo — el `empresa_id` del repo sale del header y no valida a qué empleado apuntás). El front no renderiza la sección sin permiso de costos: una sección que aparece y falla es peor que una que no aparece.
 - **Entrevista de salida (C3):** `services/_offboarding_entrevista.py`. Las columnas `entrevista_salida` y `notas_entrevista` existían en DB y estaban **muertas**; ahora se escriben y se leen.

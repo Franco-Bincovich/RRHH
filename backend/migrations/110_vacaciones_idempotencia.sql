@@ -1,0 +1,101 @@
+-- 110_vacaciones_idempotencia.sql
+--
+-- QUÉ HACE: índice único sobre `solicitudes_vacaciones`. NO destructiva: solo agrega.
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- PARA QUÉ EXISTE
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- Sin esto **el import de vacaciones no se puede construir idempotente**. `on_conflict` de
+-- PostgREST EXIGE una constraint única sobre las columnas del conflicto; sin ella no hay upsert
+-- posible y el import sólo puede hacer INSERT. Consecuencia concreta: RRHH resube la misma
+-- planilla —porque corrigió una fila, porque no sabe si la primera vez entró— y se duplican TODAS
+-- las licencias del archivo. No falla nada: los saldos de vacaciones pasan a estar mal y el
+-- reporte de ausentismo cuenta doble.
+--
+-- Es el mismo mecanismo con el que ya funciona el import de costos
+-- (`costos_nomina_empleado_id_anio_mes_key` + `upsert(on_conflict="empleado_id,anio,mes")`).
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- 🔴 POR QUÉ AHORA Y NO DESPUÉS
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- ✅ VERIFICADO CONTRA PRODUCCIÓN HOY: `solicitudes_vacaciones` tiene **0 filas**.
+--
+-- Un `CREATE UNIQUE INDEX` no se puede crear sobre datos que ya lo violan. Con la tabla vacía
+-- entra sin riesgo y sin tocar un solo dato. **Con el histórico cargado habría que deduplicar a
+-- mano primero** —decidir cuál de dos filas idénticas sobrevive, sobre licencias reales de gente
+-- real— y esa es una tarea manual que nadie quiere hacer con la base en uso.
+--
+-- Es exactamente la misma ventana que se aprovechó para `uq_ausencia_empleado_rango_tipo`
+-- (migración 089), que también se corrió con la tabla en 0.
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- LA ASIMETRÍA QUE CORRIGE
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- `solicitudes_ausencia` YA lo tiene desde la 089:
+--     uq_ausencia_empleado_rango_tipo (empleado_id, fecha_desde, fecha_hasta, tipo_id)
+-- y su hermana `solicitudes_vacaciones` no. Las dos tablas se llenan por el mismo camino (carga
+-- manual hoy, import mañana) y el import de vacaciones estaba bloqueado sólo por esto.
+--
+-- ⚠️ LAS COLUMNAS NO SON LAS MISMAS, Y NO SE DEDUJERON POR ANALOGÍA. Verificado en el catálogo:
+-- en ausencias el tipo es `tipo_id uuid` (FK a `tipos_ausencia`); en vacaciones es
+-- `tipo character varying` con un CHECK de cuatro valores ('vacaciones', 'semana_free',
+-- 'dia_free', 'permiso_especial') y default 'vacaciones'. La cuarta columna del índice es `tipo`.
+--
+-- 🟢 Las cuatro son NOT NULL (verificado). Eso importa: en Postgres los NULL no colisionan entre
+-- sí, así que una columna nullable dentro de un índice único lo desactiva en silencio para toda
+-- fila que la tenga vacía. Acá no puede pasar.
+--
+-- ⚠️ ALCANCE, para no venderlo de más: esto impide el DUPLICADO EXACTO, no el solapamiento
+-- parcial. Dos licencias del mismo empleado, mismo tipo, del 1 al 5 y del 3 al 8, siguen
+-- entrando. Es la misma limitación declarada de la 089 y es correcta: un solapamiento puede ser
+-- un dato legítimo mal cargado, y decidirlo no es tarea de una constraint.
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vacacion_empleado_rango_tipo
+    ON public.solicitudes_vacaciones USING btree (empleado_id, fecha_desde, fecha_hasta, tipo);
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- VERIFICACIÓN POSTERIOR — correr DESPUÉS, a mano.
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+--
+-- 1. El índice existe y es ÚNICO, con las cuatro columnas:
+--
+--    SELECT indexname, indexdef FROM pg_indexes
+--    WHERE schemaname = 'public' AND tablename = 'solicitudes_vacaciones'
+--    ORDER BY indexname;
+--    -- ESPERADO: aparece uq_vacacion_empleado_rango_tipo con UNIQUE y
+--    --           (empleado_id, fecha_desde, fecha_hasta, tipo).
+--
+-- 2. Las dos hermanas quedaron simétricas:
+--
+--    SELECT tablename, indexname FROM pg_indexes
+--    WHERE schemaname = 'public'
+--      AND indexname IN ('uq_vacacion_empleado_rango_tipo', 'uq_ausencia_empleado_rango_tipo');
+--    -- ESPERADO: 2 filas, una por tabla.
+--
+-- 3. 🔴 LA PRUEBA QUE IMPORTA: que el índice FUNCIONE, no que exista. Hace ROLLBACK — no dejar
+--    esto corrido, y no correrlo si la tabla ya tiene datos que no quieras tocar.
+--
+--    BEGIN;
+--    -- Reemplazar <EMPLEADO> y <EMPRESA> por ids reales (SELECT id, empresa_id FROM empleados LIMIT 1).
+--    INSERT INTO solicitudes_vacaciones (empresa_id, empleado_id, fecha_desde, fecha_hasta, dias, tipo)
+--    VALUES ('<EMPRESA>', '<EMPLEADO>', '2026-01-05', '2026-01-09', 5, 'vacaciones');
+--    INSERT INTO solicitudes_vacaciones (empresa_id, empleado_id, fecha_desde, fecha_hasta, dias, tipo)
+--    VALUES ('<EMPRESA>', '<EMPLEADO>', '2026-01-05', '2026-01-09', 5, 'vacaciones');
+--    -- ESPERADO: el SEGUNDO falla con
+--    --   ERROR 23505 duplicate key value violates unique constraint
+--    --               "uq_vacacion_empleado_rango_tipo"
+--    -- Si entra, el índice no está haciendo nada.
+--    ROLLBACK;
+--
+-- 4. Y que el mismo empleado SÍ pueda tener dos licencias de tipos distintos en el mismo rango
+--    (el contraste: sin esto, un índice demasiado ancho pasaría el punto 3 y rompería un caso
+--    legítimo). También hace ROLLBACK.
+--
+--    BEGIN;
+--    INSERT INTO solicitudes_vacaciones (empresa_id, empleado_id, fecha_desde, fecha_hasta, dias, tipo)
+--    VALUES ('<EMPRESA>', '<EMPLEADO>', '2026-01-05', '2026-01-09', 5, 'vacaciones');
+--    INSERT INTO solicitudes_vacaciones (empresa_id, empleado_id, fecha_desde, fecha_hasta, dias, tipo)
+--    VALUES ('<EMPRESA>', '<EMPLEADO>', '2026-01-05', '2026-01-09', 5, 'dia_free');
+--    -- ESPERADO: los DOS entran.
+--    ROLLBACK;

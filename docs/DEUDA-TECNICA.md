@@ -74,7 +74,7 @@
 ### En el techo exacto — el próximo cambio EXIGE dividir primero (remedido 2/8)
 
 **Services 150/150:** `assessment_service.py`. **A 149:** `vacante_service` · `offboarding_service` · `adjunto_service` · `_nomina_lote`.
-**Repos 100/100:** `planes_carrera_repo` · `inventario_asignaciones_repo` · `evaluacion_repo`. **A 98-99:** `objetivo_repo` · `vacante_repo` · `onboarding_templates_repo` · `nomina_repo` · `inventario_items_repo` · `ev_instancias_repo` · `empresa_repo` · `capacitacion_repo`.
+**Repos 100/100:** `planes_carrera_repo` · `inventario_asignaciones_repo` · `evaluacion_repo` · **`area_repo`** (llegó al techo al sumarle el `mode="json"` de los dos caminos de escritura). **A 98-99:** `objetivo_repo` · `vacante_repo` · `onboarding_templates_repo` · `nomina_repo` · `inventario_items_repo` · `ev_instancias_repo` · `empresa_repo` · `capacitacion_repo`.
 **Routers 80/80:** `vacantes.py` · `adjuntos.py`. **A 79:** `vacaciones.py` · `objetivos.py` · `inventario_items.py` · `asignaciones_capacitacion.py`.
 
 ### Frontend
@@ -127,6 +127,102 @@ CLAUDE.md manda. La disciplina se sostuvo.
 | **Ningún test del alta/edición de plantillas de mail** (`plantillas_service.guardar/borrar`) — solo del render y los permisos | 🟠 | M |
 | **Ningún test de `_asignaciones_bulk.asignar_bulk`** en su camino manual con proyecto inexistente | 🟡 | S |
 | **`mail_enviado_repo` sin tests** (idempotencia probada solo con fake) | 🟡 | S |
+
+### 🔴 El problema INVERSO: tests de texto que convierten un refactor en cambio de contrato
+
+No es un test que no prueba: es uno que **rompe sin que cambie el comportamiento**.
+
+`guardarCliente.test.ts:110` lee `ClienteModal.tsx` **por path** (`readFileSync`) y afirma **7
+substrings** dentro del archivo (`guardarCliente`, `setEmpresaId(cliente?.empresa_id ?? ...)`,
+`fetchEmpresas`, `cliente-empresa`, `{!isEdit && (`, `e.activa`, y la ausencia de
+`createCliente`). Cualquier reorganización del componente —mover la lógica a un hook, extraer el
+select a un subcomponente— rompe el test **sin que cambie una sola línea de comportamiento**.
+
+Medido en L1: extraer la lógica a un hook rompe **4** assertions; extraer el select, **2**. Por
+eso `ClienteModal.tsx` quedó sin dividir.
+
+**Es la TERCERA aparición del mismo patrón** — un test de texto sobre un archivo convierte un
+refactor en cambio de contrato:
+
+| # | Dónde | Cómo se manifestó |
+|---|---|---|
+| 1 | `services/clientes.ts` | Un comentario que citaba una ruta entre backticks le "daba caller" al endpoint y tapaba el barrido de huérfanos |
+| 2 | `ClienteModal.tsx` | Un comentario que nombraba `createCliente` rompía el `not.toContain` del propio test estructural |
+| 3 | `guardarCliente.test.ts:110` | Las 7 assertions de substring bloquean la división del componente |
+
+🚩 **L5 es el momento de reescribirlas contra la FUNCIÓN, no contra el archivo.** L5 tiene que
+tocar ese bloque igual —al desaparecer el `<select>`, las assertions sobre `cliente-empresa`,
+`fetchEmpresas`, `e.activa` y la línea de siembra quedan sin sujeto—, así que el costo de
+rehacerlas bien ya está pago. ✅ **Hecho en L5**: cuatro assertions borradas, cuatro reescritas
+contra la función, y las dos estructurales que no se pueden reescribir quedaron marcadas con su
+motivo (no hay forma de observar "el modal no llama al service" sin renderizarlo, y renderizarlo
+es imposible acá).
+
+### 🔴 LA PREGUNTA TIENE UNA PREGUNTA PREVIA: ¿el fake ES lo que estoy probando?
+
+La regla del repo es *"¿qué tendría que ser distinto en el fake para que este test pueda fallar?"*.
+**L9 mostró que hay que contestar otra antes: ¿el fake ES lo que estoy probando?**
+
+En L9 los tests atravesaban el service **de verdad** —`svc.get_detalle`, `svc.eliminar`, no armaban
+el resultado por su cuenta— y aun así la mutación no rojeaba: la mutación vivía en el **repo real**
+y los tests corrían contra `_RepoFalso`. `find_by_id` podía volver a recortar por empresa **con 37
+tests en verde**. El nombre del test no engañaba; **engañaba el nivel**.
+
+**Corolario operativo: cuando una mutación no rojea, revisar en qué CAPA vive la mutación y en qué
+CAPA corre el test, antes de concluir que falta un caso.** Las dos veces que pasó, la conclusión
+"falta un caso" habría sido incorrecta y habría llevado a agregar un test en la capa equivocada:
+
+| Sesión | La mutación vivía en… | El test corría contra… | Verde con el bug |
+|---|---|---|---|
+| **L8** | `svc.exportar` (service) | filas armadas a mano desde el repo | 34 |
+| **L9** | `_horas_vista_repo` (repo real) | `_RepoFalso` (service) | 37 |
+
+Los dos se cerraron con un test que atraviesa **la capa mutada**: en L8 capturando lo que el service
+le pasa a `build_export`, en L9 pegándole a la query real vía `Almacen`.
+
+### 🔴 El padrón tiene que poder distinguir los DOS comportamientos que se comparan
+
+No alcanza con que el fake modele "más de uno": tiene que modelar **la diferencia exacta** que
+separa el comportamiento viejo del nuevo.
+
+En L9 hubo que **sumar una tercera persona con cargas en dos sociedades**. Con Carla cargando en
+una sola, `find_por_empleado` devolvía lo mismo recortando por empresa que sin recortar — "trae las
+dos" y "trae la suya" eran indistinguibles, y el test no podía fallar aunque estuviera en la capa
+correcta. Es la misma forma que *"todo fake nuevo modela DOS empresas"*, un escalón más adentro:
+**dos filas no bastan si las dos caen del mismo lado del corte.**
+
+### 🔴 Ejecutar el SCHEMA no dice si el CAMINO serializa
+
+Barriendo `model_dump()` sin `mode="json"` sobre schemas con campos UUID salieron 6 candidatos.
+**5 eran falsos positivos**: `_empleado_write_repo` (×2), `inventario_items_repo` y `vacante_repo`
+(×2) convierten los UUID **a mano, línea por línea, DESPUÉS del `model_dump()`**
+(`payload["area_id"] = str(...)`). El único real era `ev_plantillas_service.py:75`.
+
+La prueba que los marcó como rotos ejecutaba el `model_dump()` **aislado** y le hacía
+`json.dumps`. Eso responde "¿el schema devuelve UUIDs?", que no es la pregunta: la pregunta es
+"¿qué le llega a PostgREST?". **Hay que leer el camino completo hasta la llamada, no evaluar el
+schema en el vacío** — entre el dump y el insert puede haber cinco líneas que arreglan todo.
+
+### 🔴 Un test que REPLICA adentro la transformación que quiere verificar no puede fallar
+
+Apareció al tipar `AreaCreate.responsable_id`. El primer test de serialización que se escribió
+hacía, dentro del propio test:
+
+```python
+payload = data.model_dump(exclude_none=True, mode="json")
+json.dumps(payload)          # "verifica" que serializa
+```
+
+Eso pasa **aunque `area_repo` pierda el `mode="json"`**: el test estaba probando su propia línea,
+no la del repo. Es la forma más pura del problema — ni siquiera hace falta un fake permisivo,
+alcanza con copiar la transformación.
+
+Se cerró con un doble de `supabase_admin` que hace `json.dumps` **en el punto donde corre de
+verdad** (al salir el payload hacia PostgREST) y llamando al **repo real**. Recién ahí la mutación
+"sacar `mode="json"`" rojea.
+
+⚠️ Es el hermano de la pregunta de arriba: allá el fake no era lo que se probaba; acá **el test
+era lo que se probaba**.
 
 ---
 
