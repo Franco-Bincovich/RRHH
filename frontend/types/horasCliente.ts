@@ -20,12 +20,20 @@ export interface LineaEmpleado {
   registros: number
 }
 
+/** Cuánto puso cada sociedad del grupo contra un cliente. La suma es el total del cliente. */
+export interface HorasDeEmpresa {
+  empresa_nombre: string
+  horas: number
+}
+
 export interface ClienteConHoras {
   /** null en el grupo "Sin cliente": son las cargas del camino viejo, que no tienen cliente. */
   cliente_id: string | null
   cliente_nombre: string
+  /** Total del CLIENTE, sin recortar por sociedad. `por_empresa` lo reparte. */
   horas: number
   registros: number
+  por_empresa: HorasDeEmpresa[]
   lineas: LineaEmpleado[]
 }
 

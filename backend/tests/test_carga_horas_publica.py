@@ -51,7 +51,10 @@ from utils.errors import AppError  # noqa: E402
 HOY = date(2026, 8, 9)
 EMPLEADO_SESION, EMPRESA_SESION = str(uuid4()), str(uuid4())
 EMPLEADO_IMPOSTOR, EMPRESA_IMPOSTORA = str(uuid4()), str(uuid4())
-CLIENTE_OK, CLIENTE_BAJA, CLIENTE_AJENO = str(uuid4()), str(uuid4()), str(uuid4())
+CLIENTE_OK, CLIENTE_BAJA, CLIENTE_INEXISTENTE = str(uuid4()), str(uuid4()), str(uuid4())
+# 🔴 El catálogo es GLOBAL (mig 108): estos clientes no cuelgan de ninguna empresa, y en
+# particular NO de `EMPRESA_SESION`. Que la sesión sea de una empresa y el catálogo de ninguna es
+# lo que hace falsable "el empleado ve clientes que no son de su sociedad".
 TOKEN = "t" * 43
 
 
@@ -96,10 +99,27 @@ def _fila(kw: dict):
 
 
 class _ClientesFalso:
-    def find_by_id(self, cliente_id: str, empresa_id=None):
-        if cliente_id == CLIENTE_AJENO and str(empresa_id) != str(EMPRESA_IMPOSTORA):
-            return None                                   # la barrera de empresa lo esconde
-        if cliente_id not in (CLIENTE_OK, CLIENTE_BAJA, CLIENTE_AJENO):
+    """Catálogo GLOBAL, sin empresa. Devuelve conjuntos DISTINTOS según `incluir_inactivos` y
+    REGISTRA cada llamada a `find_all` con su argumento.
+
+    🔴 Las dos cosas son lo que permite desmentir el bug de `carga_horas_service:117`: si el
+    service volviera a pasar un posicional, ligaría contra `incluir_inactivos`, un UUID es truthy
+    y el listado incluiría al dado de baja. `llamadas_find_all` lo prueba de frente y el conjunto
+    devuelto lo prueba por su efecto — con un fake que devolviera SIEMPRE la misma lista, ninguno
+    de los dos tests podría fallar."""
+
+    def __init__(self) -> None:
+        self.llamadas_find_all: list = []
+
+    def find_all(self, incluir_inactivos: bool = False):
+        self.llamadas_find_all.append(incluir_inactivos)
+        activos = [SimpleNamespace(id=CLIENTE_OK, nombre="Acme", activo=True)]
+        if incluir_inactivos:
+            activos.append(SimpleNamespace(id=CLIENTE_BAJA, nombre="Vieja SA", activo=False))
+        return activos
+
+    def find_by_id(self, cliente_id: str):
+        if cliente_id not in (CLIENTE_OK, CLIENTE_BAJA):
             return None
         return SimpleNamespace(id=cliente_id, nombre="Acme", activo=cliente_id != CLIENTE_BAJA)
 
@@ -142,6 +162,66 @@ def _error(fn) -> AppError:
     with pytest.raises(AppError) as exc:
         fn()
     return exc.value
+
+
+# ── El select público: catálogo global ────────────────────────────────────────
+
+
+class TestClientesDisponibles:
+    """🔴 EL BLOQUE QUE MOTIVA TODO L2-L4, medido en producción: los 3 clientes cargados son
+    todos de UNA de las dos sociedades. Hasta la 107 el empleado de la otra veía un select vacío
+    (y de hecho ni llegaba: el gate lo rechazaba antes).
+
+    ¿Qué tendría que ser distinto en el fake para que estos tests fallen? Que `_ClientesFalso`
+    devolviera siempre la misma lista. Devuelve conjuntos DISTINTOS según `incluir_inactivos` y
+    guarda cada llamada, así que las dos regresiones posibles —volver a filtrar por empresa, y
+    volver a pasar un posicional— se ven por separado.
+    """
+
+    def _svc_con(self, clientes: _ClientesFalso) -> CargaHorasService:
+        return CargaHorasService(sesiones=_SesionesFalso(), horas=_HorasFalso(),
+                                 clientes=clientes, ausencias=_AusenciasFalso(),
+                                 datos=_DatosFalso(8))
+
+    def test_el_empleado_ve_clientes_que_no_son_de_su_empresa(self) -> None:
+        """La sesión es de `EMPRESA_SESION`; el catálogo no cuelga de ninguna empresa. Antes esto
+        devolvía vacío para todo el padrón de la sociedad sin clientes propios."""
+        clientes = _ClientesFalso()
+        r = self._svc_con(clientes).clientes_disponibles(TOKEN)
+        assert [str(c.id) for c in r.items] == [CLIENTE_OK]
+
+    def test_y_puede_imputar_horas_contra_ese_cliente(self) -> None:
+        """Verlo no alcanza: el circuito completo es ver + imputar. Si `_verificar_cliente`
+        volviera a exigir empresa, esto rojea aunque el select siga andando."""
+        horas = _HorasFalso()
+        svc = CargaHorasService(sesiones=_SesionesFalso(), horas=horas,
+                                clientes=_ClientesFalso(), ausencias=_AusenciasFalso(),
+                                datos=_DatosFalso(8))
+        svc.cargar_horas(_req(cliente_id=CLIENTE_OK), hoy=HOY)
+        assert horas.guardadas[0]["cliente_id"] == CLIENTE_OK
+
+    def test_un_cliente_dado_de_baja_no_aparece_en_el_select(self) -> None:
+        """🔴 EL BUG DE `:117`, por su EFECTO. Si el service pasa un posicional, liga contra
+        `incluir_inactivos`, un UUID es truthy y el dado de baja entra en la lista — sin ningún
+        error, y el usuario se entera recién con un CLIENTE_INVALIDO al final del formulario."""
+        clientes = _ClientesFalso()
+        r = self._svc_con(clientes).clientes_disponibles(TOKEN)
+        assert CLIENTE_BAJA not in [str(c.id) for c in r.items]
+
+    def test_find_all_se_llama_sin_argumentos(self) -> None:
+        """El mismo bug, de frente. Los dos tests hacen falta: éste se rompe con CUALQUIER
+        posicional, aunque el fake decidiera devolver lo mismo igual."""
+        clientes = _ClientesFalso()
+        self._svc_con(clientes).clientes_disponibles(TOKEN)
+        assert clientes.llamadas_find_all == [False], "se le pasó algo a find_all()"
+
+    def test_un_token_invalido_no_lista_nada(self) -> None:
+        """`resolver` sigue siendo la autenticación aunque ya no se use su empresa."""
+        clientes = _ClientesFalso()
+        with pytest.raises(AppError) as exc:
+            self._svc_con(clientes).clientes_disponibles("x" * 43)
+        assert exc.value.code == "SESION_INVALIDA"
+        assert clientes.llamadas_find_all == []
 
 
 # ── El caso normal ────────────────────────────────────────────────────────────
@@ -218,9 +298,11 @@ class TestLaIdentidadSaleDeLaSesion:
         assert (err.code, err.status_code) == ("SESION_INVALIDA", 401)
         assert horas.guardadas == []
 
-    def test_el_cliente_se_valida_contra_la_empresa_de_la_sesion(self) -> None:
-        """Sin esto se le podrían imputar horas al cliente de otra sociedad del grupo."""
-        err = _error(lambda: _svc().cargar_horas(_req(cliente_id=CLIENTE_AJENO), hoy=HOY))
+    def test_un_cliente_inexistente_no_es_elegible(self) -> None:
+        """Reemplaza a `test_el_cliente_se_valida_contra_la_empresa_de_la_sesion`: con el catálogo
+        global ya no hay "cliente ajeno", pero sigue habiendo "no existe" y sale por el mismo
+        error. Sin este caso, un `_verificar_cliente` que aceptara cualquier id pasaría."""
+        err = _error(lambda: _svc().cargar_horas(_req(cliente_id=CLIENTE_INEXISTENTE), hoy=HOY))
         assert (err.code, err.status_code) == ("CLIENTE_INVALIDO", 422)
 
     def test_un_cliente_dado_de_baja_no_es_elegible(self) -> None:

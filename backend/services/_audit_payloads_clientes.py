@@ -23,15 +23,29 @@ from typing import Optional
 from services._audit_payloads import sin_derivados
 from services.audit_service import AuditService, _jsonable
 
-# Campos de negocio del alta/baja. `empresa_id` entra: es la sociedad dueña del cliente y es
-# justamente el dato que hace falta para leer el evento sin ir a buscar la fila.
-_CAMPOS_CLIENTE = ("empresa_id", "nombre", "activo")
+# Campos de negocio del alta/baja. `empresa_id` NO entra: desde la migración 108 un cliente no
+# pertenece a ninguna empresa, así que no hay sociedad dueña que fotografiar.
+_CAMPOS_CLIENTE = ("nombre", "activo")
 
 # Vacío A PROPÓSITO — ver el encabezado. No borrar la constante ni el argumento: sacarlos
 # obligaría a volver a decidir esto desde cero la próxima vez que el schema crezca.
 _DERIVADOS_CLIENTE: frozenset = frozenset()
 
 _ENTIDAD = "cliente"
+
+# 🔴 LOS TRES EVENTOS VAN CON `empresa_id` NULL, Y ES UNA DECISIÓN, NO UN DEFAULT OLVIDADO.
+# `auditoria.empresa_id` es nullable (verificado en el catálogo), así que el INSERT entra igual.
+#
+# Un cliente es GLOBAL: no tiene empresa. La única empresa disponible en el contexto de estas
+# escrituras sería la del header `X-Empresa-Id`, y usarla como fallback MENTIRÍA sobre de quién es
+# la entidad — diría "este cliente es de la empresa A" solo porque el usuario tenía A seleccionada
+# en el sidebar al apretar el botón. Es exactamente el bug que `_costos_write.py:80` tiene abierto,
+# con el agravante de que acá la entidad ni siquiera TIENE empresa que declarar.
+#
+# ⚠️ Consecuencia asumida: estos eventos NO aparecen al filtrar `/auditoria` por empresa. Es
+# correcto — no pertenecen a ninguna. Aparecen en el consolidado, que es donde corresponde
+# buscarlos. Sacrificar eso es preferible a etiquetarlos con una empresa falsa.
+_SIN_EMPRESA = None
 
 
 def _subset(obj: object, campos: tuple) -> dict:
@@ -43,14 +57,11 @@ def _subset(obj: object, campos: tuple) -> dict:
 def payload_alta_cliente(row, usuario_id: Optional[str]) -> dict:
     """Evento INSERT del alta de un cliente.
 
-    🔴 `empresa_id` SALE DE LA ENTIDAD (`row.empresa_id`), NUNCA del header `X-Empresa-Id`.
-    Auditar es una ACCIÓN, y en modo consolidado el header es None: etiquetar el evento con él
-    lo dejaría fuera del filtro por empresa de `/auditoria`. Es el principio Vista vs Acción, y
-    es el bug que `_costos_write.py:80` todavía tiene abierto — no se replica acá.
+    `empresa_id` va NULL — ver la nota de `_SIN_EMPRESA` arriba.
     """
     return {
         "usuario_id": usuario_id, "entidad": _ENTIDAD, "registro_id": row.id,
-        "accion": "INSERT", "evento": "alta_cliente", "empresa_id": row.empresa_id,
+        "accion": "INSERT", "evento": "alta_cliente", "empresa_id": _SIN_EMPRESA,
         "datos_anteriores": None, "datos_nuevos": _subset(row, _CAMPOS_CLIENTE),
     }
 
@@ -58,15 +69,13 @@ def payload_alta_cliente(row, usuario_id: Optional[str]) -> dict:
 def payload_update_cliente(prior, nuevo, usuario_id: Optional[str]) -> dict:
     """Evento UPDATE de la edición de un cliente (diff antes/después).
 
-    La empresa sale del PRIOR y no del nuevo: `ClienteUpdate` no permite mudar de empresa, así
-    que son el mismo valor — pero si algún día lo permitiera, el evento tiene que quedar donde
-    el registro ESTABA, que es donde alguien va a buscarlo.
+    `empresa_id` va NULL — ver la nota de `_SIN_EMPRESA` arriba.
     """
     antes, despues = AuditService._diff(
         sin_derivados(prior, _DERIVADOS_CLIENTE), sin_derivados(nuevo, _DERIVADOS_CLIENTE))
     return {
         "usuario_id": usuario_id, "entidad": _ENTIDAD, "registro_id": prior.id,
-        "accion": "UPDATE", "evento": "update_cliente", "empresa_id": prior.empresa_id,
+        "accion": "UPDATE", "evento": "update_cliente", "empresa_id": _SIN_EMPRESA,
         "datos_anteriores": antes, "datos_nuevos": despues,
     }
 
@@ -80,6 +89,6 @@ def payload_baja_cliente(prior, usuario_id: Optional[str]) -> dict:
     """
     return {
         "usuario_id": usuario_id, "entidad": _ENTIDAD, "registro_id": prior.id,
-        "accion": "DELETE", "evento": "baja_cliente", "empresa_id": prior.empresa_id,
+        "accion": "DELETE", "evento": "baja_cliente", "empresa_id": _SIN_EMPRESA,
         "datos_anteriores": _subset(prior, _CAMPOS_CLIENTE), "datos_nuevos": None,
     }

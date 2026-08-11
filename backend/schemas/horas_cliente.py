@@ -33,12 +33,21 @@ class LineaEmpleado(BaseModel):
     registros: int
 
 
+class HorasDeEmpresa(BaseModel):
+    """Cuánto puso cada sociedad del grupo contra un cliente. La suma es el total del cliente."""
+    empresa_nombre: str
+    horas: float
+
+
 class ClienteConHoras(BaseModel):
-    """Un cliente colapsable. `cliente_id` es None en el grupo "Sin cliente"."""
+    """Un cliente colapsable. `cliente_id` es None en el grupo "Sin cliente".
+
+    `horas` es el total del CLIENTE, sin recortar por sociedad (L8); `por_empresa` lo reparte."""
     cliente_id: Optional[UUID] = None
     cliente_nombre: str
     horas: float
     registros: int
+    por_empresa: List[HorasDeEmpresa]
     lineas: List[LineaEmpleado]
 
 

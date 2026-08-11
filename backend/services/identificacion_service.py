@@ -2,6 +2,11 @@
 Identificación por DNI del link PÚBLICO de carga de horas.
 Flujo: router (sin auth) → service → repository → DB
 
+La DECISIÓN de qué desenlace le toca a un dni vive en `_identificacion_resolver.py` (el archivo
+estaba en 150/150). Acá queda qué se HACE con esa decisión: registrar el intento, nivelar el
+tiempo, levantar el error único y emitir la sesión. `_PISO_SEGUNDOS` NO se movió — dos tests lo
+monkeypatchean sobre este módulo.
+
 🔴 RECHAZO ÚNICO: HAY UN SOLO `raise` EN TODO EL ARCHIVO.
 Los CINCO motivos por los que una identificación puede no prosperar —el dni no existe, existe
 pero el empleado está de baja, existe pero su empresa no tiene clientes que cargar, matchea en
@@ -34,13 +39,14 @@ de cerrar, y no se venden como cerrados.
 """
 import asyncio
 from time import perf_counter
-from typing import Optional, Tuple
+from typing import Optional
 
 from repositories import identificacion_repo
 from repositories.sesion_horas_repo import SesionHorasRepo
 from schemas.horas_publico import IdentificacionResponse
 from utils.errors import AppError
 from utils.logger import logger
+from services._identificacion_resolver import OK as _OK, decidir
 from services._sesion_horas import emitir
 from utils.rate_limit_dni import consumir_intento
 
@@ -49,7 +55,6 @@ from utils.rate_limit_dni import consumir_intento
 _RECHAZO = ("No pudimos identificarte. Verificá el número e intentá de nuevo.",
             "IDENTIFICACION_INVALIDA", 401)
 
-_OK = "ok"
 # Piso de tiempo de respuesta. Ver la nota del encabezado: tiene que superar al peor camino real
 # (dos queries + el INSERT del log). 300 ms da margen sobre los ~100-200 ms medidos contra
 # Supabase desde Vercel, y el costo es tolerable porque el endpoint se llama UNA vez por sesión
@@ -81,7 +86,7 @@ class IdentificacionService:
         inicio = perf_counter()
         dni_limpio = (dni or "").strip()
 
-        resultado, empleado = self._resolver(dni_limpio)
+        resultado, empleado = decidir(self._repo, self._limitador, dni_limpio)
 
         # El log va ANTES del piso, no después: así su latencia —que es una escritura a la base y
         # varía— queda absorbida por el piso en vez de sumarse encima y volver a diferenciar.
@@ -104,42 +109,6 @@ class IdentificacionService:
         token, expira = emitir(self._sesiones, str(empleado["id"]), str(empleado["empresa_id"]))
         return IdentificacionResponse(
             nombre=_nombre_de_pila(empleado["nombre"]), token=token, expira_en=expira)
-
-    def _resolver(self, dni: str) -> Tuple[str, Optional[dict]]:
-        """Decide el desenlace. Devuelve (resultado, empleado|None) — NUNCA lanza.
-
-        Que no lance es lo que permite que el caller tenga un solo `raise`: si cada rama
-        levantara su propia excepción, cinco mensajes distintos serían un typo de distancia.
-
-        🔴 EL ORDEN IMPORTA. El límite por dni va PRIMERO, antes de tocar la base: un contador
-        que solo se consulta después de dos queries no protege a la base de nada.
-        """
-        if not dni:
-            return "sin_coincidencia", None
-        if not self._limitador(dni):
-            return "bloqueado", None
-
-        filas = self._repo.buscar_por_dni(dni)
-        if not filas:
-            return "sin_coincidencia", None
-        if len(filas) > 1:
-            # 🔴 `empleados` tiene UNIQUE (empresa_id, dni) y NO unique global: el mismo dni puede
-            # estar cargado en dos sociedades del grupo. Las tres salidas posibles eran preguntar
-            # de qué empresa —que publica justo el dato que la respuesta se cuida de no dar—,
-            # elegir una —que imputaría las horas a la sociedad equivocada, en silencio— o
-            # RECHAZAR. Se rechaza: es fail-closed, y queda registrado como `ambiguo` para que
-            # RRHH lo vea y lo corrija en los datos, que es donde está el problema.
-            # Hoy los 31 dnis de producción son distintos: es una guarda, no un caso vivo.
-            return "ambiguo", None
-
-        empleado = filas[0]
-        if empleado.get("estado") != "activo":
-            return "inactivo", None
-        if not self._repo.hay_clientes_activos(str(empleado["empresa_id"])):
-            # Sin clientes no hay nada que cargar, así que identificarse no lleva a ningún lado.
-            # Se devuelve el empleado igual para que el LOG pueda decir a quién correspondía.
-            return "sin_clientes", empleado
-        return _OK, empleado
 
     @staticmethod
     async def _nivelar(inicio: float) -> None:

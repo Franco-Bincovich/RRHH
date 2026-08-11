@@ -28,7 +28,7 @@ import type { Cliente } from "@/types/cliente"
  */
 
 const ACTIVO: Cliente = {
-  id: "c1", empresa_id: "e1", nombre: "Acme", activo: true,
+  id: "c1", nombre: "Acme", activo: true,
   created_at: "2026-08-01T00:00:00Z", updated_at: null,
 }
 const BAJA: Cliente = { ...ACTIVO, id: "c2", nombre: "Globex", activo: false }
@@ -80,10 +80,11 @@ describe("ClientesTabla — estado del cliente", () => {
     expect(html).not.toContain("Dar de baja Globex")
   })
 
-  it("renderiza una fila por cliente, sin colapsar homónimos", () => {
-    // Dos empresas del grupo pueden tener un cliente con el mismo nombre: el índice único es
-    // POR empresa. En consolidado los dos tienen que verse.
-    const otro: Cliente = { ...ACTIVO, id: "c3", empresa_id: "e2" }
+  it("renderiza una fila por cliente: la key es el id, no el nombre", () => {
+    // ⚠️ Desde la migración 108 la base NO permite dos clientes con el mismo nombre (el índice
+    // único pasó a ser global). El test se conserva igual porque lo que afirma es una propiedad
+    // del COMPONENTE —no deduplica por nombre— y no debería depender de lo que la base permita.
+    const otro: Cliente = { ...ACTIVO, id: "c3" }
     const html = render([ACTIVO, otro], false)
     expect(html.split("Acme").length - 1).toBe(2)
   })

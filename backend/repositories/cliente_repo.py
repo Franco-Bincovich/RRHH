@@ -1,17 +1,17 @@
 """
 Repositorio del catálogo de clientes (migración 102). Acceso a Supabase con supabase_admin.
 
-🔒 BARRERA DE EMPRESA — FORMA A: el `empresa_id` viaja EN EL WHERE de la query, nunca se compara
-en Python después de traer la fila. Una sola ida a la base e imposible de saltear. Es lo que
-`find_by_id` y `update` hacen con `_con_empresa`.
+🔴 NO HAY BARRERA DE EMPRESA, Y NO ES UN OLVIDO (migración 108). Un cliente no pertenece a
+ninguna empresa: el catálogo es GLOBAL, como `tipos_ausencia`. Ninguna query de este archivo
+filtra ni escribe `empresa_id`, y no hay que "agregárselo por consistencia" con los otros repos —
+sería un filtro que dejaría el catálogo vacío o parcial sin ningún error, que es el modo de falla
+más caro del repo.
 
-`empresa_id=None` NO restringe: es la vista consolidada ("Todas las empresas"), y cualquier
-cliente existente pasa. No es un fallo de validación — la barrera limita CUÁL recurso podés
-elegir cuando hay una empresa activa, no de dónde sale la empresa que se escribe.
+⚠️ La columna `clientes.empresa_id` TODAVÍA EXISTE en la base (la 108 solo le saca el NOT NULL;
+se dropea en la 109). Que exista no la vuelve utilizable: las filas nuevas la dejan en NULL.
 
-Quien no encuentra devuelve `None`, y el 404 lo arma el service con un mensaje idéntico al de
-"no existe": "no existe" y "es de otra empresa" no se pueden distinguir desde afuera, o el
-código se vuelve un oráculo de enumeración.
+Quien no encuentra devuelve `None`, y el 404 lo arma el service. Sigue siendo el mismo 404 para
+"no existe" que para cualquier otro motivo: eso no dependía de la empresa.
 
 🔴 NO HAY `delete`, Y NO ES UN OLVIDO. `horas_proyecto.cliente_id` es una FK sin ON DELETE
 (migración 103), así que borrar un cliente con horas cargadas fallaría contra la base — y si no
@@ -20,7 +20,6 @@ de los selects y deja las horas viejas intactas. Es el mismo razonamiento, escri
 lugar, que `tipos_ausencia_repo.update`.
 """
 from typing import Any, Dict, List, Optional
-from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from schemas.cliente import ClienteCreate, ClienteResponse
@@ -29,40 +28,35 @@ from utils.errors import AppError
 _T = "clientes"
 
 
-def _con_empresa(q, empresa_id: Optional[UUID]):
-    """Aplica la barrera de empresa a la query. None = consolidado, sin filtro."""
-    return q.eq("empresa_id", str(empresa_id)) if empresa_id else q
-
-
 class ClienteRepo:
-    def find_all(self, empresa_id: Optional[UUID] = None,
-                 incluir_inactivos: bool = False) -> List[ClienteResponse]:
-        """Clientes de la empresa (None = todas), por nombre.
+    def find_all(self, incluir_inactivos: bool = False) -> List[ClienteResponse]:
+        """Todo el catálogo, por nombre. No hay filtro de empresa: el catálogo es global.
 
         `incluir_inactivos` es False por defecto porque el consumidor normal es el select de la
         carga de horas, que no debe ofrecer un cliente dado de baja. La pantalla de ABM lo pide
         en True: ahí hay que verlos para poder reactivarlos. Mismo criterio que TiposAusenciaRepo.
         """
-        q = _con_empresa(supabase_admin.table(_T).select("*"), empresa_id)
+        q = supabase_admin.table(_T).select("*")
         if not incluir_inactivos:
             q = q.eq("activo", True)
         return [ClienteResponse.model_validate(r) for r in (q.order("nombre").execute().data or [])]
 
-    def find_by_id(self, id: str, empresa_id: Optional[UUID] = None) -> Optional[ClienteResponse]:
-        """El cliente, o None si no existe O es de otra empresa. Los dos casos son el mismo."""
-        res = _con_empresa(supabase_admin.table(_T).select("*").eq("id", id), empresa_id) \
-            .maybe_single().execute()
+    def find_by_id(self, id: str) -> Optional[ClienteResponse]:
+        """El cliente, o None si no existe."""
+        res = supabase_admin.table(_T).select("*").eq("id", id).maybe_single().execute()
         return ClienteResponse.model_validate(res.data) if (res and res.data) else None
 
-    def existe_nombre(self, nombre: str, empresa_id: UUID,
-                      excepto_id: Optional[str] = None) -> bool:
-        """¿Ya hay un cliente con ese nombre en la empresa? Comparación CASE-INSENSITIVE.
+    def existe_nombre(self, nombre: str, excepto_id: Optional[str] = None) -> bool:
+        """¿Ya hay un cliente con ese nombre? Comparación CASE-INSENSITIVE y GLOBAL.
 
-        🔴 LA GARANTÍA REAL ES EL ÍNDICE `ux_clientes_nombre_por_empresa (empresa_id,
-        lower(nombre))`. Esto es para poder devolver un 409 legible en vez del error crudo de
-        una constraint, y para que el rechazo exista incluso antes de que la migración 102
-        corra. Queda una ventana de carrera entre el chequeo y el INSERT que solo el índice
+        🔴 LA GARANTÍA REAL ES EL ÍNDICE `ux_clientes_nombre_global (lower(nombre))` (migración
+        108). Esto es para poder devolver un 409 legible en vez del error crudo de una
+        constraint. Queda una ventana de carrera entre el chequeo y el INSERT que solo el índice
         cierra — por eso el índice no es opcional.
+
+        ⚠️ Es MÁS ESTRICTO que antes: hasta la 108 dos empresas podían tener cada una su "Acme"
+        y eran dos filas legítimas. Ahora "Acme" es uno solo para todo el sistema, que es la
+        consecuencia directa de que el cliente no cuelgue de ninguna empresa.
 
         🔴 SE COMPARA EN PYTHON Y NO CON `.ilike()`, a propósito. PostgREST interpreta `*` como
         comodín dentro de `ilike`, así que un cliente llamado "Acme*" haría matchear a
@@ -76,23 +70,22 @@ class ClienteRepo:
         objetivo = nombre.strip().casefold()
         return any(
             c.nombre.strip().casefold() == objetivo and str(c.id) != str(excepto_id or "")
-            for c in self.find_all(empresa_id, incluir_inactivos=True)
+            for c in self.find_all(incluir_inactivos=True)
         )
 
     def save(self, data: ClienteCreate) -> ClienteResponse:
-        """Alta. `empresa_id` sale del body (empresa dueña), no del header: crear es una ACCIÓN."""
-        res = supabase_admin.table(_T).insert(
-            {"empresa_id": str(data.empresa_id), "nombre": data.nombre.strip()}
-        ).execute()
+        """Alta. NO manda `empresa_id`: el cliente no cuelga de ninguna empresa (migración 108).
+
+        🔴 Contra la columna todavía NOT NULL este INSERT falla con 23502. Por eso la 108 tiene
+        que correr ANTES del deploy de este código — está escrito en el encabezado de esa
+        migración."""
+        res = supabase_admin.table(_T).insert({"nombre": data.nombre.strip()}).execute()
         if not res.data:
             raise AppError("Error al crear el cliente", "DB_ERROR", 500)
         return ClienteResponse.model_validate(res.data[0])
 
-    def update(self, id: str, patch: Dict[str, Any],
-               empresa_id: Optional[UUID] = None) -> Optional[ClienteResponse]:
-        """Aplica los campos de `patch`. La barrera va en el UPDATE, no solo en la relectura: sin
-        el `.eq` acá, un id de otra empresa se escribiría igual y recién el SELECT posterior
-        devolvería None — la escritura ya habría ocurrido."""
+    def update(self, id: str, patch: Dict[str, Any]) -> Optional[ClienteResponse]:
+        """Aplica los campos de `patch` y devuelve la fila resultante."""
         if patch:
-            _con_empresa(supabase_admin.table(_T).update(patch).eq("id", id), empresa_id).execute()
-        return self.find_by_id(id, empresa_id)
+            supabase_admin.table(_T).update(patch).eq("id", id).execute()
+        return self.find_by_id(id)

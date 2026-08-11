@@ -19,7 +19,6 @@ from fastapi import APIRouter, Depends, Request
 from routers.clientes import _usuario_id
 from schemas.cliente import ClienteCreate, ClienteResponse, ClienteUpdate
 from services.cliente_service import ClienteService
-from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
 
 router = APIRouter()
@@ -36,7 +35,7 @@ async def create_cliente(
     body: ClienteCreate,
     service: ClienteService = Depends(_service),
 ) -> ClienteResponse:
-    # La empresa sale del BODY, no del header: crear es una ACCIÓN (Vista vs Acción).
+    # Sin empresa por ningún lado: el cliente es global (migración 108).
     return service.create_cliente(body, _usuario_id(request))
 
 
@@ -47,7 +46,7 @@ async def update_cliente(
     request: Request,
     service: ClienteService = Depends(_service),
 ) -> ClienteResponse:
-    return service.update_cliente(id, body, get_empresa_id(request), _usuario_id(request))
+    return service.update_cliente(id, body, _usuario_id(request))
 
 
 @router.delete("/{id}", status_code=204, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -56,4 +55,4 @@ async def delete_cliente(
     request: Request,
     service: ClienteService = Depends(_service),
 ) -> None:
-    service.delete_cliente(id, get_empresa_id(request), _usuario_id(request))
+    service.delete_cliente(id, _usuario_id(request))

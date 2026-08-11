@@ -35,7 +35,11 @@ import type { Hora } from "@/types/proyecto"
 
 const CLIENTES: ClienteConHoras[] = [
   {
+    // 🔴 DOS sociedades contra el MISMO cliente: es el caso que L8 vino a resolver, y lo único
+    // que hace falsable "el desglose se muestra". Con una sola empresa acá, un componente que
+    // nunca renderizara el desglose pasaría igual (se omite a propósito cuando hay una sola).
     cliente_id: "c1", cliente_nombre: "Acme", horas: 9, registros: 3,
+    por_empresa: [{ empresa_nombre: "Karstec", horas: 6 }, { empresa_nombre: "Dosuba", horas: 3 }],
     lineas: [
       { empleado_id: "e1", empleado_nombre: "Ana Pérez", proyecto_texto: null,
         tarea_texto: "Reunión", modalidad: "home_office", horas: 6, registros: 2 },
@@ -44,7 +48,9 @@ const CLIENTES: ClienteConHoras[] = [
     ],
   },
   {
+    // Una sola sociedad: el desglose NO se renderiza. Es el contraste del de arriba.
     cliente_id: null, cliente_nombre: "Sin cliente", horas: 6, registros: 1,
+    por_empresa: [{ empresa_nombre: "Karstec", horas: 6 }],
     lineas: [
       { empleado_id: null, empleado_nombre: null, proyecto_texto: "Interno",
         tarea_texto: null, modalidad: null, horas: 6, registros: 1 },

@@ -17,7 +17,6 @@ from fastapi.responses import Response
 
 from schemas.cliente import ClienteListResponse, ClienteResponse
 from services.cliente_service import ClienteService
-from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
 from utils.rate_limit import limiter
 
@@ -31,11 +30,11 @@ def _service() -> ClienteService:
 
 @router.get("", response_model=ClienteListResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def list_clientes(
-    request: Request,
     incluir_inactivos: bool = Query(False, description="Incluir los dados de baja"),
     service: ClienteService = Depends(_service),
 ) -> ClienteListResponse:
-    return service.get_clientes(get_empresa_id(request), incluir_inactivos)
+    # Sin `X-Empresa-Id`: el catálogo es GLOBAL y el selector del sidebar no lo acota (mig 108).
+    return service.get_clientes(incluir_inactivos)
 
 
 # 🔴 ANTES de /{id}. Si fuera después, FastAPI resuelve por ORDEN DE DECLARACIÓN y "exportar"
@@ -49,7 +48,7 @@ async def exportar_clientes(
     incluir_inactivos: bool = Query(False, description="Incluir los dados de baja"),
     service: ClienteService = Depends(_service),
 ) -> Response:
-    d = service.exportar(get_empresa_id(request), formato, incluir_inactivos)
+    d = service.exportar(formato, incluir_inactivos)
     return Response(content=d.content, media_type=d.media_type,
                     headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
@@ -57,10 +56,9 @@ async def exportar_clientes(
 @router.get("/{id}", response_model=ClienteResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def get_cliente(
     id: UUID,
-    request: Request,
     service: ClienteService = Depends(_service),
 ) -> ClienteResponse:
-    return service.get_cliente(id, get_empresa_id(request))
+    return service.get_cliente(id)
 
 
 def _usuario_id(request: Request) -> Optional[str]:

@@ -31,13 +31,18 @@ def buscar_por_dni(dni: str) -> List[dict]:
     return res.data or []
 
 
-def hay_clientes_activos(empresa_id: str) -> bool:
-    """¿La empresa tiene al menos un cliente activo? Sin clientes no hay nada que cargar, así
+def hay_clientes_activos() -> bool:
+    """¿Hay al menos UN cliente activo en el sistema? Sin clientes no hay nada que cargar, así
     que identificarse no sirve de nada — y ese caso sale por el MISMO rechazo que los demás.
+
+    🔴 SIN `empresa_id` (migración 108): el catálogo de clientes es GLOBAL. Antes la pregunta era
+    "¿la empresa de este empleado tiene clientes?", y con 3 clientes cargados en una sola de las
+    dos sociedades eso dejaba al padrón entero de la otra sin poder ni identificarse. Ahora la
+    pregunta es del sistema, no de la persona: la respuesta es la misma para todos.
 
     `limit(1)`: la pregunta es de existencia, no de cantidad."""
     res = (supabase_admin.table(_CLIENTES).select("id")
-           .eq("empresa_id", empresa_id).eq("activo", True).limit(1).execute())
+           .eq("activo", True).limit(1).execute())
     return bool(res.data)
 
 

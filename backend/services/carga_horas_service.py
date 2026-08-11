@@ -67,7 +67,7 @@ class CargaHorasService:
                 return self._respuesta(ya)
 
         verificar_ventana(data.fecha, hoy)
-        self._verificar_cliente(str(data.cliente_id), empresa_id)
+        self._verificar_cliente(str(data.cliente_id))
         verificar_tope(data.horas, self._horas.total_horas_del_dia(empleado_id, str(data.fecha)))
 
         row = self._horas.save(
@@ -100,35 +100,33 @@ class CargaHorasService:
         return _semana_publica.armar(self._semana, empleado_id, hoy or datetime.now().date())
 
     def clientes_disponibles(self, token: str) -> ClientesPublicosResponse:
-        """Los clientes ACTIVOS de la empresa del empleado, para el select del formulario.
+        """TODOS los clientes activos del sistema, para el select del formulario.
 
         🔴 EXISTE PORQUE EL FORMULARIO NO SE PUEDE COMPLETAR SIN ÉL: `cliente_id` es obligatorio
         y `GET /api/clientes` exige JWT + Seccion.CLIENTES, que un empleado sin cuenta no tiene.
         Sin esta ruta el select nace vacío y la pantalla es decorativa.
 
-        Autenticada por el TOKEN y acotada a la empresa de la SESIÓN: un empleado ve los clientes
-        de SU sociedad y de ninguna otra. `incluir_inactivos` queda en False —el default— porque
-        un cliente dado de baja no es elegible, y ofrecerlo terminaría en un CLIENTE_INVALIDO
-        después de que la persona completó todo el formulario.
+        Autenticada por el TOKEN y NO acotada por empresa (mig 108): el catálogo es global y todo
+        empleado identificado ve el mismo listado. `resolver` sigue siendo la autenticación.
+
+        🔴 `find_all()` SIN POSICIONALES. Su primer parámetro es `incluir_inactivos`: pasarle ahí
+        el `empresa_id` que este método usaba antes lo liga contra ese flag, y como un UUID es
+        truthy el select ofrecería clientes DADOS DE BAJA. No revienta: miente.
         """
-        _, empresa_id = resolver(self._sesiones, token)
+        resolver(self._sesiones, token)
         return ClientesPublicosResponse(items=[
             ClientePublico(id=c.id, nombre=c.nombre)
-            for c in self._clientes.find_all(empresa_id)
+            for c in self._clientes.find_all()
         ])
 
-    def _verificar_cliente(self, cliente_id: str, empresa_id: str) -> None:
-        """El cliente tiene que ser de LA EMPRESA DE LA SESIÓN y estar activo.
+    def _verificar_cliente(self, cliente_id: str) -> None:
+        """El cliente tiene que existir y estar activo. Ya no hay empresa que validar (mig 108).
 
-        🔴 La empresa sale de la sesión, no del request: sin esto alguien podría imputarle horas
-        al cliente de otra sociedad del grupo. `ClienteRepo.find_by_id` mete el `empresa_id` en el
-        WHERE, así que la barrera viaja en la query y no se compara acá.
-
-        "No existe", "es de otra empresa" y "está dado de baja" salen por el MISMO error: los tres
-        significan lo mismo para quien está cargando —ese cliente no es elegible— y distinguirlos
-        confirmaría la existencia de clientes de otras empresas.
+        "No existe" y "está dado de baja" salen por el MISMO error: los dos significan lo mismo
+        para quien está cargando —ese cliente no es elegible— y el mensaje no cambia según cuál
+        sea. (Antes había un tercer motivo, "es de otra empresa", que dejó de existir.)
         """
-        cliente = self._clientes.find_by_id(cliente_id, empresa_id)
+        cliente = self._clientes.find_by_id(cliente_id)
         if not cliente or not cliente.activo:
             raise AppError(*_CLIENTE_INVALIDO)
 

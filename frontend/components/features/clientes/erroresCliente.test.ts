@@ -26,8 +26,8 @@ import { MAX_NOMBRE, validarNombre } from "@/components/features/clientes/guarda
 
 describe("mensajeDeError", () => {
   it("conserva el mensaje del backend", () => {
-    const e = new ApiError("Ya existe un cliente con ese nombre en la empresa", "CLIENTE_DUPLICADO", 409)
-    expect(mensajeDeError(e)).toBe("Ya existe un cliente con ese nombre en la empresa")
+    const e = new ApiError("Ya existe un cliente con ese nombre", "CLIENTE_DUPLICADO", 409)
+    expect(mensajeDeError(e)).toBe("Ya existe un cliente con ese nombre")
   })
 
   it("usa un genérico solo para lo que no es un error de la API", () => {

@@ -4,8 +4,8 @@ import { ApiError } from "@/services/api"
  * Mensaje a mostrar cuando falla un alta o una edición de cliente.
  *
  * 🔴 EL MENSAJE DEL BACKEND SE CONSERVA. El único error de negocio que este formulario puede
- * producir es `CLIENTE_DUPLICADO` (409), y su texto —"Ya existe un cliente con ese nombre en la
- * empresa"— es exactamente lo que el usuario necesita para resolverlo. Reemplazarlo por un
+ * producir es `CLIENTE_DUPLICADO` (409), y su texto —"Ya existe un cliente con ese nombre"— es
+ * exactamente lo que el usuario necesita para resolverlo. Reemplazarlo por un
  * genérico deja a alguien de RRHH apretando "Crear" sin entender por qué no pasa nada, y
  * "Intentá de nuevo" sería además el consejo equivocado: reintentar el mismo nombre nunca
  * funciona. El genérico queda solo para lo que NO es un error de la API (red caída, timeout),

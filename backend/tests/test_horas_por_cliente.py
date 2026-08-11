@@ -41,6 +41,8 @@ import pytest  # noqa: E402
 from schemas.horas import HoraResponse  # noqa: E402
 from services._horas_cliente_agrupacion import SIN_CLIENTE, agrupar  # noqa: E402
 from services._horas_cliente_export import construir_filas_export  # noqa: E402
+import services.horas_cliente_service as svc_mod  # noqa: E402
+from services.export import Descarga  # noqa: E402
 from services.horas_cliente_service import HorasClienteService  # noqa: E402
 from utils.errors import AppError  # noqa: E402
 
@@ -48,6 +50,9 @@ EMPRESA_A, EMPRESA_B = uuid4(), uuid4()
 ACME, GLOBEX = uuid4(), uuid4()
 ANA, BRUNO, CARLA, DIEGO = uuid4(), uuid4(), uuid4(), uuid4()
 AHORA = "2026-08-01T00:00:00+00:00"
+# Lo que devuelve el motor de export falseado. El contenido no importa: lo que se mira es lo que
+# el service le PASA, no lo que el motor produce (eso lo prueba `services/export/`).
+_DESCARGA = Descarga(content=b"x", media_type="text/csv", filename="x.csv")
 
 
 def _h(**kw) -> HoraResponse:
@@ -79,31 +84,32 @@ _FILAS = [
 
 
 class _RepoFalso:
-    """Filtra DE VERDAD por rango y por empresa. Ver los puntos 2 y 3 del encabezado."""
+    """Filtra DE VERDAD por rango. Ver los puntos 2 y 3 del encabezado.
+
+    🔴 `find_por_periodo` NO acepta `empresa_id`: sigue la firma real, que dejó de aceptarlo (L8).
+    Si el fake lo siguiera aceptando, un service que volviera a pasarlo NO fallaría acá y el test
+    de los tres modos pasaría con el recorte puesto."""
 
     def __init__(self) -> None:
         self.borradas: list = []
 
-    def find_por_periodo(self, desde: str, hasta: str, empresa_id=None):
-        return [h for h in _FILAS
-                if desde <= h.fecha.isoformat() <= hasta
-                and (empresa_id is None or str(h.empresa_id) == str(empresa_id))]
+    def find_por_periodo(self, desde: str, hasta: str):
+        return [h for h in _FILAS if desde <= h.fecha.isoformat() <= hasta]
 
-    def find_por_empleado(self, empleado_id: str, desde: str, hasta: str, empresa_id=None):
-        return [h for h in self.find_por_periodo(desde, hasta, empresa_id)
+    def find_por_empleado(self, empleado_id: str, desde: str, hasta: str):
+        return [h for h in self.find_por_periodo(desde, hasta)
                 if str(h.empleado_id or "") == str(empleado_id)]
 
-    def find_by_id(self, hora_id: str, empresa_id=None):
-        for h in _FILAS:
-            if str(h.id) == str(hora_id) and (empresa_id is None
-                                              or str(h.empresa_id) == str(empresa_id)):
-                return h
-        return None
+    def find_by_id(self, hora_id: str):
+        return next((h for h in _FILAS if str(h.id) == str(hora_id)), None)
 
-    def delete(self, hora_id: str, empresa_id=None) -> bool:
-        if not self.find_by_id(hora_id, empresa_id):
+    def delete(self, hora_id: str) -> bool:
+        """🔴 Ninguno de los tres acepta ya `empresa_id`: siguen la firma real (L9). Si el fake lo
+        siguiera aceptando, un service que volviera a pasarlo NO fallaría acá y los tests del
+        detalle y del borrado cruzados pasarían con el recorte puesto."""
+        if not self.find_by_id(hora_id):
             return False
-        self.borradas.append((hora_id, str(empresa_id) if empresa_id else None))
+        self.borradas.append(str(hora_id))
         return True
 
 
@@ -140,49 +146,50 @@ def _cliente(vista, nombre: str):
 class TestAgrupamiento:
     def test_agrupa_por_cliente_y_no_devuelve_todo_junto(self, svc) -> None:
         """Tres grupos distintos. Con UN cliente esto pasaría sin agrupar nada."""
-        vista = svc.get_vista(8, 2026, EMPRESA_A)
-        assert [c.cliente_nombre for c in vista.clientes] == ["Acme", SIN_CLIENTE, "Globex"]
-        assert [c.horas for c in vista.clientes] == [9.0, 6.0, 5.0]   # ordenado por horas desc
+        vista = svc.get_vista(8, 2026)
+        assert [c.cliente_nombre for c in vista.clientes] == ["Globex", "Acme", SIN_CLIENTE]
+        # Globex pasó al frente: son sus 5 h de Karstec + 7 de Dosuba (L8). Ordenado por desc.
+        assert [c.horas for c in vista.clientes] == [12.0, 9.0, 6.0]
 
     def test_las_lineas_separan_empleados_dentro_del_cliente(self, svc) -> None:
-        acme = _cliente(svc.get_vista(8, 2026, EMPRESA_A), "Acme")
+        acme = _cliente(svc.get_vista(8, 2026), "Acme")
         assert {ln.empleado_nombre for ln in acme.lineas} == {"Ana Pérez", "Bruno Gómez"}
 
     def test_dos_cargas_de_la_misma_linea_se_suman_en_un_renglon(self, svc) -> None:
         """4 + 2 de Ana con la misma tarea y modalidad tienen que ser UN renglón de 6, no dos."""
-        acme = _cliente(svc.get_vista(8, 2026, EMPRESA_A), "Acme")
+        acme = _cliente(svc.get_vista(8, 2026), "Acme")
         ana = next(ln for ln in acme.lineas if ln.empleado_nombre == "Ana Pérez")
         assert (ana.horas, ana.registros) == (6.0, 2)
 
     def test_la_linea_lleva_tarea_y_modalidad(self, svc) -> None:
-        acme = _cliente(svc.get_vista(8, 2026, EMPRESA_A), "Acme")
+        acme = _cliente(svc.get_vista(8, 2026), "Acme")
         bruno = next(ln for ln in acme.lineas if ln.empleado_nombre == "Bruno Gómez")
         assert (bruno.tarea_texto, bruno.modalidad) == ("Soporte", "home_office")
 
     def test_las_cargas_del_camino_viejo_no_desaparecen(self, svc) -> None:
         """🔴 No tienen cliente. Descartarlas era lo cómodo en una pantalla que agrupa por
         cliente, y habría hecho que 6 horas cargadas y válidas se esfumen sin aviso."""
-        sin = _cliente(svc.get_vista(8, 2026, EMPRESA_A), SIN_CLIENTE)
+        sin = _cliente(svc.get_vista(8, 2026), SIN_CLIENTE)
         assert sin.cliente_id is None and sin.horas == 6.0
         assert sin.lineas[0].empleado_nombre == "Diego Sosa"
 
 
 class TestKPIs:
     def test_los_cuatro_salen_del_mismo_conjunto_que_la_tabla(self, svc) -> None:
-        vista = svc.get_vista(8, 2026, EMPRESA_A)
-        assert vista.kpis.horas_totales == 20.0          # 4+2+3+5+6
-        assert vista.kpis.registros == 5
+        vista = svc.get_vista(8, 2026)
+        assert vista.kpis.horas_totales == 27.0          # 4+2+3+5+6+7, las dos sociedades
+        assert vista.kpis.registros == 6
         assert vista.kpis.empleados_que_cargaron == 4    # Ana, Bruno, Carla, Diego
         assert vista.kpis.horas_totales == sum(c.horas for c in vista.clientes)
 
     def test_clientes_con_carga_no_cuenta_el_grupo_sin_cliente(self, svc) -> None:
         """Sumarlo daría un KPI que dice que hay un cliente más de los que RRHH tiene cargados."""
-        vista = svc.get_vista(8, 2026, EMPRESA_A)
+        vista = svc.get_vista(8, 2026)
         assert vista.kpis.clientes_con_carga == 2        # Acme y Globex, no el bucket
         assert len(vista.clientes) == 3
 
     def test_un_mes_sin_cargas_da_ceros_y_no_un_error(self, svc) -> None:
-        vista = svc.get_vista(1, 2026, EMPRESA_A)
+        vista = svc.get_vista(1, 2026)
         assert (vista.kpis.horas_totales, vista.kpis.registros) == (0.0, 0)
         assert vista.clientes == []
 
@@ -201,36 +208,70 @@ class TestKPIs:
 class TestFiltroDeMes:
     def test_el_primer_dia_del_mes_entra(self, svc) -> None:
         """La carga del 1/8 es de Globex: si el borde estuviera mal, ese cliente desaparecería."""
-        assert "Globex" in [c.cliente_nombre for c in svc.get_vista(8, 2026, EMPRESA_A).clientes]
+        assert "Globex" in [c.cliente_nombre for c in svc.get_vista(8, 2026).clientes]
 
     def test_el_ultimo_dia_del_mes_entra(self, svc) -> None:
         """La del 31/8 es la del camino viejo. Un `<` en vez de `<=` la dejaría afuera."""
-        assert SIN_CLIENTE in [c.cliente_nombre for c in svc.get_vista(8, 2026, EMPRESA_A).clientes]
+        assert SIN_CLIENTE in [c.cliente_nombre for c in svc.get_vista(8, 2026).clientes]
 
     def test_los_dias_de_los_meses_vecinos_no_entran(self, svc) -> None:
         """El 31/7 (99 h) y el 1/9 (88 h) están en el padrón a propósito: si el rango se
         desbordara un día para cualquier lado, el total lo gritaría."""
-        assert svc.get_vista(8, 2026, EMPRESA_A).kpis.horas_totales == 20.0
+        assert svc.get_vista(8, 2026).kpis.horas_totales == 27.0
 
     def test_el_mes_vecino_ve_sus_filas_y_no_las_de_agosto(self, svc) -> None:
-        assert svc.get_vista(7, 2026, EMPRESA_A).kpis.horas_totales == 99.0
-        assert svc.get_vista(9, 2026, EMPRESA_A).kpis.horas_totales == 88.0
+        assert svc.get_vista(7, 2026).kpis.horas_totales == 99.0
+        assert svc.get_vista(9, 2026).kpis.horas_totales == 88.0
 
 
-# ── Consolidado vs empresa ────────────────────────────────────────────────────
+# ── El total es del CLIENTE, no de la sociedad ────────────────────────────────
 
 
-class TestBarreraDeEmpresa:
-    def test_consolidado_y_empresa_elegida_dan_conjuntos_distintos(self, svc) -> None:
-        """🔴 Con un padrón de una sola empresa esto pasaría con la barrera borrada."""
-        consolidado = svc.get_vista(8, 2026, None)
-        propia = svc.get_vista(8, 2026, EMPRESA_A)
-        assert consolidado.kpis.horas_totales == 27.0    # 20 + las 7 de la otra empresa
-        assert propia.kpis.horas_totales == 20.0
-        assert consolidado.kpis.registros != propia.kpis.registros
+class TestElTotalNoSeRecorta:
+    """🔴 EL BLOQUE QUE SOSTIENE LA DECISIÓN DE L8, e INVIERTE al que estaba acá.
 
-    def test_la_otra_empresa_ve_solo_lo_suyo(self, svc) -> None:
-        assert svc.get_vista(8, 2026, EMPRESA_B).kpis.horas_totales == 7.0
+    Antes esto era `TestBarreraDeEmpresa` y afirmaba que consolidado y empresa elegida daban
+    conjuntos DISTINTOS. Se decidió al revés: las empresas son sociedades de un mismo grupo, así
+    que las horas que consume un cliente son las horas del cliente, venga de donde venga el
+    empleado que las cargó.
+
+    ¿Qué tendría que ser distinto en el fake para que esto falle? Que `_FILAS` tuviera un cliente
+    por empresa. Globex recibe 5 h de Karstec (EMPRESA_A) y 7 h de Dosuba (EMPRESA_B): **el mismo
+    cliente, dos sociedades**. Con un cliente por empresa, "recorta" y "no recorta" darían el
+    mismo número y no habría nada que desmentir.
+    """
+
+    def test_globex_suma_las_dos_sociedades(self, svc) -> None:
+        """5 h de Karstec + 7 h de Dosuba = 12. Es el caso concreto del diagnóstico."""
+        assert _cliente(svc.get_vista(8, 2026), "Globex").horas == 12.0
+
+    def test_el_total_es_el_mismo_no_importa_el_sidebar(self, svc) -> None:
+        """🔴 El service ya no RECIBE la empresa, así que los tres "modos" del sidebar (A, B y
+        consolidado) producen exactamente la misma llamada y el mismo número. Se afirma sobre lo
+        que ve el usuario: 27 h totales y Globex con 12, en los tres."""
+        vista = svc.get_vista(8, 2026)
+        assert vista.kpis.horas_totales == 27.0
+        assert _cliente(vista, "Globex").horas == 12.0
+        import inspect
+        params = inspect.signature(svc.get_vista).parameters
+        assert "empresa_id" not in params, "volvió a aceptar la empresa: el sidebar podría recortar"
+
+    def test_el_desglose_reparte_las_mismas_horas_por_sociedad(self, svc) -> None:
+        """El reparto no se pierde: se muestra adentro del cliente. Y su suma ES el total — sin
+        esa igualdad, el desglose podría estar contando cualquier otra cosa."""
+        globex = _cliente(svc.get_vista(8, 2026), "Globex")
+        reparto = {e.empresa_nombre: e.horas for e in globex.por_empresa}
+        assert reparto == {"Dosuba": 7.0, "Karstec": 5.0}
+        assert round(sum(reparto.values()), 2) == globex.horas
+
+    def test_el_desglose_ordena_por_horas_desc(self, svc) -> None:
+        globex = _cliente(svc.get_vista(8, 2026), "Globex")
+        assert [e.empresa_nombre for e in globex.por_empresa] == ["Dosuba", "Karstec"]
+
+    def test_un_cliente_de_una_sola_sociedad_tiene_un_solo_renglon(self, svc) -> None:
+        """El contraste: sin esto, un desglose que devolviera SIEMPRE las dos empresas pasaría."""
+        acme = _cliente(svc.get_vista(8, 2026), "Acme")
+        assert [(e.empresa_nombre, e.horas) for e in acme.por_empresa] == [("Karstec", 9.0)]
 
 
 # ── Listado y export: el MISMO conjunto ───────────────────────────────────────
@@ -241,20 +282,43 @@ class TestParidadListadoExport:
         """Invariante 1 del bloque B: los dos entran por `_filas`, así que el archivo no puede
         traer filas que la pantalla no muestre. Se compara el CONTEO de registros del KPI contra
         las filas proyectadas al Excel."""
-        vista = svc.get_vista(8, 2026, EMPRESA_A)
-        filas = construir_filas_export(repo.find_por_periodo("2026-08-01", "2026-08-31", EMPRESA_A))
+        vista = svc.get_vista(8, 2026)
+        filas = construir_filas_export(repo.find_por_periodo("2026-08-01", "2026-08-31"))
         assert len(filas) == vista.kpis.registros
         assert sum(f["Horas"] for f in filas) == vista.kpis.horas_totales
 
-    def test_el_export_respeta_el_mismo_filtro_de_empresa(self, repo) -> None:
-        consolidado = construir_filas_export(repo.find_por_periodo("2026-08-01", "2026-08-31"))
-        propia = construir_filas_export(
-            repo.find_por_periodo("2026-08-01", "2026-08-31", EMPRESA_A))
-        assert len(consolidado) > len(propia)
+    def test_el_export_tampoco_se_recorta_por_empresa(self, repo, monkeypatch) -> None:
+        """Invertido junto con el listado (L8): el archivo trae las dos sociedades, y la columna
+        "Empresa" permite reconstruir el reparto desde el Excel.
+
+        🔴 VA POR `svc.exportar()`, NO por `construir_filas_export(repo.find_por_periodo(...))`.
+        La versión anterior de este test armaba las filas a mano desde el repo y NUNCA entraba al
+        service: `exportar` podía recortar por empresa y ningún test se enteraba. Lo detectó la
+        corrida de mutación de L8 —recortar el export dejó los 34 en verde—, no la lectura.
+        Se captura lo que el service le pasa al motor de export, que es el archivo que sale."""
+        capturado: dict = {}
+        monkeypatch.setattr(svc_mod, "build_export",
+                            lambda **kw: capturado.update(kw) or _DESCARGA)
+
+        HorasClienteService(repo=repo, audit=_AuditoriaFalsa()).exportar(8, 2026)
+
+        filas = capturado["datos"]["Horas"]
+        assert {f["Empresa"] for f in filas} == {"Karstec", "Dosuba"}
+        assert sum(f["Horas"] for f in filas) == 27.0
+
+    def test_el_export_sale_por_el_motor_comun(self, repo, monkeypatch) -> None:
+        """El contraste: sin esto, "el service no recorta" pasaría con un `exportar` que no
+        llamara a nada. Verifica que el nombre y el formato llegan al motor."""
+        capturado: dict = {}
+        monkeypatch.setattr(svc_mod, "build_export",
+                            lambda **kw: capturado.update(kw) or _DESCARGA)
+        HorasClienteService(repo=repo, audit=_AuditoriaFalsa()).exportar(8, 2026, formato="csv")
+        assert capturado["formato"] == "csv"
+        assert capturado["filename_base"] == "horas-por-cliente"
 
     def test_el_export_es_plano_y_nombra_el_grupo_sin_cliente(self, repo) -> None:
         """Una celda vacía se lee como un dato que falta; acá significa algo concreto."""
-        filas = construir_filas_export(repo.find_por_periodo("2026-08-01", "2026-08-31", EMPRESA_A))
+        filas = construir_filas_export(repo.find_por_periodo("2026-08-01", "2026-08-31"))
         assert any(f["Cliente"] == "Sin cliente" for f in filas)
         assert all(isinstance(f["Horas"], float) for f in filas)   # escalares, no árboles
 
@@ -263,21 +327,41 @@ class TestParidadListadoExport:
 
 
 class TestDetalleYBaja:
+    """🔴 El detalle y la baja tampoco se recortan por empresa (L9).
+
+    ¿Qué tendría que ser distinto en el fake para que estos tests fallen? Que `_FILAS` tuviera
+    todas las cargas de una sola sociedad. La fila 5 es de EMPRESA_B (Carla/Dosuba) contra el
+    MISMO cliente que la 3: es la única que puede desmentir "cruza empresas". Y `_RepoFalso` ya no
+    acepta `empresa_id` en ninguno de los tres métodos, así que un service que volviera a pasarlo
+    revienta acá en vez de pasar en silencio.
+
+    ⚠️ Estos tests atraviesan el SERVICE (`svc.get_detalle`, `svc.eliminar`), no arman el
+    resultado por su cuenta. Lo que NO atraviesan es el router — ver la nota al pie del archivo."""
+
     def test_el_detalle_trae_las_cargas_del_empleado_con_su_id(self, svc) -> None:
         """El `id` es lo que la pantalla necesita para poder borrar."""
-        det = svc.get_detalle(ANA, 8, 2026, EMPRESA_A)
+        det = svc.get_detalle(ANA, 8, 2026)
         assert det.total_horas == 6.0 and len(det.items) == 2
         assert all(i.id for i in det.items)
 
     def test_el_detalle_no_trae_las_de_otro_empleado(self, svc) -> None:
-        assert svc.get_detalle(BRUNO, 8, 2026, EMPRESA_A).total_horas == 3.0
+        assert svc.get_detalle(BRUNO, 8, 2026).total_horas == 3.0
+
+    def test_el_detalle_de_un_empleado_de_otra_sociedad_trae_sus_horas(self, svc) -> None:
+        """🔴 EL CASO QUE L9 VIENE A CERRAR. Carla tiene 5 h en EMPRESA_A y 7 h en EMPRESA_B.
+        Antes, con el sidebar en A, este modal se abría con las 5 —o vacío si se la miraba desde
+        B—. Ahora trae las 12: el detalle es del empleado, no de la sociedad desde la que se mira.
+        Si el recorte volviera, este número baja."""
+        det = svc.get_detalle(CARLA, 8, 2026)
+        assert det.total_horas == 12.0
+        assert {str(i.empresa_id) for i in det.items} == {str(EMPRESA_A), str(EMPRESA_B)}
 
     def test_borra_y_audita_con_la_empresa_de_la_entidad(self, svc, repo, auditoria) -> None:
         """🔴 Se llama en modo CONSOLIDADO (empresa_id=None) sobre una fila de EMPRESA_A: el
         header vale None y la entidad vale A, así que solo un payload que lea la ENTIDAD puede
         dar A. Con las dos coincidiendo, el test no podría desmentir de dónde salió."""
         fila = _FILAS[0]
-        svc.eliminar(fila.id, None, "usuario-1")
+        svc.eliminar(fila.id, "usuario-1")
         ev = auditoria.eventos[0]
         assert (ev["accion"], ev["evento"], ev["entidad"]) == ("DELETE", "baja_hora", "hora")
         assert ev["empresa_id"] is not None, "se etiquetó con el header (None)"
@@ -287,31 +371,36 @@ class TestDetalleYBaja:
     def test_el_evento_no_lleva_campos_derivados_de_joins(self, svc, auditoria) -> None:
         """`cliente_nombre` y `empleado_nombre` son resultado de CÓMO se leyó la fila, no datos
         del registro. Un diff que los incluya registra cambios que nunca ocurrieron."""
-        svc.eliminar(_FILAS[0].id, EMPRESA_A, "usuario-1")
+        svc.eliminar(_FILAS[0].id, "usuario-1")
         anteriores = auditoria.eventos[0]["datos_anteriores"]
         assert not {"cliente_nombre", "empleado_nombre", "empleado_empresa_nombre", "costo"} \
             & set(anteriores)
         assert anteriores["horas"] == 4.0
 
-    def test_una_carga_de_otra_empresa_da_404_y_no_borra(self, svc, repo, auditoria) -> None:
+    def test_una_carga_de_otra_sociedad_se_borra(self, svc, repo, auditoria) -> None:
+        """🔴 INVERTIDO. Este test afirmaba que una carga de EMPRESA_B daba 404 mirándola desde A.
+        Ahora se borra: la carga es del cliente, y quién la mira no cambia de quién es. El evento
+        se sigue etiquetando con la empresa de la ENTIDAD (B), no con la de quien la borró."""
         ajena = _FILAS[5]                       # es de EMPRESA_B
+        svc.eliminar(ajena.id, "usuario-1")
+        assert repo.borradas == [str(ajena.id)]
+        assert str(auditoria.eventos[0]["empresa_id"]) == str(EMPRESA_B)
+
+    def test_una_inexistente_sigue_dando_404(self, svc, repo, auditoria) -> None:
+        """🔴 EL CONTRASTE, sin el cual los dos de arriba pasarían con un repo que no filtra NADA.
+        Al sacar el recorte por empresa, lo único que separa "esta fila" de "cualquier fila" es el
+        id — así que un `find_by_id` que devolviera siempre algo tiene que verse acá."""
         with pytest.raises(AppError) as exc:
-            svc.eliminar(ajena.id, EMPRESA_A, "usuario-1")
+            svc.eliminar(UUID("11111111-1111-1111-1111-111111111111"), "u")
         assert (exc.value.code, exc.value.status_code) == ("HORA_NOT_FOUND", 404)
         assert repo.borradas == [] and auditoria.eventos == []
 
-    def test_una_inexistente_da_el_mismo_404_que_una_ajena(self, svc) -> None:
-        with pytest.raises(AppError) as ajena:
-            svc.eliminar(_FILAS[5].id, EMPRESA_A, "u")
-        with pytest.raises(AppError) as inexistente:
-            svc.eliminar(UUID("11111111-1111-1111-1111-111111111111"), EMPRESA_A, "u")
-        assert (ajena.value.code, ajena.value.message) == \
-               (inexistente.value.code, inexistente.value.message)
-
-    def test_la_barrera_viaja_en_el_delete_y_no_solo_en_la_lectura(self, svc, repo) -> None:
-        """Sin el `.eq` en el delete, la fila ya no estaría cuando la relectura devolviera None."""
-        svc.eliminar(_FILAS[0].id, EMPRESA_A, "u")
-        assert repo.borradas == [(str(_FILAS[0].id), str(EMPRESA_A))]
+    def test_el_id_viaja_en_el_delete_y_no_solo_en_la_lectura(self, svc, repo) -> None:
+        """Sin el `.eq("id")` en el delete, la fila ya no estaría cuando la relectura devolviera
+        None. Desde L9 ese `.eq` es la ÚNICA guarda de la query: antes había además un
+        `.eq("empresa_id")` que acotaba el daño de un descuido a una sola sociedad."""
+        svc.eliminar(_FILAS[0].id, "u")
+        assert repo.borradas == [str(_FILAS[0].id)]
 
 
 class TestEditarNoExiste:
@@ -363,34 +452,78 @@ class TestElRepoReal:
              "asignacion_id": None, "proyecto_id": None, "modalidad": "on_site",
              "proyecto_texto": None, "tarea_texto": None, "descripcion": None,
              "created_at": AHORA},
+            # 🔴 CARLA otra vez, pero en EMPRESA_A: es la única forma de que `find_por_empleado`
+            # pueda desmentir un recorte por empresa CONTRA LA QUERY REAL. Con Carla en una sola
+            # sociedad, "trae las dos" y "trae la suya" darían el mismo resultado.
+            {"id": "cccccccc-0000-4000-8000-000000000003", "empresa_id": str(EMPRESA_A),
+             "empleado_empresa_id": str(EMPRESA_A), "empleado_id": str(CARLA), "cliente_id": None,
+             "fecha": "2026-08-11", "horas": 5.0, "valor_hora_snapshot": None,
+             "asignacion_id": None, "proyecto_id": None, "modalidad": "on_site",
+             "proyecto_texto": None, "tarea_texto": None, "descripcion": None,
+             "created_at": AHORA},
         ], "empleados": [], "empresas": [], "clientes": [], "proyecto_asignaciones": []})
         monkeypatch.setattr(repo_mod, "supabase_admin", a)
         monkeypatch.setattr(hora_row, "supabase_admin", a)
         return a
 
-    def test_el_listado_filtra_por_empresa_en_la_query(self, almacen) -> None:
+    def test_el_listado_no_filtra_por_empresa_en_la_query(self, almacen) -> None:
+        """🔴 Invertido en L8, y contra la query REAL. El padrón del almacén tiene una fila de
+        cada empresa: si el WHERE volviera a llevar `empresa_id`, traería menos."""
         import repositories._horas_vista_repo as repo_mod
-        propias = repo_mod.find_por_periodo("2026-08-01", "2026-08-31", EMPRESA_A)
-        todas = repo_mod.find_por_periodo("2026-08-01", "2026-08-31", None)
-        assert len(propias) == 1 and len(todas) == 2
+        assert len(repo_mod.find_por_periodo("2026-08-01", "2026-08-31")) == 3
 
     def test_el_rango_de_fechas_viaja_en_la_query(self, almacen) -> None:
         import repositories._horas_vista_repo as repo_mod
-        assert repo_mod.find_por_periodo("2026-09-01", "2026-09-30", None) == []
+        assert repo_mod.find_por_periodo("2026-09-01", "2026-09-30") == []
 
-    def test_borrar_una_fila_ajena_no_la_borra(self, almacen) -> None:
-        """🔴 EL TEST QUE LA MUTACIÓN PEDÍA. Sin el `.eq("empresa_id")` en el DELETE, la fila de
-        la otra empresa desaparecería del catálogo y esto rojea."""
+    def test_find_by_id_alcanza_una_fila_de_otra_sociedad(self, almacen) -> None:
+        """🔴 LO DETECTÓ UNA MUTACIÓN, NO LA LECTURA. Volver a filtrar por empresa en el
+        `find_by_id` REAL dejaba los 37 tests en verde: los del borrado cruzado van por el
+        service, que usa `_RepoFalso`, así que la QUERY real no la miraba nadie. Es el mismo
+        agujero que L8 encontró en el export."""
         import repositories._horas_vista_repo as repo_mod
-        ajena = "bbbbbbbb-0000-4000-8000-000000000002"
-        assert repo_mod.delete(ajena, EMPRESA_A) is False
-        assert any(f["id"] == ajena for f in almacen.catalogo["horas_proyecto"])
+        otra = "bbbbbbbb-0000-4000-8000-000000000002"
+        fila = repo_mod.find_by_id(otra)
+        assert fila is not None and str(fila.id) == otra
+
+    def test_find_por_empleado_trae_las_cargas_de_las_dos_sociedades(self, almacen) -> None:
+        """Ídem: Carla tiene una carga en cada sociedad. Si la query volviera a recortar, trae 1."""
+        import repositories._horas_vista_repo as repo_mod
+        filas = repo_mod.find_por_empleado(str(CARLA), "2026-08-01", "2026-08-31")
+        assert len(filas) == 2
+        assert {str(f.empresa_id) for f in filas} == {str(EMPRESA_A), str(EMPRESA_B)}
+
+    def test_el_delete_se_lleva_solo_la_fila_del_id(self, almacen) -> None:
+        """🔴 EL TEST QUE MÁS IMPORTA DE L9, y contra la query REAL.
+
+        Al sacar el `.eq("empresa_id")` del DELETE, el `.eq("id")` quedó como ÚNICA guarda de esa
+        query: sin él, el DELETE alcanza la tabla entera. Antes un descuido ahí se llevaba una
+        sociedad; ahora se lleva todo.
+
+        Las DOS mitades hacen falta: que devuelva True dice que borró algo, que la OTRA fila siga
+        en el catálogo dice que no borró de más. Con una sola fila en el almacén no habría con qué
+        contrastar — por eso el padrón tiene una de cada sociedad."""
+        import repositories._horas_vista_repo as repo_mod
+        una = "aaaaaaaa-0000-4000-8000-000000000001"
+        otra = "bbbbbbbb-0000-4000-8000-000000000002"
+
+        assert repo_mod.delete(una) is True
+
+        quedan = [f["id"] for f in almacen.catalogo["horas_proyecto"]]
+        assert quedan == [otra, "cccccccc-0000-4000-8000-000000000003"], \
+            "el DELETE se llevó filas que no eran la del id"
         _, filtros, _ = almacen.escrituras[0]
-        assert ("empresa_id", str(EMPRESA_A)) in filtros
+        assert ("id", una) in filtros, "el id no viajó en la query"
 
-    def test_borrar_la_propia_si_la_borra(self, almacen) -> None:
-        """El contraste: sin esto, "no borra la ajena" pasaría con un delete que no borra nada."""
+    def test_borrar_una_de_otra_sociedad_ahora_si_la_borra(self, almacen) -> None:
+        """🔴 INVERTIDO. Este test afirmaba que la fila de la otra empresa NO se borraba."""
         import repositories._horas_vista_repo as repo_mod
-        propia = "aaaaaaaa-0000-4000-8000-000000000001"
-        assert repo_mod.delete(propia, EMPRESA_A) is True
-        assert not any(f["id"] == propia for f in almacen.catalogo["horas_proyecto"])
+        otra = "bbbbbbbb-0000-4000-8000-000000000002"
+        assert repo_mod.delete(otra) is True
+        assert not any(f["id"] == otra for f in almacen.catalogo["horas_proyecto"])
+
+    def test_borrar_un_id_inexistente_no_toca_nada(self, almacen) -> None:
+        """El contraste: sin esto, "borra la del id" pasaría con un delete que borra siempre."""
+        import repositories._horas_vista_repo as repo_mod
+        assert repo_mod.delete("dddddddd-0000-4000-8000-000000000009") is False
+        assert len(almacen.catalogo["horas_proyecto"]) == 3

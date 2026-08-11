@@ -8,14 +8,11 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { fetchEmpresas } from "@/services/empresas"
-import { getEmpresaActivaId } from "@/services/empresaStore"
 import { mensajeDeError } from "@/components/features/clientes/erroresCliente"
 import {
   guardarCliente, MAX_NOMBRE, type ErroresCliente,
 } from "@/components/features/clientes/guardarCliente"
 import type { Cliente } from "@/types/cliente"
-import type { Empresa } from "@/types/empresa"
 
 interface Props {
   open: boolean
@@ -24,10 +21,12 @@ interface Props {
   cliente?: Cliente
 }
 
-const SEL = "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-
 /**
- * Alta y edición de un cliente.
+ * Alta y edición de un cliente. Un solo campo: el nombre.
+ *
+ * 🔴 NO HAY SELECTOR DE EMPRESA (migración 108). Un cliente no pertenece a ninguna, así que el
+ * alta no tiene nada que elegir y el modal no lee el selector del sidebar. Antes había un
+ * `<select>` acá y una validación "Requerido"; los dos desaparecieron con el campo.
  *
  * La validación y el envío viven en `guardarCliente.ts`, que es la ÚNICA puerta de esta pantalla
  * a los services de escritura. El porqué está en el encabezado de ese archivo (Radix monta por
@@ -41,28 +40,15 @@ const SEL = "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 tex
 export function ClienteModal({ open, onClose, onSuccess, cliente }: Props) {
   const isEdit = Boolean(cliente)
   const [nombre, setNombre] = useState("")
-  const [empresaId, setEmpresaId] = useState("")
-  const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [errores, setErrores] = useState<ErroresCliente>({})
   const [serverError, setServerError] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     setNombre(cliente?.nombre ?? "")
-    // Preseleccionada con la empresa activa: con una empresa elegida en el sidebar el alta sigue
-    // siendo un solo click. En modo consolidado queda "" y la validación lo frena — que es la
-    // diferencia con el bug: antes ese "" salía a la red y volvía como 422.
-    setEmpresaId(cliente?.empresa_id ?? getEmpresaActivaId() ?? "")
     setErrores({})
     setServerError("")
   }, [cliente, open])
-
-  useEffect(() => {
-    // Solo en el alta: `empresa_id` no es editable, así que en la edición el select no se muestra
-    // y pedir el listado sería una ida a la red para llenar un control que no existe.
-    if (!open || isEdit) return
-    fetchEmpresas().then((r) => setEmpresas(r.items.filter((e) => e.activa))).catch(() => {})
-  }, [open, isEdit])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -70,15 +56,15 @@ export function ClienteModal({ open, onClose, onSuccess, cliente }: Props) {
     setErrores({})
     setServerError("")
     try {
-      const errs = await guardarCliente({ nombre, empresaId }, cliente)
+      const errs = await guardarCliente({ nombre }, cliente)
       if (errs) {
         setErrores(errs)
         return
       }
       onSuccess()
     } catch (e2) {
-      // El mensaje del backend se conserva: "Ya existe un cliente con ese nombre en la empresa"
-      // le dice al usuario qué hacer; un genérico lo deja tocando el botón. Ver erroresCliente.
+      // El mensaje del backend se conserva: "Ya existe un cliente con ese nombre" le dice al
+      // usuario qué hacer; un genérico lo deja tocando el botón. Ver erroresCliente.
       setServerError(mensajeDeError(e2))
     } finally {
       setSubmitting(false)
@@ -92,27 +78,6 @@ export function ClienteModal({ open, onClose, onSuccess, cliente }: Props) {
           <DialogTitle>{isEdit ? "Editar cliente" : "Nuevo cliente"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
-          {!isEdit && (
-            <div className="space-y-1.5">
-              <Label htmlFor="cliente-empresa">
-                Empresa <span className="text-destructive" aria-hidden>*</span>
-              </Label>
-              <select
-                id="cliente-empresa"
-                className={SEL}
-                value={empresaId}
-                aria-required
-                aria-invalid={Boolean(errores.empresa)}
-                onChange={(e) => setEmpresaId(e.target.value)}
-              >
-                <option value="">Seleccionar empresa</option>
-                {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-              </select>
-              {errores.empresa && (
-                <p className="text-sm text-destructive" role="alert">{errores.empresa}</p>
-              )}
-            </div>
-          )}
           <div className="space-y-1.5">
             <Label htmlFor="cliente-nombre">
               Nombre <span className="text-destructive" aria-hidden>*</span>

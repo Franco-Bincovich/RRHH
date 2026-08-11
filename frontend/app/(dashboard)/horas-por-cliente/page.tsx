@@ -81,6 +81,14 @@ export default function HorasPorClientePage() {
       <PageHeader title="Horas por cliente"
                   description={`${datos.kpis.horas_totales} horas cargadas`}
                   action={filtrosUI} />
+      {/* 🔴 En todas las demás pantallas el selector de empresa del sidebar filtra; acá no.
+          Sin decirlo, un operador que cambia de empresa y ve el mismo número cree que se
+          colgó. Lenguaje llano: los usuarios son cuatro personas de RRHH. */}
+      <p className="mb-4 rounded-lg border bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground">
+        Acá ves las horas completas de cada cliente, sumando todas las empresas. El selector de
+        empresa del menú no cambia estos números. Abrí un cliente para ver cuántas horas puso
+        cada empresa.
+      </p>
       <KPIsHorasPanel kpis={datos.kpis} />
       {datos.clientes.length === 0 ? (
         <EmptyState icon={<Clock />} title="Sin cargas en el período"

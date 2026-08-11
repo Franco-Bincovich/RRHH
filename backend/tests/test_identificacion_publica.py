@@ -9,8 +9,9 @@ dni es un identificador enumerable, no un secreto. Lo que estos tests custodian 
 
 **1. 🔴 El fake tendría que modelar UN SOLO modo de fallo.** "Rechazo único" y "rechazo distinto"
 son indistinguibles con un solo caso: con un único desenlace, cualquier implementación pasa.
-`_RepoFalso` modela los CINCO —dni inexistente, empleado de baja, empresa sin clientes, dni en dos
-empresas, y el bloqueo por límite— y las aserciones comparan los rechazos ENTRE SÍ, no contra un
+`_RepoFalso` modela los CINCO —dni inexistente, empleado de baja, SISTEMA sin clientes (desde la
+migración 108 ya no es "su empresa sin clientes"), dni en dos empresas, y el bloqueo por
+límite— y las aserciones comparan los rechazos ENTRE SÍ, no contra un
 literal escrito a mano. Un literal dejaría pasar el caso en que los cinco cambian juntos.
 
 **2. El fake tendría que devolver el mismo empleado para cualquier dni.** Devuelve filas
@@ -109,14 +110,18 @@ class _RepoFalso:
         self.intentos: list[dict] = []
         self.busquedas = 0
         self.consultas_clientes = 0
+        # 🔴 Estado del SISTEMA, no de una empresa (migración 108). Es un flag y no un lookup por
+        # empresa porque esa es exactamente la pregunta que el gate hace ahora; un fake que
+        # siguiera discriminando por empresa dejaría pasar un gate que volviera a filtrar.
+        self.hay_clientes = True
 
     def buscar_por_dni(self, dni: str) -> list:
         self.busquedas += 1
         return [dict(f) for f in _PADRON.get(dni, [])]
 
-    def hay_clientes_activos(self, empresa_id: str) -> bool:
+    def hay_clientes_activos(self) -> bool:
         self.consultas_clientes += 1
-        return empresa_id == EMPRESA_CON
+        return self.hay_clientes
 
     def registrar_intento(self, **kw) -> None:
         self.intentos.append(kw)
@@ -152,7 +157,7 @@ class TestRechazoUnico:
     """🔴 Los CINCO motivos salen exactamente igual. Se comparan ENTRE SÍ y no contra un literal:
     un literal escrito a mano dejaría pasar el caso en que los cinco cambian juntos."""
 
-    @pytest.mark.parametrize("dni", [DNI_INEXISTENTE, DNI_BAJA, DNI_SIN_CLIENTES, DNI_AMBIGUO])
+    @pytest.mark.parametrize("dni", [DNI_INEXISTENTE, DNI_BAJA, DNI_AMBIGUO])
     async def test_todos_dan_el_mismo_status_code_y_mensaje(self, repo, dni) -> None:
         base = await _rechazo(_svc(repo), DNI_INEXISTENTE)
         otro = await _rechazo(_svc(repo), dni)
@@ -253,12 +258,40 @@ class TestPayloadMinimo:
 class TestRegistroDeIntentos:
     @pytest.mark.parametrize("dni,esperado", [
         (DNI_INEXISTENTE, "sin_coincidencia"), (DNI_BAJA, "inactivo"),
-        (DNI_SIN_CLIENTES, "sin_clientes"), (DNI_AMBIGUO, "ambiguo"),
+        (DNI_AMBIGUO, "ambiguo"),
     ])
     async def test_cada_motivo_queda_registrado_con_su_nombre(self, repo, dni, esperado) -> None:
         """Hacia afuera son uno; adentro son cuatro. Sin esto el log no sirve para investigar."""
         await _rechazo(_svc(repo), dni)
         assert repo.intentos[0]["resultado"] == esperado
+
+    async def test_sin_clientes_en_el_sistema_se_registra_como_sin_clientes(self, repo) -> None:
+        """🔴 SALIÓ DEL PARAMETRIZE PORQUE DEJÓ DE DEPENDER DEL DNI (migración 108). El motivo ya
+        no es "la empresa de esta persona no tiene clientes" —eso dejaba afuera a media plantilla
+        con el sistema lleno— sino "no hay NINGÚN cliente activo". Se dispara con el estado del
+        sistema, así que cualquier dni válido sirve para probarlo."""
+        repo.hay_clientes = False
+        await _rechazo(_svc(repo), DNI_OK)
+        assert repo.intentos[0]["resultado"] == "sin_clientes"
+
+    async def test_con_clientes_el_mismo_dni_entra(self, repo) -> None:
+        """El contraste. Sin esto, un gate que devolviera siempre `sin_clientes` pasaría."""
+        assert (await _svc(repo).identificar(DNI_OK)).nombre == "Juan"
+
+    async def test_un_empleado_de_la_empresa_sin_clientes_propios_ahora_si_se_identifica(
+            self, repo) -> None:
+        """🔴 EL CASO QUE MOTIVA EL BLOQUE, medido en producción: los 3 clientes cargados son
+        todos de una sola de las dos sociedades. Sofía es de la OTRA (`EMPRESA_SIN`), y hasta la
+        107 el gate la rechazaba con `sin_clientes` — no podía ni identificarse, con el sistema
+        lleno de clientes que ahora puede usar.
+
+        Lo que hace falsable el test: `EMPRESA_SIN` sigue existiendo en el padrón y sigue sin
+        tener clientes PROPIOS. Si el gate volviera a preguntar por la empresa del empleado, esto
+        rojea."""
+        r = await _svc(repo).identificar(DNI_SIN_CLIENTES)
+        assert r.nombre == "Sofía"
+        assert repo.intentos[0]["resultado"] == "ok"
+        assert repo.intentos[0]["empresa_id"] == EMPRESA_SIN
 
     async def test_el_bloqueo_se_registra_como_bloqueado(self, repo) -> None:
         await _rechazo(_svc(repo, bloquea=True), DNI_OK)
@@ -333,7 +366,7 @@ class TestElPisoDeTiempo:
         await _svc(repo).identificar(DNI_OK)
         assert perf_counter() - t0 >= 0.12
 
-    @pytest.mark.parametrize("dni", [DNI_INEXISTENTE, DNI_BAJA, DNI_SIN_CLIENTES, DNI_AMBIGUO])
+    @pytest.mark.parametrize("dni", [DNI_INEXISTENTE, DNI_BAJA, DNI_AMBIGUO])
     async def test_todos_los_rechazos_esperan_el_mismo_piso(self, repo, dni) -> None:
         """🔴 El canal que el mensaje uniforme no cierra: un dni inexistente se resuelve con UNA
         query y uno que existe dispara dos. Sin el piso esa diferencia es medible desde afuera."""

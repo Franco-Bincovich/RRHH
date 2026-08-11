@@ -1,0 +1,66 @@
+-- 108_clientes_global_preparacion.sql
+--
+-- QUÉ HACE: saca la EXIGENCIA de `clientes.empresa_id` y reemplaza el índice único por empresa
+-- por uno GLOBAL. NO borra nada. La columna, su FK y sus índices viejos se van en la 109.
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- QUÉ DECISIÓN REVIERTE
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- La 102 dejó escrito, textual: «`empresa_id` NOT NULL: un cliente es de UNA empresa del grupo.
+-- No hay clientes globales — a diferencia de `tipos_ausencia`, donde el catálogo base sí es
+-- compartido. Acá dos empresas que le facturen al mismo cliente real son dos filas, porque la
+-- relación comercial es de cada sociedad.»
+--
+-- Eso se revierte por decisión de producto: un cliente NO pertenece a ninguna empresa. Se ve, se
+-- crea y se da de baja con el selector del sidebar en cualquier modo, y cualquier empleado imputa
+-- horas contra cualquier cliente. El catálogo pasa a comportarse como `tipos_ausencia`.
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- 🔴 POR QUÉ ESTÁ PARTIDA EN DOS MIGRACIONES (108 preparación / 109 limpieza)
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- Porque el código viejo y el nuevo NO pueden convivir con un solo paso, y el deploy no es
+-- atómico: la base se migra antes que el código, y hay una ventana en la que corren juntos.
+--
+--   · Si se DROPEARA la columna acá, el código viejo —que aún está sirviendo tráfico— hace
+--     `INSERT ... (empresa_id, nombre)` y `SELECT *` con `ClienteResponse.empresa_id` obligatorio.
+--     Las dos cosas revientan: el INSERT contra una columna inexistente (42703) y el SELECT en el
+--     `model_validate` de Pydantic. Todo el módulo de clientes en 500 hasta que salga el código.
+--
+--   · Con SOLO el DROP NOT NULL, el código viejo sigue andando IGUAL: manda `empresa_id` y la
+--     columna lo acepta. Y el código nuevo también anda: no lo manda y la columna admite NULL.
+--     Los dos conviven. Esa es toda la razón del corte.
+--
+-- 🔴 QUÉ PASA SI ESTA MIGRACIÓN SE CORRE SOLA, SIN EL CÓDIGO NUEVO: **nada**. Es el caso normal
+-- y es el orden correcto. `NOT NULL` es una exigencia, no un default: sacarla no cambia ninguna
+-- fila existente ni el comportamiento de ningún INSERT que siga mandando el valor. La migración
+-- es segura de correr en cualquier momento ANTES del deploy, y hay que correrla antes: el código
+-- nuevo deja de mandar `empresa_id`, así que contra la columna todavía NOT NULL su primer alta
+-- fallaría con un 23502.
+--
+-- ⚠️ AL REVÉS NO: el código nuevo NO se puede desplegar antes que esta migración.
+--
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- EL ÍNDICE ÚNICO — mismo criterio, sin la empresa
+-- ─────────────────────────────────────────────────────────────────────────────────────────
+-- `ux_clientes_nombre_por_empresa (empresa_id, lower(nombre))` deja de tener sentido: sin empresa,
+-- su primera columna es siempre NULL y en Postgres los NULL no colisionan entre sí, así que el
+-- índice dejaría de impedir CUALQUIER duplicado. O sea que no alcanza con dropearlo después: hay
+-- que poner el global ACÁ, en el mismo paso, o queda una ventana sin ninguna unicidad.
+--
+-- Se conserva el `lower()`: con cuatro personas de RRHH tipeando a mano, "Acme" y "ACME" son el
+-- caso normal, no el borde. El razonamiento completo está en la 102 y no cambió — lo único que
+-- cambia es el alcance.
+--
+-- ✅ VERIFICADO CONTRA PRODUCCIÓN HOY: 3 clientes, los tres con nombres distintos entre sí. El
+-- CREATE UNIQUE INDEX no colisiona. (Con nombres repetidos habría que deduplicar a mano ANTES:
+-- un índice único no se puede crear sobre datos que ya lo violan.)
+--
+-- ⚠️ El índice viejo NO se dropea acá: mientras el código viejo siga vivo, sigue siendo la
+-- garantía que sostiene su chequeo de duplicados. Se va en la 109 junto con la columna.
+-- ⚠️ Un índice por expresión NO sirve como target de `on_conflict` de PostgREST. No importa:
+-- clientes se da de alta con INSERT, nunca con upsert. (Misma nota que la 102.)
+
+ALTER TABLE public.clientes ALTER COLUMN empresa_id DROP NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_clientes_nombre_global
+    ON public.clientes USING btree (lower(nombre));

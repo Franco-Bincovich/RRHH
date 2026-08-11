@@ -1,7 +1,12 @@
-/** Espejo de backend/schemas/cliente.py. */
+/**
+ * Espejo de backend/schemas/cliente.py.
+ *
+ * 🔴 SIN `empresa_id` (migración 108): un cliente no pertenece a ninguna empresa. El catálogo es
+ * global — se ve, se crea y se da de baja con el selector del sidebar en cualquier modo, y
+ * cualquier empleado imputa horas contra cualquier cliente. Revierte la decisión de la 102.
+ */
 export interface Cliente {
   id: string
-  empresa_id: string
   nombre: string
   activo: boolean
   created_at: string
@@ -9,12 +14,9 @@ export interface Cliente {
 }
 
 export interface ClienteCreate {
-  empresa_id: string
   nombre: string
 }
 
-/** `empresa_id` NO es editable: mudar un cliente de empresa dejaría las horas ya cargadas
- *  imputadas a una sociedad que no es la que facturó. Espejo de ClienteUpdate del backend. */
 export interface ClienteUpdate {
   nombre?: string
   activo?: boolean

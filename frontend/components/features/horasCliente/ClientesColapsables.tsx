@@ -55,6 +55,18 @@ export function ClientesColapsables({ clientes, onVerDetalle }: Props) {
             </button>
             {abierto && (
               <div className="border-t">
+                {/* El reparto por sociedad. Va ARRIBA de las líneas y no como pantalla aparte:
+                    es la respuesta a "de estas horas, cuáles puso cada una". Con una sola
+                    sociedad se omite — un desglose de un solo renglón no desglosa nada. */}
+                {c.por_empresa.length > 1 && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+                    {c.por_empresa.map((e) => (
+                      <span key={e.empresa_nombre}>
+                        {e.empresa_nombre}: <span className="tabular-nums font-medium text-foreground">{e.horas} h</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {c.lineas.map((ln, i) => (
                   <div key={i} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
                     <div className="min-w-0">

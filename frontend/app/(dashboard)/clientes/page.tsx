@@ -94,7 +94,8 @@ export default function ClientesPage() {
               {incluirInactivos ? "Ocultar bajas" : "Ver bajas"}
             </Button>
             {/* El MISMO filtro que el listado: el archivo no puede traer filas que la pantalla
-                no muestre. La empresa la pone el header X-Empresa-Id, no un query param. */}
+                no muestre. El catálogo es GLOBAL (mig 108): no se acota por empresa por ningún
+                lado, ni por query param ni por el header X-Empresa-Id. */}
             <ExportMenu onExport={(formato) => exportarClientes(formato, filtros)} />
             {canWrite && (
               <Button className="min-h-11" onClick={abrirAlta}>

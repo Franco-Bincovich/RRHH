@@ -10,9 +10,15 @@ revés. Meter los dos modelos en el mismo archivo sugeriría un parentesco que n
 ClienteCreate → ClienteUpdate → ClienteResponse → ClienteListResponse. Molde: `schemas/area.py`,
 que es el otro catálogo por empresa que RRHH edita.
 
-`empresa_id` va explícito en el Create (empresa DUEÑA, del formulario) y NO sale del header
-`X-Empresa-Id`: crear un cliente es una ACCIÓN, y en modo consolidado el header es None. Es el
-principio Vista vs Acción, igual que `ProyectoCreate` y `AreaCreate`.
+🔴 UN CLIENTE NO PERTENECE A NINGUNA EMPRESA (migración 108). `empresa_id` no está en ninguno de
+los tres schemas — ni entra en el alta ni sale en la respuesta. Revierte la decisión de la 102
+("no hay clientes globales"): el catálogo pasa a comportarse como `tipos_ausencia`, se ve y se
+edita con el sidebar en cualquier modo, y cualquier empleado imputa horas contra cualquier
+cliente. Por eso acá tampoco aplica el Vista vs Acción: no hay empresa que elegir en ningún lado.
+
+⚠️ `ClienteResponse` se valida contra filas que TODAVÍA traen la columna (la 108 solo saca el
+NOT NULL; la columna se dropea en la 109). Pydantic ignora las claves de más, así que la
+respuesta simplemente deja de exponerla — y el día que la columna desaparezca, nada cambia acá.
 
 NO hay `ClienteDelete` ni el repo tiene `delete`, y no es un olvido: `horas_proyecto.cliente_id`
 es una FK sin ON DELETE, así que borrar un cliente con horas fallaría — y si no fallara, se
@@ -27,20 +33,16 @@ from pydantic import BaseModel, Field
 
 
 class ClienteCreate(BaseModel):
-    empresa_id: UUID
     nombre: str = Field(..., max_length=120)
 
 
 class ClienteUpdate(BaseModel):
-    # `empresa_id` NO es modificable: mudar un cliente de empresa dejaría las horas ya cargadas
-    # imputadas a una sociedad que no es la que facturó. Mismo criterio que ProyectoUpdate.
     nombre: Optional[str] = Field(default=None, max_length=120)
     activo: Optional[bool] = None
 
 
 class ClienteResponse(BaseModel):
     id: UUID
-    empresa_id: UUID
     nombre: str
     activo: bool
     created_at: datetime

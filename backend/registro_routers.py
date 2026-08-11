@@ -77,6 +77,7 @@ from routers.procesos import router as procesos_router
 from routers.proyectos import router as proyectos_router
 from routers.proyecto_asignaciones import router as proyecto_asignaciones_router
 from routers.horas_cliente import router as horas_cliente_router
+from routers.horas_cliente_escrituras import router as horas_cliente_escrituras_router
 from routers.proyecto_horas import router as proyecto_horas_router
 from routers.auditoria import router as auditoria_router
 from routers.adjuntos import router as adjuntos_router
@@ -156,6 +157,7 @@ def registrar(app: FastAPI) -> None:
     app.include_router(proyecto_asignaciones_router, prefix="/api/proyectos", tags=["proyectos"])
     app.include_router(proyecto_horas_router, prefix="/api/proyectos", tags=["proyectos"])
     app.include_router(horas_cliente_router, prefix="/api/horas-cliente", tags=["horas"])
+    app.include_router(horas_cliente_escrituras_router, prefix="/api/horas-cliente", tags=["horas"])  # mismo prefijo: las rutas no cambian
     app.include_router(auditoria_router, prefix="/api/auditoria", tags=["auditoria"])
     app.include_router(adjuntos_router, prefix="/api/adjuntos", tags=["adjuntos"])
     app.include_router(periodos_router, prefix="/api/periodos", tags=["periodos"])
