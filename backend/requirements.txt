@@ -1,6 +1,14 @@
-# HR Karstec — Backend dependencies
+# HR Karstec - Backend dependencies
 # Versiones exactas para evitar CVEs silenciosos (ver SEGURIDAD-PENTEST.md)
 # Actualizar mensualmente: pip-audit --fail-on-vuln
+#
+# SOLO ASCII EN ESTE ARCHIVO (comentarios incluidos). pip lo decodifica con
+# locale.getpreferredencoding(), que en Windows es cp1252, y cp1252 no mapea
+# 0x81/0x8D/0x8F/0x90/0x9D: un emoji ahi corta el install con UnicodeDecodeError,
+# no con un warning. La trampa: "!" (U+26A0) solo es inofensivo, pero el emoji
+# con selector de variacion (U+26A0 U+FE0F) agrega EF B8 8F y el 0x8F es fatal.
+# Los dos se ven IGUAL en el editor. Por eso la regla es ASCII, no "casi ASCII".
+# Guarda de regresion: tests/test_requirements_ascii.py
 
 PyJWT[crypto]==2.10.1
 fastapi==0.115.0
@@ -13,12 +21,12 @@ supabase==2.9.1
 anthropic==0.34.2
 slowapi==0.1.9
 resend==2.3.0
-# Extracción de texto de CVs en PDF (fase 2 del CV screening).
-# 🔴 PURO PYTHON (wheel py3-none-any, 297 KB / 1,16 MB descomprimido) y CERO dependencias
-# obligatorias en 3.11+: el único `Requires-Dist` sin extra es `typing_extensions`, y solo para
-# python<3.11. Sin binarios nativos, así que `@vercel/python` no tiene nada que compilar.
-# Licencia BSD. PyMuPDF quedó descartado por AGPL: es un producto comercial.
-# ⚠️ Los PDF cifrados con AES necesitan `cryptography`, que YA viene por PyJWT[crypto] y
+# Extraccion de texto de CVs en PDF (fase 2 del CV screening).
+# PURO PYTHON (wheel py3-none-any, 297 KB / 1,16 MB descomprimido) y CERO dependencias
+# obligatorias en 3.11+: el unico `Requires-Dist` sin extra es `typing_extensions`, y solo para
+# python<3.11. Sin binarios nativos, asi que `@vercel/python` no tiene nada que compilar.
+# Licencia BSD. PyMuPDF quedo descartado por AGPL: es un producto comercial.
+# OJO: los PDF cifrados con AES necesitan `cryptography`, que YA viene por PyJWT[crypto] y
 # python-jose[cryptography]. No se agrega el extra `pypdf[crypto]` para no duplicar el pin.
 pypdf==5.1.0
 openpyxl==3.1.5

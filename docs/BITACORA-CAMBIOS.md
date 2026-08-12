@@ -40,6 +40,68 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-12 · `pip install` roto en Windows: los `requirements*.txt` pasan a ASCII puro · commit pendiente
+
+**Qué cambió:** en la Lenovo, `pip install -r requirements.txt` **abortaba entero** con
+`UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 841`. No era pip roto ni
+el archivo corrupto: **`pip._internal.utils.encoding.auto_decode` decodifica el archivo con
+`locale.getpreferredencoding(False)`** salvo que encuentre un BOM o una cookie PEP-263 en las dos
+primeras líneas. En Windows ese locale es **cp1252**, que no mapea cinco bytes
+(`0x81 0x8D 0x8F 0x90 0x9D`). El `0x8F` salía del emoji **`⚠️` de un COMENTARIO** (línea 21 de
+`requirements.txt`): `U+FE0F` (VARIATION SELECTOR-16) se codifica `EF B8 8F` en UTF-8. Un
+comentario carteleaba el install completo — pip falla al decodificar el archivo, así que **no
+instalaba NADA**, no es que salteara una línea.
+
+**`requirements-dev.txt` tenía exactamente el mismo bug** (offset 1604, mismo `⚠️`), y como
+CLAUDE.md exige instalar los dos, el próximo que monte el entorno se choca dos veces.
+
+Los dos archivos pasaron a **ASCII puro** (acentos transliterados, emoji reemplazados por
+`IMPORTANTE:` / `OJO:`). **Ningún pin cambió**: 19 requisitos en prod y 4 en dev, idénticos,
+verificados parseando con el `auto_decode` de pip. Se agregó
+**`backend/tests/test_requirements_ascii.py`** (6 tests) como guarda de regresión.
+
+**Por qué ASCII y NO un BOM ni `# -*- coding: utf-8 -*-`:** las dos alternativas funcionan y las
+dos son peores. Dejan el archivo dependiendo de una heurística de pip —y la cookie **solo se lee
+en las DOS primeras líneas**, así que un comentario nuevo arriba la desactiva EN SILENCIO— y no
+cubren a ninguna otra herramienta que lea el archivo con el locale del sistema. ASCII puro no
+depende de pip, ni de su versión, ni del locale.
+
+🔴 **La trampa que hace que la regla sea ASCII y no "casi ASCII":** los acentos (`á` = `C3 A1`) y
+`🔴` (`F0 9F 94 B4`) **NO rompen** — cp1252 los mapea a mojibake y pip sigue de largo. Solo
+revientan esos cinco bytes. O sea que la regla real ("UTF-8 menos cinco bytes") es **invisible al
+ojo**: `⚠` (U+26A0) es inofensivo y `⚠️` (U+26A0 U+FE0F) es fatal, y **en el editor se ven
+IGUAL**. Una regla que nadie puede verificar mirando no es una regla.
+
+**Impacto en infraestructura:**
+
+- **Dependencias:** ninguna nueva, ninguna versión cambiada. Solo el encoding del archivo.
+- 🔴 **Para el dev de infra (es el punto de este hallazgo):** si montás el backend en Windows con
+  el locale por defecto, **te chocás con esto en el primer comando**, en los dos archivos. Ya está
+  arreglado en `main`; si trabajás sobre un clon viejo o un branch anterior al fix, el workaround
+  de una vez es `set PYTHONUTF8=1` (o `chcp 65001`) antes del `pip install` — pero la solución
+  real es traerse estos archivos. **En Linux/macOS/Docker/Vercel el bug NO aparece**: ahí el
+  locale ya es UTF-8, y por eso los deploys venían pasando sin que nadie lo notara. Es un bug
+  exclusivo del entorno de desarrollo Windows.
+- ⚠️ **Regla nueva a respetar en AWS y en cualquier `requirements*.txt` que se agregue:** ASCII
+  puro, comentarios incluidos. La cubre `tests/test_requirements_ascii.py`, que descubre los
+  archivos **por glob** (no por lista escrita a mano), así que un `requirements` nuevo queda
+  barrido solo. Lleva guarda de mínimo (`>= 2` archivos) y un test que **ancla el detector contra
+  los bytes históricos exactos** antes de creerle un verde.
+- **Migraciones / env vars / endpoints / buckets / auth / dominios:** ninguno.
+
+**Estado del entorno de la Lenovo al cerrar la sesión:** `pip install` de los dos requirements
+OK sin trucos (sin `PYTHONUTF8`, sin `chcp`), y **`pytest -q` → 3234 passed, 0 failed, 0 skipped**
+en 157 archivos. Faltaban instalar **`pypdf`** (el paquete cuyo bloque de comentarios traía
+justamente el `⚠️`) y **`ruff`** — este último no es cosmético: `tests/test_nombres_definidos.py`
+lo invoca y **falla, no se saltea**, si no está.
+
+> ⚠️ **Dato suelto para chequear en otra sesión, no bloqueante:** la suite da **3234** (3228 sin
+> los 6 tests nuevos) contra los **3280 documentados en CLAUDE.md** el 11/8, con 157 archivos
+> contra los 153 de esa medición. Todo verde y sin errores de colección ni skips, así que no hay
+> nada roto; o el número de CLAUDE.md quedó viejo o hay barridos parametrizados que hoy descubren
+> menos casos. No se investigó: excede el alcance de esta sesión.
+
+---
 ## 2026-08-11 · J5b — migración 112: drop de las 11 tablas muertas · commit pendiente
 
 **Qué cambió:** se escribió **`backend/migrations/112_drop_tablas_muertas.sql`** (🔴 DESTRUCTIVA,

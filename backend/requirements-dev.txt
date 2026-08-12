@@ -1,30 +1,34 @@
-# HR Karstec — Dependencias de desarrollo y testing
-# NUNCA incluir en requirements.txt de producción.
+# HR Karstec - Dependencias de desarrollo y testing
+# NUNCA incluir en requirements.txt de produccion.
 # Instalar con: pip install -r requirements-dev.txt
 #
-# Lección aprendida: mezclar deps de test en producción
-# infló la imagen de deploy y expuso surface de ataque innecesaria.
+# SOLO ASCII EN ESTE ARCHIVO. Misma razon que en requirements.txt: pip decodifica
+# con el encoding del locale (cp1252 en Windows) y un emoji con selector de
+# variacion revienta el install. El detalle completo esta escrito alla.
+#
+# Leccion aprendida: mezclar deps de test en produccion
+# inflo la imagen de deploy y expuso surface de ataque innecesaria.
 
-# Versiones EXACTAS, no `>=`. Con rangos abiertos cada máquina resolvió una
-# combinación distinta (Mac: pytest 9.1.1 + pytest-asyncio 1.4.0 · Windows:
-# pytest-asyncio 0.23.8, que ni siquiera cumplía el `>=0.24.0` que había acá).
-# Esa divergencia es la causa raíz de que en Windows los tests `async def` se
-# saltearan en silencio: la suite dependía de qué tenía instalado cada uno.
+# Versiones EXACTAS, no `>=`. Con rangos abiertos cada maquina resolvio una
+# combinacion distinta (Mac: pytest 9.1.1 + pytest-asyncio 1.4.0 - Windows:
+# pytest-asyncio 0.23.8, que ni siquiera cumplia el `>=0.24.0` que habia aca).
+# Esa divergencia es la causa raiz de que en Windows los tests `async def` se
+# saltearan en silencio: la suite dependia de que tenia instalado cada uno.
 pytest==9.1.1
 pytest-asyncio==1.4.0
 
-# httpx ya está en requirements.txt (lo usa el SDK de Supabase),
-# pero se declara acá para que los tests sean autocontenidos.
-# Misma versión exacta que producción, para no testear contra otro cliente.
+# httpx ya esta en requirements.txt (lo usa el SDK de Supabase),
+# pero se declara aca para que los tests sean autocontenidos.
+# Misma version exacta que produccion, para no testear contra otro cliente.
 httpx==0.27.2
 
-# 🔴 ruff es DEPENDENCIA DE LA SUITE, no solo una herramienta de escritorio.
+# IMPORTANTE: ruff es DEPENDENCIA DE LA SUITE, no solo una herramienta de escritorio.
 # `tests/test_nombres_definidos.py` lo invoca para barrer nombres sin definir (F821/F822/F823),
 # una clase de error que la suite sola no puede ver: un nombre libre no falla al importar, falla
-# cuando esa línea corre, y si el camino no está cubierto nadie se entera. Pasó dos veces el
+# cuando esa linea corre, y si el camino no esta cubierto nadie se entera. Paso dos veces el
 # 8/8/2026 (`_TA` en _ausencia_row, `user_id` en gmail_service).
-# Ese test FALLA si ruff no está —no se saltea—, por la misma lección que explica el bloque de
-# arriba: un skip silencioso deja la máquina sin la dependencia en verde y sin barrer nada.
-# ⚠️ NO se usa `ruff format` en este repo (ver CLAUDE.md): el código está en estilo compacto y
-# reformatearlo rompería los límites de líneas ya medidos. Acá se usa SOLO `ruff check`.
+# Ese test FALLA si ruff no esta -no se saltea-, por la misma leccion que explica el bloque de
+# arriba: un skip silencioso deja la maquina sin la dependencia en verde y sin barrer nada.
+# OJO: NO se usa `ruff format` en este repo (ver CLAUDE.md): el codigo esta en estilo compacto y
+# reformatearlo romperia los limites de lineas ya medidos. Aca se usa SOLO `ruff check`.
 ruff==0.16.0
