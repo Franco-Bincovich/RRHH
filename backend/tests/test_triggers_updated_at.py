@@ -37,10 +37,27 @@ _RAIZ = Path(__file__).resolve().parents[2]
 _SCHEMA = _RAIZ / "backend" / "db" / "schema.sql"
 _MIG_077 = _RAIZ / "migracionAWS" / "backend" / "migrations" / "077_recrear_triggers_updated_at.sql"
 
-# Mínimos: hoy son 41 y 41. Si el parseo se rompe, esto avisa en vez de comparar vacío
-# contra vacío. Subirlos cuando crezca de verdad es un renglón; bajarlos, nunca.
-_MIN_TABLAS = 41
-_MIN_TRIGGERS = 41
+# Mínimos: hoy schema.sql da 35 tablas con `updated_at` y la 077 da 35 triggers.
+#
+# 🔴 BAJARON DE 41 A 34 el 2026-08-11, y eso CONTRADICE la regla que este archivo tenía escrita
+# ("subirlos es un renglón; bajarlos, nunca"). La regla es correcta y sigue vigente para su caso:
+# existe para que nadie calle un rojo REAL aflojando la guarda. Acá no había rojo real — los dos
+# lados bajaron a 35 a la vez, porque el bloque J5 sacó once tablas muertas (J5a los 8 triggers
+# de la 077, J5b las tablas de schema.sql). Dejar 41 no habría protegido nada: habría bloqueado
+# la limpieza que el propio barrido exige en su segundo test.
+#
+# El mínimo NO es una igualdad: es un piso contra el parseo roto (si el regex deja de matchear,
+# las listas salen vacías y el barrido daría verde sobre cero comparaciones). Por eso queda
+# apenas debajo del valor real, que es el criterio que este archivo ya usaba (41 sobre 43).
+_MIN_TABLAS = 34
+_MIN_TRIGGERS = 34
+
+# 📌 Acá vivió `_PENDIENTES_DE_DROP_J5B` entre J5a y J5b: las 8 tablas que seguían en schema.sql
+# con `updated_at` mientras su trigger ya se había sacado de la 077. **Se borró el 2026-08-11 con
+# la migración 112**, junto con el test que la vigilaba — una excepción vacía y un test que la
+# mira son dos cosas que ya no pueden fallar, y este barrido vuelve a ser la igualdad estricta en
+# las dos direcciones que era antes. Si alguna vez hay que reabrir esa ventana, el molde está en
+# el historial de git; lo que NO hay que hacer es dejarla puesta "por si acaso".
 
 
 def _tablas_con_updated_at() -> set[str]:

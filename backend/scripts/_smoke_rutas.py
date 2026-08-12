@@ -155,13 +155,12 @@ TABLA_DE: Dict[str, str] = {
     "/api/onboarding": "onboarding_instancias",
     "/api/offboarding": "offboarding_instancias",
     "/api/evaluaciones/resultados/lotes": "evaluacion_lotes",
-    "/api/evaluaciones/instancias": "ev_instancias",
-    "/api/evaluaciones/plantillas": "ev_plantillas",
-    "/api/evaluaciones/ciclos": "ev_ciclos",
     "/api/auditoria": "auditoria",
     "/api/usuarios": "users",
     "/api/periodos": "periodos_cerrados",
-    "/api/sucesion": "sucesion_posiciones",
+    # `/api/sucesion` NO lleva entrada a propósito: `sucesion_repo` lee `empleados` y
+    # `assessment_resultados`, no `sucesion_posiciones`. El mapeo que había acá era FALSO y con
+    # `--conteos` daba OK sobre una tabla que esa ruta nunca consulta.
     "/api/integraciones": "usuario_integraciones",
     "/api/reportes/historial": "reportes_generados",
     "/api/proyectos/{proyecto_id}/horas": "horas_proyecto",

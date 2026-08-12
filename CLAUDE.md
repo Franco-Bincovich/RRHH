@@ -273,9 +273,11 @@ backend/
 | Tablas | 58 | 58 | ✅ |
 | Constraints | 364 | 364 | ✅ |
 | Índices | 151 declarados | más en `pg_indexes` | ✅ la diferencia son los índices que Postgres crea solo por PK/UNIQUE |
-| Triggers `updated_at` | **0** | **36** | 🔴 `schema.sql` NO los trae — se recrean aparte (mig 077, en `migracionAWS/`) |
+| Triggers `updated_at` | **0** | **43** | 🔴 `schema.sql` NO los trae — se recrean aparte (mig 077, en `migracionAWS/`) |
 
-> En producción hay **45 triggers** no internos: los 36 de `updated_at` + 9 `trg_emp_*` (defaults de `empresa_id` del retrofit multiempresa).
+> En producción hay **52 triggers** no internos: **43** de `updated_at` + **9** `trg_emp_*` (defaults de `empresa_id` del retrofit multiempresa). *(Recontado contra el catálogo el 11/8/2026: acá decía 36 + 9 = 45, que estaba mal. La 077 declaraba 43, así que el que mentía era este documento, no la migración.)*
+>
+> 🔴 **Van a bajar a 35 + 8 = 43 cuando corra J5b**: 8 de los `updated_at` y 1 `trg_emp_*` (`trg_emp_sucesion`) viven en las 11 tablas que ese bloque dropea. Los 8 **ya se sacaron de la 077** en J5a (11/8/2026), porque `DROP TRIGGER IF EXISTS x ON tabla` también falla si la TABLA no existe y el script abortaba entero. La ventana entre los dos bloques está declarada en `tests/test_triggers_updated_at.py::_PENDIENTES_DE_DROP_J5B`, con guarda que rojea cuando J5b la cierre.
 
 ---
 
@@ -711,7 +713,7 @@ Ausencias activas hoy, % ausentismo del mes (base de días hábiles configurable
 ---
 
 ## Staging de migración a AWS (`migracionAWS/`)
-Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. Código nuevo sin tocar `backend/` en producción. Contiene `*_NEW.py` (auth completo, `postgres_client.py` asyncpg, repos-molde `empleado_repo_NEW`, `empleado_lookup_repo_NEW`, `token_repo_NEW`) + migraciones 075 (password_hash), 076 (refresh_tokens), 077 (recrear 36 triggers `updated_at`) + docs (`MIGRACION_A_RDS.md`, `README_AUTH.md`, `settings_ADD.md`). El otro dev ejecuta la infra.
+Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. Código nuevo sin tocar `backend/` en producción. Contiene `*_NEW.py` (auth completo, `postgres_client.py` asyncpg, repos-molde `empleado_repo_NEW`, `empleado_lookup_repo_NEW`, `token_repo_NEW`) + migraciones 075 (password_hash), 076 (refresh_tokens), 077 (recrear 35 triggers `updated_at`) + docs (`MIGRACION_A_RDS.md`, `README_AUTH.md`, `settings_ADD.md`). El otro dev ejecuta la infra.
 
 **Decisiones cerradas:** se recrean los triggers · **NO hay RLS** (seguridad app-level) · no se carga demo data.
 
@@ -720,7 +722,7 @@ Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. C�
 - FK `users.id → auth.users(id)` bloquea INSERT sin Supabase → dropear + `DEFAULT gen_random_uuid()`.
 - El `ON DELETE CASCADE` contra `auth.users` es lógica de negocio viva.
 - `passlib` roto (bcrypt 5.0 sacó `__about__`) → usar `import bcrypt` directo.
-- `schema.sql` no trae los 36 triggers `updated_at`.
+- `schema.sql` no trae los 43 triggers `updated_at` (35 tras J5b — ver la tabla de arriba).
 - **Modelo Anthropic**: que ningún string con fecha (`claude-sonnet-4-20250514`, retirado) sobreviva. Alias sin fecha (`claude-sonnet-4-6`).
 - **Nuevo del Bloque A:** las tres env vars (`ASSESSMENT_ENABLED`, `TRUSTED_PROXY_HOPS`, `RATE_LIMIT_STORAGE_URI`) tienen que existir del otro lado. `TRUSTED_PROXY_HOPS` **cambia de valor en AWS** (1 con ALB solo, 2 con CloudFront adelante) — un valor de más deja al equipo entero fuera con 429. Y `RATE_LIMIT_STORAGE_URI=redis://...` es la única forma de que los límites sean reales con más de un proceso.
 - **Nuevo del Bloque A:** la tabla `oauth_states` (mig 080) tiene que estar antes de que el flujo de Google funcione.

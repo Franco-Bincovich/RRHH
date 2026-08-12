@@ -42,16 +42,12 @@ from uuid import uuid4
 import pytest
 
 from schemas.capacitacion import AsignacionCreate
-from schemas.evaluaciones import InstanciaCreate
-from services._ev_instancia_crear import crear
 from services.asignacion_service import AsignacionService
 from utils.errors import AppError
 
 EMPRESA_A, EMPRESA_B = str(uuid4()), str(uuid4())
 EMPLEADO_A = uuid4()
 CURSO_A, CURSO_B, CURSO_FANTASMA = uuid4(), uuid4(), uuid4()
-CICLO_A = uuid4()
-EMP_EN_A, EMP_EN_B, EMP_FANTASMA = uuid4(), uuid4(), uuid4()
 
 
 # ══ 1. Capacitaciones: el curso se busca acotado a la empresa del empleado ══════════════════
@@ -158,87 +154,14 @@ class TestElWhereDelCursoLlevaLaEmpresa:
         assert eqs == [("id", str(CURSO_B))]
 
 
-# ══ 2. Evaluaciones: el empleado se busca acotado a la empresa del ciclo ════════════════════
-
-
-class _FakeSupabase:
-    """Tabla `empleados` de DOS empresas que aplica TODOS los `.eq()` acumulados. Si el código
-    dejara de mandar el de empresa, este fake devolvería la fila del empleado ajeno y el test de
-    abajo fallaría — que es justamente lo que tiene que poder pasar."""
-
-    FILAS = {str(EMP_EN_A): EMPRESA_A, str(EMP_EN_B): EMPRESA_B}
-
-    def __init__(self) -> None:
-        self.eqs: list = []
-
-    def table(self, _t):
-        return self
-
-    def select(self, *a, **k):
-        return self
-
-    def eq(self, col, val):
-        self.eqs.append((col, val))
-        return self
-
-    def maybe_single(self):
-        return self
-
-    def execute(self):
-        filtros = dict(self.eqs)
-        empresa = self.FILAS.get(str(filtros.get("id")))
-        if empresa is None or ("empresa_id" in filtros and filtros["empresa_id"] != empresa):
-            return SimpleNamespace(data=None)
-        return SimpleNamespace(data={"empresa_id": empresa})
-
-
-class _FakeCiclosRepo:
-    def find_by_id(self, _id):
-        return SimpleNamespace(id=str(CICLO_A), estado="abierto",
-                               empresa_id=EMPRESA_A, plantilla_id=str(uuid4()))
-
-
-class _FakePlantillasRepo:
-    def find_by_id(self, _id):
-        return SimpleNamespace(criterios=[SimpleNamespace(id=uuid4())])
-
-
-class _FakeInstanciasRepo:
-    def exists(self, *_a):
-        return False
-
-    def create(self, *_a):
-        return SimpleNamespace(id=str(uuid4()))
-
-
-def _crear(empleado, monkeypatch):
-    fake = _FakeSupabase()
-    monkeypatch.setattr("services._ev_instancia_crear.supabase_admin", fake)
-    data = InstanciaCreate(ciclo_id=CICLO_A, empleado_id=empleado)
-    try:
-        return None, crear(_FakeInstanciasRepo(), _FakeCiclosRepo(), _FakePlantillasRepo(), data), fake
-    except AppError as e:
-        return e, None, fake
-
-
-class TestEmpleadoDeOtraEmpresaEnElCiclo:
-    def test_ya_no_devuelve_422(self, monkeypatch) -> None:
-        err, _, _ = _crear(EMP_EN_B, monkeypatch)
-        assert err.status_code == 404 and err.code != "EMPRESA_MISMATCH"
-
-    def test_es_INDISTINGUIBLE_de_un_empleado_inexistente(self, monkeypatch) -> None:
-        ajeno, _, _ = _crear(EMP_EN_B, monkeypatch)
-        fantasma, _, _ = _crear(EMP_FANTASMA, monkeypatch)
-        assert (ajeno.status_code, ajeno.code, ajeno.message) == (
-            fantasma.status_code, fantasma.code, fantasma.message)
-
-    def test_el_empleado_de_la_empresa_del_ciclo_sigue_entrando(self, monkeypatch) -> None:
-        """El control del control (ver el homólogo de capacitaciones)."""
-        err, instancia, _ = _crear(EMP_EN_A, monkeypatch)
-        assert err is None and instancia is not None
-
-    def test_la_empresa_del_CICLO_viaja_en_el_where(self, monkeypatch) -> None:
-        """No la del header: la instancia se escribe en la empresa del ciclo, así que es la
-        única comparación que significa algo. Y va en la query, no en un `if` posterior."""
-        _, _, fake = _crear(EMP_EN_B, monkeypatch)
-        assert ("empresa_id", EMPRESA_A) in fake.eqs
+# ══ 2. Evaluaciones: BORRADO el 2026-08-11 (bloque J5a) ════════════════════════════════════
+#
+# Acá vivía `TestEmpleadoDeOtraEmpresaEnElCiclo` (4 tests) sobre `_ev_instancia_crear.crear`:
+# verificaba que el empleado se buscara acotado a la empresa del CICLO, no a la del header.
+# Se fue con el módulo `ev_*` entero —17 archivos, 19 endpoints— que estaba publicado por HTTP
+# y era inalcanzable desde la UI. Las tablas `ev_*` siguen en la base hasta la migración de J5b.
+#
+# 🔴 NO se perdió cobertura de la barrera de empresa: el eje que estos tests cubrían —que la
+# empresa viaje EN EL WHERE y no en un `if` posterior— lo sigue cubriendo el bloque 1 de este
+# mismo archivo (`TestElWhereDelCursoLlevaLaEmpresa`), que es su homólogo de capacitaciones y
+# fue el molde del que estos salieron.

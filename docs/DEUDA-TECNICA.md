@@ -329,6 +329,37 @@ exactamente lo que dispara la trampa de arriba.
 
 ---
 
+## 8-bis. 🟠 `procesos_service` no degrada: una tabla que falla se lleva el panel entero
+
+> **11/8/2026, bloque J5a.** Es lo que convirtió un DROP de tablas en un 500 de una pantalla que
+> no tenía nada que ver. Se deja anotado, **no se arregló en esta sesión**.
+
+`services/procesos_service.py:70-83` arma los procesos así:
+
+```python
+procesos = [self._build_proceso(t, p, l, eid) for t, p, l in _META]   # :77-80
+except Exception as exc:
+    raise AppError("Error al obtener procesos", "PROCESOS_ERROR", 500)  # :83
+```
+
+**Los 7 procesos viven o mueren juntos.** Si UNA tabla no responde —dropeada, renombrada, un blip
+de PostgREST— el `except` se lleva las otras seis, que estaban perfectas. El usuario ve
+"No se pudo cargar el panel de procesos" (`frontend/app/(dashboard)/procesos/page.tsx:90`) y no
+tiene forma de saber cuál falló.
+
+🔑 **El repo ya tiene el patrón correcto y este archivo no lo usa:** `services/dashboard_service.py`
+calcula cada KPI con un `_safe` y devuelve los demás aunque uno falle, marcando el fallido en
+`errores`. Portarlo acá es la corrección: un `_safe` por proceso, más una lista de fallidos en
+`ProcesosResponse` (lo que obliga a tocar `schemas/procesos.py` y la pantalla).
+
+⚠️ **Y hay un segundo modo de falla en el mismo archivo, más silencioso:** `_build_proceso:100`
+hace `_ESTADOS[tabla]`, que revienta con `KeyError` si alguien agrega una entrada a `_META` y se
+olvida de `_ESTADOS`. Sale por el mismo `except` genérico y produce el mismo 500 opaco, sin decir
+que la causa es una tabla mal declarada y no la base. Las dos estructuras se editan a mano y nada
+las ata. Gravedad 🟠 · Esfuerzo M.
+
+---
+
 ## 9. Superficies que dibuja el NAVEGADOR y el tema oscuro no alcanza
 
 > **11/8/2026.** Relevado entero al arreglar el contraste del popup de los `<select>`

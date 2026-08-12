@@ -1,6 +1,6 @@
 -- 077_recrear_triggers_updated_at.sql
 --
--- Recrea la función set_updated_at() + los 42 triggers trg_*_updated_at en la
+-- Recrea la función set_updated_at() + los 35 triggers trg_*_updated_at en la
 -- base nueva (RDS). El snapshot db/schema.sql se generó del catálogo y capturó
 -- tablas/columnas/constraints/índices/defaults, pero 0 funciones y 0 triggers,
 -- así que updated_at se pobla en el alta (por el DEFAULT now()) pero NO se
@@ -30,7 +30,13 @@ BEGIN
 END;
 $$;
 
--- 42 triggers, un trigger por tabla con columna updated_at.
+-- 35 triggers, un trigger por tabla con columna updated_at.
+--
+-- 🔴 ERAN 43 hasta el 2026-08-11. Se sacaron los 8 que apuntaban a tablas que el bloque J5b
+-- dropea (las 5 ev_* + sucesion_posiciones, notificaciones_config y configuracion_empresa).
+-- NO alcanzaba con dejarlos: `DROP TRIGGER IF EXISTS x ON tabla` TAMBIÉN falla si la TABLA no
+-- existe —el IF EXISTS cubre el trigger, no la relación—, así que este script abortaba entero
+-- contra un schema.sql ya limpio. El código de esas tablas se borró en J5a.
 -- (horas_proyecto, adjuntos, periodos_cerrados y oauth_states NO llevan: son inmutables / sin
 -- updated_at. No hay que declararlos en ningún lado: el barrido DERIVA los candidatos del
 -- schema, así que una tabla sin la columna queda afuera sola.)
@@ -95,11 +101,6 @@ CREATE TRIGGER trg_presupuesto_areas_updated_at
     BEFORE UPDATE ON public.presupuesto_areas
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
-DROP TRIGGER IF EXISTS trg_sucesion_posiciones_updated_at ON public.sucesion_posiciones;
-CREATE TRIGGER trg_sucesion_posiciones_updated_at
-    BEFORE UPDATE ON public.sucesion_posiciones
-    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
 DROP TRIGGER IF EXISTS trg_planes_carrera_updated_at ON public.planes_carrera;
 CREATE TRIGGER trg_planes_carrera_updated_at
     BEFORE UPDATE ON public.planes_carrera
@@ -118,16 +119,6 @@ CREATE TRIGGER trg_assessment_campanas_updated_at
 DROP TRIGGER IF EXISTS trg_assessment_resultados_updated_at ON public.assessment_resultados;
 CREATE TRIGGER trg_assessment_resultados_updated_at
     BEFORE UPDATE ON public.assessment_resultados
-    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_notificaciones_config_updated_at ON public.notificaciones_config;
-CREATE TRIGGER trg_notificaciones_config_updated_at
-    BEFORE UPDATE ON public.notificaciones_config
-    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_configuracion_empresa_updated_at ON public.configuracion_empresa;
-CREATE TRIGGER trg_configuracion_empresa_updated_at
-    BEFORE UPDATE ON public.configuracion_empresa
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 DROP TRIGGER IF EXISTS trg_empresas_updated_at ON public.empresas;
@@ -158,31 +149,6 @@ CREATE TRIGGER trg_cap_updated_at
 DROP TRIGGER IF EXISTS trg_ec_updated_at ON public.empleado_capacitacion;
 CREATE TRIGGER trg_ec_updated_at
     BEFORE UPDATE ON public.empleado_capacitacion
-    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_evp_updated_at ON public.ev_plantillas;
-CREATE TRIGGER trg_evp_updated_at
-    BEFORE UPDATE ON public.ev_plantillas
-    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_evcrit_updated_at ON public.ev_criterios;
-CREATE TRIGGER trg_evcrit_updated_at
-    BEFORE UPDATE ON public.ev_criterios
-    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_evciclo_updated_at ON public.ev_ciclos;
-CREATE TRIGGER trg_evciclo_updated_at
-    BEFORE UPDATE ON public.ev_ciclos
-    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_evinst_updated_at ON public.ev_instancias;
-CREATE TRIGGER trg_evinst_updated_at
-    BEFORE UPDATE ON public.ev_instancias
-    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
-
-DROP TRIGGER IF EXISTS trg_evres_updated_at ON public.ev_resultados;
-CREATE TRIGGER trg_evres_updated_at
-    BEFORE UPDATE ON public.ev_resultados
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 DROP TRIGGER IF EXISTS trg_inv_items_updated_at ON public.inventario_items;
@@ -280,7 +246,7 @@ CREATE TRIGGER trg_plantillas_mail_updated_at
     BEFORE UPDATE ON public.plantillas_mail
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- Verificación (opcional): debe devolver 42.
+-- Verificación (opcional): debe devolver 35.
 -- SELECT count(*) FROM pg_trigger t
 --   JOIN pg_proc p ON p.oid = t.tgfoid
 --   WHERE p.proname = 'set_updated_at' AND NOT t.tgisinternal;

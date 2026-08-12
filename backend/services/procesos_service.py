@@ -13,12 +13,17 @@ from utils.logger import logger
 
 
 # (tabla, proceso_id, label)
+#
+# 🔴 EVALUACIONES NO ESTÁ ACÁ, Y NO ES UN OLVIDO. Hasta el 2026-08-11 el panel contaba
+# `ev_ciclos` y `ev_instancias`; se sacaron con el módulo `ev_*` (bloque J5a). NO se
+# reapuntaron al módulo de evaluaciones VIVO (`evaluacion_lotes`) porque un lote importado
+# no tiene el eje que este panel muestra: no hay `abierto`/`cerrado` ni `iniciada`/`finalizada`
+# que contar — un lote existe o no existe. Meterlo con estados inventados daría un tablero
+# que se lee igual que los otros seis y significa otra cosa.
 _META: List[tuple[str, str, str]] = [
     ("onboarding_instancias", "onboarding", "Onboarding"),
     ("offboarding_instancias", "offboarding", "Offboarding"),
     ("vacantes", "vacantes", "Vacantes"),
-    ("ev_ciclos", "evaluaciones_ciclos", "Evaluaciones — ciclos"),
-    ("ev_instancias", "evaluaciones_instancias", "Evaluaciones — instancias"),
     ("empleado_capacitacion", "capacitaciones", "Capacitaciones"),
     ("objetivos", "objetivos", "Objetivos"),
 ]
@@ -38,14 +43,6 @@ _ESTADOS: dict[str, List[tuple[str, str]]] = {
         ("nueva", "Nueva"),
         ("en_revision", "En revisión"),
         ("cerrada", "Cerrada"),
-    ],
-    "ev_ciclos": [
-        ("abierto", "Abierto"),
-        ("cerrado", "Cerrado"),
-    ],
-    "ev_instancias": [
-        ("iniciada", "Iniciada"),
-        ("finalizada", "Finalizada"),
     ],
     "empleado_capacitacion": [
         ("pendiente", "Pendiente"),

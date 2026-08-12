@@ -40,6 +40,105 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-11 · J5b — migración 112: drop de las 11 tablas muertas · commit pendiente
+
+**Qué cambió:** se escribió **`backend/migrations/112_drop_tablas_muertas.sql`** (🔴 DESTRUCTIVA,
+irreversible) y se sacaron las 11 tablas de **`backend/db/schema.sql`**, que baja de 63 a **52
+tablas** (1650 → **1430** líneas, 231 borradas + 11 de encabezado nuevo). Cierra el bloque J5.
+
+### 🔴 ACCIÓN DE INFRAESTRUCTURA — ORDEN OBLIGATORIO
+
+```
+DEPLOY de J5a  →  112 (esta migración)
+```
+
+**La 112 NO se puede correr antes del deploy.** El código que hoy sirve tráfico todavía consulta
+`ev_ciclos`/`ev_instancias` desde **dos superficies que no son de evaluaciones**: el Panel de
+Procesos (que muere entero con un 500 `PROCESOS_ERROR`, no degrada una fila) y el reporte anual
+(que deja de generarse). Al revés no pasa nada: el código de J5a ya no las nombra.
+
+**Va SIN `CASCADE`, deliberadamente.** Verificado contra el catálogo el 11/8: **cero FK entrantes
+desde tablas vivas**, cero vistas, cero matviews, cero funciones dependientes. Sin `CASCADE`, una
+dependencia futura hace fallar el drop ruidosamente; con `CASCADE` la borraría en silencio.
+
+**Orden interno:** las 5 `ev_*` hijas primero (`ev_resultados → ev_instancias → ev_criterios →
+ev_ciclos → ev_plantillas`, 5 FK internas), después las 6 huérfanas en cualquier orden.
+
+**Se lleva:** 50 índices · 9 triggers (8 `updated_at` + `trg_emp_sucesion`) · 17 policies RLS ·
+66 constraints (29 FK). Cero secuencias, cero ENUMs — todo cae solo con `DROP TABLE`.
+**Producción pasa de 63 a 52 tablas y de 52 a 43 triggers no internos (35 `updated_at` + 8
+`trg_emp_*`).** Las queries de verificación posterior están comentadas al final del archivo, con
+los valores esperados leídos del catálogo ANTES del drop.
+
+**Las migraciones 004, 015, 021, 022, 023, 030 y 040–044 se CONSERVAN** como historial, igual que
+la 102.
+
+> ⚠️ **`schema.sql` queda POR DELANTE de producción hasta que Franco corra la 112** — declara 52
+> tablas y producción tiene 63. Está escrito en su encabezado, con la marca 🚩 de volver a "AL
+> DÍA" cuando se corra. Un rebuild desde el archivo ya sale sin las once, que es lo correcto: en
+> RDS no tienen que existir nunca.
+
+**La excepción con vencimiento se cerró.** `tests/test_triggers_updated_at.py` tenía
+`_PENDIENTES_DE_DROP_J5B` (8 tablas) y un test que la vigilaba; el test **disparó solo** al sacar
+las tablas de `schema.sql`, con el mensaje que pedía cerrarla. Se borraron **las dos cosas** —
+constante y test— y el barrido volvió a ser igualdad estricta bidireccional: **35 tablas con
+`updated_at` = 35 triggers en la 077, cero diferencia en las dos direcciones**.
+
+**Verificación:** pytest **3228 passed** (era 3229; −1 es el test de vencimiento) · los 13
+barridos verdes, incluidos los 3 que leen `schema.sql` · `ruff` limpio · front **647/647** y
+`tsc` exit 0, sin tocar una línea.
+
+---
+## 2026-08-11 · J5a — desmontaje del módulo `ev_*` (solo CÓDIGO) · commit pendiente
+
+**Qué cambió:** se borraron **17 archivos** del módulo `ev_*` (4 routers, 6 services, 5 repos,
+`schemas/evaluaciones.py` y su test) — **19 endpoints publicados por HTTP e inalcanzables desde la
+UI**, uno de ellos roto desde hacía meses (`PUT /api/evaluaciones/plantillas/{id}`: `model_dump`
+sin `mode="json"` sobre `area_id`). `registro_routers.py` baja de 163 a **155**.
+
+> ⚠️ **`services/_evaluaciones_export.py` y `schemas/evaluaciones.py` no se llaman `ev_*` y sí
+> eran del módulo.** Y al revés: **`services/_audit_payloads_ev.py` SÍ se llama `ev` y NO lo es** —
+> dos de sus funciones las usa el módulo de evaluaciones VIVO. Se le sacaron solo las dos que
+> quedaron sin caller. Nombrar por prefijo no alcanzó en ninguna de las dos direcciones.
+
+🔴 **IMPACTO EN INFRAESTRUCTURA — HAY UNO, Y ES EL PUNTO DE LA SESIÓN:**
+
+**`migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql` pasó de 43 a 35
+`CREATE TRIGGER`.** Se le sacaron los 8 que apuntan a tablas que J5b dropea (las 5 `ev_*` +
+`sucesion_posiciones`, `notificaciones_config`, `configuracion_empresa`). **Sin esto el script
+abortaba entero** contra un `schema.sql` ya limpio: `DROP TRIGGER IF EXISTS x ON tabla` **también
+falla si la TABLA no existe** — el `IF EXISTS` cubre el trigger, no la relación. Es el archivo que
+el dev de infra corre después de `schema.sql`.
+
+**Nada más de infra.** Sin migraciones nuevas, sin env vars, sin dependencias, sin endpoints
+nuevos, sin cambios de auth ni CORS. **Las 11 tablas siguen intactas en la base**: dropearlas es
+J5b. La ventana entre los dos bloques está declarada en
+`tests/test_triggers_updated_at.py::_PENDIENTES_DE_DROP_J5B`, con una guarda que **rojea cuando
+J5b saque las tablas de `schema.sql`**, para que la excepción no sobreviva a su motivo.
+
+**Dos features vivas que consultaban tablas `ev_*` y no degradaban:**
+- `services/procesos_service.py` — contaba `ev_ciclos`/`ev_instancias`. Arma los 7 procesos en una
+  list-comprehension dentro de UN try/except: la tabla ausente daba **500 y se llevaba el panel
+  entero**, no una fila. Filas sacadas, **no reapuntadas** al módulo vivo (un lote importado no
+  tiene `abierto`/`cerrado`).
+- `services/_reporte_anual_metricas.py` — métrica `ev_finalizadas` en `anual_consolidado`. Sin
+  try/except en ningún escalón: el informe entero dejaba de generarse. Métrica **sacada**.
+
+**Test nuevo:** `tests/test_sin_ev_procesos_y_anual.py` (4 tests) cubre las dos, **por HTTP contra
+la app real**. El fake **levanta ante una tabla desconocida en vez de devolver 0** — sin eso el
+test pasaría verde con `ev_ciclos` todavía declarado. Mutación verificada: la tabla muerta de
+vuelta en `_META` **y** en `_ESTADOS` rojea los dos tests (500 `PROCESOS_ERROR` y
+`assert not ['ev_ciclos']`).
+
+**Verificación:** pytest **3229 passed** (era 3280; −56 removidos, +5 agregados) · los 13 barridos
+verdes · `ruff --select F821,F822,F823` limpio en todo el backend · front **647/647** y `tsc` exit
+0, **sin un solo cambio**: el front nunca referenció `ev_*`.
+
+> 📌 También: `docs/DEUDA-TECNICA.md` §8-bis anota la fragilidad que queda (procesos no degrada) y
+> `CLAUDE.md` corrige el conteo de triggers, que decía 36 + 9 = 45 cuando el catálogo tiene
+> **43 + 9 = 52**. La 077 declaraba 43, así que el que mentía era `CLAUDE.md`.
+
+---
 ## 2026-08-11 · Contraste del popup de los `<select>` en modo oscuro · commit pendiente
 
 **Qué cambió:** **una sola regla CSS** en `frontend/app/globals.css:131-158`, dentro del

@@ -32,7 +32,18 @@
 -- confirmo una por una: existen las tablas `clientes`, `intentos_identificacion`
 -- y `sesiones_horas`; `horas_proyecto` tiene `cliente_id` e `idempotencia`;
 -- `asignacion_id` es NULLABLE; y la fila del tipo de ausencia "Licencia" (107)
--- esta sembrada. El catalogo vivo y este archivo declaran 63 tablas.
+-- esta sembrada.
+--
+-- 🔴 ESTE ARCHIVO VA POR DELANTE DE PRODUCCION EN UNA COSA: LA MIGRACION 112.
+-- Declara 52 tablas; produccion todavia tiene 63. Las 11 de diferencia son las
+-- tablas muertas que la 112 dropea (las 5 `ev_*` del motor de evaluaciones que
+-- nunca se uso, mas `assessment_reportes`, `configuracion_empresa`,
+-- `documentos_empleado`, `notificaciones`, `notificaciones_config` y
+-- `sucesion_posiciones`). Las once estaban en 0 filas y sin una sola referencia
+-- en codigo; el codigo se borro en el bloque J5a.
+-- 🚩 CUANDO FRANCO CORRA LA 112, ESTE PARRAFO VUELVE A "AL DIA" Y SE BORRA.
+-- Un rebuild desde este archivo YA sale sin las once, que es lo correcto: en RDS
+-- no tienen que existir nunca.
 --
 -- ⚠️ ESTE BLOQUE DECIA "ESTE ARCHIVO VA POR DELANTE DE PRODUCCION" y era FALSO
 -- desde que Franco corrio las migraciones. Un encabezado que miente sobre si el
@@ -137,22 +148,6 @@ CREATE TABLE public.assessment_links (
     expira_en timestamp with time zone NOT NULL DEFAULT (now() + '7 days'::interval),
     enviado_en timestamp with time zone,
     abierto_en timestamp with time zone,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    empresa_id uuid NOT NULL
-);
-CREATE TABLE public.assessment_reportes (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    resultado_id uuid NOT NULL,
-    tipo_reporte character varying(30) NOT NULL,
-    titulo character varying(200) NOT NULL,
-    contenido jsonb NOT NULL DEFAULT '{}'::jsonb,
-    resumen text,
-    generado_por character varying(10) NOT NULL DEFAULT 'ia'::character varying,
-    modelo_ia character varying(100),
-    url_pdf text,
-    storage_path text,
-    visible_empleado boolean NOT NULL DEFAULT false,
-    created_by uuid,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     empresa_id uuid NOT NULL
 );
@@ -264,14 +259,6 @@ CREATE TABLE public.clientes (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
-CREATE TABLE public.configuracion_empresa (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    nombre character varying(200) NOT NULL DEFAULT 'Mi Empresa'::character varying,
-    logo_url text,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now(),
-    empresa_id uuid NOT NULL
-);
 CREATE TABLE public.costos_nomina (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     empleado_id uuid NOT NULL,
@@ -287,21 +274,6 @@ CREATE TABLE public.costos_nomina (
     created_by uuid,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
-    empresa_id uuid NOT NULL
-);
-CREATE TABLE public.documentos_empleado (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    empleado_id uuid NOT NULL,
-    tipo character varying(30) NOT NULL,
-    nombre_archivo character varying(255) NOT NULL,
-    descripcion character varying(500),
-    bucket character varying(50) NOT NULL DEFAULT 'documentos'::character varying,
-    storage_path text NOT NULL,
-    tamano_bytes bigint,
-    mime_type character varying(100),
-    estado character varying(20) NOT NULL DEFAULT 'activo'::character varying,
-    subido_por uuid,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
     empresa_id uuid NOT NULL
 );
 CREATE TABLE public.empleado_capacitacion (
@@ -391,66 +363,6 @@ CREATE TABLE public.empresas (
     telefono character varying(30),
     email character varying(255),
     logo_url text
-);
-CREATE TABLE public.ev_ciclos (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    empresa_id uuid NOT NULL,
-    nombre text NOT NULL,
-    plantilla_id uuid NOT NULL,
-    fecha_inicio date NOT NULL,
-    fecha_fin date NOT NULL,
-    estado text NOT NULL DEFAULT 'abierto'::text,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now()
-);
-CREATE TABLE public.ev_criterios (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    empresa_id uuid NOT NULL,
-    plantilla_id uuid NOT NULL,
-    nombre text NOT NULL,
-    descripcion text,
-    peso numeric NOT NULL DEFAULT 1,
-    orden integer NOT NULL DEFAULT 1,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now()
-);
-CREATE TABLE public.ev_instancias (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    empresa_id uuid NOT NULL,
-    ciclo_id uuid NOT NULL,
-    empleado_id uuid NOT NULL,
-    evaluador_id uuid,
-    estado text NOT NULL DEFAULT 'borrador'::text,
-    puntaje_global numeric,
-    comentario_general text,
-    fecha_evaluacion date,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now()
-);
-CREATE TABLE public.ev_plantillas (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    empresa_id uuid NOT NULL,
-    nombre text NOT NULL,
-    descripcion text,
-    tipo_escala text NOT NULL,
-    escala_min integer,
-    escala_max integer,
-    opciones_cualitativas jsonb,
-    activa boolean NOT NULL DEFAULT true,
-    area_id uuid,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now()
-);
-CREATE TABLE public.ev_resultados (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    empresa_id uuid NOT NULL,
-    instancia_id uuid NOT NULL,
-    criterio_id uuid NOT NULL,
-    puntaje numeric,
-    valor text,
-    comentario text,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 CREATE TABLE public.evaluacion_equivalencias (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -564,27 +476,6 @@ CREATE TABLE public.inventario_items (
     fecha_alta date NOT NULL DEFAULT CURRENT_DATE,
     costo numeric,
     notas text,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now()
-);
-CREATE TABLE public.notificaciones (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL,
-    tipo character varying(30) NOT NULL,
-    titulo character varying(200) NOT NULL,
-    mensaje text NOT NULL,
-    referencia_tipo character varying(50),
-    referencia_id uuid,
-    leida boolean NOT NULL DEFAULT false,
-    leida_en timestamp with time zone,
-    created_at timestamp with time zone NOT NULL DEFAULT now()
-);
-CREATE TABLE public.notificaciones_config (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL,
-    tipo_evento character varying(30) NOT NULL,
-    canal character varying(10) NOT NULL,
-    activo boolean NOT NULL DEFAULT true,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
@@ -922,22 +813,6 @@ CREATE TABLE public.vacaciones_pendientes (
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
-CREATE TABLE public.sucesion_posiciones (
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    cargo character varying(150) NOT NULL,
-    area_id uuid,
-    titular_id uuid,
-    sucesor_primario_id uuid,
-    sucesor_secundario_id uuid,
-    nivel_preparacion_primario character varying(20),
-    nivel_preparacion_secundario character varying(20),
-    criticidad character varying(10) NOT NULL DEFAULT 'media'::character varying,
-    estado character varying(20) NOT NULL DEFAULT 'activo'::character varying,
-    notas text,
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now(),
-    empresa_id uuid NOT NULL
-);
 -- empresa_id NULL = tipo global (las 4 filas base lo son). cuenta_ausentismo es POLITICA del
 -- tipo y NO reemplaza a solicitudes_ausencia.justificada, que es un HECHO de la instancia.
 CREATE TABLE public.tipos_ausencia (
@@ -1031,24 +906,16 @@ ALTER TABLE public.adjuntos ADD CONSTRAINT adjuntos_pkey PRIMARY KEY (id);
 ALTER TABLE public.areas ADD CONSTRAINT areas_pkey PRIMARY KEY (id);
 ALTER TABLE public.assessment_campanas ADD CONSTRAINT assessment_campanas_pkey PRIMARY KEY (id);
 ALTER TABLE public.assessment_links ADD CONSTRAINT assessment_links_pkey PRIMARY KEY (id);
-ALTER TABLE public.assessment_reportes ADD CONSTRAINT assessment_reportes_pkey PRIMARY KEY (id);
 ALTER TABLE public.assessment_resultados ADD CONSTRAINT assessment_resultados_pkey PRIMARY KEY (id);
 ALTER TABLE public.auditoria ADD CONSTRAINT auditoria_pkey PRIMARY KEY (id);
 ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_pkey PRIMARY KEY (id);
 ALTER TABLE public.capacitaciones ADD CONSTRAINT capacitaciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.cesiones ADD CONSTRAINT cesiones_pkey PRIMARY KEY (id);
 ALTER TABLE public.clientes ADD CONSTRAINT clientes_pkey PRIMARY KEY (id);
-ALTER TABLE public.configuracion_empresa ADD CONSTRAINT configuracion_empresa_pkey PRIMARY KEY (id);
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_pkey PRIMARY KEY (id);
-ALTER TABLE public.documentos_empleado ADD CONSTRAINT documentos_empleado_pkey PRIMARY KEY (id);
 ALTER TABLE public.empleado_capacitacion ADD CONSTRAINT empleado_capacitacion_pkey PRIMARY KEY (id);
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_pkey PRIMARY KEY (id);
 ALTER TABLE public.empresas ADD CONSTRAINT empresas_pkey PRIMARY KEY (id);
-ALTER TABLE public.ev_ciclos ADD CONSTRAINT ev_ciclos_pkey PRIMARY KEY (id);
-ALTER TABLE public.ev_criterios ADD CONSTRAINT ev_criterios_pkey PRIMARY KEY (id);
-ALTER TABLE public.ev_instancias ADD CONSTRAINT ev_instancias_pkey PRIMARY KEY (id);
-ALTER TABLE public.ev_plantillas ADD CONSTRAINT ev_plantillas_pkey PRIMARY KEY (id);
-ALTER TABLE public.ev_resultados ADD CONSTRAINT ev_resultados_pkey PRIMARY KEY (id);
 ALTER TABLE public.evaluacion_equivalencias ADD CONSTRAINT evaluacion_equivalencias_pkey PRIMARY KEY (id);
 ALTER TABLE public.evaluacion_evaluados ADD CONSTRAINT evaluacion_evaluados_pkey PRIMARY KEY (id);
 ALTER TABLE public.evaluacion_lotes ADD CONSTRAINT evaluacion_lotes_pkey PRIMARY KEY (id);
@@ -1057,8 +924,6 @@ ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_pkey PRIMARY KEY
 ALTER TABLE public.intentos_identificacion ADD CONSTRAINT intentos_identificacion_pkey PRIMARY KEY (id);
 ALTER TABLE public.inventario_asignaciones ADD CONSTRAINT inventario_asignaciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_pkey PRIMARY KEY (id);
-ALTER TABLE public.notificaciones ADD CONSTRAINT notificaciones_pkey PRIMARY KEY (id);
-ALTER TABLE public.notificaciones_config ADD CONSTRAINT notificaciones_config_pkey PRIMARY KEY (id);
 ALTER TABLE public.oauth_states ADD CONSTRAINT oauth_states_pkey PRIMARY KEY (id);
 ALTER TABLE public.objetivo_responsables ADD CONSTRAINT objetivo_responsables_pkey PRIMARY KEY (objetivo_id, user_id);
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_pkey PRIMARY KEY (id);
@@ -1081,7 +946,6 @@ ALTER TABLE public.reportes_generados ADD CONSTRAINT reportes_generados_pkey PRI
 ALTER TABLE public.sesiones_horas ADD CONSTRAINT sesiones_horas_pkey PRIMARY KEY (id);
 ALTER TABLE public.solicitudes_ausencia ADD CONSTRAINT solicitudes_ausencia_pkey PRIMARY KEY (id);
 ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT solicitudes_vacaciones_pkey PRIMARY KEY (id);
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_pkey PRIMARY KEY (id);
 ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_pkey PRIMARY KEY (id);
 ALTER TABLE public.tipos_ausencia ADD CONSTRAINT tipos_ausencia_padre_no_es_si_mismo CHECK (padre_id IS NULL OR padre_id <> id);
 ALTER TABLE public.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
@@ -1097,15 +961,12 @@ ALTER TABLE public.areas ADD CONSTRAINT areas_id_empresa_uq UNIQUE (id, empresa_
 ALTER TABLE public.assessment_campanas ADD CONSTRAINT assessment_campanas_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.assessment_links ADD CONSTRAINT assessment_links_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.assessment_links ADD CONSTRAINT assessment_links_token_key UNIQUE (token);
-ALTER TABLE public.assessment_reportes ADD CONSTRAINT assessment_reportes_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.assessment_resultados ADD CONSTRAINT assessment_resultados_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.assessment_resultados ADD CONSTRAINT assessment_resultados_link_id_key UNIQUE (link_id);
 ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.capacitaciones ADD CONSTRAINT capacitaciones_id_empresa_id_key UNIQUE (id, empresa_id);
-ALTER TABLE public.configuracion_empresa ADD CONSTRAINT configuracion_empresa_empresa_uq UNIQUE (empresa_id);
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_empleado_id_anio_mes_key UNIQUE (empleado_id, anio, mes);
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_id_empresa_uq UNIQUE (id, empresa_id);
-ALTER TABLE public.documentos_empleado ADD CONSTRAINT documentos_empleado_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.empleado_capacitacion ADD CONSTRAINT empleado_capacitacion_capacitacion_id_empleado_id_key UNIQUE (capacitacion_id, empleado_id);
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_email_corporativo_key UNIQUE (email_corporativo);
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_empresa_dni_uq UNIQUE (empresa_id, dni);
@@ -1113,17 +974,11 @@ ALTER TABLE public.empleados ADD CONSTRAINT empleados_id_empresa_uq UNIQUE (id, 
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_legajo_empresa_key UNIQUE (legajo, empresa_id);
 ALTER TABLE public.empresas ADD CONSTRAINT empresas_cuit_uq UNIQUE (cuit);
 ALTER TABLE public.empresas ADD CONSTRAINT empresas_nombre_key UNIQUE (nombre);
-ALTER TABLE public.ev_ciclos ADD CONSTRAINT ev_ciclos_id_empresa_id_key UNIQUE (id, empresa_id);
-ALTER TABLE public.ev_instancias ADD CONSTRAINT ev_instancias_ciclo_id_empleado_id_key UNIQUE (ciclo_id, empleado_id);
-ALTER TABLE public.ev_instancias ADD CONSTRAINT ev_instancias_id_empresa_id_key UNIQUE (id, empresa_id);
-ALTER TABLE public.ev_plantillas ADD CONSTRAINT ev_plantillas_id_empresa_id_key UNIQUE (id, empresa_id);
-ALTER TABLE public.ev_resultados ADD CONSTRAINT ev_resultados_instancia_id_criterio_id_key UNIQUE (instancia_id, criterio_id);
 ALTER TABLE public.evaluacion_equivalencias ADD CONSTRAINT evaluacion_equivalencias_empresa_nombre_key UNIQUE (empresa_id, apellido_csv, nombre_csv);
 ALTER TABLE public.evaluacion_evaluados ADD CONSTRAINT evaluacion_evaluados_lote_nombre_key UNIQUE (lote_id, apellido_evaluado, nombre_evaluado);
 ALTER TABLE public.evaluacion_lotes ADD CONSTRAINT evaluacion_lotes_empresa_periodo_key UNIQUE (empresa_id, periodo);
 ALTER TABLE public.evaluacion_resultados ADD CONSTRAINT evaluacion_resultados_eval_tipo_comp_key UNIQUE (evaluado_id, tipo_evaluador, competencia);
 ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_id_empresa_id_key UNIQUE (id, empresa_id);
-ALTER TABLE public.notificaciones_config ADD CONSTRAINT notificaciones_config_user_id_tipo_evento_key UNIQUE (user_id, tipo_evento);
 ALTER TABLE public.oauth_states ADD CONSTRAINT oauth_states_state_hash_key UNIQUE (state_hash);
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offboarding_activos_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.offboarding_instancias ADD CONSTRAINT offboarding_instancias_id_empresa_uq UNIQUE (id, empresa_id);
@@ -1137,7 +992,6 @@ ALTER TABLE public.planes_carrera_hitos ADD CONSTRAINT planes_carrera_hitos_id_e
 ALTER TABLE public.presupuesto_areas ADD CONSTRAINT presupuesto_areas_area_id_anio_mes_tipo_costo_key UNIQUE (area_id, anio, mes, tipo_costo);
 ALTER TABLE public.presupuesto_areas ADD CONSTRAINT presupuesto_areas_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.proyecto_asignaciones ADD CONSTRAINT uq_proyecto_empleado UNIQUE (proyecto_id, empleado_id);
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_id_empresa_uq UNIQUE (id, empresa_id);
 -- tipos_ausencia_nombre_key (UNIQUE global sobre `nombre`) fue DROPEADA en la migracion 085:
 -- con empresa_id nullable prohibia que dos empresas tuvieran cada una su "Licencia especial".
 -- La reemplazan los dos indices unicos parciales de la seccion INDICES.
@@ -1155,8 +1009,6 @@ ALTER TABLE public.assessment_campanas ADD CONSTRAINT assessment_campanas_estado
 ALTER TABLE public.assessment_campanas ADD CONSTRAINT assessment_campanas_tipo_check CHECK (((tipo)::text = ANY ((ARRAY['conductual'::character varying, 'cognitivo'::character varying, 'tecnico'::character varying, 'mixto'::character varying])::text[])));
 ALTER TABLE public.assessment_links ADD CONSTRAINT assessment_links_estado_check CHECK (((estado)::text = ANY ((ARRAY['pendiente'::character varying, 'enviado'::character varying, 'abierto'::character varying, 'completado'::character varying, 'expirado'::character varying, 'cancelado'::character varying])::text[])));
 ALTER TABLE public.assessment_links ADD CONSTRAINT chk_link_destino_exclusivo CHECK ((NOT ((empleado_id IS NOT NULL) AND (candidato_id IS NOT NULL))));
-ALTER TABLE public.assessment_reportes ADD CONSTRAINT assessment_reportes_generado_por_check CHECK (((generado_por)::text = ANY ((ARRAY['ia'::character varying, 'manual'::character varying])::text[])));
-ALTER TABLE public.assessment_reportes ADD CONSTRAINT assessment_reportes_tipo_reporte_check CHECK (((tipo_reporte)::text = ANY ((ARRAY['perfil_conductual'::character varying, 'perfil_cognitivo'::character varying, 'fit_cultural'::character varying, 'plan_desarrollo'::character varying, 'comparativo'::character varying, 'ejecutivo'::character varying])::text[])));
 ALTER TABLE public.assessment_resultados ADD CONSTRAINT assessment_resultados_tiempo_total_segundos_check CHECK ((tiempo_total_segundos > 0));
 ALTER TABLE public.auditoria ADD CONSTRAINT auditoria_accion_check CHECK (((accion)::text = ANY ((ARRAY['INSERT'::character varying, 'UPDATE'::character varying, 'DELETE'::character varying])::text[])));
 ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_estado_check CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying, 'descartado'::character varying, 'contratado'::character varying, 'en_espera'::character varying])::text[])));
@@ -1171,19 +1023,12 @@ ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_cargas_sociales_ch
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_mes_check CHECK (((mes >= 1) AND (mes <= 12)));
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_otros_costos_check CHECK ((otros_costos >= (0)::numeric));
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_salario_bruto_check CHECK ((salario_bruto >= (0)::numeric));
-ALTER TABLE public.documentos_empleado ADD CONSTRAINT documentos_empleado_estado_check CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying, 'archivado'::character varying, 'eliminado'::character varying])::text[])));
-ALTER TABLE public.documentos_empleado ADD CONSTRAINT documentos_empleado_tamano_bytes_check CHECK ((tamano_bytes > 0));
-ALTER TABLE public.documentos_empleado ADD CONSTRAINT documentos_empleado_tipo_check CHECK (((tipo)::text = ANY ((ARRAY['contrato'::character varying, 'recibo_sueldo'::character varying, 'certificado'::character varying, 'dni'::character varying, 'curriculum'::character varying, 'evaluacion'::character varying, 'otro'::character varying])::text[])));
 ALTER TABLE public.empleado_capacitacion ADD CONSTRAINT empleado_capacitacion_estado_check CHECK ((estado = ANY (ARRAY['pendiente'::text, 'en_curso'::text, 'completado'::text])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_desempeno_check CHECK (((desempeno)::text = ANY ((ARRAY['alto'::character varying, 'medio'::character varying, 'bajo'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_estado_check CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying, 'baja'::character varying, 'licencia'::character varying, 'suspendido'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_modalidad_trabajo_check CHECK (((modalidad_trabajo)::text = ANY ((ARRAY['presencial'::character varying, 'remoto'::character varying, 'hibrido'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_potencial_check CHECK (((potencial)::text = ANY ((ARRAY['alto'::character varying, 'medio'::character varying, 'bajo'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_roles_no_vacio CHECK ((array_length(roles, 1) >= 1));
-ALTER TABLE public.ev_ciclos ADD CONSTRAINT ev_ciclos_estado_check CHECK ((estado = ANY (ARRAY['abierto'::text, 'cerrado'::text])));
-ALTER TABLE public.ev_criterios ADD CONSTRAINT ev_criterios_peso_check CHECK ((peso > (0)::numeric));
-ALTER TABLE public.ev_instancias ADD CONSTRAINT ev_instancias_estado_check CHECK ((estado = ANY (ARRAY['borrador'::text, 'finalizada'::text])));
-ALTER TABLE public.ev_plantillas ADD CONSTRAINT ev_plantillas_tipo_escala_check CHECK ((tipo_escala = ANY (ARRAY['numerica'::text, 'cualitativa'::text])));
 ALTER TABLE public.evaluacion_evaluados ADD CONSTRAINT evaluacion_evaluados_perfil_check CHECK ((perfil = ANY (ARRAY['lider'::text, 'general'::text])));
 ALTER TABLE public.evaluacion_resultados ADD CONSTRAINT evaluacion_resultados_tipo_evaluador_check CHECK ((tipo_evaluador = ANY (ARRAY['AUTOEVALUACION'::text, 'AUTOEVALUACION_LIDER'::text, 'SUPERIOR_INMEDIATO'::text, 'PAR'::text, 'COLABORADOR'::text, 'LIBRES'::text])));
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_horas_check CHECK ((horas > (0)::numeric));
@@ -1197,9 +1042,6 @@ ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_modalidad_check 
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_forma_check CHECK (((asignacion_id IS NULL AND proyecto_id IS NULL AND valor_hora_snapshot IS NULL) OR (asignacion_id IS NOT NULL AND proyecto_id IS NOT NULL AND valor_hora_snapshot IS NOT NULL)));
 ALTER TABLE public.inventario_asignaciones ADD CONSTRAINT inventario_asignaciones_estado_devolucion_check CHECK (((estado_devolucion = ANY (ARRAY['ok'::text, 'con_daño'::text])) OR (estado_devolucion IS NULL)));
 ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_estado_check CHECK ((estado = ANY (ARRAY['disponible'::text, 'asignado'::text, 'en_reparacion'::text, 'baja'::text])));
-ALTER TABLE public.notificaciones ADD CONSTRAINT notificaciones_tipo_check CHECK (((tipo)::text = ANY ((ARRAY['onboarding_tarea'::character varying, 'offboarding_inicio'::character varying, 'assessment_enviado'::character varying, 'assessment_completado'::character varying, 'vacante_nueva'::character varying, 'candidato_nuevo'::character varying, 'documento_vencimiento'::character varying, 'plan_carrera_hito'::character varying, 'sucesion_alerta'::character varying, 'sistema'::character varying, 'otro'::character varying])::text[])));
-ALTER TABLE public.notificaciones_config ADD CONSTRAINT notificaciones_config_canal_check CHECK (((canal)::text = ANY ((ARRAY['email'::character varying, 'in_app'::character varying, 'ambos'::character varying, 'ninguno'::character varying])::text[])));
-ALTER TABLE public.notificaciones_config ADD CONSTRAINT notificaciones_config_tipo_evento_check CHECK (((tipo_evento)::text = ANY ((ARRAY['onboarding_tarea'::character varying, 'offboarding_inicio'::character varying, 'assessment_enviado'::character varying, 'assessment_completado'::character varying, 'vacante_nueva'::character varying, 'candidato_nuevo'::character varying, 'documento_vencimiento'::character varying, 'plan_carrera_hito'::character varying, 'sucesion_alerta'::character varying, 'sistema'::character varying, 'otro'::character varying])::text[])));
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_estado_check CHECK ((estado = ANY (ARRAY['por_hacer'::text, 'haciendo'::text, 'terminado'::text])));
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_prioridad_check CHECK ((prioridad = ANY (ARRAY['baja'::text, 'media'::text, 'alta'::text])));
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offboarding_activos_estado_check CHECK (((estado)::text = ANY ((ARRAY['pendiente'::character varying, 'devuelto'::character varying, 'no_aplica'::character varying, 'perdido'::character varying])::text[])));
@@ -1235,10 +1077,6 @@ ALTER TABLE public.solicitudes_vacaciones ADD CONSTRAINT sv_periodo_check CHECK 
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_dias_check CHECK ((dias > 0));
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_dias_liquidados_check CHECK (((dias_liquidados >= 0) AND (dias_liquidados <= dias)));
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_periodo_check CHECK (((periodo >= 2000) AND (periodo <= 2100)));
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_criticidad_check CHECK (((criticidad)::text = ANY ((ARRAY['baja'::character varying, 'media'::character varying, 'alta'::character varying, 'critica'::character varying])::text[])));
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_estado_check CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying, 'en_revision'::character varying, 'cerrado'::character varying])::text[])));
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_nivel_preparacion_primario_check CHECK (((nivel_preparacion_primario)::text = ANY ((ARRAY['listo_ya'::character varying, '1_2_anios'::character varying, '3_5_anios'::character varying, 'potencial'::character varying])::text[])));
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_nivel_preparacion_secundario_check CHECK (((nivel_preparacion_secundario)::text = ANY ((ARRAY['listo_ya'::character varying, '1_2_anios'::character varying, '3_5_anios'::character varying, 'potencial'::character varying])::text[])));
 ALTER TABLE public.users ADD CONSTRAINT users_rol_check CHECK (((rol)::text = ANY ((ARRAY['admin_rrhh'::character varying, 'gerencia_lectura'::character varying, 'mandos_medios'::character varying])::text[])));
 ALTER TABLE public.vacantes ADD CONSTRAINT chk_rango_salarial CHECK (((rango_salarial_max IS NULL) OR (rango_salarial_min IS NULL) OR (rango_salarial_max >= rango_salarial_min)));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_cantidad_puestos_check CHECK ((cantidad_puestos > 0));
@@ -1279,10 +1117,6 @@ ALTER TABLE public.assessment_links ADD CONSTRAINT assessment_links_campana_id_f
 ALTER TABLE public.assessment_links ADD CONSTRAINT assessment_links_candidato_id_fkey FOREIGN KEY (candidato_id) REFERENCES candidatos(id) ON DELETE SET NULL;
 ALTER TABLE public.assessment_links ADD CONSTRAINT assessment_links_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE SET NULL;
 ALTER TABLE public.assessment_links ADD CONSTRAINT assessment_links_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
-ALTER TABLE public.assessment_reportes ADD CONSTRAINT ass_rep_resultado_emp_fkey FOREIGN KEY (resultado_id, empresa_id) REFERENCES assessment_resultados(id, empresa_id) ON DELETE CASCADE;
-ALTER TABLE public.assessment_reportes ADD CONSTRAINT assessment_reportes_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
-ALTER TABLE public.assessment_reportes ADD CONSTRAINT assessment_reportes_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
-ALTER TABLE public.assessment_reportes ADD CONSTRAINT assessment_reportes_resultado_id_fkey FOREIGN KEY (resultado_id) REFERENCES assessment_resultados(id) ON DELETE CASCADE;
 ALTER TABLE public.assessment_resultados ADD CONSTRAINT ass_res_campana_emp_fkey FOREIGN KEY (campana_id, empresa_id) REFERENCES assessment_campanas(id, empresa_id) ON DELETE RESTRICT;
 ALTER TABLE public.assessment_resultados ADD CONSTRAINT ass_res_link_emp_fkey FOREIGN KEY (link_id, empresa_id) REFERENCES assessment_links(id, empresa_id) ON DELETE CASCADE;
 ALTER TABLE public.assessment_resultados ADD CONSTRAINT assessment_resultados_campana_id_fkey FOREIGN KEY (campana_id) REFERENCES assessment_campanas(id) ON DELETE RESTRICT;
@@ -1298,34 +1132,16 @@ ALTER TABLE public.candidatos ADD CONSTRAINT candidatos_vacante_id_fkey FOREIGN 
 ALTER TABLE public.capacitaciones ADD CONSTRAINT capacitaciones_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.cesiones ADD CONSTRAINT cesiones_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
 ALTER TABLE public.cesiones ADD CONSTRAINT cesiones_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
-ALTER TABLE public.configuracion_empresa ADD CONSTRAINT configuracion_empresa_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_empleado_emp_fkey FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id) ON DELETE RESTRICT;
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE RESTRICT;
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
-ALTER TABLE public.documentos_empleado ADD CONSTRAINT documentos_empleado_emp_fkey FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id) ON DELETE CASCADE;
-ALTER TABLE public.documentos_empleado ADD CONSTRAINT documentos_empleado_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
-ALTER TABLE public.documentos_empleado ADD CONSTRAINT documentos_empleado_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
-ALTER TABLE public.documentos_empleado ADD CONSTRAINT documentos_empleado_subido_por_fkey FOREIGN KEY (subido_por) REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE public.empleado_capacitacion ADD CONSTRAINT ec_capacitacion_empresa_fk FOREIGN KEY (capacitacion_id, empresa_id) REFERENCES capacitaciones(id, empresa_id);
 ALTER TABLE public.empleado_capacitacion ADD CONSTRAINT ec_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE RESTRICT;
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_manager_id_fkey FOREIGN KEY (manager_id) REFERENCES empleados(id) ON DELETE SET NULL;
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
-ALTER TABLE public.ev_ciclos ADD CONSTRAINT ev_ciclo_plantilla_fk FOREIGN KEY (plantilla_id, empresa_id) REFERENCES ev_plantillas(id, empresa_id);
-ALTER TABLE public.ev_ciclos ADD CONSTRAINT ev_ciclos_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
-ALTER TABLE public.ev_criterios ADD CONSTRAINT ev_criterio_plantilla_fk FOREIGN KEY (plantilla_id, empresa_id) REFERENCES ev_plantillas(id, empresa_id);
-ALTER TABLE public.ev_criterios ADD CONSTRAINT ev_criterios_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
-ALTER TABLE public.ev_instancias ADD CONSTRAINT ev_instancia_ciclo_fk FOREIGN KEY (ciclo_id, empresa_id) REFERENCES ev_ciclos(id, empresa_id);
-ALTER TABLE public.ev_instancias ADD CONSTRAINT ev_instancia_empleado_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
-ALTER TABLE public.ev_instancias ADD CONSTRAINT ev_instancias_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
-ALTER TABLE public.ev_instancias ADD CONSTRAINT ev_instancias_evaluador_id_fkey FOREIGN KEY (evaluador_id) REFERENCES empleados(id);
-ALTER TABLE public.ev_plantillas ADD CONSTRAINT ev_plantillas_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id);
-ALTER TABLE public.ev_plantillas ADD CONSTRAINT ev_plantillas_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
-ALTER TABLE public.ev_resultados ADD CONSTRAINT ev_resultado_instancia_fk FOREIGN KEY (instancia_id, empresa_id) REFERENCES ev_instancias(id, empresa_id);
-ALTER TABLE public.ev_resultados ADD CONSTRAINT ev_resultados_criterio_id_fkey FOREIGN KEY (criterio_id) REFERENCES ev_criterios(id);
-ALTER TABLE public.ev_resultados ADD CONSTRAINT ev_resultados_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.evaluacion_equivalencias ADD CONSTRAINT evaluacion_equivalencias_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.evaluacion_equivalencias ADD CONSTRAINT evaluacion_equivalencias_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
 ALTER TABLE public.evaluacion_equivalencias ADD CONSTRAINT evaluacion_equivalencias_confirmado_por_fkey FOREIGN KEY (confirmado_por) REFERENCES users(id) ON DELETE SET NULL;
@@ -1352,8 +1168,6 @@ ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_proyecto_id_fkey
 ALTER TABLE public.inventario_asignaciones ADD CONSTRAINT inv_asig_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
 ALTER TABLE public.inventario_asignaciones ADD CONSTRAINT inv_asig_item_empresa_fk FOREIGN KEY (item_id, empresa_id) REFERENCES inventario_items(id, empresa_id);
 ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
-ALTER TABLE public.notificaciones ADD CONSTRAINT notificaciones_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-ALTER TABLE public.notificaciones_config ADD CONSTRAINT notificaciones_config_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE public.oauth_states ADD CONSTRAINT oauth_states_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE public.objetivo_responsables ADD CONSTRAINT objetivo_responsables_objetivo_id_fkey FOREIGN KEY (objetivo_id) REFERENCES objetivos(id) ON DELETE CASCADE;
 ALTER TABLE public.objetivo_responsables ADD CONSTRAINT objetivo_responsables_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
@@ -1419,11 +1233,6 @@ ALTER TABLE public.mail_enviado ADD CONSTRAINT mail_enviado_empleado_id_fkey FOR
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE SET NULL;
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_sucesor_primario_id_fkey FOREIGN KEY (sucesor_primario_id) REFERENCES empleados(id) ON DELETE SET NULL;
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_sucesor_secundario_id_fkey FOREIGN KEY (sucesor_secundario_id) REFERENCES empleados(id) ON DELETE SET NULL;
-ALTER TABLE public.sucesion_posiciones ADD CONSTRAINT sucesion_posiciones_titular_id_fkey FOREIGN KEY (titular_id) REFERENCES empleados(id) ON DELETE SET NULL;
 ALTER TABLE public.users ADD CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
 ALTER TABLE public.usuario_integraciones ADD CONSTRAINT usuario_integraciones_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE RESTRICT;
@@ -1451,9 +1260,6 @@ CREATE INDEX idx_links_campana ON public.assessment_links USING btree (campana_i
 CREATE INDEX idx_links_empleado ON public.assessment_links USING btree (empleado_id);
 CREATE INDEX idx_links_estado ON public.assessment_links USING btree (estado);
 CREATE INDEX idx_links_token ON public.assessment_links USING btree (token);
-CREATE INDEX idx_assessment_reportes_empresa ON public.assessment_reportes USING btree (empresa_id);
-CREATE INDEX idx_reportes_resultado ON public.assessment_reportes USING btree (resultado_id);
-CREATE INDEX idx_reportes_tipo ON public.assessment_reportes USING btree (tipo_reporte);
 CREATE INDEX idx_assessment_resultados_empresa ON public.assessment_resultados USING btree (empresa_id);
 CREATE INDEX idx_resultados_campana ON public.assessment_resultados USING btree (campana_id);
 CREATE INDEX idx_resultados_candidato ON public.assessment_resultados USING btree (candidato_id);
@@ -1474,10 +1280,6 @@ CREATE INDEX idx_cesiones_empresa ON public.cesiones USING btree (empresa_id);
 CREATE INDEX idx_costos_nomina_empleado ON public.costos_nomina USING btree (empleado_id);
 CREATE INDEX idx_costos_nomina_empresa ON public.costos_nomina USING btree (empresa_id);
 CREATE INDEX idx_costos_nomina_periodo ON public.costos_nomina USING btree (anio, mes);
-CREATE INDEX idx_documentos_empleado ON public.documentos_empleado USING btree (empleado_id);
-CREATE INDEX idx_documentos_empleado_empresa ON public.documentos_empleado USING btree (empresa_id);
-CREATE INDEX idx_documentos_estado ON public.documentos_empleado USING btree (estado);
-CREATE INDEX idx_documentos_tipo ON public.documentos_empleado USING btree (tipo);
 CREATE INDEX idx_ec_capacitacion_id ON public.empleado_capacitacion USING btree (capacitacion_id);
 CREATE INDEX idx_ec_empleado_id ON public.empleado_capacitacion USING btree (empleado_id);
 CREATE INDEX idx_ec_empresa_id ON public.empleado_capacitacion USING btree (empresa_id);
@@ -1491,20 +1293,6 @@ CREATE INDEX idx_empleados_manager ON public.empleados USING btree (manager_id);
 CREATE INDEX idx_empleados_potencial ON public.empleados USING btree (potencial);
 CREATE INDEX idx_empleados_user ON public.empleados USING btree (user_id);
 CREATE INDEX idx_evaluacion_evaluados_empleado ON public.evaluacion_evaluados USING btree (empleado_id);
-CREATE INDEX idx_evcicp_empresa ON public.ev_ciclos USING btree (empresa_id);
-CREATE INDEX idx_evcicp_estado ON public.ev_ciclos USING btree (estado);
-CREATE INDEX idx_evcicp_plantilla ON public.ev_ciclos USING btree (plantilla_id);
-CREATE INDEX idx_evcrit_empresa ON public.ev_criterios USING btree (empresa_id);
-CREATE INDEX idx_evcrit_plantilla ON public.ev_criterios USING btree (plantilla_id);
-CREATE INDEX idx_evinst_ciclo ON public.ev_instancias USING btree (ciclo_id);
-CREATE INDEX idx_evinst_empleado ON public.ev_instancias USING btree (empleado_id);
-CREATE INDEX idx_evinst_empresa ON public.ev_instancias USING btree (empresa_id);
-CREATE INDEX idx_evinst_estado ON public.ev_instancias USING btree (estado);
-CREATE INDEX idx_evp_activa ON public.ev_plantillas USING btree (activa);
-CREATE INDEX idx_evp_area ON public.ev_plantillas USING btree (area_id);
-CREATE INDEX idx_evp_empresa ON public.ev_plantillas USING btree (empresa_id);
-CREATE INDEX idx_evres_empresa ON public.ev_resultados USING btree (empresa_id);
-CREATE INDEX idx_evres_instancia ON public.ev_resultados USING btree (instancia_id);
 CREATE INDEX idx_hp_asignacion ON public.horas_proyecto USING btree (asignacion_id);
 CREATE INDEX idx_hp_empresa ON public.horas_proyecto USING btree (empresa_id);
 CREATE INDEX idx_hp_fecha ON public.horas_proyecto USING btree (fecha);
@@ -1520,10 +1308,6 @@ CREATE INDEX idx_inv_asig_item ON public.inventario_asignaciones USING btree (it
 CREATE UNIQUE INDEX idx_inv_asig_item_activo ON public.inventario_asignaciones USING btree (item_id) WHERE (fecha_devolucion IS NULL);
 CREATE INDEX idx_inv_items_empresa ON public.inventario_items USING btree (empresa_id);
 CREATE INDEX idx_inv_items_estado ON public.inventario_items USING btree (estado);
-CREATE INDEX idx_notificaciones_created ON public.notificaciones USING btree (created_at DESC);
-CREATE INDEX idx_notificaciones_leida ON public.notificaciones USING btree (user_id, leida);
-CREATE INDEX idx_notificaciones_user ON public.notificaciones USING btree (user_id);
-CREATE INDEX idx_notif_config_user ON public.notificaciones_config USING btree (user_id);
 CREATE INDEX idx_obj_empresa ON public.objetivos USING btree (empresa_id);
 CREATE INDEX idx_obj_estado ON public.objetivos USING btree (estado);
 CREATE INDEX idx_obj_responsable ON public.objetivos USING btree (responsable_id);
@@ -1579,10 +1363,6 @@ CREATE INDEX idx_sv_empresa_id ON public.solicitudes_vacaciones USING btree (emp
 CREATE INDEX idx_sv_periodo ON public.solicitudes_vacaciones USING btree (empleado_id, periodo) WHERE (periodo IS NOT NULL);
 CREATE INDEX idx_vp_empleado ON public.vacaciones_pendientes USING btree (empleado_id);
 CREATE INDEX idx_vp_empresa ON public.vacaciones_pendientes USING btree (empresa_id);
-CREATE INDEX idx_sucesion_area ON public.sucesion_posiciones USING btree (area_id);
-CREATE INDEX idx_sucesion_criticidad ON public.sucesion_posiciones USING btree (criticidad);
-CREATE INDEX idx_sucesion_posiciones_empresa ON public.sucesion_posiciones USING btree (empresa_id);
-CREATE INDEX idx_sucesion_titular ON public.sucesion_posiciones USING btree (titular_id);
 CREATE INDEX idx_vacantes_area ON public.vacantes USING btree (area_id);
 CREATE INDEX idx_esp_empresa ON public.empleado_superior_pendiente USING btree (empresa_id);
 -- Identidad de una ausencia (mig 089) y de una vacacion (mig 110): sostienen la idempotencia del

@@ -24,10 +24,10 @@ Subirlo exige revisar los techos de tiempo de arriba, y eso es una decisión, no
 
 ⚠️ ALCANCE REAL DE LA PROTECCIÓN, para no venderla de más. En los exports paginados
 (empleados, vacaciones, ausencias, auditoría) el total llega por `count="exact"` y solo se
-traen las filas del tope: ahí el control actúa ANTES de cargar nada grande. En los cinco que
-no paginan (capacitaciones, inventario ítems, inventario asignaciones, objetivos,
-ev_instancias) el repo no expone un conteo y sus archivos están en o sobre su límite de
-líneas, así que el chequeo corre sobre la lista ya traída — **igual que hoy**: no hay
+traen las filas del tope: ahí el control actúa ANTES de cargar nada grande. En los cuatro que
+no paginan (capacitaciones, inventario ítems, inventario asignaciones, objetivos) el repo no
+expone un conteo y sus archivos están en o sobre su límite de líneas, así que el chequeo corre
+sobre la lista ya traída — **igual que hoy**: no hay
 regresión, pero un volumen que muera por timeout muere antes de llegar acá. Cerrarlo del todo
 pide un `contar()` por repo, y eso es una tanda propia.
 """

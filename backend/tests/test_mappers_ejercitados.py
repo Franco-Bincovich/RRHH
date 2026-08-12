@@ -73,8 +73,6 @@ _EJERCITADOS: dict[str, str] = {
     "_objetivo_row._build":                     "test_objetivo_row",
     "_proyectos_enrich.enriquecer":             "test_proyectos_enrich",
     "_proyectos_enrich.batch_costos":           "test_proyectos_enrich",
-    "_ev_instancias_row.enrich_rows":           "test_ev_row_mappers",
-    "_ev_plantillas_row.enrich":                "test_ev_row_mappers",
     "_inventario_items_row._build":             "test_inventario_filtro_area",
     "_evaluacion_lotes_enrich.enriquecer_lotes": "test_evaluacion_lotes_historial",
     # Los tres de abajo se ejercitan TRANSITIVAMENTE, por su caller: `_nombres` y

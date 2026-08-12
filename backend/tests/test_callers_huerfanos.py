@@ -48,9 +48,6 @@ from tests._barrido_callers import (  # noqa: E402
 
 # ── Motivos compartidos ───────────────────────────────────────────────────────
 
-_EV = ("familia ev_*: los routers siguen MONTADOS y responden, la UI se borró. No se limpia de a "
-       "un símbolo: se va entera en el cutover a AWS, con el resto de las tablas huérfanas.")
-
 _MAILS = ("🔴 PENDIENTE, NO INTENCIONAL. `POST /api/plantillas/enviar` YA se conectó (el botón "
           "'Enviar' de PlantillasSection), pero esta función sigue sin punta: es la que permitiría "
           "decir 'quedan 12 de 50' después de un corte parcial. Hoy el modal de envío lo resuelve "
@@ -64,8 +61,6 @@ _PARA_TESTS = ("existe PARA el test estructural, por diseño, y su docstring lo 
 # Cada entrada lleva su razón: si alguien agrega una acá sin justificarla, se ve en el diff.
 
 _SIMBOLOS_SIN_CALLER: dict[str, str] = {
-    "repositories/ev_plantillas_repo.py::EvPlantillasRepo.find_criterios": _EV,
-
     "repositories/assessment_campanas_repo.py::AssessmentCampanasRepo.mark_link_completed":
         "assessment está apagado por ASSESSMENT_ENABLED (router desmontado). El módulo entero "
         "queda fuera de alcance hasta que se encienda; que un link nunca se marque completado se "
@@ -108,25 +103,10 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
         "wrapper `fetchCliente` se borró el 2026-08-10 tras nacer sin caller; este barrido no "
         "lo vio porque `updateCliente`/`deleteCliente` escriben el MISMO literal de path.",
 
-    ("GET", "/api/evaluaciones/ciclos"): _EV,
-    ("POST", "/api/evaluaciones/ciclos"): _EV,
-    ("GET", "/api/evaluaciones/ciclos/{id}"): _EV,
-    ("PUT", "/api/evaluaciones/ciclos/{id}"): _EV,
-    ("POST", "/api/evaluaciones/ciclos/{id}/cerrar"): _EV,
-    ("GET", "/api/evaluaciones/instancias"): _EV,
-    ("POST", "/api/evaluaciones/instancias"): _EV,
-    ("GET", "/api/evaluaciones/instancias/exportar"): _EV,
-    ("GET", "/api/evaluaciones/instancias/{id}"): _EV,
-    ("POST", "/api/evaluaciones/instancias/{id}/finalizar"): _EV,
-    ("PUT", "/api/evaluaciones/instancias/{id}/resultados/{criterio_id}"): _EV,
-    ("GET", "/api/evaluaciones/plantillas"): _EV,
-    ("POST", "/api/evaluaciones/plantillas"): _EV,
-    ("GET", "/api/evaluaciones/plantillas/{id}"): _EV,
-    ("PUT", "/api/evaluaciones/plantillas/{id}"): _EV,
-    ("DELETE", "/api/evaluaciones/plantillas/{id}"): _EV,
-    ("POST", "/api/evaluaciones/plantillas/{id}/criterios"): _EV,
-    ("PUT", "/api/evaluaciones/plantillas/{id}/criterios/{criterio_id}"): _EV,
-    ("DELETE", "/api/evaluaciones/plantillas/{id}/criterios/{criterio_id}"): _EV,
+    # Acá vivían las 19 rutas de la familia `ev_*`, declaradas porque los routers seguían
+    # montados sin UI que los llamara. Se BORRARON el 2026-08-11 (bloque J5a) junto con sus
+    # 17 archivos: ya no hay ruta que declarar. Las 5 tablas `ev_*` siguen en la base hasta
+    # que corra la migración de J5b.
 }
 
 # ── Guardas de mínimo ─────────────────────────────────────────────────────────

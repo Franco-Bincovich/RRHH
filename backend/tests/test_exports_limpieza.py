@@ -21,23 +21,22 @@ for _k, _v in _TEST_ENV.items():
 from datetime import date, datetime
 from uuid import uuid4
 
-from schemas.evaluaciones import InstanciaResponse
 from schemas.inventario import AsignacionResponse
 from schemas.objetivo import ObjetivoResponse
 from schemas.offboarding import AccesoResponse, ActivoResponse, OffboardingResponse
 from schemas.area import AreaResponse
 from schemas.capacitacion import CapacitacionResponse
 from schemas.empresa import EmpresaResponse
-# ⚠️ ALIAS OBLIGATORIO: `InstanciaResponse` existe en schemas.evaluaciones Y en
-# schemas.onboarding. Sin el alias, el segundo import tapa al primero y el test de evaluaciones
-# construye el modelo equivocado (falla con "5 validation errors", que no dice eso).
+# El alias YA NO ES OBLIGATORIO desde el 2026-08-11: la colisión era con
+# `schemas.evaluaciones.InstanciaResponse`, y ese archivo se borró con el módulo `ev_*` (J5a).
+# Se conserva igual, por explícito: `InstanciaResponse` es un nombre que tres módulos podrían
+# querer, y el alias dice de cuál es sin ir a leer los imports.
 from schemas.onboarding import InstanciaResponse as OnboardingInstanciaResponse
 from schemas.onboarding import TemplateResponse
 from schemas.periodo import PeriodoResponse
 from schemas.proyectos import CosteoResumen, ProyectoResponse
 from schemas.vacaciones_pendientes import VacacionPendienteResponse
 from schemas.vacante import CandidatoGrupoResponse, VacanteResponse
-from services._evaluaciones_export import construir_filas_export as filas_evaluaciones
 from services._inventario_export import construir_filas_export as filas_inventario
 from services._objetivos_export import construir_filas_export as filas_objetivos
 from services._areas_export import construir_filas_export as filas_areas
@@ -75,21 +74,11 @@ def test_inventario_export_sin_uuids_con_nombres():
     assert fila["Fecha devolución"] == ""  # None → ''
 
 
-# ── Evaluaciones instancias ───────────────────────────────────────────────────
-
-def test_evaluaciones_export_sin_uuids_con_nombres():
-    row = InstanciaResponse(
-        id=uuid4(), empresa_id=uuid4(), empresa_nombre="Karstec", ciclo_id=uuid4(),
-        ciclo_nombre="Q1 2026", empleado_id=uuid4(), empleado_nombre="Ana Lopez",
-        empleado_area="Tecnología", evaluador_id=uuid4(), evaluador_nombre="Juan Pérez",
-        estado="finalizada", puntaje_global=4.5, fecha_evaluacion=date(2026, 4, 10),
-    )
-    fila = filas_evaluaciones([row])[0]
-    assert _UUID_KEYS.isdisjoint(fila.keys())
-    assert fila["Empresa"] == "Karstec" and fila["Empleado"] == "Ana Lopez"
-    assert fila["Ciclo"] == "Q1 2026" and fila["Evaluador"] == "Juan Pérez"
-    assert fila["Área"] == "Tecnología" and fila["Estado"] == "finalizada"
-    assert fila["Puntaje"] == 4.5 and fila["Fecha evaluación"] == "10/04/2026"
+# ── Evaluaciones instancias: BORRADO el 2026-08-11 (bloque J5a) ───────────────
+# `test_evaluaciones_export_sin_uuids_con_nombres` cubría `services/_evaluaciones_export.py`,
+# que se fue con el módulo `ev_*`. No es una baja de cobertura del motor de export: los otros
+# 10 bloques de este archivo verifican la misma invariante —que ninguna fila exportada filtre
+# UUIDs crudos— sobre exports que sí tienen pantalla.
 
 
 # ── Objetivos ─────────────────────────────────────────────────────────────────

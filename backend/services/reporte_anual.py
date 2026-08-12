@@ -36,8 +36,10 @@ def _count_rango(
 def generate_anual_consolidado(anio: int, empresa_id: Optional[UUID] = None) -> Dict[str, Any]:
     """
     Genera métricas anuales consolidadas. Filtra por empresa_id (None = todas).
-    ev_instancias.fecha_evaluacion es la fecha en que se finalizó (Optional[date]);
-    instancias sin fecha_evaluacion (pre-campo o sin finalizar) no se contabilizan.
+
+    ⚠️ NO trae "Evaluaciones finalizadas" desde el 2026-08-11 (bloque J5a): contaba
+    `ev_instancias`, que se fue con el módulo `ev_*`. El motivo de no reapuntarla al módulo
+    de evaluaciones vivo está en `_reporte_anual_metricas.actividad`.
 
     Returns:
         Dict con '_sheets' (multi-hoja Excel) y campos planos (fallback PDF).
@@ -68,7 +70,6 @@ def generate_anual_consolidado(anio: int, empresa_id: Optional[UUID] = None) -> 
     dias_vacaciones = act["dias_vacaciones"]
     cap_completadas = act["cap_completadas"]
     obj_terminados = act["obj_terminados"]
-    ev_finalizadas = act["ev_finalizadas"]
 
     # ── Estructura de retorno ──────────────────────────────────────────────────
     return {
@@ -90,7 +91,6 @@ def generate_anual_consolidado(anio: int, empresa_id: Optional[UUID] = None) -> 
                 "Solicitudes de vacaciones": solicitudes_vacaciones,
                 "Días de vacaciones tomados": dias_vacaciones,
                 "Capacitaciones completadas": cap_completadas,
-                "Evaluaciones finalizadas": ev_finalizadas,
                 "Objetivos terminados": obj_terminados,
             },
         },
@@ -106,7 +106,6 @@ def generate_anual_consolidado(anio: int, empresa_id: Optional[UUID] = None) -> 
         "solicitudes_vacaciones": solicitudes_vacaciones,
         "dias_vacaciones_tomados": dias_vacaciones,
         "capacitaciones_completadas": cap_completadas,
-        "evaluaciones_finalizadas": ev_finalizadas,
         "objetivos_terminados": obj_terminados,
         "headcount_por_area": headcount_list,
     }

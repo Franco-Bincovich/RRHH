@@ -60,13 +60,17 @@ def headcount_por_area(eid: Optional[str]) -> tuple[int, List[dict]]:
 
 
 def actividad(eid: Optional[str], ini: str, fin: str, ini_ts: str, fin_ts: str) -> dict:
-    """Vacaciones, capacitaciones, objetivos y evaluaciones del año.
+    """Vacaciones, capacitaciones y objetivos del año.
 
     Solo `tipo="vacaciones"` y sin canceladas: es la misma definición que usa el reporte de saldos
     — una licencia por enfermedad no descuenta días de vacaciones.
 
-    `ev_instancias.fecha_evaluacion` es la fecha en que se finalizó y es NULL mientras no se
-    finalice, así que las instancias abiertas no se cuentan en ningún año.
+    ⚠️ YA NO DEVUELVE `ev_finalizadas`. Contaba `ev_instancias` finalizadas en el año; la tabla
+    se fue con el módulo `ev_*` el 2026-08-11 (bloque J5a). NO se reapuntó al módulo de
+    evaluaciones VIVO: ahí no hay "instancia finalizada en una fecha" que contar — se importa
+    un lote entero con resultados ya calculados afuera, y su fecha es la del import, no la de
+    ninguna evaluación. Un número con el mismo nombre y otro significado en un informe anual
+    que se compara contra el del año pasado es peor que la columna ausente.
     """
     vac_q = supabase_admin.table("solicitudes_vacaciones").select("dias").eq("tipo", "vacaciones").eq("cancelada", False).gte("fecha_desde", ini).lte("fecha_desde", fin)
     if eid:
@@ -84,14 +88,9 @@ def actividad(eid: Optional[str], ini: str, fin: str, ini_ts: str, fin_ts: str) 
     if eid:
         obj_q = obj_q.eq("empresa_id", eid)
 
-    ev_q = supabase_admin.table("ev_instancias").select("id", count="exact").eq("estado", "finalizada").gte("fecha_evaluacion", ini).lte("fecha_evaluacion", fin)
-    if eid:
-        ev_q = ev_q.eq("empresa_id", eid)
-
     return {
         "solicitudes_vacaciones": len(vac_data),
         "dias_vacaciones": sum(int(r.get("dias") or 0) for r in vac_data),
         "cap_completadas": cap_q.execute().count or 0,
         "obj_terminados": obj_q.execute().count or 0,
-        "ev_finalizadas": ev_q.execute().count or 0,
     }

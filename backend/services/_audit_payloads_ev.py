@@ -1,64 +1,16 @@
 """
-Payloads de auditoría de evaluaciones de desempeño (scoring de una instancia).
+Payloads de auditoría del módulo de evaluaciones (import de resultados por CSV).
 
-Módulo propio (no se agrega a _audit_payloads_rrhh.py, que ya está cerca del límite).
-Entidad "evaluacion" (misma que usan los adjuntos de evaluación) con registro_id = id de
-la instancia: agrupa todo el historial de una evaluación (scoring + finalización) bajo el
-mismo registro. El diff se reusa de AuditService._diff (mismo patrón que empleados).
+Entidad "evaluacion", con registro_id = id del LOTE. Un import audita UN evento por lote,
+nunca fila por fila — es la regla del repo para toda importación.
 
-_subset se duplica acá (3 líneas triviales) en vez de importarlo helper→helper.
+⚠️ Este archivo llegó a tener también los payloads del scoring instancia-por-instancia
+(`payload_carga_resultado_evaluacion` y `payload_finalizar_evaluacion`). Se borraron el
+2026-08-11 con el módulo `ev_*` (bloque J5a): eran los únicos consumidores de
+`_resultado_de` y de `_CAMPOS_RESULTADO`, que se fueron con ellos. Lo que queda sirve al
+módulo VIVO (`evaluacion_lotes`/`_evaluados`/`_resultados`), que es otro.
 """
 from typing import Optional
-
-from services.audit_service import AuditService, _jsonable
-
-# Campos del scoring de un criterio (columnas reales de ev_resultados).
-_CAMPOS_RESULTADO = ("puntaje", "valor", "comentario")
-
-
-def _subset(obj: object, campos: tuple) -> dict:
-    """Extrae `campos` de un modelo Pydantic (o dict) como dict JSON-serializable."""
-    data = obj.model_dump() if hasattr(obj, "model_dump") else dict(obj)  # type: ignore[arg-type]
-    return {k: _jsonable(data.get(k)) for k in campos}
-
-
-def _resultado_de(instancia, criterio_id: str):
-    """Resultado (fila de scoring) de un criterio dentro de una instancia, o None."""
-    return next(
-        (r for r in instancia.resultados if str(r.criterio_id) == str(criterio_id)), None
-    )
-
-
-def payload_carga_resultado_evaluacion(prior, nueva, criterio_id, usuario_id: Optional[str]) -> dict:
-    """Evento UPDATE del scoring de un criterio: puntaje/valor/comentario viejo→nuevo.
-
-    `prior`/`nueva` son la instancia antes y después de la escritura. registro_id = id de
-    la instancia; se incluye el nombre del criterio para saber a cuál corresponde la nota."""
-    r_prev = _resultado_de(prior, str(criterio_id))
-    r_new = _resultado_de(nueva, str(criterio_id))
-    antes, despues = AuditService._diff(
-        _subset(r_prev, _CAMPOS_RESULTADO) if r_prev else {},
-        _subset(r_new, _CAMPOS_RESULTADO) if r_new else {},
-    )
-    criterio = (r_new or r_prev).criterio_nombre if (r_new or r_prev) else None
-    antes["criterio"] = criterio
-    despues["criterio"] = criterio
-    return {
-        "usuario_id": usuario_id, "entidad": "evaluacion", "registro_id": str(nueva.id),
-        "accion": "UPDATE", "evento": "carga_resultado_evaluacion",
-        "empresa_id": str(nueva.empresa_id),
-        "datos_anteriores": antes, "datos_nuevos": despues,
-    }
-
-
-def payload_finalizar_evaluacion(instancia_id, prior, puntaje_global, empresa_id, usuario_id: Optional[str]) -> dict:
-    """Evento UPDATE de finalización: estado borrador→finalizada + puntaje_global resultante."""
-    return {
-        "usuario_id": usuario_id, "entidad": "evaluacion", "registro_id": str(instancia_id),
-        "accion": "UPDATE", "evento": "finalizar_evaluacion", "empresa_id": empresa_id,
-        "datos_anteriores": {"estado": prior.estado},
-        "datos_nuevos": {"estado": "finalizada", "puntaje_global": _jsonable(puntaje_global)},
-    }
 
 
 def payload_importacion_evaluaciones(lote_id: str, periodo: str, empresa_id: str, evaluados: int,

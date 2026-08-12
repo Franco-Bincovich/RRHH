@@ -59,10 +59,6 @@ from routers.vacantes_escrituras import router as vacantes_escrituras_router
 from routers.vacantes_integraciones import router as vacantes_integraciones_router
 from routers.capacitaciones import router as capacitaciones_router
 from routers.asignaciones_capacitacion import router as asignaciones_cap_router
-from routers.ev_plantillas import router as ev_plantillas_router
-from routers.ev_criterios import router as ev_criterios_router
-from routers.ev_ciclos import router as ev_ciclos_router
-from routers.ev_instancias import router as ev_instancias_router
 from routers.evaluaciones_import import router as evaluaciones_import_router
 from routers.evaluaciones_resultados import router as evaluaciones_resultados_router
 from routers.evaluaciones_resultados_export import router as evaluaciones_resultados_export_router
@@ -138,10 +134,6 @@ def registrar(app: FastAPI) -> None:
     app.include_router(screening_criterio_router, prefix="/api/screening/criterio", tags=["screening"])
     app.include_router(capacitaciones_router, prefix="/api/capacitaciones", tags=["capacitaciones"])
     app.include_router(asignaciones_cap_router, prefix="/api/capacitaciones/asignaciones", tags=["capacitaciones"])
-    app.include_router(ev_plantillas_router, prefix="/api/evaluaciones/plantillas", tags=["evaluaciones"])
-    app.include_router(ev_criterios_router, prefix="/api/evaluaciones/plantillas", tags=["evaluaciones"])
-    app.include_router(ev_ciclos_router, prefix="/api/evaluaciones/ciclos", tags=["evaluaciones"])
-    app.include_router(ev_instancias_router, prefix="/api/evaluaciones/instancias", tags=["evaluaciones"])
     app.include_router(evaluaciones_import_router, prefix="/api/evaluaciones/importar", tags=["evaluaciones"])
     app.include_router(evaluaciones_resultados_export_router, prefix="/api/evaluaciones/resultados", tags=["evaluaciones"])
     app.include_router(evaluaciones_resultados_router, prefix="/api/evaluaciones/resultados", tags=["evaluaciones"])
