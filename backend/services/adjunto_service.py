@@ -14,7 +14,7 @@ import uuid as _uuid
 from typing import List, Optional
 from uuid import UUID
 
-from integrations.supabase_client import supabase_admin
+from integrations import storage
 from repositories.adjunto_repo import AdjuntoRepo
 from schemas.adjunto import Adjunto
 from services._adjunto_padres import ensure_padre_de_empresa
@@ -28,7 +28,6 @@ from utils.files import ALLOWED_TYPES_ADJUNTO, MAX_SIZE_ADJUNTO, validate_upload
 from utils.logger import logger
 from utils.permisos import Accion, Seccion, puede
 
-_BUCKET = "documentos"
 
 # Mapeo entidad→Seccion: de dónde hereda el permiso cada adjunto. Ampliar al sumar entidades.
 _ENTIDAD_SECCION = {
@@ -83,13 +82,11 @@ class AdjuntoService:
         validate_upload(content, content_type, ALLOWED_TYPES_ADJUNTO, MAX_SIZE_ADJUNTO, "archivo")
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
         path = f"adjuntos/{entidad}/{entidad_id}/{_uuid.uuid4()}.{ext}"
-        supabase_admin.storage.from_(_BUCKET).upload(
-            path=path, file=content, file_options={"content-type": content_type}
-        )
+        storage.subir(storage.DOCUMENTOS, path, content, content_type)
         adj = self._repo.crear({
             "entidad": entidad, "entidad_id": str(entidad_id),
             "empresa_id": empresa_padre,
-            "bucket": _BUCKET, "storage_path": path, "nombre_archivo": filename,
+            "bucket": storage.DOCUMENTOS, "storage_path": path, "nombre_archivo": filename,
             "mime_type": content_type, "tamano_bytes": len(content),
             "categoria": categoria, "descripcion": descripcion, "subido_por": usuario_id,
         })
@@ -108,8 +105,9 @@ class AdjuntoService:
         """Genera signed URL (3600 s) para descargar el adjunto. Raises ADJUNTO_NOT_FOUND (404), FORBIDDEN (403)."""
         adj = self._get_owned(id, empresa_id)
         self._gate(rol, adj.entidad, Accion.READ)
-        res = supabase_admin.storage.from_(adj.bucket).create_signed_url(path=adj.storage_path, expires_in=3600)
-        return res["signedURL"]
+        # El bucket sale de la FILA, no de una constante: `adjuntos.bucket` es una columna con
+        # DEFAULT 'documentos' y hay filas viejas escritas con ese valor.
+        return storage.url_firmada(adj.bucket, adj.storage_path)
 
     def marcar_principal(
         self, id: str, principal: bool, empresa_id: Optional[UUID], rol: Optional[str],

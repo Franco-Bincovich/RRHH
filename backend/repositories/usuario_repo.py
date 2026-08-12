@@ -1,12 +1,17 @@
 """
-Repositorio de escritura de usuarios del sistema (perfil espejo en public.users).
+Repositorio de usuarios del sistema (perfil espejo en public.users).
 La identidad/credencial vive en auth.users (Supabase Auth) — eso lo maneja el service.
 Acceso con supabase_admin. Chequeos de unicidad dirigidos (limit 1, sin full-scan).
+
+Estaba en 99/100 y no admitía el `find_by_username` que faltaba, así que los cuatro lookups de
+UNA fila se fueron a `_usuario_lookup_repo`. Molde: `empleado_repo.py` — los delegadores
+sostienen la interfaz pública, así que ningún caller cambió.
 """
 from datetime import datetime, timezone
 from typing import Optional
 
 from integrations.supabase_client import supabase_admin
+from repositories import _usuario_lookup_repo as _lookup
 from utils.errors import AppError
 
 _USERS = "users"
@@ -47,12 +52,6 @@ class UsuarioRepo:
         res = supabase_admin.table(_EMPLEADOS).update({"user_id": user_id}).eq("id", empleado_id).execute()
         return bool(res.data)
 
-    def get_email(self, user_id: str) -> Optional[str]:
-        """Email del usuario por id (para reautenticar en el cambio de contraseña).
-        None si el usuario no existe. Chequeo dirigido (limit 1)."""
-        res = supabase_admin.table(_USERS).select("email").eq("id", user_id).limit(1).execute()
-        return res.data[0]["email"] if res.data else None
-
     def bajar_flag_password(self, user_id: str) -> None:
         """Baja must_change_password a false tras un cambio de contraseña exitoso
         (idempotente: dejarlo en false si ya lo estaba no rompe nada)."""
@@ -72,19 +71,6 @@ class UsuarioRepo:
         supabase_admin.table(_USERS).update({"ultimo_acceso": sello}).eq("id", user_id).execute()
         return sello
 
-    def get_estado(self, user_id: str) -> Optional[dict]:
-        """Estado de autorización del usuario (rol + activo + ultimo_acceso), para el caché del
-        middleware.
-
-        Los tres campos salen de la MISMA fila y la misma query: sumarlos no cuesta un request
-        más.
-
-        `limit(1)` y no `.single()`: `.single()` LANZA con 0 filas, y acá "el usuario no existe"
-        es una respuesta legítima que el caller convierte en negación, no un error de base.
-        None si no existe."""
-        res = supabase_admin.table(_USERS).select("rol, activo, ultimo_acceso").eq("id", user_id).limit(1).execute()
-        return res.data[0] if res.data else None
-
     def set_activo(self, user_id: str, activo: bool) -> None:
         """Baja/alta BLANDA del perfil: mueve `activo` sin borrar la fila.
 
@@ -93,7 +79,20 @@ class UsuarioRepo:
         apuntando a un id que ya no resuelve a ningún nombre."""
         supabase_admin.table(_USERS).update({"activo": activo}).eq("id", user_id).execute()
 
+    # ── Lookups de una fila (delegados a _usuario_lookup_repo) ──
+
+    def find_by_username(self, username: str) -> Optional[dict]:
+        """Perfil de login por username (case-insensitive). Delegado a `por_username`."""
+        return _lookup.por_username(username)
+
+    def get_email(self, user_id: str) -> Optional[str]:
+        """Email del usuario por id. Delegado a `_usuario_lookup_repo.email`."""
+        return _lookup.email(user_id)
+
+    def get_estado(self, user_id: str) -> Optional[dict]:
+        """Estado de autorización (rol/activo/ultimo_acceso). Delegado a `_usuario_lookup_repo.estado`."""
+        return _lookup.estado(user_id)
+
     def get_perfil(self, user_id: str) -> Optional[dict]:
-        """Perfil mínimo (id, username, rol) para la baja y su auditoría. None si no existe."""
-        res = supabase_admin.table(_USERS).select("id, username, rol").eq("id", user_id).limit(1).execute()
-        return res.data[0] if res.data else None
+        """Perfil mínimo (id, username, rol). Delegado a `_usuario_lookup_repo.perfil`."""
+        return _lookup.perfil(user_id)

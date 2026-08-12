@@ -7,7 +7,7 @@ Flujo: router → service → repository.
 from typing import List, Optional
 from uuid import UUID
 
-from integrations.supabase_client import supabase_admin
+from integrations import storage
 from repositories.candidato_repo import CandidatoRepo
 from repositories.vacante_repo import VacanteRepo
 from schemas.vacante import CandidatoGrupoResponse, CandidatoResponse
@@ -19,7 +19,6 @@ from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 
-_CV_BUCKET = "cvs"
 
 
 def _grupo_vivo(titulo: str, area_nombre: Optional[str]) -> str:
@@ -92,10 +91,7 @@ class CandidatoService:
             raise AppError("Candidato no encontrado", "CANDIDATO_NOT_FOUND", 404)
         if not candidato.cv_storage_path:
             raise AppError("El candidato no tiene CV cargado", "CV_NOT_FOUND", 404)
-        res = supabase_admin.storage.from_(_CV_BUCKET).create_signed_url(
-            path=candidato.cv_storage_path, expires_in=3600
-        )
-        return res["signedURL"]
+        return storage.url_firmada(storage.CVS, candidato.cv_storage_path)
 
     def delete_candidato(self, candidato_id: str, empresa_id: Optional[UUID] = None,
                          usuario_id: Optional[str] = None) -> None:

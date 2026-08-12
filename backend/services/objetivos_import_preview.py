@@ -17,7 +17,7 @@ alterar. Mismo criterio que el `es_actualizacion` de costos.
 """
 from typing import List, Optional, Tuple
 
-from integrations.supabase_client import supabase_admin
+from repositories.usuario_repo import UsuarioRepo
 from schemas.importacion_objetivos import (
     FilaObjetivoError, FilaObjetivoPreview, ImportacionObjetivosPreviewResponse,
 )
@@ -33,9 +33,10 @@ def usuarios_activos() -> dict:
     usar. Una sola consulta: resolver usuario por usuario serían N consultas para una tabla de
     4 filas.
     """
-    filas_users = (supabase_admin.table("users")
-                   .select("id, nombre, apellido, email, username")
-                   .eq("activo", True).execute().data or [])
+    # `listar_activos` ya existía para el listado y su export. Trae `rol` de más —que acá se
+    # ignora— y viene ordenado por apellido, orden que este índice no usa: la clave es el
+    # email/username/nombre casefold, no la posición.
+    filas_users = UsuarioRepo().listar_activos()
     idx: dict = {}
     for u in filas_users:
         entrada = {"id": u["id"], "nombre": f"{u['nombre']} {u['apellido']}"}

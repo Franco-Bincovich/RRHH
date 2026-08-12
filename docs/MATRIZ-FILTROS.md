@@ -210,18 +210,16 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 > (~30 filas por lote) pero es duplicación con riesgo de divergencia.
 > El listado de **lotes** (`evaluaciones_resultados.py:25`) no tiene ningún filtro.
 
-### Evaluaciones — instancias (`ev_*`)
+### ~~Evaluaciones — instancias (`ev_*`)~~ — ✅ EL MÓDULO YA NO EXISTE
 
-| Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
-|---|---|---|---|---|---|
-| empresa | `ev_instancias_repo.py:61` | `ev_instancias_service.py:44` | header | — | ✅ |
-| ciclo | `ev_instancias_repo.py:61` | ✅ | `ev_instancias.py:27` | — | ✅ `:39` |
-| estado | `ev_instancias_repo.py:61` | ✅ | `ev_instancias.py:28` | — | ✅ `:40` |
-
-> 🔴 **Backend completo, CERO frontend.** Verificado: no existe ningún archivo `.ts`/`.tsx` que
-> llame a `/api/evaluaciones/instancias`, `/ciclos` o `/plantillas`. La UI de `ev_*` se borró y
-> las tablas están vacías en producción. **No invertir en filtros acá** — el módulo vivo es
-> "resultados importados". Se limpia tras el cutover a AWS.
+> **Borrado el 11/8/2026 (bloque J5).** Tenía tres filtros (empresa por header, `ciclo`, `estado`)
+> con backend completo y **cero frontend**: ningún `.ts`/`.tsx` llamaba a
+> `/api/evaluaciones/instancias`, `/ciclos` ni `/plantillas`. Esa asimetría —filtros que nadie
+> podía usar— fue parte de lo que justificó el desmontaje. J5a borró el código y J5b dropeó las
+> tablas (migración 112).
+>
+> 🔴 **El módulo de evaluaciones VIVO es otro y comparte prefijo de URL:** "resultados
+> importados" (`evaluacion_*`), cuyos filtros están más arriba en este mismo documento.
 
 ### Costos / nómina
 
@@ -370,9 +368,9 @@ máximo y que use los filtros — **no entregan un archivo cortado**.
   angostarlo; fallar dejaría al usuario sin forma de obtener la auditoría de un mes cargado.
   Conserva su **truncado declarado** (nota dentro del archivo diciendo cuántas quedaron afuera).
 
-⚠️ **Alcance parcial en 5 módulos.** En los paginados (empleados, vacaciones, ausencias) el
+⚠️ **Alcance parcial en 4 módulos.** En los paginados (empleados, vacaciones, ausencias) el
 total llega por `count="exact"` y solo se traen las filas del tope: el control actúa antes de
-cargar nada grande. En capacitaciones, inventario ×2, objetivos y ev_instancias los repos no
+cargar nada grande. En capacitaciones, inventario ×2 y objetivos los repos no
 exponen conteo y sus archivos están en o cerca de su límite, así que el chequeo corre sobre la
 lista ya traída — **igual que antes**, sin regresión, pero un volumen que muera por timeout
 muere antes de llegar al chequeo. Cerrarlo pide un `contar()` por repo: tanda propia.
@@ -385,10 +383,11 @@ muere antes de llegar al chequeo. Cerrarlo pide un `contar()` por repo: tanda pr
 tiene filtros (los de abajo); el barrido `tests/test_paridad_list_export.py` lo comprueba sobre
 la superficie ENTERA por introspección, no sobre esta tabla.
 
-> 📏 **Los números de hoy, medidos por introspección de `app.routes` el 10/8/2026** (no copiados
-> de otro documento): **27 endpoints con parámetro `formato`**, de los cuales **19 aceptan
+> 📏 **Los números de hoy, medidos por introspección de `app.routes` el 12/8/2026** (no copiados
+> de otro documento): **26 endpoints con parámetro `formato`**, de los cuales **18 aceptan
 > además filtros propios** y 8 solo el formato (empresas, equipo, offboarding, onboarding,
 > onboarding/templates, períodos, usuarios y el export de un reporte por id).
+> *(Eran 27/19 el 10/8: el que falta es el export de `ev_instancias`, que se fue con el módulo.)*
 
 | Módulo | List | Export | ¿Igual? |
 |---|---|---|---|
@@ -399,7 +398,6 @@ la superficie ENTERA por introspección, no sobre esta tabla.
 | Inventario ítems | `estado` | idem (`inventario_items.py:35`) | ✅ |
 | Inventario asig. | `empleado_id` | idem (`inventario_asignaciones.py:49`) | ✅ |
 | Ev. resultados | `sector, perfil, con_nota` | idem (`evaluaciones_resultados.py:67-69`) | ✅ |
-| Ev. instancias | `ciclo_id, estado` | idem (`ev_instancias.py:39-40`) | ✅ |
 | Clientes | `incluir_inactivos` | idem (`clientes.py:49`) | ✅ |
 | Horas por cliente | `mes, anio` | idem (`horas_cliente.py:53-54`) | ✅ |
 
@@ -574,6 +572,17 @@ Mi lectura, ordenada por **valor / esfuerzo**. El criterio es cuántos cortes de
 ---
 
 ## PARTE 6 — Costo de líneas
+
+> 🔴 **PARTE 6 ES UNA FOTO DE JULIO Y YA NO DESCRIBE EL REPO. No la uses para decidir si hay
+> margen: medí.** *(Revisada el 12/8/2026.)* Se conserva porque el **razonamiento** sigue siendo
+> el correcto —antes de agregar un filtro, mirar cuánto lugar queda en las cuatro capas— pero
+> **los números de abajo están todos vencidos**: el backend pasó a **cero archivos over-limit**
+> el 2/8, así que las filas marcadas 🔴 *"ya over-limit"* (`empleado_repo` 174,
+> `_audit_payloads_rrhh` 189, `reporte_anual` 154, `nomina_repo` 107, `proyectos_repo` 104) están
+> todas cerradas; `gmail_service` bajó a 122 y `vacaciones_service` y `costo_service` ya
+> absorbieron los filtros para los que "no tenían margen". Todo lo que diga `ev_*` refiere a un
+> módulo **borrado** el 11/8. El inventario al día de archivos en el techo vive en
+> `docs/DEUDA-TECNICA.md` §3, remedido el 12/8.
 
 ### Backend — sin margen (el próximo filtro exige dividir primero)
 

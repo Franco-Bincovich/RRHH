@@ -73,8 +73,11 @@ class ObjetivosImportService:
                 errores.append(FilaObjetivoError(fila=f.fila, identificador=f.titulo,
                                                  motivo=str(exc)))
 
+        # `str()` explícito: el payload declara `empresa_id: str`. `AuditService.registrar` lo
+        # convertiría igual, pero apoyarse en eso es frágil acá — si fallara, el audit se traga
+        # la excepción por diseño y el evento del lote desaparece sin dejar rastro.
         self._audit.registrar(**payload_importacion_objetivos(
-            body.empresa_id, archivo, len(body.filas), len(creados), len(errores),
+            str(body.empresa_id), archivo, len(body.filas), len(creados), len(errores),
             usuario_id, creados))
         logger.info("Import objetivos confirmado", extra={
             "archivo": archivo, "enviadas": len(body.filas), "creados": len(creados),
@@ -82,10 +85,22 @@ class ObjetivosImportService:
         return ImportacionObjetivosConfirmarResponse(importados=len(creados), errores=errores)
 
     @staticmethod
-    def _a_create(f: FilaObjetivoPreview, empresa_id: str) -> ObjetivoCreate:
-        """Fila del preview → payload de alta. `parent_id` NO se setea: ver el encabezado."""
+    def _a_create(f: FilaObjetivoPreview, empresa_id: UUID) -> ObjetivoCreate:
+        """Fila del preview → payload de alta. `parent_id` NO se setea: ver el encabezado.
+
+        🔴 ACÁ LA CONVERSIÓN SE SACÓ, NO SE AGREGÓ, y es al revés de lo que uno espera al tipar
+        ids: estas dos líneas hacían `UUID(empresa_id)` y `UUID(f.responsable_id)` sobre strings.
+        Ahora los dos campos YA son UUID en el schema, y `UUID(objeto_uuid)` no es idempotente:
+        levanta TypeError. O sea que tipar el schema sin tocar esto rompería el confirmar entero.
+        Es el mismo rastreo que en el otro import descubrió que faltaba un `str()`; el resultado
+        fue el opuesto, y por eso hay que SEGUIR el camino en vez de aplicar una regla fija.
+
+        ⚠️ `responsables_ids` sigue siendo `List[str]` en el schema, así que su `UUID(u)` se
+        queda. No es inconsistencia por descuido: ese campo no entró en el inventario de esta
+        sesión (ver el comentario en el schema).
+        """
         return ObjetivoCreate(
-            empresa_id=UUID(empresa_id), responsable_id=UUID(f.responsable_id),
+            empresa_id=empresa_id, responsable_id=f.responsable_id,
             titulo=f.titulo, descripcion=f.descripcion, prioridad=f.prioridad,
             fecha_entrega=f.fecha_entrega,  # type: ignore[arg-type]
             responsables=[UUID(u) for u in f.responsables_ids],

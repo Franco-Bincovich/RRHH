@@ -12,12 +12,11 @@ los que estaban embebidos en `candidato_service.py`. Molde: `_empleados_write.py
 from typing import Optional
 from uuid import UUID
 
-from integrations.supabase_client import supabase_admin
+from integrations import storage
 from schemas.vacante import CandidatoResponse
 from utils.errors import AppError
 from utils.logger import logger
 
-_CV_BUCKET = "cvs"
 
 
 def borrar(candidato_repo, audit, candidato_id: str, empresa_id: Optional[UUID] = None,
@@ -32,7 +31,7 @@ def borrar(candidato_repo, audit, candidato_id: str, empresa_id: Optional[UUID] 
         raise AppError("No se puede eliminar un candidato de una búsqueda activa", "CANDIDATO_ACTIVO", 400)
     if cand.cv_storage_path:  # guard: nunca remove sobre key vacía; usa la key de la DB tal cual
         try:
-            supabase_admin.storage.from_(_CV_BUCKET).remove([cand.cv_storage_path])
+            storage.borrar(storage.CVS, [cand.cv_storage_path])
         except Exception as exc:  # storage falló: se conserva el flujo, objeto huérfano en Storage
             logger.error("Storage remove falló (CV)", extra={"candidato_id": candidato_id, "error": str(exc)})
     candidato_repo.delete(candidato_id, empresa_id)

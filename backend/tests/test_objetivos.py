@@ -194,11 +194,18 @@ class _Repo:
 
 
 class _UsersFake:
-    """La tabla `users` como la consulta `_validate_responsable`: select→eq→maybe_single→execute.
+    """La tabla `users` como la consulta `_validate_responsable`: select→eq→limit→execute.
 
     🔴 Devuelve TRES cosas distintas según el id (punto 3): la fila de un activo, la de un
-    inactivo, y None para un id que no existe. El service llega a `users` por `supabase_admin`
-    DIRECTO —no por un repo—, así que este es el único punto donde se lo puede falsear.
+    inactivo, y None para un id que no existe.
+
+    ⚠️ **Desde la sesión 0.9 el service NO llega a `users` por `supabase_admin` directo**: pasa
+    por `UsuarioRepo.get_estado`, que delega en `_usuario_lookup_repo`. Se faltea AHÍ, que es
+    donde quedó la query. La forma cambió con la mudanza —`maybe_single()` devolvía un dict,
+    `limit(1)` devuelve una lista— y este fake la sigue: el repo ya usaba `limit(1)` en sus
+    otros tres lookups, así que la query se alineó con sus hermanas en vez de al revés.
+    Las dos aserciones que este doble sostiene NO cambiaron: que la tabla sea `users` y a qué
+    id se consultó.
     """
 
     def __init__(self) -> None:
@@ -217,18 +224,20 @@ class _UsersFake:
         self.consultas.append(val)
         return self
 
-    def maybe_single(self):
+    def limit(self, n: int):
         return self
 
     def execute(self):
-        return SimpleNamespace(data=_USERS.get(self._id))
+        fila = _USERS.get(self._id)
+        return SimpleNamespace(data=[fila] if fila else [])
 
 
 @pytest.fixture
 def users(monkeypatch) -> _UsersFake:
     """Evita la red en `_validate_responsable` y deja afirmar a QUIÉN se consultó."""
     fake = _UsersFake()
-    monkeypatch.setattr(svc_mod, "supabase_admin", fake)
+    import repositories._usuario_lookup_repo as lookup_mod
+    monkeypatch.setattr(lookup_mod, "supabase_admin", fake)
     return fake
 
 

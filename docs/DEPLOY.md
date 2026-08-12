@@ -98,11 +98,18 @@ ya está puesto en el código; conectarlo es decisión de infraestructura.
 🔴 **`backend/db/schema.sql` es la ÚNICA fuente de verdad del schema.** Se lee del catálogo de
 Postgres (`information_schema` / `pg_catalog`), no se deriva del historial de migraciones.
 
-**Estado verificado el 7/8/2026 contra el catálogo vivo: 58 tablas · 698 columnas · 364
-constraints (153 FK + 103 CHECK + PK/UNIQUE) · 151 índices declarados.** El contraste dio **0
-diferencias** en las dos direcciones: no hay nada en `schema.sql` que no exista en producción, ni
-al revés. (Producción reporta 259 índices; los 108 de diferencia son los que Postgres crea solo
-por PK/UNIQUE, y salen de las constraints que el archivo sí declara.)
+**Estado reverificado el 12/8/2026 contra el catálogo vivo, ya con las migraciones 108–112
+corridas: 52 tablas en las dos puntas · 133 FK declaradas contra 134 en producción · 141 índices
+standalone declarados.** *(La medición anterior —58 tablas, 364 constraints, 151 índices, del
+7/8— quedó vieja el día que corrió la 112: ese drop se llevó 11 tablas.)*
+
+- **La FK de más es `users.id → auth.users(id)`**, y `schema.sql` no la declara **a propósito**:
+  es específica de Supabase y es una de las minas de la migración a RDS (ver `migracionAWS/`).
+- **No compares "constraints" con un solo número.** El catálogo cuenta cada `NOT NULL` como CHECK
+  (hoy da 705 en total), así que ese total no es comparable con nada que se lea del archivo. La
+  cuenta de FKs sí lo es.
+- Producción reporta **235 entradas en `pg_indexes`**; la diferencia con las 141 son los índices
+  que Postgres crea solo por PK/UNIQUE, y salen de las constraints que el archivo sí declara.
 
 ### Procedimiento
 
@@ -115,19 +122,19 @@ por PK/UNIQUE, y salen de las constraints que el archivo sí declara.)
 ### Lo que `schema.sql` NO trae
 
 🔴 **No trae ninguna función ni ningún trigger.** El snapshot se leyó del catálogo para tablas,
-columnas, constraints, índices y defaults. Producción tiene **50 triggers** no internos y el
-archivo trae **0**.
+columnas, constraints, índices y defaults. Producción tiene **43 triggers** no internos y el
+archivo trae **0**. *(Recontado el 12/8/2026: acá decía 50 / 41 / 9, valores previos al bloque J5.)*
 
 | | |
 |---|---|
 | **Datos** | Solo estructura. Los catálogos base (tipos de ausencia, etc.) hay que sembrarlos |
-| 🔴 **Los 41 triggers de `updated_at`** | Se recrean con `migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql` (+ la función `set_updated_at`). **Sin ellos, `updated_at` queda congelado en el valor del INSERT y nadie se entera** |
-| 🔴 **Los 9 triggers `trg_emp_*`** | Se recrean con **`backend/migrations/094_recrear_triggers_empresa.sql`** (+ la función `fn_misma_empresa`). Hacen cumplir que un registro y las filas que referencia sean de la MISMA empresa — una FK garantiza que el área existe, no que sea de la empresa del empleado. **Hasta el 7/8/2026 existían solo en producción, sin ningún artefacto que los recreara: un rebuild los perdía en silencio** |
+| 🔴 **Los 35 triggers de `updated_at`** | Se recrean con `migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql` (+ la función `set_updated_at`). **Sin ellos, `updated_at` queda congelado en el valor del INSERT y nadie se entera.** Eran 43 hasta que J5 dropeó 11 tablas; los 8 sobrantes **ya se sacaron de la 077** — si no, `DROP TRIGGER IF EXISTS x ON tabla` aborta el script entero cuando la TABLA no existe |
+| 🔴 **Los 8 triggers `trg_emp_*`** | Se recrean con **`backend/migrations/094_recrear_triggers_empresa.sql`** (+ la función `fn_misma_empresa`). Hacen cumplir que un registro y las filas que referencia sean de la MISMA empresa — una FK garantiza que el área existe, no que sea de la empresa del empleado. **Hasta el 7/8/2026 existían solo en producción, sin ningún artefacto que los recreara: un rebuild los perdía en silencio.** `trg_emp_sucesion` se fue con `sucesion_posiciones` en la 112 |
 | **Esquemas internos de Supabase** (`auth`, `storage`) | La única referencia externa es `users.id → auth.users(id)`. 🔴 **En AWS hay que dropear esa FK** y ponerle `DEFAULT gen_random_uuid()`, o no se puede insertar un usuario |
 
 ### `migrations/` es historial, NO bootstrap
 
-**001 → 094.** Documentan cómo se llegó hasta acá. Correrlas en orden contra una
+**001 → 112** (110 archivos). Documentan cómo se llegó hasta acá. Correrlas en orden contra una
 base vacía **no reconstruye producción de forma confiable**: hay dependencias de orden rotas,
 operaciones no idempotentes, y parte del modelo multiempresa se aplicó a mano en producción y se
 versionó retroactivamente de forma incompleta.
@@ -139,19 +146,26 @@ Siguen siendo el lugar donde se versiona **cada cambio nuevo**. ⚠️ Al aplica
 > 001 → 024, quedó ~65 migraciones atrás, y reintroduce triggers de auditoría que fueron
 > dropeados (la captura hoy es app-level). Se conserva solo como historial.
 
-### Migraciones destructivas — las únicas dos
+### Migraciones destructivas — hoy son cuatro
 
 | # | Qué borra | Riesgo |
 |---|---|---|
 | **084** `drop_modalidad_contratacion_y_nivel` | 🔴 **DROP COLUMN** sobre `empleados` | Irreversible. Ya corrida |
+| **109** `clientes_global_cierre` | 🔴 **DROP COLUMN** `clientes.empresa_id` + su FK e índice | Irreversible. Ya corrida. Iba **después** de que el código nuevo estuviera en producción |
+| **112** `drop_tablas_muertas` | 🔴 **DROP TABLE ×11** (las 5 `ev_*` y las 6 huérfanas), y con ellas 50 índices, 9 triggers, 17 policies y 66 constraints | Irreversible. Ya corrida. Iba **después** del deploy de J5a, nunca antes |
 | **080** `create_oauth_states` | `DROP` de objetos propios antes de recrearlos (idempotencia) | Bajo |
 
-Las 85 restantes son aditivas: `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, índices.
+Las restantes son aditivas: `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, índices.
 
-**Estado en producción (verificado 7/8/2026 contra el catálogo vivo):** **001 → 093 corridas
-TODAS**, incluida la 089 (`ausencias_unicidad`), que estaba pendiente al 2/8. 🔴 **La 094
-(`recrear_triggers_empresa`) NO está corrida y NO hace falta correrla en producción**: los 9
-triggers ya existen ahí. Existe para el **rebuild** (RDS), que es donde faltaban.
+**Estado en producción (verificado objeto por objeto el 12/8/2026): ✅ NO hay migraciones
+pendientes.** Corridas la **080, 089 y 102–112**. Producción quedó en **52 tablas**, sin ninguna
+`ev_*`, y `clientes` sin `empresa_id` (2 índices, 0 FKs salientes, los 4 clientes y su hora
+imputada intactos). `db/schema.sql` refleja ese estado exactamente.
+
+🔴 **La 094 (`recrear_triggers_empresa`) NO está corrida y NO hace falta correrla en producción**:
+los triggers ya existen ahí. **Y para el rebuild tampoco se usa** — quedó desincronizada de la 112
+(declara un trigger sobre una tabla dropeada). El rebuild usa **`db/funciones_y_triggers.sql`**,
+generado del catálogo vivo. Ver la sección de reconstrucción en `docs/handoff-aws/README.md`.
 
 ### Buckets de Storage
 

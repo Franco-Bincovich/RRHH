@@ -9,16 +9,13 @@ from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._nomina_evolucion import evolucion
 from repositories._nomina_row import SELECT as _NOM_SEL
 from repositories._nomina_row import TABLE as _NOM
 from repositories._nomina_row import item as _a_item
 from repositories._nomina_row import row as _to_nomina
 from schemas.costo import EvolucionMes, HistorialSalarialItem, NominaCreate, NominaResponse
 from utils.errors import AppError
-
-
-def _prev_period(mes: int, anio: int) -> tuple[int, int]:
-    return (mes - 1, anio) if mes > 1 else (12, anio - 1)
 
 
 class NominaRepo:
@@ -45,10 +42,11 @@ class NominaRepo:
 
     def save_nomina(self, data: NominaCreate) -> NominaResponse:
         """Upsert de nómina. empresa_id se hereda del empleado (FK compuesta garantiza coherencia)."""
+        empleado_id = str(data.empleado_id)  # UUID → str: sale a PostgREST en el .eq() Y en el payload
         emp_res = (
             supabase_admin.table("empleados")
             .select("empresa_id")
-            .eq("id", data.empleado_id)
+            .eq("id", empleado_id)
             .maybe_single()
             .execute()
         )
@@ -56,7 +54,7 @@ class NominaRepo:
             raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
         cargas = max(0.0, data.monto_bruto - data.monto_neto)
         payload = {
-            "empleado_id": data.empleado_id, "mes": data.mes, "anio": data.anio,
+            "empleado_id": empleado_id, "mes": data.mes, "anio": data.anio,
             "salario_bruto": data.monto_bruto, "cargas_sociales": cargas,
             "empresa_id": str(emp_res.data["empresa_id"]),
         }
@@ -67,32 +65,16 @@ class NominaRepo:
         )
         return _to_nomina(row_res.data)
 
+    def periodos_cargados(self, empresa_id: str) -> set[tuple]:
+        """Conjunto de (empleado_id, anio, mes) ya registrados en la empresa.
+
+        Lo usa el PREVIEW del import de nómina para marcar `es_actualizacion`. Vivía en
+        `nomina_csv_service` como query suelta: es la única tabla de este repo y no tenía por
+        qué resolverla el service.
+        """
+        res = supabase_admin.table(_NOM).select("empleado_id,anio,mes").eq("empresa_id", empresa_id).execute()
+        return {(r["empleado_id"], int(r["anio"]), int(r["mes"])) for r in (res.data or [])}
+
     def get_evolucion(self, mes: int, anio: int, empresa_id: Optional[UUID] = None) -> List[EvolucionMes]:
-        """
-        Evolución de costos de los últimos 12 meses.
-        CRÍTICO: filtra por empresa_id cuando se provee — no mezcla empresas en el SUM.
-        """
-        periodos: list[tuple[int, int]] = []
-        m, y = mes, anio
-        for _ in range(12):
-            periodos.append((m, y))
-            m, y = _prev_period(m, y)
-        min_y = min(y for _, y in periodos)
-        q = (
-            supabase_admin.table(_NOM).select("mes,anio,total")
-            .gte("anio", min_y).lte("anio", anio)
-        )
-        if empresa_id:
-            q = q.eq("empresa_id", str(empresa_id))
-        res = q.execute()
-        ps = set(periodos)
-        totals: dict[tuple[int, int], float] = {}
-        for r in (res.data or []):
-            k = (int(r["mes"]), int(r["anio"]))
-            if k in ps:
-                totals[k] = totals.get(k, 0.0) + float(r.get("total") or 0)
-        return [
-            EvolucionMes(mes=m, anio=y, total=round(totals[(m, y)], 2))
-            for m, y in reversed(periodos)
-            if (m, y) in totals
-        ]
+        """Evolución de costos de los últimos 12 meses. Delegado a `_nomina_evolucion.evolucion`."""
+        return evolucion(mes, anio, empresa_id)

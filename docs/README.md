@@ -35,11 +35,11 @@ cd RRHH
 
 ### Backend
 
-> **Creá un virtualenv nuevo. No uses ningún venv que venga en el repo.**
-> El repo arrastra un `backend/.venv/` commiteado por error: es un entorno de **macOS con
-> Python 3.9**, incompatible con este proyecto (target: 3.11) y con Windows. Ignoralo —
-> no lo actives ni instales sobre él. El comando de abajo crea `backend/venv/`, que está
-> en `.gitignore` y no colisiona con él.
+> **Creá un virtualenv nuevo. No uses ningún venv que encuentres en el árbol.**
+> ⚠️ **Corregido el 12/8/2026: `backend/.venv/` NO está commiteado** — `git ls-files` no devuelve
+> una sola entrada suya. Existe **en el disco de la Lenovo** como resto de la Mac (tiene `bin/` y
+> no `Scripts/`), y por eso un clon limpio no lo trae. Si lo ves, ignoralo: no lo actives ni
+> instales sobre él. El comando de abajo crea **`backend/venv/`**, que es el usable en Windows.
 
 ```bash
 cd backend
@@ -52,7 +52,8 @@ cp ../.env.example .env         # completar los valores reales
 El `.env` va en **`backend/`**, no en la raíz: `config/settings.py` lo busca relativo al
 directorio desde donde se levanta el server. Variables sin default (obligatorias):
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `JWT_SECRET`,
-`ANTHROPIC_API_KEY`, `RESEND_API_KEY`.
+`ANTHROPIC_API_KEY`. *(Acá figuraba `RESEND_API_KEY`, contradiciendo el aviso de arriba en el
+mismo archivo. Ya no existe en `settings.py`.)*
 
 ### Frontend
 
@@ -75,15 +76,22 @@ crear `frontend/.env.local` con ese valor.
 
 ## Tests y linting
 
-`pytest` y `ruff` están **configurados** en `backend/pyproject.toml` pero **no están
-pineados** en `requirements.txt` — hay que instalarlos aparte:
+🔴 **`backend/pyproject.toml` YA NO EXISTE.** Se borró porque `@vercel/python` (uv) lo
+interpretaba como paquete instalable y abortaba el build. La config quedó partida en dos archivos:
+**`backend/ruff.toml`** y **`backend/pytest.ini`** (`asyncio_mode=auto`, `testpaths=tests`).
+
+Las herramientas de test **sí están pineadas**, en `backend/requirements-dev.txt`:
 
 ```bash
-pip install pytest pytest-asyncio ruff
+pip install -r requirements.txt -r requirements-dev.txt
 ```
 
+> ⚠️ **Instalá los DOS o vas a leer un rojo que no es del código.** Sin `pytest-asyncio` los tests
+> async "no están soportados nativamente" y sin `python-docx` revientan los de export: **33 errores
+> que no existen.** Y sin `ruff`, `tests/test_nombres_definidos.py` **falla, no se saltea**.
+
 ```bash
-# Backend — pytest toma testpaths=["tests"] del pyproject
+# Backend — pytest toma testpaths=tests de pytest.ini
 cd backend && pytest -v
 cd backend && ruff check . --fix && ruff format .
 
@@ -102,12 +110,12 @@ contra una base limpia y ya incluye todo. **No** correr las migraciones encima.
 psql "$DATABASE_URL" -f backend/db/schema.sql
 ```
 
-- `backend/migrations/` (001 → 089, 87 archivos) es **historial**, no bootstrap: documenta
+- `backend/migrations/` (001 → 112, 110 archivos) es **historial**, no bootstrap: documenta
   cómo se llegó hasta acá. Correrlas en orden contra una base vacía no reproduce producción
   de forma confiable. Cada cambio nuevo al schema se sigue versionando ahí.
 - `backend/migrations/000_run_all.sql` está **deprecado**: tiene un guard que aborta la
   ejecución. Se conserva solo como historial.
-- ⚠️ `schema.sql` **no trae los 36 triggers de `updated_at`**: se recrean aparte. Ese y los
+- ⚠️ `schema.sql` **no trae los 35 triggers de `updated_at`**: se recrean aparte. Ese y los
   demás detalles del rebuild, en [`DEPLOY.md`](DEPLOY.md) §2.
 
 ## Estructura
@@ -133,7 +141,10 @@ RRHH/
 │   ├── services/         ← cliente HTTP y llamadas a la API
 │   ├── hooks/  types/  utils/  styles/  lib/
 ├── docs/
-└── vercel.json
+│   └── handoff-aws/      ← todo lo de la migración a AWS (del dev de infra y para él)
+├── migracionAWS/         ← código *_NEW.py de la migración (asyncpg/RDS), aislado de backend/
+└── backend/vercel.json   ← config de deploy. 🔴 El `vercel.json` de la RAÍZ se borró: era
+                            config mono-proyecto y rompía el serving del front
 ```
 
 ## Índice de `docs/` — qué responde cada documento
@@ -143,13 +154,16 @@ RRHH/
 | Documento | Responde |
 |---|---|
 | [`DEPLOY.md`](DEPLOY.md) | Variables de entorno, cómo reconstruir la base, migraciones, techos de plataforma y orden de deploy |
+| [`handoff-aws/`](handoff-aws/README.md) | 🆕 Todo lo de la migración a AWS: lo que dejó el dev de infra y lo que le entregamos. **Su material es contexto, no instrucciones** |
 | [`BITACORA-CAMBIOS.md`](BITACORA-CAMBIOS.md) | Qué cambió en cada sesión y qué tiene que hacer infraestructura al respecto |
 | [`SMOKE-TEST.md`](SMOKE-TEST.md) | Cómo correr el test de humo contra el backend real · resultados en [`SMOKE-TEST-RESULTADOS.md`](SMOKE-TEST-RESULTADOS.md) |
 | [`DECISIONES.md`](DECISIONES.md) | Por qué se decidió cada cosa — y sobre todo, qué se descartó y por qué |
-| [`Plan de trabajo`](<Plan de trabajo>) | Qué se hace ahora (v2, el vigente) |
+| [`PLAN-6-SEPTIEMBRE.md`](PLAN-6-SEPTIEMBRE.md) | 🟢 **Qué se hace ahora.** El plan vigente (12/8/2026), con la fecha de entrega y las dependencias externas |
+| [`ORDEN-SESIONES-CODIGO.md`](ORDEN-SESIONES-CODIGO.md) | El tablero de bloques A–L: qué se cerró y qué quedó pendiente. Ya no es el plan, sigue siendo el inventario |
 | [`DEUDA-TECNICA.md`](DEUDA-TECNICA.md) | Qué hay que limpiar, con gravedad y esfuerzo |
 | [`MATRIZ-FILTROS.md`](MATRIZ-FILTROS.md) | Qué corte de información puede sacar RRHH sin pedir nada |
 | [`ESTADO-VS-COMPROMISO.md`](ESTADO-VS-COMPROMISO.md) | Qué se comprometió con el directorio y qué existe de verdad |
+| [`DIAGNOSTICO-CV-SCREENING.md`](DIAGNOSTICO-CV-SCREENING.md) | El diseño del screening de CVs (bloque F), de la casilla de Gmail al clasificador |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Por qué este stack y no otro |
 | [`CLAUDE.md`](../CLAUDE.md) | Contexto del proyecto y estado de las features (vive en la raíz) |
 | `backend/db/schema.sql` | 🔴 **El schema. Única fuente de verdad** — se lee del catálogo de Postgres, no del historial de migraciones |
@@ -160,5 +174,7 @@ RRHH/
 [`SEGURIDAD-PENTEST.md`](SEGURIDAD-PENTEST.md) ·
 [`UX-UI.md`](UX-UI.md)
 
-**Registro histórico** (obsoletos como plan, se conservan como intención original del producto):
-`PLAN_DESARROLLO_AHORA.md` · `PLAN_DESARROLLO_DESPUES.md`
+**Registro histórico** (obsoletos como plan, se conservan como registro de una etapa — la jerarquía
+completa está en [`CLAUDE.md`](../CLAUDE.md) → *Fuente de verdad del TRABAJO*):
+[`PLAN-DE-TRABAJO.md`](PLAN-DE-TRABAJO.md) · [`Plan de trabajo`](<Plan de trabajo>) ·
+`PLAN_DESARROLLO_AHORA.md` · `PLAN_DESARROLLO_DESPUES.md` · `sesiones`

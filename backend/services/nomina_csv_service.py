@@ -6,8 +6,8 @@ import csv
 import io
 from uuid import UUID
 
-from integrations.supabase_client import supabase_admin
 from repositories.empleado_repo import EmpleadoRepo
+from repositories.nomina_repo import NominaRepo
 from utils.logger import logger
 
 REQUIRED_FIELDS_NOMINA = {"dni", "anio", "mes", "salario_bruto", "neto"}
@@ -15,8 +15,7 @@ REQUIRED_FIELDS_NOMINA = {"dni", "anio", "mes", "salario_bruto", "neto"}
 
 def _existing_nomina(empresa_id: str) -> set[tuple]:
     """Retorna el conjunto de (empleado_id, anio, mes) ya registrados en la empresa."""
-    res = supabase_admin.table("costos_nomina").select("empleado_id,anio,mes").eq("empresa_id", empresa_id).execute()
-    return {(r["empleado_id"], int(r["anio"]), int(r["mes"])) for r in (res.data or [])}
+    return NominaRepo().periodos_cargados(empresa_id)
 
 
 def parse_nomina_csv(content: str, empresa_id: str) -> tuple[list[dict], list[dict]]:

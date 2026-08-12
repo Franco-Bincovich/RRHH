@@ -91,7 +91,10 @@ class _FakeStorage:
 @pytest.fixture
 def storage(monkeypatch):
     fake = _FakeStorage()
-    monkeypatch.setattr(adj_mod.supabase_admin, "storage", fake, raising=False)
+    # El SDK ya no se alcanza desde el service: vive en `integrations/storage.py`, que el service
+    # importa como `storage`. El fake y las aserciones no cambian — `supabase_admin` es el MISMO
+    # objeto, así que parchear su atributo `.storage` sigue siendo global.
+    monkeypatch.setattr(adj_mod.storage.supabase_admin, "storage", fake, raising=False)
     return fake
 
 

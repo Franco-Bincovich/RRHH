@@ -9,7 +9,7 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from integrations.supabase_client import supabase_admin
+from integrations import storage
 from repositories.asignacion_repo import AsignacionRepo
 from repositories.capacitacion_repo import CapacitacionRepo
 from schemas.capacitacion import AsignacionCreate, AsignacionListResponse, AsignacionResponse, AsignacionUpdate
@@ -19,7 +19,6 @@ from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 
-_BUCKET = "documentos"
 _VALID_ESTADOS = ("pendiente", "en_curso", "completado")
 _ALLOWED_TYPES = ("application/pdf", "image/jpeg", "image/png", "image/webp")
 
@@ -113,7 +112,7 @@ class AsignacionService:
             raise AppError("Solo se permiten PDF o imágenes (JPG, PNG, WEBP)", "INVALID_FILE_TYPE", 400)
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "pdf"
         path = f"certificados/{id}/{_uuid.uuid4()}.{ext}"
-        supabase_admin.storage.from_(_BUCKET).upload(path=path, file=content, file_options={"content-type": content_type})
+        storage.subir(storage.DOCUMENTOS, path, content, content_type)
         updated = self._repo.update(id, empresa_id, {"certificado_url": path})
         logger.info("Certificado subido", extra={"asignacion_id": id, "path": path})
         return updated  # type: ignore[return-value]
@@ -125,5 +124,4 @@ class AsignacionService:
             raise AppError("Asignación no encontrada", "ASIGNACION_NOT_FOUND", 404)
         if not row.certificado_url:
             raise AppError("Esta asignación no tiene certificado", "SIN_CERTIFICADO", 404)
-        res = supabase_admin.storage.from_(_BUCKET).create_signed_url(path=row.certificado_url, expires_in=3600)
-        return res["signedURL"]
+        return storage.url_firmada(storage.DOCUMENTOS, row.certificado_url)

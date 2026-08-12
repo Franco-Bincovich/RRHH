@@ -16,13 +16,12 @@ No hereda un límite más alto por ser un satélite.
 import uuid
 from typing import Optional
 
-from integrations.supabase_client import supabase_admin
+from integrations import storage
 from schemas.empresa import EmpresaResponse
 from services._audit_payloads_rrhh import payload_logo_empresa
 from utils.errors import AppError
 from utils.logger import logger
 
-_BUCKET = "avatars"
 
 
 def subir_logo(
@@ -57,12 +56,9 @@ def subir_logo(
         raise AppError("El archivo debe ser una imagen", "INVALID_FILE_TYPE", 400)
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
     path = f"logos/{id}/{uuid.uuid4()}.{ext}"
-    supabase_admin.storage.from_(_BUCKET).upload(
-        path=path,
-        file=content,
-        file_options={"content-type": content_type},
-    )
-    logo_url = supabase_admin.storage.from_(_BUCKET).get_public_url(path)
+    storage.subir(storage.AVATARS, path, content, content_type)
+    # AVATARS es el ÚNICO bucket público del sistema: por eso acá la URL es permanente y no firmada.
+    logo_url = storage.url_publica(storage.AVATARS, path)
     empresa = repo.set_logo_url(id, logo_url)
     if not empresa:
         raise AppError("Error al actualizar el logo", "LOGO_UPDATE_ERROR", 500)

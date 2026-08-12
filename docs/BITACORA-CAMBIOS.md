@@ -40,6 +40,487 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-12 · Fase 0.9 · Las 4 fugas de acceso a datos se mueven a `repositories/` · commit pendiente
+
+**Qué cambió:** cierre de Fase 0. De las 62 llamadas a la base que vivían fuera de
+`repositories/`, **se movieron 4**, se **declararon 58** con un barrido nuevo, y se escribió
+`docs/handoff-aws/ACCESO-A-DATOS.md`, que es la entrega de la sesión para el dev de infra.
+
+### Los dos repos destino estaban los DOS en 99/100
+
+`usuario_repo.py` **99/100** y `nomina_repo.py` **99/100**: ninguno admitía un método más. Hubo
+que dividir los dos ANTES de mover nada:
+
+- **`_usuario_lookup_repo.py` (61 líneas)** — los cuatro lookups de UNA fila. El corte es por
+  FORMA de la consulta, no por tamaño: acá viven las que devuelven una fila o `None`; las
+  escrituras, los chequeos de unicidad (que devuelven bool) y el listado se quedaron.
+  `usuario_repo` bajó a **98**.
+- **`_nomina_evolucion.py` (53 líneas)** — la evolución de 12 meses, que es el único bloque del
+  repo que no devuelve filas de nómina sino una serie agregada, y se lleva su helper
+  `_prev_period`. `nomina_repo` bajó a **80**.
+
+Molde de los dos: `empleado_repo.py` — funciones libres en el satélite y delegadores de una línea
+que sostienen la interfaz pública. **Ningún caller de producción cambió.**
+
+### Cuáles de las 3 fugas de `users` necesitaron método nuevo
+
+| Fuga | Resolución |
+|---|---|
+| `objetivo_service.py:138` | ✅ **`get_estado` ya existía** (caché del middleware). Trae `rol` y `ultimo_acceso` de más; **no se le recortaron columnas** — eso tocaría a su otro caller |
+| `objetivos_import_preview.py:36` | ✅ **`listar_activos` ya existía** (listado + export). Trae `rol` de más y viene ordenado por apellido; el índice que arma el preview es por email/username/nombre, no por posición |
+| `auth_service.py:37` | 🆕 **`find_by_username`**, el único que faltaba. La búsqueda por `ilike` sin comodines no tenía método |
+| `nomina_csv_service.py:18` | 🆕 **`periodos_cargados`** en `nomina_repo` |
+
+**Dos de cuatro se resolvieron reusando lo que había**, y eso se ve en el conteo: la suite bajó
+de 3256 a 3254 porque `test_selects_repos` parametriza por `select` descubierto, y dos queries
+dejaron de existir en vez de mudarse. El total de llamadas a la base bajó de **388 a 386** sin
+perder una sola consulta.
+
+⚠️ **Un cambio de forma, declarado:** `_validate_responsable` pasó de `maybe_single()` (devuelve
+dict) a `limit(1)` (devuelve lista), porque es la forma que `usuario_repo` ya usaba en sus otros
+tres lookups. El comportamiento observable es idéntico (fila o nada → mismos 422), pero el fake
+del test tuvo que seguir la forma.
+
+⚠️ **`objetivo_service` NO bajó de líneas: 142 → 142.** El pedido era que bajara, y no podía: la
+query que salió **era una sola línea**, así que reemplazarla por la llamada al repo es neutro.
+`auth_service` sí bajó, 134 → **125**, porque ahí salieron 9 líneas de `try/except` alrededor de
+un `.single()`.
+
+### El barrido — 4 familias, no 23 archivos
+
+**`tests/test_acceso_a_datos.py` (6 tests).** Recorre por AST `services`, `routers`, `utils`,
+`middleware`, `scripts`, `config` y `schemas`, y rojea ante cualquier `.table()`/`.rpc()` que no
+caiga en una familia declarada.
+
+🔑 **Las excepciones son por FAMILIA y la clave es un substring del path, no un archivo.**
+Declarar los 19 archivos uno por uno daría la lista que nadie mira (K2, K7). Son **4** —
+`reporte`, `dashboard`, `organigrama`, `procesos`— cada una con su motivo escrito, y **hay un
+test que impide que pasen de 5**: si hacen falta seis, el problema no es la lista, es que la
+regla dejó de valer. Un archivo nuevo de reportes entra solo, sin tocar el barrido.
+
+Por AST y no por texto: varios docstrings nombran tablas y un grep los marcaría. Guarda de
+mínimo (≥250 archivos descubiertos) y contracara (`repositories/` **tiene** que seguir
+consultando, ≥60 archivos) para que no pase en verde sobre un conjunto vacío.
+
+**Mutación:** una query nueva en `vacante_service` (familia no declarada) → **1 test en rojo**,
+nombrando `services/vacante_service.py:27`. El barrido también se cazó a sí mismo mientras se
+escribía: uno de los motivos decía "ídem" y el test de "toda familia tiene motivo escrito" lo
+rechazó.
+
+### 🔴 ACCIONES DE INFRAESTRUCTURA — `docs/handoff-aws/ACCESO-A-DATOS.md`
+
+- **El número:** 386 llamadas, **328 en `repositories/`** (85%), **58 afuera** en 19 archivos de
+  `services/`, todas inventariadas con archivo:línea.
+- 🔴 **Los DOS catálogos de tabla dinámica**, que son lo que un porteo por búsqueda y reemplazo
+  **no ve**: `procesos_service._META` (el que produjo el **500 del Panel de Procesos** cuando
+  J5a borró las `ev_*` — la pantalla muere entera, no degrada una tarjeta) y
+  `_dashboard_alertas_catalogo.BLOQUEOS`. Con la regla que sale de ahí: antes de renombrar o
+  dropear una tabla, grepearla en esos dos archivos.
+- **`.rpc()` es CERO en todo el backend**: no hay lógica de Postgres invocada desde la app.
+- **Supabase Auth es superficie aparte** (`_usuario_alta.py`, `usuario_service.py`) y **no entra
+  en las 386**; su reemplazo ya está en las migraciones 075/076 de `migracionAWS/`.
+- **Los 5 helpers de `repositories/` con `table` por parámetro SÍ se resuelven** leyendo el
+  caller: no son el caso difícil.
+- 🔴 **Sección de estado, para que no planifique sobre algo que puede cambiar:** las 48 de
+  reportes y dashboard quedan como **CANDIDATAS** a moverse si el trabajo de features termina
+  antes del **6/9**. Si a esa fecha siguen donde están, se quedan y son suyas. **Después del 6 no
+  se toca nada**: moverle el piso mientras portea es peor que dejarlas.
+- **Migraciones / env vars / dependencias / buckets / endpoints / auth / dominios:** ninguno.
+
+**Verificación:** `pytest -q` → **3260 passed** (3254 tras mover las fugas + los 6 del barrido) ·
+los 14 barridos + el nuevo verdes (494 tests) · **encoding limpio: 0 BOM y 0 caracteres de
+reemplazo** en todos los archivos tocados, revisado con `git diff` (es la segunda vez en dos días
+que el encoding de Windows muerde el repo; esta vez se usó solo la herramienta de edición).
+
+---
+## 2026-08-12 · Fase 0.7 · Storage pasa a tener un punto de contacto ÚNICO · commit pendiente
+
+**Qué cambió:** nace **`backend/integrations/storage.py`** (94 líneas) y los **7** services que
+hablaban con Storage dejan de nombrar buckets y de llamar al SDK. Es la recomendación #2 de las
+tres migraciones anteriores: un wrapper simétrico, para que el código de negocio no se toque el
+día del cutover a S3.
+
+> ⚠️ **Eran SIETE, no seis.** El inventario traía 6 services con la constante hardcodeada; el
+> séptimo —`_adjuntos_masivo.py`— no nombraba ningún bucket **porque lo lee de la fila**
+> (`adj.bucket`), pero llamaba al SDK igual. Es la fuga que un inventario por constante no ve, y
+> es justo el caso que más condiciona el diseño.
+
+**Dónde se cortó y por qué ahí:** en `integrations/`, no en `services/`. Es la convención del repo
+(`integrations/` son los wrappers de servicios externos) y el archivo **no tiene una línea de
+negocio**: no valida, no arma paths, no audita. El contraejemplo aparente es `services/mailer/`,
+que también es punto de salida único y también habla con un proveedor externo, pero **ownea**
+plantillas, render y variables y apenas contiene un `_gmail.py` privado. Acá no hay nada que
+ownear: son cuatro llamadas. Y el desempate práctico: el día del cutover, el archivo que cambia de
+proveedor conviene que esté al lado del otro que cambia por lo mismo (`supabase_client.py`).
+
+**La API es neutral al proveedor a propósito** — afuera no se ve `from_()`, ni `file_options`, ni
+la clave `signedURL` del dict de Supabase: `subir` · `url_firmada` · `url_publica` · `borrar`, más
+`DOCUMENTOS` / `CVS` / `AVATARS`.
+
+🔴 **`bucket` se recibe como `str` y no como Enum, por la base.** `adjuntos.bucket` es una COLUMNA
+con `DEFAULT 'documentos'`: el nombre está grabado en filas de producción. Dos caminos leen el
+bucket DE LA FILA —la descarga de un adjunto y el borrado masivo—, así que el módulo tiene que
+poder operar sobre un valor que llega de la base. Un Enum movería el fallo de "el proveedor
+rechaza" a "la conversión revienta": otro error, en otro lugar, y esta sesión no cambia
+comportamiento.
+
+**¿Hacían lo mismo de formas distintas?** Casi no, y la única diferencia real **no se unificó**:
+`cv_service` es el único de los cuatro uploads que puede recibir el `content_type` vacío (el
+archivo llega de un mail) y resuelve su default con `or "application/octet-stream"`. Ese default se
+quedó **en el call site**, no se subió al módulo: es una regla de ese flujo. Los dos borrados
+tienen su propio `try/except` con log —"si Storage falla, seguí igual y dejá el objeto huérfano"—
+y también se quedaron en los services: es decisión de negocio, y traerla al módulo unificaría dos
+criterios que hoy coinciden por casualidad, no por diseño.
+
+**Tests:** `tests/test_storage_punto_unico.py` (143 líneas, 5 tests) recorre `services/` y
+`repositories/` **por AST** y rojea si alguien vuelve a nombrar un bucket o a llamar al SDK.
+🔑 **Por AST y no por texto**: varios docstrings dicen "bucket privado 'documentos'" —prosa
+correcta— y un grep los marcaría, con lo que el barrido nacería con falsos positivos y se apagaría.
+Hay un quinto test que fija justamente eso: que la prosa NO cuenta, para que nadie "arregle" un
+falso positivo borrando documentación. Lleva guarda de mínimo (≥150 archivos descubiertos), por lo
+de `barridoFront` en Windows.
+
+**Los tests existentes NO se reescribieron.** Los de adjuntos y logo necesitaron **una línea cada
+uno**: el monkeypatch alcanzaba el SDK como `<service>.supabase_admin`, y ese nombre ya no existe
+en el service. Se retargetearon a `<service>.storage.supabase_admin` —sin agregar imports, sin
+tocar los fakes ni una sola aserción—, aprovechando que `supabase_admin` es el MISMO objeto y
+parchear su atributo `.storage` sigue siendo global.
+
+**Mutaciones, verificadas:** que `cv_service` vuelva a escribir `"cvs"` a mano → **1 test en rojo**
+(`test_ningun_service_ni_repo_nombra_un_bucket`, nombrando archivo y bucket). Que el módulo apunte
+a un bucket equivocado (`CVS = "cvs-equivocado"`) → **1 test en rojo, y es el estructural, no uno
+funcional**.
+
+> 🔴 **Ese segundo resultado es un HALLAZGO, no un aprobado:** ningún test funcional afirma el
+> NOMBRE del bucket. Los fakes de adjuntos y logo reciben el bucket en `from_()` y lo descartan sin
+> mirarlo, así que un bucket equivocado los deja verdes. Queda anotado en `STORAGE.md`: **un typo
+> en un nombre de bucket de S3 no lo va a detener un test funcional.** No se tocaron esos tests
+> (la consigna era no modificarlos); cerrarlo es una tanda propia.
+
+**Impacto en infraestructura:**
+
+- 📌 **Se escribió `docs/handoff-aws/STORAGE.md`**, que es la entrega de esta sesión para el dev de
+  infra: los 3 buckets con qué guarda cada uno, su acceso y sus paths; **qué archivo toca y cuáles
+  NO** el día del cutover; y las cinco cosas que hay que saber antes de portar.
+- 🔴 **`avatars` es el ÚNICO bucket público**, y su URL se **persiste** en `empresas.logo_url`. Si
+  el dominio del bucket cambia en AWS, esas filas quedan apuntando al viejo. Los otros dos guardan
+  solo la key y firman en cada request: no tienen ese problema.
+- 🔴 **Si en AWS se renombran los buckets, hay que migrar `adjuntos.bucket`** o mapear los nombres
+  viejos dentro del módulo.
+- **El E2E de adjuntos sigue sin ejecutarse nunca** (apunta al bucket de producción). El cutover es
+  el momento de escribirlo contra un bucket de prueba.
+- **Migraciones / env vars / dependencias / endpoints / auth / dominios:** ninguno. El
+  comportamiento no cambió: mismos buckets, mismos paths, mismo manejo de errores.
+
+**Verificación:** `pytest -q` → **3256 passed** (3251 + los 5 nuevos) · los 13 barridos + el nuevo
+verdes (490 tests) · `npm test` **647/647** y `tsc --noEmit` exit 0 — el front no se tocó.
+
+> ⚠️ **Nota de método, porque casi cuesta caro:** el reemplazo de imports se hizo primero con un
+> `Get-Content`/`Set-Content` masivo de PowerShell y **corrompió el encoding de los 6 archivos**
+> (PS 5.1 lee UTF-8 sin BOM como cp1252 y reescribe con BOM: cada `ó` quedó `Ã³`). Se detectó en el
+> `git diff` —que mostraba cambios en líneas que nadie tocó— y se revirtió byte a byte
+> reinterpretando cp1252→UTF-8. **Para editar código con acentos en Windows, usar la herramienta de
+> edición, no `Set-Content`.**
+
+---
+## 2026-08-12 · Fase 0.6 · Los 5 ids de entrada pasan de `str` a `UUID` + la 109 ya corrió · commit pendiente
+
+**Qué cambió:** los cinco schemas de ENTRADA que declaraban un id como `str` ahora lo declaran
+`UUID`. Es preparación del porteo a asyncpg —con el SDK de Supabase el id viaja como string y el
+tipo no molesta; con asyncpg vuelve como objeto y un schema que dice `str` explota— y de paso
+mueve la validación a la frontera: un id vacío o mal formado sale **422** en vez del **500** que
+daba Postgres con `22P02`. Es el mismo bug que ya nos costó un 500 en producción con
+`AreaCreate.empresa_id`.
+
+| Schema | Endpoint | Qué hubo que tocar en el camino |
+|---|---|---|
+| `NominaCreate.empleado_id` | `POST /api/costos/nomina` | **`str()` en DOS lugares** de `nomina_repo.save_nomina`: el `.eq()` del lookup y el payload del upsert |
+| `FilaNominaPreview.empleado_id` | `POST /api/importacion/nomina/confirmar` | **`str()`** en el armado de filas de `nomina_import_service` |
+| `ImportacionNominaConfirmarRequest.empresa_id` | idem | **`str()`** ídem, y explícito hacia el payload de auditoría |
+| `FilaObjetivoPreview.responsable_id` | `POST /api/importacion/objetivos/confirmar` | 🔴 **SACAR** la conversión: `_a_create` hacía `UUID(...)` y `UUID(objeto_uuid)` levanta TypeError |
+| `ImportacionObjetivosConfirmarRequest.empresa_id` | idem | 🔴 ídem, más `str()` explícito hacia el payload de auditoría |
+
+🔑 **La lección del rastreo: el resultado fue OPUESTO en los dos imports.** En el de nómina
+faltaba una conversión; en el de objetivos SOBRABA. Aplicar una regla fija ("tipar UUID ⇒ agregar
+`str()`") habría roto el confirmar de objetivos entero. Hay que seguir el camino hasta PostgREST y
+**ejecutarlo**, no leerlo: `objetivo_repo.save` ya convertía campo por campo desde antes —el falso
+positivo conocido— y no necesitaba nada.
+
+**Lo que NO se tocó, con razón:** `responsables_ids: List[str]` en el mismo schema de objetivos.
+Tiene el mismo problema de fondo y su `UUID(u)` sigue vivo y funcionando, pero **no entró en el
+inventario de los cinco** y cambiarlo pide el mismo rastreo completo. Queda anotado en el schema,
+no hecho a medias.
+
+**Tests:** `tests/test_ids_tipados_uuid.py` (433 líneas, **17 tests**). Todos entran **por HTTP
+contra el app real** —no instancian los schemas a mano, que es el error que dejó pasar el bug de
+clientes— y cada campo tiene su caso positivo (el valor llega entero al otro lado) y sus dos
+negativos (`""` y `"no-es-un-uuid"` → 422, nunca 500). La serialización, que ningún test de HTTP
+toca porque el doble del service corta antes del repo, se cubre llamando a los **repos y services
+REALES** con un doble de `supabase_admin` que hace `json.dumps` en el punto donde el payload sale
+hacia PostgREST. Molde: `test_area_empresa_tipada.py`.
+
+> 🔴 **Un detalle que cambia si el test sirve o no:** el confirmar de objetivos atrapa toda
+> excepción por fila y la devuelve como error de esa fila, así que **con el bug vivo respondía 200
+> igual**. Un test que mirara solo el status pasaba. Por eso se afirma `importados == 1` y
+> `errores == []`.
+
+**Mutaciones, verificadas:** volver `FilaNominaPreview.empleado_id` a `str` → **4 tests en rojo**;
+sacar el `str()` del armado de filas del import → **1 test en rojo**, con
+`TypeError: Object of type UUID is not JSON serializable`.
+
+**18 tests existentes hubo que actualizar** (fixtures con ids inventados tipo `"emp-1"` y `"e9"`,
+que el schema ahora rechaza). No es daño colateral: es la señal de que el contrato se apretó.
+
+### ✅ La 109 ya corrió — corregido en los tres lugares
+
+Franco la corrió. Verificado en el catálogo: `clientes` **sin** `empresa_id`, 2 índices
+(`clientes_pkey` y `ux_clientes_nombre_global`), **0 FKs salientes**, y los 4 clientes con su hora
+imputada intactos. `db/schema.sql` volvió a **"AL DÍA"** y el párrafo de "va por delante" se borró,
+que es la regla que el propio archivo declara. Actualizados también `CLAUDE.md`, `DEPLOY.md` y
+`docs/handoff-aws/README.md`. **No quedan migraciones pendientes: 080, 089 y 102–112 corridas.**
+
+> 🔴 **Es la TERCERA vez que ese encabezado queda desfasado**, y las tres están ahora escritas ahí
+> como justificación de la regla: (1) decía "va por delante" con las migraciones ya corridas;
+> (2) lo mismo con la 112, cuatro días después; (3) al arreglar (2) se marcó "AL DÍA" verificando
+> **solo el conteo de tablas**, y la 109 no crea ni borra tablas, así que era invisible. La regla
+> —tocarlo en la MISMA sesión que la migración, al escribirla y al correrla— ya está anotada como
+> tal, con los tres casos.
+
+**Impacto en infraestructura:**
+
+- **Ninguno inmediato.** Cero migraciones, variables, endpoints, buckets, dependencias o cambios
+  de auth. El contrato de red **no cambia**: JSON lleva los ids como string en las dos direcciones,
+  y el front reenvía las filas del preview tal cual las recibió (verificado en
+  `ImportarNominaCSVModal` e `ImportarObjetivosModal`: pasan `preview.filas_validas` sin tocar).
+  Por eso no hubo que tocar una línea del front ni de sus tipos.
+- 📌 **Para el porteo:** estos cinco eran deuda de porteo, no deuda menor. Quedan **0** ids de
+  entrada tipados `str`. Los ~37 que el grep de control sigue mostrando son de **salida**
+  (`*Response`, que se arman desde el row ya serializado y no entran en ninguna query) o **ids
+  externos** (`message_id`, `email_id`, `post_id` de Gmail/LinkedIn, que **no son UUID y tienen que
+  seguir siendo `str`**).
+- ⚠️ `repositories/nomina_repo.py` quedó en **99/100**. Estaba en 98 y el comentario del cambio lo
+  llevó a 106; se condensó a una línea al lado del código en vez de un bloque. **El próximo cambio
+  en ese archivo exige dividirlo primero.**
+
+**Verificación:** `pytest -q` → **3251 passed** (3234 + los 17 nuevos) · los 13 barridos verdes
+(485 tests en los 10 de backend) · `npm test` **647/647** y `tsc --noEmit` exit 0 — el front no se
+tocó, se corrieron para confirmarlo.
+
+---
+## 2026-08-12 · Fase 0.5 · Los cuatro artefactos de reconstrucción + **la 109 estaba pendiente y nadie lo sabía** · commit pendiente
+
+**Qué cambió:** el repo queda con los cuatro archivos con los que se levanta RDS desde cero.
+**`db/funciones_y_triggers.sql`** (165 líneas) y **`db/seed.sql`** (120) son nuevos; `db/schema.sql`
+y `docs/handoff-aws/README.md` se tocaron. Los dos nuevos salieron del **catálogo vivo**, no de
+`migrations/`.
+
+### 🔴 LO MÁS IMPORTANTE NO ESTABA EN EL PLAN: LA MIGRACIÓN 109 NO ESTÁ CORRIDA
+
+Apareció al derivar qué tablas necesitan trigger: `clientes` seguía apareciendo con `empresa_id`.
+Verificado objeto por objeto contra el catálogo: **producción todavía tiene `clientes.empresa_id`,
+su FK `clientes_empresa_id_fkey`, el índice `idx_clientes_empresa` y el índice único viejo
+`ux_clientes_nombre_por_empresa`** — los cuatro objetos que la 109 dropea. Y 3 de los 4 clientes
+cargados tienen `empresa_id` no nulo.
+
+**Correrla es seguro y hay que hacerlo:** la 108 (que sí corrió) ya dejó puesta la unicidad global
+`ux_clientes_nombre_global`, así que en ningún momento la tabla queda sin unicidad de nombre; y por
+diseño la 109 iba después de que el código del bloque L estuviera en producción, y lo está desde
+`bca5de6`. **Un rebuild desde `schema.sql` ya sale en el estado post-109** (el archivo declara la
+tabla sin la columna): la que está atrás es producción, no el artefacto.
+
+> ⚠️ **Cómo se coló, que es la parte que sirve:** el 11/8 este documento y `CLAUDE.md` dijeron
+> "108–112 todas corridas" habiendo verificado **solo el conteo de tablas** (52 = 52). La 109 no
+> crea ni borra tablas —borra una columna y tres objetos—, así que era **invisible a esa
+> comprobación**. Contar tablas no alcanza para afirmar que un archivo refleja producción: hay que
+> mirar el objeto que la migración toca. Corregido en `schema.sql`, `CLAUDE.md` y `DEPLOY.md`.
+
+### Los cuatro artefactos
+
+1. **`db/schema.sql`** — se sacó la FK `users.id → auth.users(id) ON DELETE CASCADE` y `users.id`
+   quedó con `DEFAULT gen_random_uuid()`.
+2. **`db/funciones_y_triggers.sql` (NUEVO)** — `fn_misma_empresa()` + los **8** triggers
+   `trg_emp_*`, leídos del catálogo con `pg_get_functiondef`/`pg_get_triggerdef`.
+3. **`077_recrear_triggers_updated_at.sql`** — sin cambios, ya estaba en `migracionAWS/`.
+4. **`db/seed.sql` (NUEVO)** — `tipos_ausencia` (5), `parametros_empresa` (1 fila global),
+   `reglas_vacaciones_escala` (3 tramos). **Sin `empresas`, `users` ni `plantillas_mail`**: eso es
+   dato de negocio y viaja en el dump.
+
+### 🔴 ACCIONES DE INFRAESTRUCTURA
+
+- **La secuencia de reconstrucción, con la invocación exacta, está en
+  `docs/handoff-aws/README.md`.** Los cuatro con `psql -v ON_ERROR_STOP=1 -f`, en orden
+  `schema → funciones_y_triggers → 077 → seed`, los cuatro con exit 0. `ON_ERROR_STOP=1` **no es
+  opcional**: sin él psql sigue tras un error y termina en 0 igual, así que un replay a medias se
+  lee como exitoso. Los triggers van **antes** del seed a propósito.
+- 🔴 **`backend/migrations/094_recrear_triggers_empresa.sql` NO se usa en el rebuild y quedó
+  declarado como historia.** Declara 9 triggers; el noveno es `trg_emp_sucesion` sobre
+  `sucesion_posiciones`, tabla que dropeó la 112 — y aborta el script, porque
+  `DROP TRIGGER IF EXISTS x ON tabla` falla igual cuando la que no existe es la **tabla**. Misma
+  mina que J5a desactivó en la 077. **No se tocó la 094**: es una migración.
+- 🔴 **Correr la 109 en producción** (ver arriba).
+- **`schema.sql` no refleja producción en un punto más, a propósito:** la FK a `auth.users`. **Esto
+  no toca Supabase y no hay que correr nada allá** — el archivo describe la base destino. En
+  producción la FK sigue y se queda. Verificado en el código
+  (`services/_usuario_alta.py:74-90`): hoy el id lo genera **Supabase Auth** y la app lo pasa
+  explícito en el INSERT, así que el `DEFAULT` **no cambia nada del comportamiento actual**; solo
+  habilita el INSERT sin `id`, que es lo que hace falta del otro lado. **Lo que sí hay que reponer
+  en la app del destino es el `ON DELETE CASCADE`**: el alta tiene un rollback (`_rollback_auth`)
+  que hoy se apoya en él para no dejar el perfil huérfano.
+- 🟠 **Conflicto conocido, sin resolver, anotado en el archivo de triggers:** `trg_emp_empleados`
+  vigila `manager_id` y **exige que el superior sea de la misma empresa**, mientras que la decisión
+  de producto del 2/8 permite superior cruzado entre empresas — y sobre esa premisa están
+  `services/_alcance_mandos.py` y el import de nómina de la migración **086, titulada justamente
+  "superior cruzado entre empresas"**. Hoy no explotó porque hay **0 empleados con manager de otra
+  empresa** (verificado). El día que se cargue el primero, el UPDATE falla con "Cruce de empresa en
+  empleados.manager_id". La 086 no menciona el trigger: el choque nunca se discutió. **Se reprodujo
+  tal cual está en producción** —el artefacto refleja, no decide— pero hay que resolverlo antes del
+  cutover.
+- **Migraciones nuevas / variables de entorno / dependencias / buckets / endpoints / auth de la
+  app / dominios:** ninguno.
+
+### Lo que el seed documenta y no se puede regenerar a la ligera
+
+🔴 **Los UUID de `tipos_ausencia` van FIJOS.** `services/_carga_licencia.py:51` tiene hardcodeado
+`TIPO_LICENCIA_ID = '9f3b7c2a-1d4e-4a6b-8c5d-0e1f2a3b4c5d'` (lo sembró la migración 107). Un seed
+con `gen_random_uuid()` rompe la carga de licencias del link público **con violación de FK, en
+producción y no en los tests** —el fake no tiene FKs—, y además deja sin resolver los `tipo_id` de
+cualquier dump de `solicitudes_ausencia` que se restaure después.
+
+El "qué se rompe sin cada catálogo" se verificó en el código, no se supuso: **sin `tipos_ausencia`
+no se puede crear NINGUNA ausencia** (`solicitudes_ausencia.tipo_id` es NOT NULL con FK) · **sin la
+fila global de `parametros_empresa`** el service levanta `CONFIG_GLOBAL_FALTANTE` (500) y con eso
+cae el reporte de ausentismo y la pantalla de Configuración, mientras el KPI del dashboard degrada
+solo esa card por el `_safe` · **sin `reglas_vacaciones_escala`**, hoy, **ningún cálculo se rompe**
+(el propio service dice que la escala "se persiste y se muestra, y nada la aplica todavía"): lo que
+queda vacío es la pantalla de Configuración.
+
+**Verificación:** `pytest -q` → **3234 passed**, sin cambios · los barridos que leen `schema.sql`
+(392 tests) verdes · **el replay contra un Postgres limpio NO se corrió**: hay PostgreSQL 16
+instalado y corriendo en la Lenovo, pero `pg_hba.conf` exige `scram-sha-256` y la contraseña no
+está en el repo. Es la verificación de Fase 3 (J1). Script listo para correrlo en un comando.
+
+---
+## 2026-08-12 · El encabezado de `schema.sql` deja de mentir + el barrido del front deja de ser ciego en Windows · commit pendiente
+
+**Qué cambió:** dos fixes que salieron de la auditoría de documentación de la sesión anterior, más
+la entrada faltante del bloque D (arriba, fechada 7/8 en su lugar cronológico).
+
+1. 🔴 **`backend/db/schema.sql` — el encabezado afirmaba que producción tenía 63 tablas** y que el
+   archivo "iba por delante" hasta que se corriera la 112. **La 112 corrió el 11/8**: producción
+   tiene 52, verificado contra el catálogo. El propio archivo dejaba la instrucción de volver el
+   párrafo a "AL DÍA" al correrla, y no se había hecho. Se reescribió el bloque de estado, se
+   actualizaron las dos referencias a `001..093` (ahora `001..112`) y se marcó como histórica la
+   verificación del 7/8 (58 tablas / 153 FKs / 151 índices), que describía el archivo de antes de
+   las migraciones 108–112.
+   **Por qué importa más que un número:** es el artefacto del que el dev de infra levanta RDS. Un
+   encabezado que miente sobre si el archivo **adelanta** o **refleja** manda a buscar un drift que
+   no existe, o hace confiar en una tabla que todavía no está. Ya había mentido en las dos
+   direcciones, así que el aprendizaje del archivo se amplió con la regla práctica: **el bloque se
+   toca en la misma sesión que la migración, las dos veces — al escribirla y al correrla.**
+2. **`frontend/services/barridoFront.test.ts` — descubría CERO exports en Windows.** Armaba los
+   paths con `path.join` (separador `\`) y después filtraba con `p.includes("/services/")` y
+   `p.split("/")`, que nunca matcheaban. Resultado: `SERVICES` vacío, `EXPORTS` vacío, y **tres
+   tests en rojo en la Lenovo y verdes en la Mac**, sin que hubiera cambiado una línea del código
+   auditado. Se normaliza el separador **en el único lugar donde nacen los paths** (`archivosDe`),
+   no en cada comparación: arreglarlo en los dos consumidores dejaría al tercero naciendo con el
+   bug.
+
+**Lo que hay que leer de esto, más allá del fix:** el barrido no falló, **falló ruidosamente**.
+Las guardas de mínimo (`expected 0 to be >= 200`) hicieron exactamente su trabajo: sin ellas el
+test habría informado *"ningún export huérfano"* sobre un conjunto vacío, en verde, para siempre.
+Es el caso #5 de la regla del repo con otra cara — la aserción no era vacua por una clave
+inexistente, sino por un **conjunto vacío que dependía de la plataforma**.
+
+**Barrido del patrón, antes de tocar nada** (regla del dev de infra: arreglar uno y olvidar
+cuatro). Se buscó `path.join` + comparación contra un `/` literal en todo el repo:
+**un solo archivo lo tenía**, con dos líneas afectadas (148 y 151). Los otros tres tests del front
+que recorren el árbol (`pageSize`, `loadingSeApaga`, `contrasteTokens`) filtran por **nombre de
+archivo** (`e.name`), nunca por un tramo del path, y usan el path solo para leer — inmunes. Los
+barridos del backend usan `Path.parts`, `.stem`, `.name` y `.as_posix()`, que son
+separador-agnósticos **por diseño**; los `"/"` que aparecen ahí son paths de URL de FastAPI, no del
+sistema de archivos.
+
+**Verificación de que el fix es completo y no parcial:** después de normalizar, el barrido
+descubre en Windows **450 archivos y 50 services**, que es **exactamente** la cantidad de `.ts`/
+`.tsx` que git tiene trackeados bajo `app|components|hooks|services` (450) y de no-test bajo
+`services/` (50). O sea: ve el árbol entero, no un subconjunto. Los 264 exports contra los 263
+anotados en el propio test (medidos en la Mac el 10/8) y los 450 contra 438 archivos son **deriva
+del repo, no diferencia de plataforma**: en el commit que estrenó el barrido había 439 archivos
+trackeados y hoy hay 450.
+
+> ⚠️ **Dato suelto, no bloqueante:** el comentario del test dice que las guardas se fijaron "~25%
+> por debajo del valor real (263 exports, 438 archivos, **792 imports**)", pero `totalImports`
+> —la variable que la guarda mide— da **2710**. El 792 parece ser el tamaño del `Set` de pares
+> únicos, que es otra cosa. La guarda de imports (`>= 600`) es entonces mucho más floja de lo que
+> su propio criterio declara. No se tocó: subirla es una decisión, no una corrección.
+
+**Impacto en infraestructura:**
+
+- 🔴 **`db/schema.sql` cambió, pero SOLO en comentarios de encabezado.** Cero DDL tocado: ni una
+  tabla, columna, constraint ni índice. Un rebuild produce exactamente lo mismo que antes. Se
+  verificó con los tres barridos que leen el archivo (`_postgrest_schema`, `test_selects_repos`,
+  `test_triggers_updated_at`), todos verdes.
+- **La 094 sigue pendiente de corrección** — ver la entrada del 7/8. Es lo único de estas dos
+  sesiones que le bloquea trabajo al dev de infra.
+- **Migraciones / variables de entorno / dependencias / buckets / endpoints / auth / dominios:**
+  ninguno. El cambio del front es un archivo de test.
+
+**Verificación:** `pytest -q` → **3234 passed** (idéntico antes y después) · `npm test` → **647/647
+en 53 archivos, en Windows** (era 644/647) · `tsc --noEmit` exit 0.
+
+---
+## 2026-08-12 · Ordenamiento de la documentación del handoff + auditoría de lo que ya no era cierto · commit pendiente
+
+**Qué cambió:** se creó **`docs/handoff-aws/`** y se movieron ahí los cinco archivos que estaban
+sueltos en la raíz del repo: `COMPARATIVA_VERCEL_SUPABASE_VS_AWS.md`, `PATRONES_CODIGO_AWS.md`,
+el README del dev de infra (→ `README-DEV.md`) y `README-handoff-aws.md` (→ `README.md`).
+`PLAN-6-SEPTIEMBRE.md` fue a `docs/`. En la raíz quedan solo `CLAUDE.md` y `AUDITORIA_FUNCIONAL.md`.
+Después se auditó **cada documento de `docs/` y `CLAUDE.md`** contra el código y el catálogo vivo.
+
+🔴 **EL HALLAZGO DE FONDO NO FUE UN NÚMERO: `CLAUDE.md` apuntaba al plan equivocado.** Declaraba
+como vigente a `docs/Plan de trabajo` (v2, **27/7**), cuando hay **cinco** documentos de plan y ése
+es el tercero más viejo: `PLAN-DE-TRABAJO.md` (5/8) dice en su encabezado que lo supersede, y
+`PLAN-6-SEPTIEMBRE.md` (12/8) es el que tiene la fecha de entrega comprometida. **Cualquier agente
+—o persona— que arrancara leyendo `CLAUDE.md`, que es lo que ese archivo pide, trabajaba contra un
+plan de hace dos semanas.** Se escribió la jerarquía de los cinco, numerada, en un solo lugar, con
+la regla de que un plan nuevo actualiza esa lista en la misma sesión. Ninguno se borró: cada uno es
+el registro de una etapa.
+
+**Las afirmaciones falsas corregidas** (~20, todas verificadas contra el código o el catálogo):
+suite 3280→**3234** y 153→**157** archivos · 69→**66** routers y 247→**225** rutas · 197→**192**
+services y 87→**82** repos · 58→**52** tablas · migraciones "hasta la 107, 105 archivos" → **hasta
+la 112, 110** · `Seccion` 26→**28** valores y 190→**204** gates en 61 routers · 27→**26** exports ·
+el barrido de límite de export decía barrer 11 services y son **18** · triggers "van a bajar cuando
+corra J5b" → **ya corrió**: 43 = 35 + 8 · 33→**28** archivos de front sobre 150.
+
+**Y cuatro que no eran conteos, que son las que más costaban:** `ev_*` descrito como *"los 3
+routers están MONTADOS, borrarlos rompe endpoints publicados"* cuando el módulo se borró entero el
+11/8 · las 6 tablas huérfanas descritas como *"se limpian después del cutover"* cuando ya se
+dropearon · `_costos_write.py` marcado como violación activa de Vista vs Acción cuando está
+arreglado desde el 6/8 · el import de costos marcado como *"no audita nada"* en un archivo que 400
+líneas más abajo lo listaba como resuelto.
+
+**Documentos tocados:** `CLAUDE.md`, `docs/README.md` (además: `pyproject.toml` que ya no existe,
+`RESEND_API_KEY` como obligatoria contradiciendo su propio aviso, un `.venv` descrito como
+commiteado que `git ls-files` no conoce, y el índice al que le faltaban cinco documentos),
+`DEPLOY.md`, `DEUDA-TECNICA.md`, `ORDEN-SESIONES-CODIGO.md`, `MATRIZ-FILTROS.md`,
+`ESTADO-VS-COMPROMISO.md`. **Las entradas históricas de esta bitácora NO se reescribieron**: una
+entrada que decía "doce barridos verdes" era cierta el día que se escribió.
+
+**Impacto en infraestructura:**
+
+- **Ninguno en el sistema.** Cero código, cero migraciones, cero variables, cero endpoints.
+- 📌 **Para el dev de infra, dos cosas útiles:** su material vive ahora en **`docs/handoff-aws/`**,
+  y `docs/README.md` (el índice) y `DEPLOY.md` ya no le dan números de tablas, migraciones ni
+  triggers que estaban vencidos. **`DEPLOY.md` es el documento por el que tiene que empezar.**
+- **Su material es CONTEXTO, no instrucciones.** Queda escrito en `CLAUDE.md` y en el README de la
+  carpeta: el checklist de 50 ítems no se ejecuta y no se hace refactor preventivo hacia sus
+  patrones. El código existente del proyecto manda.
+
+**Verificación:** ningún test lee `docs/` (verificado sobre las 157 suites de backend y las 53 del
+front), así que los movimientos no rompen nada · `pytest -q` → **3234 passed**, idéntico.
+
+---
 ## 2026-08-12 · `pip install` roto en Windows: los `requirements*.txt` pasan a ASCII puro · commit pendiente
 
 **Qué cambió:** en la Lenovo, `pip install -r requirements.txt` **abortaba entero** con
@@ -2681,6 +3162,79 @@ que Vercel y la imagen de AWS no cambian. Lo único a saber: cualquier máquina 
 la suite tiene que hacer `pip install -r requirements-dev.txt` **después de este cambio**, o pytest
 aborta de entrada con `Missing required plugins: pytest-asyncio` — que es exactamente el
 comportamiento buscado. Sin migraciones, variables de entorno, buckets, endpoints ni cambios de auth.
+
+---
+
+## 2026-08-07 · BLOQUE D · Tres barridos estructurales + la auditoría que faltaba en tres módulos + **migración 094** · commit `1b972a8`
+
+> 📌 **Entrada escrita el 12/8/2026, cinco días tarde.** Es la ÚNICA que se escribió fuera de su
+> sesión, y se detectó en la auditoría de documentación del 12/8: el bloque D era el único de los
+> doce cerrados sin entrada. Se deja anotado en vez de disimularlo, porque **lo que se perdió por
+> escribirla tarde es justamente lo que la bitácora existe para transmitir**: la migración 094
+> estuvo cinco días sin aparecer en el único documento que el dev de infra lee para saber qué
+> tiene que correr. El contenido de abajo se reconstruyó del commit y del catálogo vivo.
+
+**Qué cambió:** 27 archivos, +1928/−136. Tres cosas distintas en un commit:
+
+1. **Tres barridos estructurales nuevos** — `test_callers_huerfanos.py` (símbolos de `services/` y
+   `repositories/` que nadie llama, y endpoints montados que el front nunca pide),
+   `test_auditoria_coherente.py` y la extensión de `test_selects_repos.py` a **todos** los repos,
+   más los dos helpers `_barrido_callers.py` y `_barrido_auditoria.py`.
+2. **La auditoría que faltaba en tres módulos** — adjuntos (incluida la marca de principal),
+   logo de empresa y vacantes/candidatos, con sus payloads en `_audit_payloads_adjuntos.py` y
+   cuatro archivos de test nuevos.
+3. 🔴 **`backend/migrations/094_recrear_triggers_empresa.sql`** — la función `fn_misma_empresa()`
+   y los triggers `trg_emp_*`, extraídos 1:1 del catálogo de producción.
+
+### 🔴 ACCIÓN DE INFRAESTRUCTURA — la 094 es OBLIGATORIA en el rebuild, y NO está en `schema.sql`
+
+**El agujero que cierra:** `fn_misma_empresa()` y los `trg_emp_*` **existían SOLO en producción**.
+No estaban en `db/schema.sql` (el snapshot se lee del catálogo y captura tablas, columnas,
+constraints, índices y defaults — **0 funciones y 0 triggers**), no estaban en la 077 de
+`migracionAWS/` (que recrea únicamente los de `updated_at`) y no estaban en ninguna migración
+001–093: se aplicaron a mano durante el retrofit multiempresa y nunca se versionaron.
+**Un rebuild desde cero —que es exactamente lo que se va a hacer en RDS— los perdía en silencio.**
+
+**Qué se pierde sin ellos, y por qué no es cosmético.** Son la **única defensa a nivel base**
+contra el cruce de empresas por referencia. Una FK garantiza que `empleados.area_id` apunta a un
+área que **existe**; no garantiza que esa área sea de la **misma empresa** que el empleado. Sin el
+trigger, un INSERT que cruce empresas entra sin error y queda como **dato corrupto silencioso**:
+el listado de la empresa A muestra un empleado cuya área es de la B. La barrera de aplicación
+(Fase 2) cubre el camino de la API, **no** un INSERT por SQL directo ni un import mal armado.
+
+🔑 **Y no hay red debajo: verificado contra el catálogo el 12/8/2026, de los 12 pares
+(columna → tabla padre) que vigilan los triggers vivos, CERO tienen una FK compuesta que los
+respalde.** El modelo sí usa ese patrón —hay **22 FKs compuestas** `(x_id, empresa_id) → padre(id,
+empresa_id)` en producción— pero sobre otras columnas. Estos 12 pares quedaron fuera de ese
+patrón, y el trigger es lo único que los sostiene:
+
+| Tabla | Columnas vigiladas |
+|---|---|
+| `areas` | `area_padre_id` → `areas` · `responsable_id` → `empleados` |
+| `empleados` | `area_id` → `areas` · `manager_id` → `empleados` |
+| `vacantes` · `onboarding_templates` | `area_id` → `areas` |
+| `planes_carrera` | `responsable_id` → `empleados` *(la FK compuesta que existe es sobre `empleado_id`, que es otra columna)* |
+| `assessment_campanas` | `area_id` → `areas` |
+| `assessment_links` · `assessment_resultados` | `empleado_id` → `empleados` · `candidato_id` → `candidatos` |
+
+**Qué hay que hacer, en orden:** correr `094_recrear_triggers_empresa.sql` **UNA vez, DESPUÉS de
+`db/schema.sql`**, junto con la 077. Es idempotente (`CREATE OR REPLACE` + `DROP TRIGGER IF
+EXISTS`). **En producción NO hace falta**: los triggers ya están ahí. Existe **para el rebuild**.
+
+> 🔴 **PENDIENTE ABIERTO detectado el 12/8, y bloquea el rebuild: la 094 quedó desincronizada de
+> la 112.** Declara **9** triggers, y el noveno es `trg_emp_sucesion` **sobre
+> `sucesion_posiciones`, una de las 11 tablas que la 112 dropeó**. Producción tiene **8** (contados
+> hoy: `SELECT count(*) ... WHERE p.proname = 'fn_misma_empresa'` → 8), así que el archivo pide una
+> tabla que ya no existe. Un replay de `schema.sql` (52 tablas) seguido de la 094 **aborta**:
+> `DROP TRIGGER IF EXISTS x ON tabla` falla igual si la que no existe es la **tabla**, no el
+> trigger. **Es la MISMA mina que J5a ya desactivó en la 077** —de ahí se sacaron los 8
+> `updated_at` de las tablas muertas— y a la 094 no se le hizo. Hay que sacarle el bloque de
+> `trg_emp_sucesion` (líneas 82-85) y corregir el comentario de verificación final, que dice "debe
+> devolver 9". **No se tocó en esta sesión: editar una migración es cambio de migración, y esta
+> sesión era de documentación.**
+>
+> **Migraciones:** la **094**, con la salvedad de arriba. **Variables de entorno / dependencias /
+> buckets / endpoints públicos / auth / dominios:** ninguno.
 
 ---
 

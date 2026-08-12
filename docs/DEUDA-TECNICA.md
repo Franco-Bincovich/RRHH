@@ -19,15 +19,22 @@
 | ✅ ~~`costo_repo.py` (135 líneas)~~ | — | **BORRADO 2/8.** Callers reverificados uno por uno antes de tocar nada | ✅ | — |
 | ✅ ~~`assessment_repo.py` (131)~~ | — | **BORRADO 2/8.** Ídem | ✅ | — |
 | ✅ ~~`EliminarLoteButton.tsx` (74)~~ | — | **BORRADO 2/8.** Ídem | ✅ | — |
-| Tablas huérfanas: `configuracion_empresa`, `documentos_empleado`, `notificaciones`, `notificaciones_config`, `sucesion_posiciones`, `assessment_reportes` | `db/schema.sql` | **0 filas las 6** en producción | ⬜ | S |
+| ✅ ~~Tablas huérfanas: `configuracion_empresa`, `documentos_empleado`, `notificaciones`, `notificaciones_config`, `sucesion_posiciones`, `assessment_reportes`~~ | — | **DROPEADAS 11/8** por la migración 112 (J5b), junto con las 5 `ev_*`. Producción: 63 → 52 tablas | ✅ | — |
 
 ### 🔴 Lo que NO está muerto, aunque se sospechaba
 
 | Qué | Por qué NO se borra |
 |---|---|
-| **`ev_*` entero** (`ev_plantillas_repo` 129, `ev_instancias_repo` 146, `ev_ciclos`) | **Los 3 routers están MONTADOS** (`main.py:154-157`) y los repos tienen 3, 1 y varios callers. Las tablas están vacías en producción (0/0/0) pero **la API existe y responde**. Borrarlos rompe endpoints publicados |
-| **Assessment** | El router se monta condicionalmente (`main.py:141`, `assessment_enabled=false`) — el módulo está apagado, **no muerto**. Los services, schemas y tests siguen vivos. Solo `assessment_repo` está huérfano |
+| **Assessment** | El router se monta condicionalmente (`assessment_enabled=false`) — el módulo está apagado, **no muerto**. Los services, schemas y tests siguen vivos. Solo `assessment_repo` estaba huérfano, y se borró |
 | **Sucesión** | Apagado en el front por dos flags; **todo el backend intacto y montado** |
+
+> ✅ **`ev_*` SALIÓ de esta tabla el 11/8/2026: se borró entero (bloque J5).** Acá decía *"los 3
+> routers están MONTADOS, borrarlos rompe endpoints publicados"*, y era cierto el 2/8. Lo que
+> cambió no fue el criterio sino la medición: del otro lado de esos endpoints había **19 rutas
+> publicadas por HTTP e inalcanzables desde la UI**, una rota hacía meses. J5a borró el código
+> (17 archivos, 1.527 líneas) y J5b las tablas (migración 112). **La regla de abajo sigue en pie
+> y este caso no la contradice**: no se borró porque "no se veía en la UI", se borró después de
+> contar los callers reales y comprobar que no había ninguno.
 
 > ⚠️ **Regla que sale de esto:** "está oculto en la UI" ≠ "está muerto". De los 5 sospechosos,
 > **3 estaban vivos**. Verificar callers uno por uno, siempre.
@@ -40,14 +47,14 @@
 |---|---|---|---|---|
 | a1 | ✅ ~~**`EMPRESA_MISMATCH` 422 vivo**~~ — **CERRADO 2/8.** Los dos pasan al 404 del módulo, con el filtro **en el WHERE** (Forma A), no comparando después. `tests/test_empresa_mismatch_cerrado.py` fija el contrato Y que la empresa viaje en la query; con el bug reinstalado caen 6 de 10 | ✅ | — |
 | a2 | **7 comparaciones `empresa_id !=` post-lectura** (Forma B). Todas devuelven 404, así que **no hay oráculo**, pero traen la fila antes de decidir: más caro y más fácil de olvidar al copiar | `evaluacion_service.py:33` · `adjunto_service.py:64` · `cesion_service.py:42` · `periodo_service.py:49` · `tipos_ausencia_service.py:80` · `reporte_export_service.py:42` | 🟡 | L |
-| b | **El import de costos no audita nada** — `batch_upsert_nomina` sin un solo evento, contra la regla propia de "un evento por lote". El Flujo 1 sí audita | `routers/importacion_nomina.py` (verificado: cero `audit` en el archivo) | 🟠 | S |
-| c | **`_costos_write` audita con la empresa del HEADER**, no la de la entidad. Viola Vista vs Acción | `services/_costos_write.py:80` | 🟠 | S |
+| b | ✅ ~~**El import de costos no audita nada**~~ — **CERRADO 6/8.** Emite **UN evento por lote** desde `services/nomina_import_service.py` (el `confirmar` era el único de los tres imports sin capa de service: se creó, y el router bajó de 70 a 57 líneas) | ✅ | — |
+| c | ✅ ~~**`_costos_write` audita con la empresa del HEADER**~~ — **CERRADO 6/8.** Los dos caminos auditan con la entidad: `nomina.empresa_id` (`:48`) y `presupuesto.empresa_id` (`:86`), y el docstring declara que el header es "solo VISTA" | ✅ | — |
 | c2 | **9 eventos con `empresa_id NULL` en producción.** 6 legítimos (`alta_usuario` ×3, `cambio_password` ×3 — los usuarios no cuelgan de empresa) y **3 mal etiquetados**: `alta_adjunto`, `baja_adjunto` (sobre una vacante, que sí tiene empresa) y `baja_candidato` | tabla `auditoria` | 🟡 | M |
 | d | **Barrido de los endpoints nuevos (~15 sesiones): sin hallazgos.** `/plantillas` (4), `/plantillas/enviar`, `/superiores-pendientes` (2), `/asignaciones/area`, `/configuracion` (3) — **todos** con `require_permission` y barrera de empresa donde reciben un id | — | ✅ | — |
 
-> ✅ **a1 era el único 🔴 de la sección y está cerrado.** Lo que queda (b, c, c2) son **fixes de
-> comportamiento, no limpieza**, y van en sesión propia: hoy no rompieron nada porque hay UNA
-> empresa, y se vuelven visibles el día que exista la segunda.
+> ✅ **De la sección quedan a2 y c2.** a1, b y c están cerrados (6/8). **c2 no se "arregla":** son
+> 3 filas ya escritas en `auditoria`, que es inmutable por diseño. El bug que las produjo es el
+> que cerró **c**.
 
 ---
 
@@ -71,24 +78,29 @@
 > `_*.py` dentro de `repositories/` **es un repositorio y su límite es 100**. Partir un archivo
 > para respetar un límite es correcto; **redefinir el límite del archivo nuevo, no**.
 
-### En el techo exacto — el próximo cambio EXIGE dividir primero (remedido 2/8)
+### En el techo exacto — el próximo cambio EXIGE dividir primero (remedido **12/8**)
 
-**Services 150/150:** `assessment_service.py`. **A 149:** `vacante_service` · `offboarding_service` · `adjunto_service` · `_nomina_lote`.
-**Repos 100/100:** `planes_carrera_repo` · `inventario_asignaciones_repo` · `evaluacion_repo` · **`area_repo`** (llegó al techo al sumarle el `mode="json"` de los dos caminos de escritura). **A 98-99:** `objetivo_repo` · `vacante_repo` · `onboarding_templates_repo` · `nomina_repo` · `inventario_items_repo` · `ev_instancias_repo` · `empresa_repo` · `capacitacion_repo`.
-**Routers 80/80:** `vacantes.py` · `adjuntos.py`. **A 79:** `vacaciones.py` · `objetivos.py` · `inventario_items.py` · `asignaciones_capacitacion.py`.
+**Services 150/150:** `assessment_service.py` · `_clasificador_prompt.py` · `_vacaciones_write.py`.
+**Repos 100/100:** `area_repo` · `candidato_repo` · `inventario_asignaciones_repo` · `objetivo_repo` · `planes_carrera_repo` · `vacante_repo`.
+**Routers 80/80:** `adjuntos.py` · `candidatos.py`.
+
+> ⚠️ **Es una FOTO, no un inventario: medila antes de usarla.** La versión del 2/8 nombraba
+> `evaluacion_repo`, `nomina_repo`, `vacantes.py` y `vacaciones.py`, que desde entonces se
+> movieron, y cuatro `ev_*` que ya no existen.
 
 ### Frontend
 
 | Archivo | Líneas | Corte | Esf. |
 |---|---:|---|---|
 | `app/(dashboard)/costos/page.tsx` | **624** | El peor del repo. Molde: `components/features/sucesion/` (855→85) | L |
-| `app/(dashboard)/vacantes/[id]/page.tsx` | **577** | Ídem | L |
-| `app/(dashboard)/onboarding/page.tsx` | **410** | Tabs a componentes | M |
+| `app/(dashboard)/vacantes/[id]/page.tsx` | **451** | Ídem | L |
+| `app/(dashboard)/onboarding/page.tsx` | **413** | Tabs a componentes | M |
 | `components/features/costos/ImportarNominaCSVModal.tsx` | **377** | Hook + pasos | M |
-| `app/(dashboard)/offboarding/page.tsx` | 307 · `NominaModal` 287 · `areas/page` 261 · `evaluacion/[token]` 258 · `VacanteModal` 251 · `AIPanel` 249 · +18 más sobre 150 | — | L |
+| `app/(dashboard)/offboarding/page.tsx` | 311 · `NominaModal` 287 · `evaluacion/[token]` 258 · `VacanteModal` 251 · `AIPanel` 249 · +19 más sobre 150 | — | L |
 | **Hooks sobre 80** | `useFiltrosVacaciones.ts` **95** · `useFiltrosAsignacionesCap.ts` **89** | Molde ya aplicado: `useOpcionesAusencias` (partir carga de opciones vs. estado del filtro) | S |
 
-> ⬜ `dropdown-menu.tsx` (268) y `dialog.tsx` (160) son primitivos generados de shadcn/ui: **no cuentan**.
+> ⬜ `dropdown-menu.tsx` (268) y `dialog.tsx` (**221**) son primitivos generados de shadcn/ui: **no cuentan**.
+> ✅ `areas/page.tsx` salió de la lista: **261 → 128**. Total remedido el 12/8: **28 archivos > 150** (26 propios + los 2 primitivos).
 
 ---
 

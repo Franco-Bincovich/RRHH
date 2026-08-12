@@ -9,7 +9,7 @@
 -- multiempresa), e indices.
 --
 -- POR QUE EXISTE:
--- Las migraciones incrementales (001..093) NO reconstruyen la base desde cero
+-- Las migraciones incrementales (001..112) NO reconstruyen la base desde cero
 -- de forma confiable: tienen dependencias de orden rotas, operaciones no
 -- idempotentes, y parte del modelo multiempresa fue aplicado a mano en produccion
 -- (drift) y versionado retroactivamente de forma incompleta. Las migraciones
@@ -21,53 +21,91 @@
 --
 -- CONTENIDO VERIFICADO CONTRA EL CATALOGO VIVO el 2026-08-07 (proyecto
 -- grmdiwxcvcjorlohpwji), ya con las migraciones 075..093 corridas: 58 tablas,
--- 698 columnas, 153 FKs, 103 CHECKs y los 151 indices standalone coinciden
+-- 698 columnas, 153 FKs, 103 CHECKs y los 151 indices standalone coincidian
 -- EXACTAMENTE, sin fantasmas ni faltantes en ninguna de las dos direcciones.
 -- O sea: el archivo se regenero despues del 16/7 y solo la fecha de arriba quedo
--- vieja. Los otros 108 indices de produccion son los que Postgres crea solo por
--- PK/UNIQUE, y salen de las constraints que este archivo si declara.
+-- vieja.
+-- 🔄 ESOS NUMEROS SON DEL 7/8 Y YA NO SON LOS DE HOY: las migraciones 108..112
+-- bajaron el archivo a 52 tablas, 133 FKs y 141 indices standalone. El estado
+-- vigente es el del bloque de abajo, fechado 12/8. Este parrafo queda como
+-- registro de la verificacion anterior, no como descripcion del archivo.
 --
--- ✅ AL DIA CON PRODUCCION (verificado contra el catalogo vivo el 2026-08-10).
--- Las migraciones 102..107 —el modulo de carga de horas— YA ESTAN CORRIDAS. Se
--- confirmo una por una: existen las tablas `clientes`, `intentos_identificacion`
--- y `sesiones_horas`; `horas_proyecto` tiene `cliente_id` e `idempotencia`;
--- `asignacion_id` es NULLABLE; y la fila del tipo de ausencia "Licencia" (107)
--- esta sembrada.
+-- ✅ AL DIA CON PRODUCCION (verificado objeto por objeto el 2026-08-12, despues de
+-- que Franco corriera la 109).
 --
--- 🔴 ESTE ARCHIVO VA POR DELANTE DE PRODUCCION EN UNA COSA: LA MIGRACION 112.
--- Declara 52 tablas; produccion todavia tiene 63. Las 11 de diferencia son las
--- tablas muertas que la 112 dropea (las 5 `ev_*` del motor de evaluaciones que
--- nunca se uso, mas `assessment_reportes`, `configuracion_empresa`,
--- `documentos_empleado`, `notificaciones`, `notificaciones_config` y
--- `sucesion_posiciones`). Las once estaban en 0 filas y sin una sola referencia
--- en codigo; el codigo se borro en el bloque J5a.
--- 🚩 CUANDO FRANCO CORRA LA 112, ESTE PARRAFO VUELVE A "AL DIA" Y SE BORRA.
--- Un rebuild desde este archivo YA sale sin las once, que es lo correcto: en RDS
--- no tienen que existir nunca.
+-- CORRIDAS: 080, 089, 102..107 (modulo de carga de horas), 108 y 109 (clientes como
+-- catalogo global), 110, 111 y 112. Verificado en el catalogo: `clientes` ya NO
+-- tiene `empresa_id`, le quedan 2 indices (`clientes_pkey` y
+-- `ux_clientes_nombre_global`) y 0 FKs salientes, con los 4 clientes y su hora
+-- imputada intactos. El conteo de tablas da 52 de los dos lados, y 133 FKs
+-- declaradas contra 134 en produccion: la de mas es `users.id -> auth.users(id)`,
+-- que este archivo NO declara a proposito (ver el bloque de auth mas abajo).
 --
--- ⚠️ ESTE BLOQUE DECIA "ESTE ARCHIVO VA POR DELANTE DE PRODUCCION" y era FALSO
--- desde que Franco corrio las migraciones. Un encabezado que miente sobre si el
--- archivo adelanta o refleja es peor que no tenerlo: manda a buscar un drift que
--- no existe, o —al reves— hace confiar en una tabla que todavia no esta.
--- 🚩 Al escribir una migracion nueva, este bloque vuelve a decir "va por delante"
--- y se lista lo pendiente; al correrla, vuelve a esto. No hay test que lo cubra:
--- es prosa, y la unica forma de que no mienta es tocarla en las dos direcciones.
+-- 🔴 ESTE BLOQUE YA QUEDO DESFASADO TRES VECES, EN LAS DOS DIRECCIONES. No es
+-- anecdota: es la justificacion de la regla que viene abajo.
+--   1. Decia "va por delante" cuando ya no era cierto, porque las migraciones se
+--      habian corrido y nadie volvio a tocarlo.
+--   2. Lo mismo con la 112: siguio diciendolo cuatro dias despues de que corriera.
+--   3. Al arreglar (2) se marco "AL DIA, 108..112 todas corridas" verificando SOLO
+--      EL CONTEO DE TABLAS (52 = 52) — y la 109 estaba pendiente. Esa migracion no
+--      crea ni borra tablas (borra una columna y tres objetos), asi que era
+--      invisible a esa comprobacion. **Contar tablas NO alcanza para afirmar que
+--      este archivo refleja produccion: hay que mirar el objeto que la migracion
+--      toca.**
+-- Un encabezado que miente sobre si el archivo adelanta o refleja es peor que no
+-- tenerlo: manda a buscar un drift que no existe, o —al reves— hace confiar en una
+-- tabla o una columna que todavia no esta.
+--
+-- 🚩 LA REGLA, con tres casos que la respaldan: al escribir una migracion nueva,
+-- este bloque vuelve a decir "va por delante" y se lista lo pendiente; al
+-- correrla, vuelve a "AL DIA" y el parrafo se borra. **Se toca en la MISMA sesion
+-- que la migracion, las dos veces**, igual que la entrada de la bitacora. No hay
+-- test que lo cubra —es prosa—, y la unica forma de que no mienta es esa.
 --
 -- COMO USARLO EN UN REBUILD:
 --   1. Crear una base vacia.
---   2. Correr este schema.sql (crea todo el esquema 'public').
---   3. NO correr las migraciones 001..093 encima (son historial, no bootstrap).
---   4. Correr los DOS scripts de triggers (ver NOTA de abajo): sin ellos el
---      esquema queda estructuralmente completo pero sin comportamiento.
+--   2. psql -v ON_ERROR_STOP=1 -f db/schema.sql
+--   3. psql -v ON_ERROR_STOP=1 -f db/funciones_y_triggers.sql
+--   4. psql -v ON_ERROR_STOP=1 -f migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql
+--   5. psql -v ON_ERROR_STOP=1 -f db/seed.sql
+-- Los cuatro tienen que dar exit 0. La secuencia completa, con el porque de cada
+-- paso, esta en docs/handoff-aws/README.md.
+-- 🔴 NO correr las migraciones 001..112 encima: son HISTORIAL, no bootstrap.
 --
--- NOTA: no incluye datos (solo estructura), ni objetos de los esquemas internos de
--- Supabase (auth, storage). La unica referencia externa es users.id -> auth.users(id).
+-- NOTA: no incluye datos (solo estructura). Los catalogos base van en db/seed.sql.
+--
+-- ── AUTENTICACION: LO UNICO DE ESTE ARCHIVO QUE NO REFLEJA PRODUCCION ─────────
+-- 🔴 SE SACO LA FK `users.id -> auth.users(id) ON DELETE CASCADE` Y SE LE PUSO A
+-- `users.id` UN DEFAULT gen_random_uuid(). Era la UNICA referencia a un esquema de
+-- Supabase que quedaba, y el UNICO bloqueante del replay: en RDS no existe el
+-- schema `auth` y esa linea aborta el script entero.
+--
+-- 🚨 ESTO NO ES UNA MIGRACION Y NO TOCA SUPABASE. Este archivo es el ARTEFACTO DE
+-- RECONSTRUCCION: describe la base que se levanta en RDS, no la que hoy sirve
+-- trafico. En produccion la FK sigue existiendo y se queda ahi. Nadie tiene que
+-- correr nada contra Supabase por este cambio.
+--
+-- QUIEN GENERA EL ID, verificado en el codigo (services/_usuario_alta.py:74-90):
+-- hoy lo genera SUPABASE AUTH (`supabase_admin.auth.admin.create_user`) y la app lo
+-- pasa EXPLICITO en el INSERT (`"id": uid`). O sea que el DEFAULT no cambia el
+-- comportamiento actual —el INSERT siempre trae el id, el DEFAULT nunca se usa—;
+-- solo habilita el INSERT sin `id`, que es lo que hara falta del otro lado.
+--
+-- LO QUE SI SE PIERDE CON LA FK, y hay que reponer en la app del destino:
+--   - el ON DELETE CASCADE que borraba el perfil al borrar la identidad. En el alta
+--     hay un rollback (`_rollback_auth`) que HOY se apoya en ese cascade.
+--   - la garantia de que todo `users.id` corresponde a una identidad real.
+-- El destino ya tiene su propio auth (migracionAWS: 075 password_hash, 076
+-- refresh_tokens), asi que la FK no tendria a que apuntar.
 --
 -- 🔴 TAMPOCO INCLUYE FUNCIONES NI TRIGGERS: el catalogo se leyo para tablas,
--- columnas, constraints, indices y defaults. En produccion hay 50 triggers no
--- internos y este archivo trae 0. Se recrean aparte:
---   - los 41 de updated_at  -> migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql
---   - los 9  trg_emp_*      -> backend/migrations/094_recrear_triggers_empresa.sql
+-- columnas, constraints, indices y defaults. En produccion hay 43 triggers no
+-- internos y este archivo trae 0. Se recrean aparte, con los pasos 3 y 4 de arriba:
+--   - los 35 de updated_at  -> migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql
+--   - los 8  trg_emp_*      -> db/funciones_y_triggers.sql
+-- ⚠️ NO se usa `backend/migrations/094_recrear_triggers_empresa.sql`: quedo
+-- desincronizada de la 112 (declara un noveno trigger sobre `sucesion_posiciones`,
+-- tabla que ya no existe) y abortaria el replay. Queda como historial.
 -- ============================================================================
 
 SET statement_timeout = 0;
@@ -828,8 +866,13 @@ CREATE TABLE public.tipos_ausencia (
     -- (2) la garantiza el service, no un CHECK: un CHECK no puede consultar otra fila.
     padre_id uuid
 );
+-- 🔴 `id` LLEVA DEFAULT gen_random_uuid() Y NO TIENE FK A auth.users. Ver el bloque
+-- "AUTENTICACION" del encabezado: en Supabase el id lo genera Supabase Auth y la app lo
+-- pasa explicito en el INSERT, asi que el DEFAULT no cambia nada de como se crea un
+-- usuario HOY; solo habilita el INSERT sin `id`, que es lo que hace falta en RDS, donde
+-- no existe `auth.users` que lo genere.
 CREATE TABLE public.users (
-    id uuid NOT NULL,
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
     email character varying(255) NOT NULL,
     nombre character varying(100) NOT NULL,
     apellido character varying(100) NOT NULL,
@@ -1233,7 +1276,13 @@ ALTER TABLE public.mail_enviado ADD CONSTRAINT mail_enviado_empleado_id_fkey FOR
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empleado_id_fkey FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE;
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vp_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
-ALTER TABLE public.users ADD CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+-- 🔴 ACA VIVIA LA UNICA REFERENCIA A UN SCHEMA DE SUPABASE, Y SE SACO A PROPOSITO:
+--   ALTER TABLE public.users ADD CONSTRAINT users_id_fkey
+--     FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+-- Era el UNICO bloqueante del replay: en RDS no existe el schema `auth`, asi que esa linea
+-- aborta el script entero. No se reemplaza por nada — la autenticacion del destino es propia
+-- (`migracionAWS/`: 075 password_hash, 076 refresh_tokens), asi que la FK no tiene a que
+-- apuntar. Ver el bloque "AUTENTICACION" del encabezado para lo que se pierde con ella.
 ALTER TABLE public.usuario_integraciones ADD CONSTRAINT usuario_integraciones_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE RESTRICT;
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;

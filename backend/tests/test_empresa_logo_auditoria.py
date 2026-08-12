@@ -100,7 +100,8 @@ class _FakeStorage:
 @pytest.fixture
 def storage(monkeypatch):
     fake = _FakeStorage()
-    monkeypatch.setattr(logo_mod.supabase_admin, "storage", fake, raising=False)
+    # Ídem test_adjuntos: el SDK se alcanza por `integrations/storage.py`, no por el service.
+    monkeypatch.setattr(logo_mod.storage.supabase_admin, "storage", fake, raising=False)
     return fake
 
 

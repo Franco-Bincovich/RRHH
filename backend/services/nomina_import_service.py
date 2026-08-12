@@ -72,19 +72,27 @@ class NominaImportService:
             Conteo de importados/actualizados. `errores` va vacío: el upsert es una sola query,
             o entra el lote o falla entero — no hay fallo por fila que reportar.
         """
+        # 🔴 Los dos ids van con `str()`: son UUID en el schema y este dict se entrega TAL CUAL a
+        # PostgREST (`batch_upsert_nomina` no lo vuelve a tocar), donde un objeto UUID no es
+        # serializable. Acá no hay `model_dump(mode="json")` que lo cubra — el dict se arma a
+        # mano —, así que la conversión tiene que ser explícita.
+        empresa_id = str(body.empresa_id)
         filas = [
             {
-                "empleado_id": f.empleado_id, "anio": f.anio, "mes": f.mes,
+                "empleado_id": str(f.empleado_id), "anio": f.anio, "mes": f.mes,
                 "salario_bruto": f.salario_bruto,
                 "cargas_sociales": max(0.0, f.salario_bruto - f.neto),
-                "empresa_id": body.empresa_id,
+                "empresa_id": empresa_id,
             }
             for f in body.filas
         ]
         persistidas = self._repo.batch_upsert_nomina(filas)
 
+        # `empresa_id` ya convertido: el payload lo declara `str`. `AuditService.registrar` haría
+        # el `str()` igual, pero un UUID crudo acá dependería de esa cortesía de la capa de abajo
+        # — y si fallara, el error se lo traga el audit y el evento desaparece sin rastro.
         self._audit.registrar(**payload_importacion_costos(
-            body.empresa_id, _periodos(body.filas), len(body.filas), len(persistidas), usuario_id,
+            empresa_id, _periodos(body.filas), len(body.filas), len(persistidas), usuario_id,
         ))
 
         importados = sum(1 for f in body.filas if not f.es_actualizacion)

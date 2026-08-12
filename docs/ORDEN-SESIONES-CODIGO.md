@@ -30,16 +30,35 @@
 | **F** ✅ | CV screening completo: código de vacante, matcher, adjunto, extracción de texto, clasificador con criterio configurable |
 | **G** ✅ | Link público de carga de horas (`/horas`) · pantalla de clientes · vista de horas por cliente |
 | **422** ✅ | Bug de producción en el alta de clientes + handler de `RequestValidationError`. Las 27 pantallas dejan de mostrar "Error del servidor" ante un 422 |
+| **L** ✅ | **Clientes como catálogo GLOBAL** (L1–L9, migraciones 108 y 109, las dos corridas). Un cliente no pertenece a ninguna empresa; el nombre es único en todo el sistema |
+| **J5** ✅ | **`ev_*` desmontado y las 11 tablas muertas dropeadas.** J5a borró el código (17 archivos, 19 endpoints publicados e inalcanzables); J5b corrió la migración **112**. Producción: 63 → **52 tablas**, 52 → **43 triggers** |
+| **áreas** ✅ | 500 al crear un área en modo consolidado + barrida de ids mal tipados (el patrón `str` donde va `UUID`) |
+| **contraste** ✅ | El popup de los `<select>` en modo oscuro, con `frontend/app/contrasteTokens.test.ts` como guarda |
+| **ASCII** ✅ | `pip install` roto en Windows: los `requirements*.txt` pasan a ASCII puro (+6 tests) |
 
-**Suite:** 3280 backend · 647 front en 53 archivos · **trece** barridos estructurales · `tsc` limpio.
-*(Remedido el 11/8/2026. La lista de los trece vive en `CLAUDE.md` → Tests; acá solo el número.)*
-**Migraciones:** hasta la 107, todas corridas. `schema.sql` verificado exacto contra el catálogo.
+**Suite:** **3234** backend en 157 archivos · 647 front en 53 archivos · **trece** barridos
+estructurales · `tsc` limpio.
+*(Remedido el 12/8/2026. La lista de los trece vive en `CLAUDE.md` → Tests; acá solo el número.
+El backend bajó de 3280 porque J5 borró código con sus tests, no porque se perdiera cobertura:
+3280 → 3229 → 3228 → 3234.)*
+**Migraciones:** hasta la **112**, todas corridas. `schema.sql` verificado exacto contra el catálogo
+el 12/8: 52 tablas de los dos lados.
+
+> ⚠️ **Este documento ya NO es el plan.** Lo supersede **`docs/PLAN-6-SEPTIEMBRE.md`** (12/8), que
+> tiene la fecha de entrega y el orden de las próximas 45 sesiones. Lo que sigue valiendo de acá
+> —y por eso no se archiva— es el **inventario**: los bloques cerrados, los pendientes concretos,
+> los archivos al filo y, sobre todo, **lo que no depende de nosotros**.
 
 ---
 
 ## Bloque L — Clientes como catálogo global
 
-**Es lo que sigue, y va antes de J** porque cambia `schema.sql`, que es el archivo del handoff.
+> ✅ **CERRADO el 10/8/2026 — L1 a L9, con las migraciones 108 y 109 corridas.** Lo de abajo queda
+> como el registro de cómo se decidió y en qué orden se ejecutó. **Un dato del encabezado envejeció
+> y conviene no leerlo como estado:** decía `clientes` 0 filas y `horas_proyecto` 0; hoy hay **4
+> clientes y 1 carga de horas** (12/8).
+
+**Era lo que seguía, y fue antes de J** porque cambia `schema.sql`, que es el archivo del handoff.
 
 **Decisión tomada:** un cliente no pertenece a ninguna empresa. Se ve, se crea y se elimina con
 el sidebar en cualquier modo, y cualquier empleado imputa horas contra cualquier cliente.
@@ -94,7 +113,7 @@ Después de L. No depende de nadie y el otro dev trabaja en paralelo.
 | **J2** | `.env.example` completo y verificado contra `settings.py` | 1 | Incluye `HORAS_PUBLICO_ENABLED` y `ASSESSMENT_ENABLED` |
 | **J3** | `DEPLOY.md` y `BITACORA-CAMBIOS.md` al día | 2 | `CLAUDE.md` ya quedó al día en el cierre de G |
 | **J4** | Documento de handoff: rutas públicas, techos medidos, decisiones que condicionan el cutover | 2 | Storage, `ban_duration`, `TRUSTED_PROXY_HOPS`, rate limit con `memory://` |
-| **J5** | 🔴 **Decidir**: limpiar las 6 tablas huérfanas y las `ev_*`, o dejarlas documentadas como residuo | 2 | Es DDL destructivo. Si va, va **antes** de entregar el schema |
+| **J5** | ✅ **HECHO (11/8).** Se decidió LIMPIAR: J5a borró el código de `ev_*`, J5b corrió la migración **112** con el drop de las 11 tablas | 2 | Era DDL destructivo y fue **antes** de entregar el schema, como estaba previsto |
 
 **Pendiente para J1:** el diagnóstico de replayabilidad tiene que cubrir las dependencias de
 Supabase (`auth.uid()`, `auth.users`, schema `storage`, roles `anon`/`authenticated`/`service_role`).
@@ -121,7 +140,7 @@ No bloquea nada. Va cuando haya aire.
 | **K2** | `test_limite_export.EXPORTS` es lista a mano → introspección | 2 | Un export nuevo pasa el barrido sin ser mirado. Ya pasó dos veces |
 | **K3** | Los 2 hooks del front sobre 80 líneas | 2 | |
 | **K4** | Test que compare `aplicar_filtro_estado` con `derive_estado` | 2 | |
-| **K5** | Los archivos del front sobre 150 líneas | 4 | Una sesión por archivo. `offboarding/page.tsx` 311, `areas/page.tsx` 271 |
+| **K5** | Los archivos del front sobre 150 líneas (**28**, remedidos el 12/8) | 4 | Una sesión por archivo. `costos/page.tsx` 624, `vacantes/[id]/page.tsx` 451, `onboarding/page.tsx` 413. ✅ `areas/page.tsx` ya se cortó (261 → 128) |
 | **K6** | Las 7 comparaciones `empresa_id !=` post-lectura | 4 | Sin oráculo: elegancia, no seguridad. Ninguna es sobre clientes |
 | **K7** | 🆕 Barrido de endpoints sin test por HTTP | 3 | Ver abajo — nace con snapshot, no con lista |
 
@@ -155,9 +174,20 @@ snapshot. Solo baja, nunca sube. Eso captura endpoints nuevos sin pedir 77 sesio
 
 ### Archivos al filo — bloquean el próximo cambio en su módulo
 
-`identificacion_service.py` **150/150** 🔴 · `routers/horas_cliente.py` 80/80 · `_clasificador_prompt.py` 150/150 · `CandidatoDetailPanel.tsx` 150/150 · `candidato_repo.py` 100/100 · `objetivo_repo.py` 100/100 · `vacante_repo.py` 100/100 · `cliente_repo.py` 98/100 · `horas_repo.py` 98/100 · `horas_publico.py` 79/80 · `ClienteModal.tsx` 147/150 · `CargaForm.tsx` 148/150 · `IntegracionesSection.tsx` 148/150 · `app/horas/page.tsx` 146/150 · `carga_horas_service.py` 143/150
+**Remedido el 12/8/2026** (la lista anterior era del cierre del 422 y ya no describía el repo:
+`identificacion_service.py` y `ClienteModal.tsx` se cortaron en **L1**, y `horas_cliente.py`
+bajó a 69).
 
-Los dos primeros que toca L salen en **L1**.
+**En el límite EXACTO:** `_clasificador_prompt.py` 150/150 · `assessment_service.py` 150/150 ·
+`_vacaciones_write.py` 150/150 · `CandidatoDetailPanel.tsx` 150/150 · `area_repo.py` 100/100 ·
+`candidato_repo.py` 100/100 · `inventario_asignaciones_repo.py` 100/100 · `objetivo_repo.py`
+100/100 · `planes_carrera_repo.py` 100/100 · `vacante_repo.py` 100/100 · `routers/adjuntos.py`
+80/80 · `routers/candidatos.py` 80/80.
+**Cerca:** `app/horas/page.tsx` 146/150 · `carga_horas_service.py` 141/150 · `horas_repo.py`
+93/100 · `cliente_repo.py` 91/100 · `horas_publico.py` 79/80.
+
+> ⚠️ **Esta lista es una FOTO y se mueve todas las semanas. Medila, no la leas.** Si la usás como
+> inventario, vas a "dividir" un archivo que ya se dividió.
 
 ### Deuda anotada
 

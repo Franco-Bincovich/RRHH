@@ -32,19 +32,10 @@ class AuthService:
             AppError: INVALID_CREDENTIALS (401) si el username no existe o la contraseña es incorrecta.
         """
         # Paso 1: resolver username → perfil completo (case-insensitive via ilike sin wildcards)
-        try:
-            profile_result = (
-                supabase_admin.table("users")
-                .select("id, email, username, nombre, apellido, rol, must_change_password")
-                .ilike("username", username)
-                .single()
-                .execute()
-            )
-        except Exception:
+        profile = UsuarioRepo().find_by_username(username)
+        if not profile:
             logger.warning("Login fallido — username no encontrado", extra={"username": username})
             raise AppError("Usuario o contraseña incorrectos", "INVALID_CREDENTIALS", 401)
-
-        profile = profile_result.data
 
         # Paso 2: autenticar contra Supabase Auth usando el email resuelto
         try:

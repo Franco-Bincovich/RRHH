@@ -151,7 +151,10 @@ class TestCostoAudit:
 
         from schemas.costo import NominaCreate
         svc = CostoService(nomina_repo=_Repo(), audit=audit)
-        svc.cargar_nomina(NominaCreate(empleado_id="emp1", mes=6, anio=2026,
+        # `empleado_id` va con un UUID real: el schema lo tipa `UUID` desde la sesión 0.6 y un
+        # "emp1" ni siquiera construye el modelo. La `NominaResponse` de arriba sigue con ids
+        # cortos a propósito — ahí el campo es `str` y este test mira `empresa_id`, no el formato.
+        svc.cargar_nomina(NominaCreate(empleado_id=str(uuid4()), mes=6, anio=2026,
                                        monto_bruto=100.0, monto_neto=80.0),
                           empresa_id=None, usuario_id="u1")
         c = audit.calls[0]

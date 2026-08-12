@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from "node:fs"
-import { join, resolve } from "node:path"
+import { join, resolve, sep } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
@@ -121,13 +121,30 @@ const MINIMO_IMPORTS = 600
 
 // ── Escaneo ───────────────────────────────────────────────────────────────────
 
+/**
+ * 🔴 LOS PATHS SALEN NORMALIZADOS A "/" Y NO ES COSMÉTICO — es lo único que hace que este
+ * barrido vea algo en Windows.
+ *
+ * `path.join` usa el separador del sistema (`\` en Windows), y abajo hay dos lugares que
+ * comparan contra un "/" literal: el filtro `includes("/services/")` y el `split("/")` de
+ * `moduloDe`. Sin normalizar, ninguno matchea nunca: `SERVICES` queda vacío, `EXPORTS` también,
+ * y el barrido reporta **0 exports** — o sea, "nadie está huérfano" sobre un conjunto vacío.
+ *
+ * Lo cazaron las guardas de mínimo (`expected 0 to be >= 200`), que es exactamente para lo que
+ * están. Pero el síntoma era **por plataforma**: verde en la Mac, tres rojos en la Lenovo, sin
+ * que hubiera cambiado una línea del código auditado.
+ *
+ * Se normaliza acá, en el ÚNICO lugar donde nacen los paths, y no en cada comparación: si se
+ * arregla en los dos consumidores, el tercero que se agregue vuelve a nacer con el bug.
+ * `readFileSync` acepta "/" en Windows, así que no hay nada más que tocar.
+ */
 function archivosDe(dir: string): string[] {
   const salida: string[] = []
   const caminar = (d: string) => {
     for (const e of readdirSync(d)) {
       const p = join(d, e)
       if (statSync(p).isDirectory()) caminar(p)
-      else if (p.endsWith(".ts") || p.endsWith(".tsx")) salida.push(p)
+      else if (p.endsWith(".ts") || p.endsWith(".tsx")) salida.push(p.split(sep).join("/"))
     }
   }
   caminar(dir)

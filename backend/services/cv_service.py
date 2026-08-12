@@ -1,17 +1,16 @@
 """
 Servicio de CVs de candidatos: valida y sube el archivo al bucket privado 'cvs'.
 Solo almacena; la descarga se resuelve por signed URL en otra pieza.
-Patrón de subida reusado de adjunto_service (supabase_admin.storage.upload).
+La subida va por `integrations/storage.py`, igual que los otros tres uploads del sistema.
 """
 import uuid as _uuid
 from typing import Optional
 
-from integrations.supabase_client import supabase_admin
+from integrations import storage
 from utils.errors import AppError
 from utils.files import MAX_SIZE_CV, mensaje_supera_tamano
 from utils.logger import logger
 
-_BUCKET = "cvs"
 _EXT = {"pdf", "doc", "docx"}
 _MIME = {
     "application/pdf",
@@ -55,9 +54,8 @@ class CvService:
         """
         emp = empresa_id or "sin_empresa"
         path = f"{emp}/{candidato_id}/{_uuid.uuid4()}.{_ext(filename) or 'bin'}"
-        supabase_admin.storage.from_(_BUCKET).upload(
-            path=path, file=content,
-            file_options={"content-type": content_type or "application/octet-stream"},
-        )
+        # El default de content-type se resuelve ACÁ y no en el módulo de storage: es el único
+        # de los cuatro uploads que puede recibirlo vacío (el archivo llega de un mail).
+        storage.subir(storage.CVS, path, content, content_type or "application/octet-stream")
         logger.info("CV subido", extra={"candidato_id": candidato_id})
         return path

@@ -39,11 +39,18 @@ from services.nomina_import_service import NominaImportService, _periodos
 
 EMPRESA = str(uuid4())
 
+# 🔴 Los ids de empleado son UUID REALES y no `f"emp-{n}"`, desde que `FilaNominaPreview.empleado_id`
+# se tipó `UUID` (sesión 0.6). No es cosmética del fixture: con el id inventado, el schema ni
+# siquiera se construye, así que el test ya no puede llegar a ejercitar lo que dice ejercitar.
+# Se guardan en un dict por índice para poder afirmar sobre uno concreto más abajo.
+_EMPLEADOS = {n: str(uuid4()) for n in range(1, 6)}
+
 
 def _fila(n: int, *, anio: int = 2026, mes: int = 6, bruto: float = 1000.0,
           neto: float = 800.0, actualizacion: bool = False) -> FilaNominaPreview:
     return FilaNominaPreview(
-        fila=n, dni=f"3000000{n}", nombre_empleado=f"Emp {n}", empleado_id=f"emp-{n}",
+        fila=n, dni=f"3000000{n}", nombre_empleado=f"Emp {n}",
+        empleado_id=_EMPLEADOS.setdefault(n, str(uuid4())),
         anio=anio, mes=mes, salario_bruto=bruto, neto=neto, es_actualizacion=actualizacion,
     )
 

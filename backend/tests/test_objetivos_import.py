@@ -84,13 +84,23 @@ def _archivo_de_3_filas() -> bytes:
 
 
 class _UsersFake:
-    """La tabla `users` como la consulta el preview: select→eq(activo)→execute."""
+    """La tabla `users` como la consulta el preview: select→eq(activo)→order→execute.
+
+    ⚠️ Desde la sesión 0.9 el preview no consulta `users` directo: usa
+    `UsuarioRepo.listar_activos()`, que ya existía para el listado y su export. Por eso se
+    faltea `usuario_repo` y el fake suma `order` — ese método ordena por apellido. El orden no
+    cambia el resultado de este test: el preview arma un índice por email/username/nombre, y la
+    clave no depende de la posición.
+    """
 
     def table(self, nombre: str):
         assert nombre == "users", f"el preview consultó {nombre!r}, no users"
         return self
 
     def select(self, *a, **k):
+        return self
+
+    def order(self, *a, **k):
         return self
 
     def eq(self, col, val):
@@ -132,7 +142,8 @@ class _AuditFake:
 
 @pytest.fixture
 def users(monkeypatch):
-    monkeypatch.setattr(prev_mod, "supabase_admin", _UsersFake())
+    import repositories.usuario_repo as usuario_repo_mod
+    monkeypatch.setattr(usuario_repo_mod, "supabase_admin", _UsersFake())
 
 
 def _svc(falla_en: str = ""):
@@ -162,14 +173,16 @@ class TestPreviewFilaValida:
         f = svc.preview(_archivo_de_3_filas()).filas_validas[0]
 
         assert f.titulo == "Migrar nómina"
-        assert f.responsable_id == ANA and f.responsable_nombre == "Ana Gómez"
+        # `str(...)`: `responsable_id` es UUID en el schema desde la sesión 0.6, y ANA es el str
+        # que el fake de `users` devuelve. Comparar el valor —no el tipo— es lo que este test mira.
+        assert str(f.responsable_id) == ANA and f.responsable_nombre == "Ana Gómez"
 
     def test_el_responsable_se_puede_escribir_como_email_username_o_nombre(self, users) -> None:
         """Las tres claves porque el archivo lo escribe una persona: no hay forma de saber cuál
         va a usar. Las tres filas del archivo usan una distinta."""
         svc, _, _ = _svc()
 
-        ids = [f.responsable_id for f in svc.preview(_archivo_de_3_filas()).filas_validas]
+        ids = [str(f.responsable_id) for f in svc.preview(_archivo_de_3_filas()).filas_validas]
 
         assert ids == [ANA, ANA, BETO]   # email, username, "nombre apellido"
 

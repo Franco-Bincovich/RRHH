@@ -9,8 +9,14 @@
 2. **`backend/db/schema.sql`** — fuente de reconstrucción, y lo que `tests/_postgrest_schema.py` valida contra las queries. Hoy coincide con producción en tablas y constraints.
 3. 🔴 **`docs/MODELO_DATOS.md` SE BORRÓ el 2/8/2026 — no lo busques ni lo recrees.** Se declaraba "fuente de verdad única del schema" y describía **13 tablas que no existen** (`equipos`, `empleado_proyecto`, `presupuesto_proyecto`, `seniorities`, `roles`, `skills`, `acceso_empresa`…) y **6 columnas inventadas solo en `horas_proyecto`**. **La única fuente de verdad del schema es `backend/db/schema.sql`**, que se lee del catálogo de Postgres y tiene un validador automático (`tests/_postgrest_schema.py`). Un segundo documento que lo describa en prosa vuelve a divergir: por eso no se reemplazó por nada.
 
-**Fuente de verdad del TRABAJO:**
-- **`docs/Plan de trabajo`** (v2, 27/7/2026 — el archivo no tiene extensión) — **supersede a `PLAN_DESARROLLO_AHORA.md` y `PLAN_DESARROLLO_DESPUES.md`**. 7 bloques (A–G), decisiones cerradas, pedidos a RRHH. Es el que manda para "qué se hace ahora".
+**Fuente de verdad del TRABAJO — hay CINCO planes en `docs/` y solo el primero manda:**
+1. 🟢 **`docs/PLAN-6-SEPTIEMBRE.md`** (12/8/2026) — **EL VIGENTE.** Entrega el 20/9, objetivo interno 6/9. Fases 0 a 4, las cinco features nuevas, las cuatro reglas de "construir pensando en el porteo" y las dependencias externas con fecha de vencimiento. Es el que manda para "qué se hace ahora".
+2. **`docs/ORDEN-SESIONES-CODIGO.md`** (11/8) — el tablero de bloques **A–L**: qué se cerró, qué quedó pendiente, qué bloquea RRHH. Sigue siendo el mejor inventario de pendientes concretos; **ya no es el plan**.
+3. **`docs/PLAN-DE-TRABAJO.md`** (5/8) — superseded. Declara en su encabezado que reemplaza al siguiente.
+4. **`docs/Plan de trabajo`** (v2, 27/7 — el archivo no tiene extensión) — superseded por el anterior.
+5. **`PLAN_DESARROLLO_AHORA.md` / `PLAN_DESARROLLO_DESPUES.md`** — registro histórico, ver abajo.
+> 🔴 **Cinco planes es exactamente el modo de falla que este archivo documenta.** Ninguno se borra —cada uno es el registro de una etapa— pero **la jerarquía se lee acá y en ningún otro lado**. Si vas a escribir un plan nuevo, actualizá esta lista en la misma sesión.
+
 - ⚠️ **`PLAN_DESARROLLO_AHORA.md` y `PLAN_DESARROLLO_DESPUES.md` quedaron OBSOLETOS como plan.** AHORA describe una Fase 0 multiempresa que se completó hace meses y reglas que ya no rigen ("sin checks de rol", "sin flujos de aprobación", auditoría por trigger `fn_auditoria()` — los triggers se dropearon en la migración 058). DESPUÉS describe features que en su mayoría no se van a construir en ese orden. **No borrarlos: siguen siendo el registro de la intención original de producto** (proyectos, costeo por hora, link público, capa de permisos por sección). Leerlos como contexto histórico, nunca como instrucción.
 
 **Estado y trazabilidad:**
@@ -19,6 +25,15 @@
 - **`docs/MATRIZ-FILTROS.md`** — inventario de qué filtro existe en cada módulo y en cuál de las cuatro capas (repo → service → router → UI), y si el export lo acepta. **Se actualiza al cerrar cada tanda del bloque B.** Responde "¿qué corte de información puede sacar RRHH sin pedirnos nada?"
 
 Documentos de la agencia (convenciones obligatorias): `docs/ORDEN-Y-LEGIBILIDAD.md` · `docs/SEGURIDAD-PENTEST.md` · `docs/BASES-DE-DESARROLLO.md` · `docs/UX-UI.md`.
+
+**`docs/handoff-aws/`** — carpeta única de la migración a AWS (creada el 12/8/2026). Adentro: el
+material que dejó el dev de infra tras migrar tres proyectos (`COMPARATIVA_VERCEL_SUPABASE_VS_AWS.md`,
+`PATRONES_CODIGO_AWS.md`, `README-DEV.md`) y el `README.md` que explica cómo se usa.
+🔴 **Esos tres son CONTEXTO de decisiones ya tomadas, NO instrucciones a ejecutar.** Su checklist
+de 50 ítems no se corre, y **no se hace refactor preventivo para parecerse a sus patrones**: el
+código existente del proyecto manda. Lo que sí sale de ahí son las cuatro reglas de porteo que
+adoptó `PLAN-6-SEPTIEMBRE.md` (IDs `UUID`, un solo lugar para serializar, buckets centralizados,
+nada de RLS en tablas nuevas).
 
 > ✅ **Duplicación resuelta — TODA la doc vive en `docs/`, sin excepciones.** `Plan de trabajo`, `ORDEN-Y-LEGIBILIDAD.md` y `UX-UI.md` estaban tracked **dos veces** (raíz y `docs/`). Los dos `.md` eran idénticos; **`Plan de trabajo` NO**: el de la raíz era la v1 (153 líneas) y el de `docs/` la v2 (282), y nada indicaba cuál mandaba. **Se borraron las tres copias de la raíz.** La v1 queda en el historial de git (`1c5dd30`, última forma en `e9df215`). En la raíz solo quedan `CLAUDE.md` y `AUDITORIA_FUNCIONAL.md`.
 > **Regla: un documento nuevo va en `docs/`. Si tenés que elegir entre dos copias, ya es tarde.**
@@ -88,21 +103,28 @@ RRHH es el repositorio interno de **HR Karstec**: plataforma de gestión del cic
 
 ## 🎯 FOCO ACTUAL
 
-**Fases 0–3 y Bloques A, B y C COMPLETOS** (los tres bloques del `Plan de trabajo` v2 con commits en `main`, working tree limpio).
+🔴 **EL PLAN VIGENTE ES `docs/PLAN-6-SEPTIEMBRE.md`** (12/8/2026). Entrega comprometida **20 de
+septiembre**, objetivo interno **6 de septiembre** para dejarle dos semanas de colchón al dev de
+infra. Los otros tres documentos de plan quedaron atrás y **cada uno declara a quién supersede**:
+`ORDEN-SESIONES-CODIGO.md` (11/8, bloques A–L) → `PLAN-DE-TRABAJO.md` (5/8) → `Plan de trabajo`
+(v2, 27/7). Ninguno se borra; todos son registro. **Para "qué se hace ahora" manda el primero.**
+
+**Fases 0–3 y bloques A, B, C, D, E, F, G, H, L y J5 COMPLETOS**, con commits en `main`.
 
 - **Fase 0** (blindaje pre-testing) · **Fase 1** (reportes + KPIs) · **Fase 2** (barrera de empresa) · **Fase 3** (deuda estructural).
 - **BLOQUE A — Seguridad.** A1 assessment apagado también en backend · A2 rate limiting por franjas · A3 validación de `X-Empresa-Id` contra empresas reales · A4 nonce OAuth de un solo uso. Ver "Hardening (Bloque A)".
 - **BLOQUE B — Filtros y exports.** B1 matriz · B2 fundación · B3 filtro por área · B4 filtro por proyecto · B5/B6 filtros expuestos y rango de fechas · B7 límite de export con aviso. Ver "Filtros y exports (Bloque B)".
-- **BLOQUE C — Compromisos del directorio.** C1 historial salarial · C2 exports de nómina y auditoría · C3 entrevista de salida · C4 domicilio desglosado (mig 081) · C5 Áreas al sidebar. **C6 (plantillas públicas/privadas) NO está hecho** — sigue sin alcance definido (§4.3 del Plan).
+- **BLOQUE C — Compromisos del directorio.** C1 historial salarial · C2 exports de nómina y auditoría · C3 entrevista de salida · C4 domicilio desglosado (mig 081) · C5 Áreas al sidebar. **C6 (plantillas públicas/privadas) NO está hecho** — sigue sin alcance definido.
+- **BLOQUES D–L** (agosto). **E** Comunicación: envío de plantillas de mail, destinatario libre e historial · **F** CV screening de punta a punta (Gmail → clasificador) · **G/H** export en 25 módulos, subobjetivos, import de objetivos por Excel · **L** clientes como catálogo GLOBAL (migs 108/109) · **J5** desmontaje de `ev_*` y drop de las 11 tablas muertas (mig 112). El bloque **B de objetivos se CANCELÓ**: `responsable_id → users` es el modelo correcto, los objetivos son tablero del equipo de RRHH.
 
-**Lo que sigue:** **encender el link público de horas** (`HORAS_PUBLICO_ENABLED=true` + cargar al menos un cliente — el código está entero y verde) · entregar usuarios a RRHH para testing sobre datos reales · **BLOQUE D** (evaluaciones cross-lote, bloqueado por tener 1 solo lote) · **BLOQUE E** (CV screening) · handoff a AWS (`migracionAWS/`).
+**Lo que sigue (Fase 0 del plan del 6/9):** los 5 IDs tipados `str` que deberían ser `UUID` · centralizar los 3 buckets de Storage · decidir si el link público de horas va a v2 · después, el diagnóstico grande y el lote único de migraciones (113 en adelante), que **congela el schema el 21/8**.
 
 ### 🔴 EL PROBLEMA #1 NO ES CÓDIGO: RRHH no cargó datos
-Verificado contra el catálogo vivo (**10/8/2026**): **2 empresas, 31 empleados** (19 + 12), y casi todo lo demás vacío:
+Verificado contra el catálogo vivo (**12/8/2026**): **2 empresas, 31 empleados** (19 + 12), y casi todo lo demás vacío:
 - `manager_id` **11/31** · `seniority` 3/31 · `horas_contrato` **0/31**
-- `solicitudes_vacaciones` 0 · `solicitudes_ausencia` 0 · `costos_nomina` 0 · **`clientes` 0 · `horas_proyecto` 0**
-- Apenas arrancados: `vacantes` 1 · `objetivos` 1 · `candidatos` 2
-- Poblado: `fecha_nacimiento` 31/31 (por eso el KPI de cumpleaños muestra datos) · `areas` 12 · `auditoria` 147 filas · el lote de evaluaciones (10 evaluados, 307 resultados).
+- `solicitudes_vacaciones` 0 · `solicitudes_ausencia` 0 · **`costos_nomina` 0**
+- Apenas arrancados: `vacantes` 1 · `objetivos` 1 · `candidatos` 3 · **`clientes` 4 · `horas_proyecto` 1**
+- Poblado: `fecha_nacimiento` 31/31 (por eso el KPI de cumpleaños muestra datos) · `areas` 12 · `auditoria` 156 filas · el lote de evaluaciones (10 evaluados, 307 resultados).
 
 > 🟢 **`manager_id` DEJÓ DE ESTAR EN CERO** (0/19 → 11/31). Es el cambio más importante de este
 > bloque y desbloquea dos cosas que estaban declaradas como no probables: el rol
@@ -122,7 +144,7 @@ Verificado contra el catálogo vivo (**10/8/2026**): **2 empresas, 31 empleados*
 1. Los reportes/KPIs salen vacíos hasta que carguen dotación, vacaciones, ausencias, costos. No están rotos.
 2. `manager_id` **11/31** → `mandos_medios` YA se puede probar, pero solo con un usuario que sea manager de alguien; los otros 20 empleados siguen sin superior y un manager vacío no ve nada.
 3. Los filtros nuevos (área, proyecto, empleado, rango de fechas) están vivos, pero con 31 empleados y un proyecto que concentra 13, **casi todo filtro devuelve casi todo**. No es un filtro roto: es el reparto real de la gente.
-4. **El link público de horas necesita al menos un cliente cargado EN EL SISTEMA** (hay 3, verificado el 10/8/2026): con CERO clientes la identificación por DNI rechaza al padrón entero, y por rechazo único el empleado no ve la diferencia con "tu DNI no existe". 🔴 **El gate es de SISTEMA, no por empresa** (bloque L): antes bastaba con que la sociedad de esa persona no tuviera clientes propios para dejarla afuera con el sistema lleno.
+4. **El link público de horas necesita al menos un cliente cargado EN EL SISTEMA** (hay 4, verificado el 12/8/2026): con CERO clientes la identificación por DNI rechaza al padrón entero, y por rechazo único el empleado no ve la diferencia con "tu DNI no existe". 🔴 **El gate es de SISTEMA, no por empresa** (bloque L): antes bastaba con que la sociedad de esa persona no tuviera clientes propios para dejarla afuera con el sistema lleno.
 5. Qué se espera que "traten de romper".
 
 ### Fases cerradas (no reabrir)
@@ -210,12 +232,13 @@ La purga de vencidos corre en el camino que **crea** states (el que genera las f
 ## Estructura (backend)
 ```
 backend/
-├── main.py              ← entrada + middleware (65 líneas; el registro se fue a registro_routers.py)
-├── registro_routers.py  ← registrar(app): monta los 69 routers. Es FUNCIÓN, no módulo con efectos:
-│                          los flags se leen AL LLAMARLA, así un test puede encenderlos y re-registrar.
+├── main.py              ← entrada + middleware (71 líneas; el registro se fue a registro_routers.py)
+├── registro_routers.py  ← registrar(app): monta 64 de los 66 routers (2 los gatea un flag). Es
+│                          FUNCIÓN, no módulo con efectos: los flags se leen AL LLAMARLA, así un
+│                          test puede encenderlos y re-registrar.
 ├── config/settings.py   ← única fuente de config y env (Settings() se instancia en import)
-├── routers/             ← 69 archivos, 247 rutas montadas, sin lógica (límite 80 líneas)
-├── services/            ← 197 archivos de lógica de negocio (220 con submódulos) (límite 150)
+├── routers/             ← 66 archivos, 225 rutas montadas, sin lógica (límite 80 líneas)
+├── services/            ← 192 archivos de lógica de negocio (215 con submódulos) (límite 150)
 │   ├── _empleado_scope.py     ← barrera de empresa/ownership sobre el empleado target (Fase 2)
 │   ├── _adjunto_padres.py     ← resolver de la entidad padre de un adjunto (Fase 2)
 │   ├── _empleados_write.py    ← altas/ediciones de empleado, extraído por límite
@@ -230,7 +253,7 @@ backend/
 │   ├── _import_csv.py, _import_encoding.py ← lector de CSV único de los 3 imports
 │   ├── _tipos_jerarquia.py    ← guarda de profundidad de los subtipos de ausencia (mig 088)
 │   ├── _nomina_superiores.py, _superiores_matcher.py ← 2ª pasada del import (mig 086)
-│   ├── _usuario_alta.py, _ev_instancia_crear.py ← altas extraídas por límite
+│   ├── _usuario_alta.py       ← alta de usuario, extraída por límite
 │   ├── _reporte_anual_metricas.py, _audit_payloads_offboarding.py ← extraídos por límite
 │   ├── cliente_service.py     ← ABM del catálogo GLOBAL de clientes; la baja es LÓGICA (activo=False)
 │   ├── identificacion_service.py ← paso 1 del link público: DNI → sesión. Rechazo ÚNICO + piso de tiempo
@@ -241,7 +264,7 @@ backend/
 │   ├── mailer/                ← punto de salida ÚNICO de mails; expone solo enviar_mail
 │   ├── export/                ← punto de salida ÚNICO de exports; expone build_export
 │   └── reportes/              ← un submódulo por familia + _common.py
-├── repositories/        ← 87 archivos, único acceso a DB (límite 100, satélites incluidos)
+├── repositories/        ← 82 archivos, único acceso a DB (límite 100, satélites incluidos)
 │   ├── cliente_repo.py        ← catálogo GLOBAL (sin empresa); `existe_nombre` compara TODO el catálogo en Python, NO con .ilike()
 │   ├── _hora_row.py           ← mapper de horas_proyecto con lookups por lote (anti-N+1)
 │   ├── identificacion_repo.py, sesion_horas_repo.py ← DNI → empleado · nonces de sesión del link público
@@ -250,34 +273,37 @@ backend/
 │   ├── _rango_fechas.py       ← filtro por período con semántica de SOLAPAMIENTO (B5)
 │   ├── _empleado_write_repo.py, _empleado_row.py, _nomina_row.py, _offboarding_row.py
 │   ├── _onboarding_templates_{row,filtros,write}.py ← SELECT+mappers · visibilidad · payloads
-│   ├── _ev_instancias_row.py, _ev_plantillas_row.py ← mappers + enrich por lotes (anti-N+1)
 │   └── oauth_state_repo.py    ← crear · consumir · purgar_vencidos (A4)
 ├── integrations/        ← wrappers externos (supabase_client, anthropic)
+│   └── storage.py       ← 🔴 PUNTO DE CONTACTO ÚNICO con Storage. Los 3 buckets y las 4
+│                          operaciones. API neutral al proveedor: afuera no se ve `from_()`
+│                          ni `signedURL`. Al pasar a S3 se toca ESTE archivo y ninguno más.
 ├── schemas/             ← Pydantic in/out (+ empleado_out.py y _provincias.py)
 ├── utils/               ← permisos.py, errors.py, logger.py, rate_limit.py, empresas_cache.py
-├── db/schema.sql        ← FUENTE DE RECONSTRUCCIÓN (58 tablas, 364 constraints, 151 índices)
-├── migrations/          ← 105 archivos SQL; backend va por 107 (075–077 viven en migracionAWS/)
+├── db/schema.sql        ← FUENTE DE RECONSTRUCCIÓN (52 tablas, 133 FK, 141 índices standalone)
+├── migrations/          ← 110 archivos SQL; backend va por 112 (075–077 viven en migracionAWS/)
 ├── ruff.toml            ← config de ruff (reemplazó pyproject.toml, por Vercel)
 ├── pytest.ini           ← config de pytest (asyncio_mode=auto, testpaths=tests)
-└── tests/               ← 89 archivos test_*.py + _postgrest_schema.py (helper)
+└── tests/               ← 157 archivos test_*.py + _postgrest_schema.py y _barrido_callers.py (helpers)
 ```
 
 **Env vars obligatorias** (sin default → rompen el import si faltan): `supabase_url`, `supabase_anon_key`, `supabase_service_key`, `jwt_secret`, `anthropic_api_key`, `resend_api_key`. Con default: `assessment_enabled`, **`horas_publico_enabled`** (`false` — enciende el link público de carga de horas), `trusted_proxy_hops`, `rate_limit_storage_uri`, `supabase_timeout` (30 s), Google OAuth, `frontend_url`, `allowed_origins`. La migración a AWS agrega `database_url`.
 
-**Migraciones y salud de base.** La última del backend es **107** (`tipo_ausencia_licencia`), 105 archivos SQL en total. ✅ **Verificado contra el catálogo el 10/8/2026: NO hay migraciones pendientes** — la 089 (`uq_ausencia_empleado_rango_tipo`) y las 102–107 del módulo de horas están todas corridas, y las 4 tablas nuevas coinciden con `schema.sql` columna por columna (19/19 constraints, 10/10 índices). Las 072/073/074 corrigieron drift. **La 084 es la única destructiva** (`DROP COLUMN modalidad_contratacion` y `nivel`). `000_run_all.sql` **deprecado con guard que aborta**. Detalle de reconstrucción desde cero en **`docs/DEPLOY.md`**.
+**Migraciones y salud de base.** La última del backend es **112** (`drop_tablas_muertas`), 110 archivos SQL en total. ✅ **Verificado objeto por objeto contra el catálogo el 12/8/2026: NO hay pendientes.** Corridas la 080, 089, 102–112. Producción tiene 52 tablas, ninguna `ev_*`, y `clientes` ya sin `empresa_id` (2 índices, 0 FKs salientes, los 4 clientes y su hora imputada intactos).
+> ⚠️ **La 109 estuvo pendiente y este documento lo afirmó al revés durante unas horas.** Decía "108–112 todas corridas" tras verificar **solo el conteo de tablas** (52 = 52), y la 109 no crea ni borra tablas —borra una columna y tres objetos—, así que era invisible a esa comprobación. **Contar tablas no alcanza para decir que `schema.sql` refleja producción: hay que mirar el objeto que la migración toca.** Es el tercer desfasaje del encabezado de `schema.sql`; la regla que sale de los tres está escrita ahí. Las 072/073/074 corrigieron drift. **Destructivas: la 084** (`DROP COLUMN modalidad_contratacion` y `nivel`), **la 109** (drop de `clientes.empresa_id`) **y la 112** (drop de 11 tablas). `000_run_all.sql` **deprecado con guard que aborta**. Detalle de reconstrucción desde cero en **`docs/DEPLOY.md`**.
 
-**Contraste schema.sql ↔ catálogo vivo (28/7/2026):**
+**Contraste schema.sql ↔ catálogo vivo (reverificado el 12/8/2026, ya con la 112 corrida):**
 
 | | `db/schema.sql` | Producción | |
 |---|---|---|---|
-| Tablas | 58 | 58 | ✅ |
-| Constraints | 364 | 364 | ✅ |
-| Índices | 151 declarados | más en `pg_indexes` | ✅ la diferencia son los índices que Postgres crea solo por PK/UNIQUE |
-| Triggers `updated_at` | **0** | **43** | 🔴 `schema.sql` NO los trae — se recrean aparte (mig 077, en `migracionAWS/`) |
+| Tablas | 52 | 52 | ✅ |
+| FKs | 133 declaradas | 134 | ✅ la de más es `users.id → auth.users(id)`, que `schema.sql` no declara a propósito (es la mina de la migración a RDS) |
+| Índices | 141 standalone declarados | 235 en `pg_indexes` | ✅ la diferencia son los índices que Postgres crea solo por PK/UNIQUE |
+| Triggers `updated_at` | **0** | **35** | 🔴 `schema.sql` NO los trae — se recrean aparte (mig 077, en `migracionAWS/`) |
 
-> En producción hay **52 triggers** no internos: **43** de `updated_at` + **9** `trg_emp_*` (defaults de `empresa_id` del retrofit multiempresa). *(Recontado contra el catálogo el 11/8/2026: acá decía 36 + 9 = 45, que estaba mal. La 077 declaraba 43, así que el que mentía era este documento, no la migración.)*
+> ⚠️ **No compares "constraints" contra el catálogo con un solo número.** Acá vivía una fila que decía `364 = 364`; el catálogo cuenta cada `NOT NULL` como CHECK (hoy da 705 en total), así que ese número no era comparable con nada que se lea del archivo. La fila de FKs sí lo es, y es la que quedó.
 >
-> 🔴 **Van a bajar a 35 + 8 = 43 cuando corra J5b**: 8 de los `updated_at` y 1 `trg_emp_*` (`trg_emp_sucesion`) viven en las 11 tablas que ese bloque dropea. Los 8 **ya se sacaron de la 077** en J5a (11/8/2026), porque `DROP TRIGGER IF EXISTS x ON tabla` también falla si la TABLA no existe y el script abortaba entero. La ventana entre los dos bloques está declarada en `tests/test_triggers_updated_at.py::_PENDIENTES_DE_DROP_J5B`, con guarda que rojea cuando J5b la cierre.
+> ✅ **J5b CORRIÓ (11/8/2026) — esto ya no es futuro.** En producción hay **43 triggers** no internos: **35** de `updated_at` + **8** `trg_emp_*` (defaults de `empresa_id` del retrofit multiempresa). `trg_emp_sucesion` se fue con `sucesion_posiciones`. La excepción con vencimiento (`tests/test_triggers_updated_at.py::_PENDIENTES_DE_DROP_J5B`) **se cerró y se borró**: el barrido volvió a ser igualdad estricta 35 = 35 en las dos direcciones.
 
 ---
 
@@ -316,7 +342,7 @@ Tres roles en `utils/permisos.py`:
 - **mandos_medios** — lectura + escritura solo en VACACIONES y AUSENCIAS; sin acceso al resto.
 - Rol desconocido / None → **fail-closed**.
 
-Núcleo: `puede(rol, seccion, accion)`, `require_permission(seccion, accion)` (dependency factory → `AppError(..., "FORBIDDEN", 403)`). Enum `Seccion` (26 valores). `MANDOS_MEDIOS_SECCIONES = frozenset({VACACIONES, AUSENCIAS})`. **190 gates `Depends(require_permission(...))` en 50 routers.** Espejo front en `frontend/services/permisos.ts`, **hoy verificado por `tests/test_espejo_permisos.py`** (secciones, acciones, roles y `MANDOS_MEDIOS_SECCIONES`, con guarda de mínimo). Sidebar filtra `NAV_GROUPS` por permiso, AuthGuard gatea por ruta, `useCanWrite` oculta botones de escritura.
+Núcleo: `puede(rol, seccion, accion)`, `require_permission(seccion, accion)` (dependency factory → `AppError(..., "FORBIDDEN", 403)`). Enum `Seccion` (28 valores). `MANDOS_MEDIOS_SECCIONES = frozenset({VACACIONES, AUSENCIAS})`. **204 gates `Depends(require_permission(...))` en 61 routers.** *(Recontado el 12/8/2026.)* Espejo front en `frontend/services/permisos.ts`, **hoy verificado por `tests/test_espejo_permisos.py`** (secciones, acciones, roles y `MANDOS_MEDIOS_SECCIONES`, con guarda de mínimo). Sidebar filtra `NAV_GROUPS` por permiso, AuthGuard gatea por ruta, `useCanWrite` oculta botones de escritura.
 
 ✅ **La divergencia sidebar ↔ guard de ruta ya NO es manual-y-a-ciegas:** `components/layout/nav-config.test.ts` compara `NAV_GROUPS` entero contra `seccionDeRuta` de `permisos.ts`, con guarda de mínimo. Un ítem nuevo del menú sin su mapeo de ruta (o al revés) rompe el test. **Lo que sigue siendo espejo manual es `permisos.ts` ↔ `permisos.py`** — eso no tiene test.
 
@@ -422,8 +448,9 @@ Dedup por DNI. Dos flujos, ambos gateados `Seccion.IMPORTACION + WRITE` (solo ad
 **Flujo 1 — Nómina de empleados** (single-shot, sin preview): `routers/importacion_nomina_empleados.py` → `nomina_empleados_service.py` + `_nomina_empleados_transforms.py`. CSV 27 col, `;`, `latin1`. Idempotente, no aborta ante error de fila, clasifica en 3 grupos.
 
 **Flujo 2 — Nómina de costos** (preview + confirmar): `routers/importacion_nomina.py` → `nomina_csv_service.py::parse_nomina_csv` + `nomina_import_repo.py`. Resuelve DNI→empleado, detecta duplicados por `(anio, mes)`.
-> **Este Flujo 2 es el molde de la base de import compartida.** Lo que falta agregar es el **reader XLSX** (hoy `openpyxl` solo se usa para export).
-> 🔴 **Y le falta la auditoría**: `routers/importacion_nomina.py:62` hace el `batch_upsert_nomina` y **no registra ningún evento** — contra la regla propia de "un evento por lote". Ver Deuda técnica.
+> **Este Flujo 2 es el molde de la base de import compartida.**
+> ✅ **La auditoría que este documento le marcaba como faltante ESTÁ**: la emite `services/nomina_import_service.py`, UN evento por lote (ver "Resueltos" abajo).
+> ⚠️ **El reader XLSX ya existe** — `services/_import_excel.py`, escrito para el import de objetivos del bloque H—, **pero este flujo sigue siendo solo CSV**: nadie los cableó. Enchufarlo es lo que queda de la "base de import compartida".
 
 ---
 
@@ -451,9 +478,9 @@ Dedup por DNI. Dos flujos, ambos gateados `Seccion.IMPORTACION + WRITE` (solo ad
 - **`components/ui/FiltersBar.tsx`** (128 líneas) — presentacional, controlado, sin estado ni fetch ni debounce. **5 tipos:** `select` · `search` · `date` · **`daterange`** (emite un objeto) · **`multiselect`** (checkboxes, *no* `<select multiple>`: el nativo exige ctrl/cmd+click, que es justo lo que un usuario no descubre solo). Si algún filtro llega a decenas de opciones, eso pide un combobox con búsqueda — control distinto, no un ajuste de este.
 - Hooks vivos: `useFiltrosEmpleados` · `useFiltrosVacaciones` · `useFiltrosAusencias` · `useFiltrosProyectos` · `useFiltrosAsignacionesCap` · `useFiltrosAsignacionesInv` · `useFiltrosEvaluadosResultados`.
 
-### Superficie de filtros hoy (verificada por introspección de `app.routes`, 10/8/2026)
+### Superficie de filtros hoy (verificada por introspección de `app.routes`, 12/8/2026)
 
-**27 endpoints con parámetro `formato`** (= exports). **19 aceptan además filtros propios**; los
+**26 endpoints con parámetro `formato`** (= exports). **18 aceptan además filtros propios**; los
 otros 8 exportan el listado entero (empresas, equipo, offboarding, onboarding, onboarding/
 templates, períodos, usuarios y el export de un reporte por id). Los que llevan filtros:
 
@@ -468,7 +495,6 @@ templates, períodos, usuarios y el export de un reporte por id). Los que llevan
 | objetivos | estado · prioridad · responsable |
 | evaluaciones (evaluados de un lote) | perfil · sector · con_nota · **proyecto** |
 | costos/nómina | anio · mes |
-| ev_instancias | ciclo · estado |
 | proyectos (listado) | area · estado |
 | **clientes** | incluir_inactivos (🔴 **no hay filtro de empresa**: el catálogo es global) |
 | **horas por cliente** | anio · mes — 🔴 **obligatorios**, no opcionales: sin período la consulta sería la tabla entera |
@@ -487,9 +513,9 @@ Las rutas salen de **`app.routes`** (introspección de FastAPI), no de una lista
 - Guardas: `>= 8` exports y `>= 8` pares detectados · ningún export huérfano sin excepción declarada · **ninguna excepción que apunte a una ruta borrada** (una excepción muerta es ruido que oculta el próximo caso).
 
 **2. `tests/test_limite_export.py::TestTodosLosExportsChequean` — barrido del límite de export.**
-Barre los **11 services con export** y verifica que cada uno (a) importe `verificar_limite_export` y (b) **lo invoque en el cuerpo de `exportar`** (importarlo no alcanza — se comprueba con `inspect.getsource`). Sin él, el próximo export nace sin control y nadie se entera hasta que un usuario recibe un archivo incompleto.
+Barre los **18 services con export** y verifica que cada uno (a) importe `verificar_limite_export` y (b) **lo invoque en el cuerpo de `exportar`** (importarlo no alcanza — se comprueba con `inspect.getsource`). Sin él, el próximo export nace sin control y nadie se entera hasta que un usuario recibe un archivo incompleto.
 - Excepciones declaradas con razón: `reporte_export_service` (reporte puntual por id) y `reportes/_reporte_auditoria` (acotado a un mes por construcción, conserva un truncado **declarado** con nota en el archivo).
-- Guarda: `assert len(EXPORTS) >= 11`.
+- Guarda: `assert len(EXPORTS) >= 18`. ⚠️ **`EXPORTS` sigue siendo una lista a mano** (a diferencia del barrido de paridad, que descubre por `app.routes`): un export nuevo entra al barrido solo si alguien lo agrega. Pasarlo a introspección es el ítem **K2** de `docs/ORDEN-SESIONES-CODIGO.md`.
 
 > Hay un **tercero, en el front**: `components/layout/nav-config.test.ts` compara `NAV_GROUPS` contra `seccionDeRuta` de `permisos.ts`, también con guarda de mínimo (`>= 20` ítems). Cubre al próximo módulo que se agregue al sidebar.
 
@@ -506,7 +532,7 @@ Antes cada export pedía `page_size=100000` y armaba el archivo con lo que entra
 
 Es **constante de módulo, NO variable de entorno**: subirlo exige revisar los techos de tiempo, y eso es una decisión, no configuración.
 
-⚠️ **Alcance real, para no venderlo de más.** En los exports **paginados** (empleados, vacaciones, ausencias, auditoría) el total llega por `count="exact"` y el control actúa **antes** de cargar nada grande. En los **cinco que no paginan** (capacitaciones, inventario ítems, inventario asignaciones, objetivos, ev_instancias) el repo no expone un conteo, así que el chequeo corre sobre la lista ya traída — igual que antes: no hay regresión, pero un volumen que muera por timeout muere antes de llegar acá. Cerrarlo del todo pide un `contar()` por repo: tanda propia.
+⚠️ **Alcance real, para no venderlo de más.** En los exports **paginados** (empleados, vacaciones, ausencias, auditoría) el total llega por `count="exact"` y el control actúa **antes** de cargar nada grande. En los **cuatro que no paginan** (capacitaciones, inventario ítems, inventario asignaciones, objetivos) el repo no expone un conteo, así que el chequeo corre sobre la lista ya traída — igual que antes: no hay regresión, pero un volumen que muera por timeout muere antes de llegar acá. Cerrarlo del todo pide un `contar()` por repo: tanda propia.
 
 ---
 
@@ -525,7 +551,7 @@ Las tablas `ev_*` no sirven para esto y están **vacías en producción**. Las n
 
 Las hijas **no llevan `empresa_id`** — se alcanza por `lote_id`. **Invariante: el matcheo resuelve el empleado SIEMPRE dentro de la empresa del lote, nunca global.** `competencia` va como texto, no catálogo.
 
-**Por qué no se reusó `ev_*`:** `ev_instancias` tiene `UNIQUE(ciclo_id, empleado_id)` pero el dato real son hasta 6 filas por evaluado (una por tipo de evaluador); `evaluador_id` es FK a persona, el CSV trae un tipo (`AUTOEVALUACION`/`PAR`/…) sin identidad; `puntaje_global` se calcula, acá viene calculado de afuera. UI de `ev_*` borrada; tablas se limpian tras el cutover a AWS.
+**Por qué no se reusó `ev_*`:** `ev_instancias` tenía `UNIQUE(ciclo_id, empleado_id)` pero el dato real son hasta 6 filas por evaluado (una por tipo de evaluador); `evaluador_id` era FK a persona, y el CSV trae un tipo (`AUTOEVALUACION`/`PAR`/…) sin identidad; `puntaje_global` se calculaba, acá viene calculado de afuera. ✅ **El módulo `ev_*` ya no existe: código borrado en J5a (17 archivos, 19 endpoints) y las 5 tablas dropeadas por la migración 112 en J5b.** Queda como explicación de por qué este módulo nació aparte.
 
 ### El formato (no cambia — nos adaptamos)
 Dos CSV `;`, **encoding distinto entre sí** (notas UTF-16, desglose UTF-8), números con espacios adelante. A·Notas finales: 8 col, una fila por evaluado. B·Desglose: 7 de identidad + `TIPO EVALUACION` + 15 competencias. **No traen DNI ni legajo, solo apellido y nombre.** El lector detecta BOM explícito y falla claro si no puede determinar encoding (el decode viejo caía a `latin-1` y decodificaba UTF-16 a basura en silencio).
@@ -584,7 +610,7 @@ Arreglar las siete instancias no cerraba nada: el próximo reporte nacía con el
 - **Las ACCIONES reciben la empresa como PARÁMETRO EXPLÍCITO** (del formulario/body), nunca del header `X-Empresa-Id`. Ejemplos: generar un reporte (empresa del form), borrar un lote de evaluaciones (empresa del lote), colgar un adjunto (empresa de la entidad padre).
 - Regla mental: **mirar = sidebar manda · hacer = el form/parámetro manda.**
 - **Reportes = ACCIÓN** → empresa+área salen del form, ignora el sidebar. **Dashboard = VISTA** → respeta el sidebar. Son opuestos a propósito; no contagiar un patrón al otro.
-- 🔴 **Este principio HOY ESTÁ VIOLADO en un lugar**: `services/_costos_write.py:80` audita con la empresa del **header** en vez de la de la entidad afectada. Ver Deuda técnica.
+- ✅ **La violación que este documento marcaba en `services/_costos_write.py` está CERRADA** (6/8/2026). Los dos caminos de escritura auditan con la empresa de la ENTIDAD: `nomina.empresa_id` (línea 48) y `presupuesto.empresa_id` (línea 86), con el porqué escrito en el docstring del módulo. El `empresa_id` del header se recibe y se declara explícitamente como "solo VISTA".
 
 ### Detalle de los reportes
 Dotación: headcount, altas/bajas (con listado nominal), distribución por seniority/modalidad/turno (nulos → "Sin especificar"), rotación por motivo.
@@ -633,8 +659,8 @@ Ausencias activas hoy, % ausentismo del mes (base de días hábiles configurable
     lógica**. 🔴 **Un cliente NO pertenece a ninguna empresa** (bloque L, migraciones 108/109):
     se ve y se edita con el sidebar en cualquier modo, y el nombre es único en TODO el sistema
     (`ux_clientes_nombre_global`, case-insensitive). Revierte lo declarado en `102_clientes.sql`.
-  - **Hoy hay 3 clientes cargados** (10/8/2026). Con CERO, el gate de identificación —que es de
-    SISTEMA, no por empresa— rechaza al padrón entero.
+  - **Hoy hay 4 clientes cargados** (12/8/2026), y `horas_proyecto` tiene **1 fila**. Con CERO
+    clientes, el gate de identificación —que es de SISTEMA, no por empresa— rechaza al padrón entero.
   - 🔴 **Las horas de un cliente son del cliente**: la vista "Horas por cliente" NO se recorta por
     empresa en ninguna de sus cuatro superficies (listado, export, detalle, baja). El reparto por
     sociedad se muestra desglosado adentro de cada cliente, y la pantalla avisa que el selector
@@ -783,9 +809,12 @@ Hay **tres módulos apagados a propósito**. En los tres el código está **ente
 
 ### 🔴 Bugs / riesgos ACTIVOS
 
-- **`_costos_write.py:80` audita con la empresa del HEADER, no con la de la entidad afectada.** El presupuesto hereda su `empresa_id` del área, pero el evento se etiqueta con `X-Empresa-Id` — que en modo consolidado es `None`. **Viola Vista vs Acción** (auditar es una ACCIÓN: la empresa sale de la entidad).
-  > ⚠️ **Corrección respecto de cómo estaba anotado:** en producción hay **cero** eventos `set_presupuesto` y **cero** `carga_nomina`, así que esta línea todavía **no etiquetó mal nada**. Los **9 eventos con `empresa_id NULL`** que sí existen son otros: `alta_usuario` ×3 y `cambio_password` ×3 (legítimos — los usuarios no cuelgan de una empresa, es la decisión de producto documentada) y **3 que sí están mal etiquetados**: `alta_adjunto`, `baja_adjunto` (los dos sobre una **vacante**, que sí tiene empresa) y `baja_candidato`. Con **una sola empresa** en producción un desajuste header-vs-entidad no se puede distinguir todavía; **se va a volver visible el día que exista la segunda.** Cerrar el patrón antes de eso.
-- **`objetivos.responsable_id` es FK a `users`, no a `empleados`** (verificado en el catálogo). Bloquea el filtro por área y el import de objetivos: un objetivo no se puede colgar de un empleado ni ubicar en un área. **Con 0 filas la migración es trivial; con datos cargados es cara.** 🚩 **Hacerlo AHORA o asumir el costo después.** (Es el §4.1 del Plan: falta definir el alcance del rediseño.)
+- 🔴 **`migrations/094_recrear_triggers_empresa.sql` quedó desincronizada de la 112, y eso ROMPE EL REBUILD.** Declara **9** triggers `trg_emp_*`; el noveno es `trg_emp_sucesion` **sobre `sucesion_posiciones`, tabla que la 112 dropeó**. Producción tiene **8** (contado el 12/8). Un replay de `schema.sql` (52 tablas) seguido de la 094 **aborta**: `DROP TRIGGER IF EXISTS x ON tabla` falla igual si la que no existe es la TABLA. **Es la misma mina que J5a ya desactivó en la 077** y a la 094 no se le hizo. Fix: sacar las líneas 82-85 y el comentario de verificación que dice "debe devolver 9".
+  > 🔑 **Y no es un archivo prescindible:** `fn_misma_empresa()` y sus triggers son la **única** defensa a nivel base contra el cruce de empresas por referencia, y **no están en `schema.sql`** (que no trae funciones ni triggers). De los 12 pares (columna → tabla padre) que vigilan, **cero tienen FK compuesta que los respalde** — verificado contra el catálogo el 12/8, y eso que el modelo usa ese patrón en otras 22 FKs.
+
+- **Los 3 eventos de auditoría mal etiquetados que ya están en la tabla.** `alta_adjunto` y `baja_adjunto` (los dos sobre una **vacante**, que sí tiene empresa) y `baja_candidato` quedaron con `empresa_id NULL`. Son datos viejos: `auditoria` es inmutable, no se corrigen. Los otros 6 NULL son legítimos (`alta_usuario` ×3 y `cambio_password` ×3 — los usuarios no cuelgan de una empresa). Con **dos** empresas cargadas, un desajuste header-vs-entidad recién ahora empieza a ser distinguible.
+  > ✅ **El bug que los produjo está cerrado** (`_costos_write.py`, ver Vista vs Acción). Esta entrada queda porque las filas siguen ahí.
+- **`objetivos.responsable_id` es FK a `users`, no a `empleados`** (verificado en el catálogo). ⚠️ **Y es una DECISIÓN, no deuda: el bloque B de objetivos se canceló a propósito** — los objetivos son tablero del equipo de RRHH, no de los 31 empleados, y los operadores de RRHH no tienen área. Consecuencia asumida: **no hay filtro por área en objetivos**, y hay que explicárselo al directorio (estaba comprometido).
 - **Filtro por provincia/localidad — pendiente hasta que haya domicilios cargados.** Las 6 columnas existen (mig 081) y `provincia` ya es una lista cerrada servida por endpoint, así que el filtro es barato; hoy no tendría nada que filtrar.
 - **Filtros duplicados front+back** (patrón recurrente): si un filtro afecta el export, va **server-side, una sola implementación**. Casos abiertos: `aplicar_filtro_estado` es espejo de `derive_estado` (merece un test que las compare); el listado de evaluaciones filtra client-side y exporta server-side (aceptable a ~30 filas, el endpoint ya acepta los filtros).
 - **`permisos.ts` es espejo manual de `permisos.py`** — riesgo de divergencia. (La divergencia sidebar↔guard **sí** tiene test; esta no.)
@@ -809,34 +838,38 @@ Hay **tres módulos apagados a propósito**. En los tres el código está **ente
 - ✅ **`state` de OAuth adivinable — RESUELTO (A4).** Nonce de un solo uso.
 - ✅ **Assessment expuesto sin auth — RESUELTO (A1).** Router desmontado + regex gateada.
 
-### Líneas — **REMEDIDO contra el código el 2/8/2026**
+### Líneas — **REMEDIDO contra el código el 12/8/2026**
 
-> 🟢 **BACKEND: CERO archivos sobre su límite.** Es la primera vez. Los 7 que estaban se cerraron
-> el 2/8: 2 se **borraron** (`costo_repo`, `assessment_repo` — ver "Código muerto") y 5 se
-> **partieron** (`_onboarding_templates_row` 159→87 · `_audit_payloads` 167→119 ·
-> `ev_instancias_repo` 146→98 · `ev_plantillas_repo` 129→93 · `reporte_anual` 154→112), más
-> `usuario_service` 149→77 y `ev_instancias_service` 149→113 que estaban en el techo.
+> 🟢 **BACKEND: CERO archivos sobre su límite.** Se sostiene desde el 2/8, remedido hoy archivo
+> por archivo. Los 7 originales se cerraron ese día: 2 se **borraron** (`costo_repo`,
+> `assessment_repo` — ver "Código muerto") y 5 se **partieron** (`_onboarding_templates_row`
+> 159→87 · `_audit_payloads` 167→119 · `ev_instancias_repo` 146→98 · `ev_plantillas_repo`
+> 129→93 · `reporte_anual` 154→112), más `usuario_service` 149→77 y `ev_instancias_service`
+> 149→113 que estaban en el techo. *(Los cuatro `ev_*` de esa lista ya no existen: J5a los borró.
+> Quedan escritos porque el aprendizaje de abajo salió de ellos.)*
 
 > 🔴 **UN SATÉLITE NO TIENE LÍMITE PROPIO DE 200 POR VIVIR EN `repositories/`.** Dos archivos
 > `_row` tenían escrito "acá el límite es 200" y uno llegó a **159**. Un `_*.py` dentro de
 > `repositories/` **es un repositorio y su límite es 100**; dentro de `services/`, 150. Partir un
 > archivo para respetar un límite es correcto; redefinir el límite del archivo nuevo, no.
 
-**Backend — nadie over-limit. En/al límite EXACTO (el próximo cambio EXIGE dividir primero):**
-- **Services 150/150:** `assessment_service.py`. **A 149:** `vacante_service` · `offboarding_service` · `adjunto_service` · `_nomina_lote`.
-- **Repos 100/100:** `planes_carrera_repo` · `inventario_asignaciones_repo` · `evaluacion_repo`. **A 98-99:** `objetivo_repo` · `vacante_repo` · `onboarding_templates_repo` · `nomina_repo` · `inventario_items_repo` · `ev_instancias_repo` · `empresa_repo` · `capacitacion_repo`.
-- **Routers 80/80:** `vacantes.py` · `adjuntos.py`. **A 79:** `vacaciones.py` · `objetivos.py` · `inventario_items.py` · `asignaciones_capacitacion.py`.
+**Backend — nadie over-limit. A 99-100 (el próximo cambio EXIGE dividir primero), remedido el 12/8:**
+- ⚠️ **`repositories/nomina_repo.py` 99/100** — llegó ahí en la sesión 0.6. El comentario del `str()` se condensó a una línea justamente para no pasarlo.
+- **Services 150/150:** `assessment_service.py` · `_clasificador_prompt.py` · `_vacaciones_write.py`.
+- **Repos 100/100:** `area_repo` · `candidato_repo` · `inventario_asignaciones_repo` · `objetivo_repo` · `planes_carrera_repo` · `vacante_repo`.
+- **Routers 80/80:** `adjuntos.py` · `candidatos.py`.
+> ⚠️ **Esta lista se mueve todas las semanas: es una FOTO, no un inventario estable.** La forma de reconstruirla es medir, no leerla — `Get-ChildItem ... | ForEach-Object { (Get-Content -LiteralPath $_.FullName).Count }` sobre `routers/`, `services/` y `repositories/`. La versión anterior nombraba `evaluacion_repo`, `nomina_repo`, `vacantes.py` y `vacaciones.py`, que desde entonces bajaron o subieron.
 > ⚠️ **`gmail_service.py` ya NO está en el techo** (150 → **122**): el manejo del token se fue a `_google_token.py`, compartido con el envío. Quedó solo con la recepción de mails de candidatos.
 
-**Frontend — 33 archivos > 150** (sin contar `.test.*`), y **2 hooks > 80**:
-`costos/page.tsx` **624** · `vacantes/[id]/page.tsx` **577** · `onboarding/page.tsx` 410 ·
-`ImportarNominaCSVModal.tsx` 377 · `offboarding/page.tsx` 307 · `NominaModal.tsx` 287 ·
-`areas/page.tsx` 261 · `evaluacion/[token]/page.tsx` 258 · `VacanteModal.tsx` 251 ·
-`AIPanel.tsx` 249 · `assessment/page.tsx` 233 · `empresas/[id]/page.tsx` 230 ·
-`EmpresaModal.tsx` 226 · `vacantes/page.tsx` 217 · +19 más entre 152 y 208.
-- **Hooks sobre 80:** `useFiltrosVacaciones.ts` **95** · `useFiltrosAsignacionesCap.ts` **89**. Molde para cortarlos: `useOpcionesAusencias` (partir la carga de opciones del estado del filtro).
-- ⬜ **No cuentan como deuda:** `dropdown-menu.tsx` 268 y `dialog.tsx` 160 son primitivos generados de shadcn/ui.
-- ✅ Ya cortados: `configuracion/page.tsx` (390 → **81**) · `onboarding/templates/[id]/page.tsx` (412 → **136**) · `onboarding/templates/page.tsx` (290 → **120**).
+**Frontend — 28 archivos > 150** (sin contar `.test.*`; **26 propios**, los otros 2 son primitivos de shadcn), y **2 hooks > 80**. Remedido el 12/8:
+`costos/page.tsx` **624** · `vacantes/[id]/page.tsx` **451** · `onboarding/page.tsx` 413 ·
+`ImportarNominaCSVModal.tsx` 377 · `offboarding/page.tsx` 311 · `NominaModal.tsx` 287 ·
+`evaluacion/[token]/page.tsx` 258 · `VacanteModal.tsx` 251 · `AIPanel.tsx` 249 ·
+`assessment/page.tsx` 233 · `empresas/[id]/page.tsx` 230 · `EmpresaModal.tsx` 226 ·
+`CampanaModal.tsx` 208 · `EmpresaAreasTab.tsx` 206 · `vacantes/page.tsx` 178 · +11 más entre 152 y 201.
+- **Hooks sobre 80:** `useFiltrosVacaciones.ts` **95** · `useFiltrosAsignacionesCap.ts` **89** (los dos viven en `components/features/`, no en `hooks/`). Molde para cortarlos: `useOpcionesAusencias` (partir la carga de opciones del estado del filtro).
+- ⬜ **No cuentan como deuda:** `dropdown-menu.tsx` 268 y `dialog.tsx` **221** son primitivos generados de shadcn/ui.
+- ✅ Ya cortados: `configuracion/page.tsx` (390 → **81**) · `onboarding/templates/[id]/page.tsx` (412 → **136**) · `onboarding/templates/page.tsx` (290 → **120**) · **`areas/page.tsx` (261 → 128)**.
 > Los dos objetivos grandes siguen siendo `costos/page.tsx` (624) y `vacantes/[id]/page.tsx` (577) — copiar el corte de `components/features/sucesion/` (855 → 85).
 
 **Cortes ya identificados (para no re-diagnosticar):**
@@ -860,13 +893,23 @@ siempre la misma y no se salta: grep del nombre del módulo Y de su clase en `se
 
 | Qué | Por qué |
 |---|---|
-| **`ev_*` entero** (`ev_ciclos`, `ev_plantillas`, `ev_instancias` — repos, services y routers) | **Los 3 routers están MONTADOS** en `main.py` y los repos tienen callers. Las tablas están vacías en producción, pero **la API existe y responde**: borrarlos rompe endpoints publicados. Se limpian en el cutover a AWS, con el resto de las huérfanas. |
 | **Assessment** (services, schemas, tests) | Apagado por FLAG (`ASSESSMENT_ENABLED`), no muerto. Encenderlo es una variable de entorno y cero código. Solo `assessment_repo` estaba huérfano, y ya se borró. |
 | **Sucesión** (todo el backend, y los 11 componentes del front) | Apagado por dos flags en el front. El backend está intacto y montado. |
 
-**Tablas huérfanas** (`assessment_reportes`, `configuracion_empresa`, `documentos_empleado`,
-`notificaciones`, `notificaciones_config`, `sucesion_posiciones`): 0 filas las 6. **Se limpian
-después del cutover a AWS**, como ya estaba decidido — no ahora.
+> ✅ **`ev_*` YA NO ESTÁ EN ESTA TABLA: se borró entero en el bloque J5 (11/8/2026).** Acá decía
+> *"los 3 routers están MONTADOS, borrarlos rompe endpoints publicados"*, y era cierto hasta ese
+> día. Lo que lo destrabó fue medir qué había del otro lado de esos endpoints: **19 rutas
+> publicadas por HTTP e inalcanzables desde la UI**, una de ellas rota hacía meses sin que nadie
+> lo notara. **J5a** borró el código (17 archivos, 1.527 líneas) y **J5b** dropeó las tablas
+> (migración 112). 🔴 **No confundir con el módulo de evaluaciones VIVO**, que comparte el prefijo
+> de URL `/api/evaluaciones/*` y tiene datos en producción: ése es `evaluacion_*`, no `ev_*`.
+
+✅ **Las 6 tablas huérfanas TAMBIÉN se dropearon** (`assessment_reportes`, `configuracion_empresa`,
+`documentos_empleado`, `notificaciones`, `notificaciones_config`, `sucesion_posiciones`), en la
+misma migración 112 y por el mismo motivo: 0 filas y cero referencias en código. Acá decía que se
+limpiaban "después del cutover a AWS"; se adelantó **a propósito**, porque el `schema.sql` que el
+dev de infra levanta en RDS no tiene por qué traerlas. **Producción: 63 → 52 tablas** (verificado
+contra el catálogo el 12/8/2026).
 
 ### Al margen por decisión (NO tocar)
 - **S6 / DROP de `cargo` y `rol`** → no se borra nada (decisión de producto). Fallbacks `roles[0] ?? cargo` quedan.
@@ -874,9 +917,11 @@ después del cutover a AWS**, como ya estaba decidido — no ahora.
 - **"Compatibilidad con una posición"** (sucesión): feature nunca construida, no deuda técnica. El ranking es por assessment genérico. Cuando RRHH la reclame, definir qué significa compatibilidad antes de improvisar.
 
 ### Tests
-- **Backend: 3280 passed** en **153 archivos `test_*.py`** (+ `tests/_postgrest_schema.py` y `tests/_barrido_callers.py`, que son helpers, no tests). `pytest -q` desde `backend/` con `venv`. *(Medido el 11/8/2026.)*
-- **Front: `npm test` (= `vitest run`) — 647 tests en 53 archivos.** *(Medido el 11/8/2026.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
-- **Los TRECE barridos estructurales** — cada uno cubre automáticamente lo que se agregue después, y **todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una extracción rota devolvería 0 elementos y pasaría en el vacío:
+- **Backend: 3260 passed** en **160 archivos `test_*.py`** (+ `tests/_postgrest_schema.py` y `tests/_barrido_callers.py`, que son helpers, no tests). `pytest -q` desde `backend/` con `venv`. *(Remedido el 12/8/2026.)*
+  > 📌 **La secuencia, para que 3234 no parezca una caída inexplicada:** 3280 (11/8) → **3229** (J5a: se borraron los tests del módulo `ev_*`) → **3228** (J5b: se cerró la excepción con vencimiento de los triggers) → **3234** (los 6 tests del fix ASCII de `requirements`). Bajó porque se borró código, no porque se perdieran tests.
+- **Front: `npm test` (= `vitest run`) — 647 tests en 53 archivos, verdes en las DOS plataformas.** *(Windows verificado el 12/8/2026.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+  > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
+- **Los QUINCE barridos estructurales** — cada uno cubre automáticamente lo que se agregue después, y **todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una extracción rota devolvería 0 elementos y pasaría en el vacío:
   1. `tests/test_paridad_list_export.py` — el export acepta los mismos Query que el listado.
   2. `tests/test_limite_export.py::TestTodosLosExportsChequean` — todo export llama a `verificar_limite_export`.
   3. `tests/test_selects_repos.py` — **todo** `select` con embed del repo, validado con AST contra `db/schema.sql`. Descubrimiento por introspección, nunca una lista.
@@ -884,6 +929,8 @@ después del cutover a AWS**, como ya estaba decidido — no ahora.
   5. `tests/test_callers_huerfanos.py` — símbolos de `services/`+`repositories/` que nadie llama, y endpoints montados que el front nunca pide.
   6. `tests/test_mappers_ejercitados.py` · 7. `tests/test_contrato_repos.py` · 8. `tests/test_auditoria_coherente.py` · 9. `tests/test_nombres_definidos.py` · 10. `tests/test_triggers_updated_at.py`.
   11. `frontend/components/layout/nav-config.test.ts` — `NAV_GROUPS` contra `seccionDeRuta`.
+  15. **`tests/test_acceso_a_datos.py` (NUEVO, 12/8/2026)** — **solo `repositories/` habla con la base.** Barre por AST todas las capas que no son repos y rojea ante un `.table()`/`.rpc()` no declarado. 🔑 Las excepciones son **4 FAMILIAS** (`reporte`, `dashboard`, `organigrama`, `procesos`), no 19 archivos, y **un test impide que pasen de 5**: una lista larga es la que nadie mira (K2/K7). Guarda de mínimo ≥250 archivos + contracara (`repositories/` tiene que seguir consultando). El inventario de las 58 declaradas vive en `docs/handoff-aws/ACCESO-A-DATOS.md`.
+  14. **`tests/test_storage_punto_unico.py` (NUEVO, 12/8/2026)** — ningún service ni repo nombra un bucket ni llama al SDK de Storage: todo pasa por `integrations/storage.py`. **Por AST, no por texto**, porque varios docstrings dicen "bucket privado 'documentos'" y un grep los marcaría — hay un quinto test que fija que la prosa NO cuenta, para que nadie "arregle" el falso positivo borrando documentación. Guarda de mínimo ≥150 archivos.
   12. **`frontend/services/barridoFront.test.ts` (NUEVO, 10/8/2026)** — exports de `services/` que ningún componente importa, en dos buckets (huérfano / solo-tests), con excepciones declaradas con razón y verificadas en las dos direcciones.
   13. **`frontend/app/contrasteTokens.test.ts` (NUEVO, 11/8/2026)** — ratio WCAG de los pares fondo/texto del bloque `.dark` de `globals.css`, parseando hex y oklch del archivo real. Vigila que la paleta oscura siga siendo legible: la regla de `option` (`globals.css:154-158`) no elige colores, los toma prestados de `--popover`/`--popover-foreground`, así que un ajuste de paleta puede volver el popup ilegible **sin tocar la regla**. Ancla la fórmula con valores literales antes de medir nada (blanco/negro = 21:1 por hex y por oklch), porque una conversión mal implementada daría ratios inventados que pasan siempre. Excepción declarada y verificada en las dos direcciones: `--primary`/`--primary-foreground` da **3.68:1** en oscuro (6.18:1 en claro) — el botón primario, anotado en `docs/DEUDA-TECNICA.md` §9.
 

@@ -2,6 +2,19 @@
 
 **HR Karstec (RRHH)** · **Verificado el 5 de agosto de 2026**
 
+> ⚠️ **Vencimiento parcial, anotado el 12/8/2026.** El documento no se rehízo, pero **una semana
+> de trabajo pasó por encima de él**: se cerraron los bloques E, F, G, H, L y J5. Lo que cambia de
+> lo de abajo, sin tocar los veredictos que siguen valiendo:
+> - Las referencias a **`routers/ev_instancias.py`** apuntan a un archivo **borrado** el 11/8
+>   (bloque J5). El export de evaluaciones que sigue vivo es `evaluaciones_resultados_export.py`.
+> - **Export**: pasó de 12 a **25 módulos** (bloque H). Cualquier fila que diga "no exporta"
+>   conviene reverificarla contra `docs/MATRIZ-FILTROS.md`.
+> - **Datos de producción** (12/8): 2 empresas · 31 empleados · `manager_id` **11/31** ·
+>   4 clientes · 1 carga de horas · 3 candidatos · `auditoria` 156 filas. `costos_nomina`,
+>   `solicitudes_vacaciones` y `solicitudes_ausencia` **siguen en 0**, que es lo que sostiene la
+>   distinción 🟡 de arriba.
+> - **Rehacerlo entero es una sesión propia**, y va antes de volver a mostrarle esto al directorio.
+
 ---
 
 ## Cómo se lee este documento

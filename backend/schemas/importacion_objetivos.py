@@ -12,6 +12,7 @@ confirmar. El confirmar **revalida igual** (ver `objetivos_import_service.confir
 preview resuelve para MOSTRAR, no para autorizar.
 """
 from typing import List, Optional
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -27,11 +28,16 @@ class FilaObjetivoPreview(BaseModel):
     fila: int
     titulo: str
     responsable: str            # lo que decía la celda, para que el usuario lo reconozca
-    responsable_id: str         # resuelto contra users en el preview
+    # 🔴 Igual que `FilaNominaPreview.empleado_id`: viaja de ida y de vuelta, y el front reenvía
+    # la fila tal cual la recibió. UUID acá hace que un id alterado o vacío muera en el 422.
+    responsable_id: UUID        # resuelto contra users en el preview
     responsable_nombre: str
     prioridad: str
     fecha_entrega: Optional[str] = None     # "YYYY-MM-DD"
     descripcion: Optional[str] = None
+    # ⚠️ Sigue siendo List[str] a propósito: NO entró en el inventario de los 5 de la sesión 0.6.
+    # Tiene el mismo problema de fondo y su conversión (`UUID(u)` en `_a_create`) sigue viva y
+    # funcionando. Cambiarlo pide el mismo rastreo completo; queda anotado, no hecho a medias.
     responsables_ids: List[str] = []        # acompañantes ya resueltos (sin el dueño)
     # Lo que se cargó de menos y el usuario tiene que saber: hoy solo "fecha" (celda ilegible).
     faltantes: List[str] = []
@@ -47,7 +53,7 @@ class ImportacionObjetivosPreviewResponse(BaseModel):
 class ImportacionObjetivosConfirmarRequest(BaseModel):
     # 🔴 La empresa viaja en el BODY, no en el header: confirmar un import es una ACCIÓN y la
     # empresa es un dato del formulario (principio Vista vs Acción).
-    empresa_id: str
+    empresa_id: UUID
     filas: List[FilaObjetivoPreview]
 
 

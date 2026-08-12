@@ -20,8 +20,8 @@ rechaza igual venga como dueño o como acompañante.
 from typing import Optional
 from uuid import UUID
 
-from integrations.supabase_client import supabase_admin
 from repositories.objetivo_repo import ObjetivoRepo
+from repositories.usuario_repo import UsuarioRepo
 from schemas.objetivo import (
     CambiarEstadoRequest, ESTADOS, ObjetivoCreate, ObjetivoListResponse,
     ObjetivoResponse, ObjetivoUpdate, PRIORIDADES,
@@ -134,9 +134,10 @@ class ObjetivoService:
         logger.info("Objetivo eliminado", extra={"objetivo_id": str(id)})
 
     def _validate_responsable(self, responsable_id: str) -> None:
-        """Verifica que el responsable sea un user activo en la tabla users (no empleados)."""
-        res = supabase_admin.table("users").select("activo").eq("id", responsable_id).maybe_single().execute()
-        if not res.data:
+        """Verifica que el responsable sea un user activo en `users` (no empleados). Reusa
+        `get_estado`: trae 2 columnas de más, pero recortarlas tocaría a su otro caller."""
+        estado = UsuarioRepo().get_estado(responsable_id)
+        if not estado:
             raise AppError("Responsable no encontrado en users", "RESPONSABLE_NO_VALIDO", 422)
-        if not res.data.get("activo"):
+        if not estado.get("activo"):
             raise AppError("El responsable no está activo", "RESPONSABLE_NO_ACTIVO", 422)

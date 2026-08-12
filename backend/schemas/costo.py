@@ -3,12 +3,18 @@ Schemas Pydantic para el módulo de Costos de Personal.
 NominaCreate → NominaResponse · PresupuestoCreate → PresupuestoResponse · DashboardCostosResponse
 """
 from typing import List, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
 class NominaCreate(BaseModel):
-    empleado_id: str
+    # 🔴 UUID, no str: un `str` acepta "" y "abc", Pydantic los deja pasar y Postgres los rechaza
+    # con 22P02 → 500 en producción en vez del 422 que corresponde. Además, con asyncpg el id
+    # vuelve como objeto UUID y un schema que declara `str` explota al serializar.
+    # ⚠️ Los `*Response` de este archivo SIGUEN siendo `str` a propósito: ahí el valor SALE
+    # (ya viene serializado del row de la base) y no entra en ninguna query.
+    empleado_id: UUID
     mes: int = Field(..., ge=1, le=12)
     anio: int = Field(..., ge=2000, le=2100)
     monto_bruto: float = Field(..., ge=0)

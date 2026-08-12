@@ -352,7 +352,10 @@ class TestLaQueryTraeLosDosCampos:
             def execute(self):
                 return type("R", (), {"data": [{"rol": "admin_rrhh", "activo": True, "ultimo_acceso": None}]})()
 
-        monkeypatch.setattr(mod, "supabase_admin", type("C", (), {"table": lambda s, t: _Q()})())
+        # La query vive en `_usuario_lookup_repo` desde que `usuario_repo` se partió (99/100).
+        # Se parchea AHÍ y no acá: el repo delega, así que su `supabase_admin` ya no interviene
+        # y patchearlo dejaría este test hablándole a la base de verdad.
+        monkeypatch.setattr(mod._lookup, "supabase_admin", type("C", (), {"table": lambda s, t: _Q()})())
         return mod.UsuarioRepo(), columnas
 
     def test_el_select_pide_los_tres_campos(self, monkeypatch) -> None:

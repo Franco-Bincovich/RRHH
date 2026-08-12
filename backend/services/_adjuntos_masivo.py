@@ -13,7 +13,7 @@ sería tener dos criterios de permiso sobre lo mismo.
 from typing import Optional
 from uuid import UUID
 
-from integrations.supabase_client import supabase_admin
+from integrations import storage
 from services._audit_payloads_adjuntos import payload_baja_adjunto
 from utils.logger import logger
 from utils.permisos import Accion
@@ -30,7 +30,7 @@ def eliminar_todos(
     for adj in repo.find_by_entidad(entidad, entidad_id, empresa_id):
         if adj.storage_path:  # guard: nunca remove sobre key vacía; usa la key de la DB tal cual
             try:
-                supabase_admin.storage.from_(adj.bucket).remove([adj.storage_path])
+                storage.borrar(adj.bucket, [adj.storage_path])
             except Exception as exc:  # storage falló: se conserva el flujo, objeto huérfano
                 logger.error("Storage remove falló (adjunto)", extra={"adjunto_id": adj.id, "error": str(exc)})
         repo.marcar_eliminado(adj.id)
