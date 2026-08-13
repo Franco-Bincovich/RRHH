@@ -70,18 +70,39 @@ psql -v ON_ERROR_STOP=1 -f backend/db/seed.sql
 **Los cuatro tienen que dar exit 0.** `ON_ERROR_STOP=1` no es opcional: sin él, `psql` sigue de
 largo tras un error y termina con exit 0 igual, así que un replay a medias se lee como exitoso.
 
+> 🟢 **Los cuatro pasos se corrieron de verdad el 13/8/2026, contra un PostgreSQL 16 que no es
+> Supabase — la primera vez que este replay se ejecuta fuera de la plataforma.** Los cuatro
+> dieron **exit 0** y no apareció ningún bloqueante. Estado final: **55 tablas · 46 triggers no
+> internos · 140 FKs · 246 índices.** El detalle está en `docs/DIAGNOSTICO-ESCALA.md` §1.
+>
+> ⚠️ **Prueba sintaxis y orden, NO compatibilidad con la versión destino:** la base era 16.13 y
+> producción es 17.6.
+
+### 🔴 Las migraciones 113, 114 y 115 NO se corren en un rebuild
+
+**`db/schema.sql` ya las incluye.** El archivo va por delante de producción desde el 13/8/2026
+(lo dice su propio encabezado), así que quien reconstruya desde él **ya tiene** las 3 tablas
+nuevas, las 7 columnas y los índices de las tres migraciones.
+
+Correrlas igual no rompe nada —las tres son idempotentes, verificado— pero **listarlas como paso
+del rebuild hace que alguien busque un paso que no falta.** Son parte del historial: se corren
+UNA vez contra la base de producción que ya existe, no contra una base recién creada.
+
+Dicho al revés, que es como se usa: **si arrancás de `schema.sql`, el orden de reconstrucción son
+los cuatro pasos de arriba y nada más.**
+
 **El orden importa, y no es alfabético:**
 1. `schema.sql` crea las tablas. Todo lo demás las necesita.
 2. y 3. Los triggers van **antes** del seed: si van después, las filas del seed entran sin pasar
    por las validaciones, que es justo lo que no se quiere ejercitar mal el primer día.
 4. `seed.sql` va último, y es el único que escribe filas.
 
-Verificación al terminar — tiene que dar `43`, `8` y `5 / 1 / 3`:
+Verificación al terminar — tiene que dar `46`, `8` y `5 / 1 / 3`:
 
 ```sql
 SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
   JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='public' AND NOT t.tgisinternal;                        -- 43 (35 + 8)
+ WHERE n.nspname='public' AND NOT t.tgisinternal;                        -- 46 (38 + 8)
 SELECT count(*) FROM pg_trigger t JOIN pg_proc p ON p.oid=t.tgfoid
  WHERE p.proname='fn_misma_empresa' AND NOT t.tgisinternal;              -- 8
 SELECT (SELECT count(*) FROM tipos_ausencia           WHERE empresa_id IS NULL),

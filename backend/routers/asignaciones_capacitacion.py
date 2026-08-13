@@ -8,7 +8,7 @@ from services.asignacion_service import AsignacionService
 from utils.empresa import get_empresa_id
 from utils.files import ALLOWED_TYPES_CERTIFICADO, MAX_SIZE_CERTIFICADO, validate_upload
 from utils.permisos import Accion, Seccion, require_permission
-from utils.rate_limit import limiter
+from utils.rate_limit import limite_export
 
 router = APIRouter()
 SECCION = Seccion.CAPACITACIONES
@@ -28,7 +28,7 @@ async def list_asignaciones(
 
 
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+@limite_export  # 100/hora por usuario — utils/rate_limit.py
 async def exportar_asignaciones(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), empleado_id: Optional[UUID] = Query(None), capacitacion_id: Optional[UUID] = Query(None), estado: Optional[str] = Query(None), area_id: Optional[UUID] = Query(None), service: AsignacionService = Depends(_svc)) -> Response:
     d = service.exportar(get_empresa_id(request), formato, empleado_id, capacitacion_id, estado, area_id)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})

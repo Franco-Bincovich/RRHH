@@ -18,7 +18,7 @@ from fastapi.responses import Response
 from schemas.cliente import ClienteListResponse, ClienteResponse
 from services.cliente_service import ClienteService
 from utils.permisos import Accion, Seccion, require_permission
-from utils.rate_limit import limiter
+from utils.rate_limit import limite_export
 
 router = APIRouter()
 SECCION = Seccion.CLIENTES
@@ -41,7 +41,7 @@ async def list_clientes(
 # matchearía como el path param `id: UUID` → 422 de validación en vez del archivo. Es el mismo
 # comentario, y el mismo bug evitado, que en areas.py.
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+@limite_export  # 100/hora por usuario — utils/rate_limit.py
 async def exportar_clientes(
     request: Request,
     formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"),

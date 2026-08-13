@@ -23,7 +23,7 @@ from fastapi.responses import Response
 from schemas.horas_cliente import DetalleEmpleadoResponse, HorasPorClienteResponse
 from services.horas_cliente_service import HorasClienteService
 from utils.permisos import Accion, Seccion, require_permission
-from utils.rate_limit import limiter
+from utils.rate_limit import limite_export
 
 router = APIRouter()
 SECCION = Seccion.PROYECTOS
@@ -46,7 +46,7 @@ async def vista(
 # ⚠️ ANTES de cualquier ruta con parámetro: FastAPI resuelve por ORDEN DE DECLARACIÓN y con
 # `/{algo}` arriba, "exportar" matchearía como el parámetro. Ídem areas.py.
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+@limite_export  # 100/hora por usuario — utils/rate_limit.py
 async def exportar(
     request: Request,
     mes: int = Query(..., ge=1, le=12),

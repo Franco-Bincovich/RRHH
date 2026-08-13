@@ -51,7 +51,7 @@ class TestLimite:
         assert verificar_limite_export(total) is None
 
     def test_exactamente_en_el_limite_no_corta(self) -> None:
-        """El borde va explícito: 5.000 es el MÁXIMO, no el primer valor rechazado."""
+        """El borde va explícito: el tope es el MÁXIMO ACEPTADO, no el primer rechazado."""
         assert verificar_limite_export(LIMITE_FILAS_EXPORT) is None
 
     def test_uno_por_encima_corta(self) -> None:
@@ -63,23 +63,28 @@ class TestLimite:
 
 class TestMensaje:
     def test_incluye_el_total_real(self) -> None:
-        assert "12.345" in _error(12345).message
+        assert "123.456" in _error(123456).message
 
     def test_incluye_el_maximo(self) -> None:
-        assert "5.000" in _error(12345).message
+        """El literal va A PROPÓSITO en vez de derivarse de la constante: derivarlo haría que
+        el test espeje la implementación y deje de poder ver un cambio de formato (el separador
+        de miles con punto). El assert de arriba ata el literal al tope, así que si el tope se
+        mueve el test falla pidiendo que se actualice, en vez de quedar viejo en silencio."""
+        assert LIMITE_FILAS_EXPORT == 20000, "cambió el tope: actualizá el literal de abajo"
+        assert "20.000" in _error(123456).message
 
     def test_dice_que_hacer(self) -> None:
         """Accionable, no solo descriptivo."""
-        assert "filtros" in _error(12345).message.lower()
+        assert "filtros" in _error(123456).message.lower()
 
     def test_sin_jerga_tecnica(self) -> None:
         """El usuario es de RRHH: no puede leer nombres de params ni de tablas."""
-        msg = _error(12345).message.lower()
+        msg = _error(123456).message.lower()
         assert not any(t in msg for t in ("page_size", "query", "timeout", "postgrest", "null"))
 
     def test_no_nombra_un_filtro_que_puede_no_existir(self) -> None:
         """"Acotá por fechas" sería imposible de seguir en empleados, que no filtra por fecha."""
-        assert "fecha" not in _error(12345).message.lower()
+        assert "fecha" not in _error(123456).message.lower()
 
 
 # ─── El barrido: TODOS los services con export chequean ───────────────────────
@@ -196,8 +201,16 @@ class TestElConteoRespetaLosFiltros:
         assert self._exportar(repo, estado="disponible") is not None
 
     def test_el_total_del_mensaje_es_el_filtrado(self) -> None:
-        """No el total de la tabla: el número que ve el usuario tiene que ser el de SU consulta."""
-        repo = _RepoPorFiltro(9999, LIMITE_FILAS_EXPORT + 7)
+        """No el total de la tabla: el número que ve el usuario tiene que ser el de SU consulta.
+
+        El número esperado se DERIVA del tope en vez de ir literal: acá lo que se prueba es de
+        cuál de los dos conteos sale el mensaje, no cómo se formatea (eso lo cubre
+        `TestMensaje::test_incluye_el_maximo`, que sí lleva literal). Con el literal, mover el
+        tope rompía este test por un motivo que no tiene nada que ver con lo que verifica."""
+        filtrado = LIMITE_FILAS_EXPORT + 7
+        repo = _RepoPorFiltro(9999, filtrado)
         with pytest.raises(AppError) as exc:
             self._exportar(repo, estado="disponible")
-        assert "5.007" in exc.value.message
+        assert f"{filtrado:,}".replace(",", ".") in exc.value.message
+        # La otra mitad, que faltaba: que el total de la TABLA no se cuele en el mensaje.
+        assert "9.999" not in exc.value.message

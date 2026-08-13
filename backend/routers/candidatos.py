@@ -14,7 +14,7 @@ from services.candidato_service import CandidatoService
 from services.vacante_service import VacanteService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
-from utils.rate_limit import limiter
+from utils.rate_limit import limite_export
 
 router = APIRouter()
 SECCION = Seccion.CANDIDATOS
@@ -43,7 +43,7 @@ async def listar_candidatos(
 
 # ⚠️ ANTES de /{id}/…: si fuera después, "exportar" matchearía como un id y daría 422 de UUID.
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+@limite_export  # 100/hora por usuario — utils/rate_limit.py
 async def exportar_candidatos(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), sin_vacante: bool = Query(False), clasificacion: Optional[Clasificacion] = Query(None), service: CandidatoService = Depends(_candidato_svc)) -> Response:
     d = service.exportar(get_empresa_id(request), formato, sin_vacante, clasificacion)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})

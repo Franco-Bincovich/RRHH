@@ -31,14 +31,14 @@ FRANJAS (de más restrictiva a menos):
                      POST /api/usuarios/cambiar-password          10/hora
   import             los 5 endpoints de import        10/hora compartido (scope="import")
   export             los endpoints de export + reportes/generar-export
-                                                      30/hora compartido (scope="export")
+                                       100/hora compartido POR USUARIO (scope="export")
   costo externo      POST /api/reportes/generar                   20/hora
   /health            EXENTO (lo consultan los health checks de la plataforma)
   todo lo demás      BASELINE, abajo
 
 ⚠️ DOS exports quedan FUERA de la franja y corren bajo el baseline: `objetivos.py` e
 `inventario_items.py` (79 líneas cada uno). Sumarles el decorador los pasaba del límite de 80
-del router. **Cuando se dividan, agregarles `shared_limit("30/hour", scope="export")`.**
+del router. **Cuando se dividan, agregarles el decorador `@limite_export` de este módulo.**
 Eran TRES: `evaluaciones_resultados.py` se cerró al dividir su router — el export se mudó a
 `routers/evaluaciones_resultados_export.py`, que sí lleva la franja. La lista de pendientes
 la fija `tests/test_rate_limit.py::TestFranjaExport` / `test_los_dos_pendientes_siguen_sin_decorador`;
@@ -53,9 +53,10 @@ la aserción vacua).
      hace falta un store compartido: `RATE_LIMIT_STORAGE_URI=redis://...`. El enchufe está
      puesto; conectarlo es decisión de infraestructura.
 
-  2. **La key es la IP, y detrás de un proxy la IP depende de `TRUSTED_PROXY_HOPS`.** Si ese
-     valor queda mal, el efecto no es "el límite no anda": es que todo el tráfico colapsa en
-     un solo contador y el equipo entero se queda afuera. Ver `client_ip`.
+  2. **La key por defecto es la IP, y detrás de un proxy la IP depende de `TRUSTED_PROXY_HOPS`.**
+     Si ese valor queda mal, el efecto no es "el límite no anda": es que todo el tráfico
+     colapsa en un solo contador y el equipo entero se queda afuera. Ver `client_ip`.
+     La franja de export es la excepción: usa `usuario_o_ip` y no depende de ese valor.
 """
 import time
 
@@ -66,6 +67,8 @@ from starlette.responses import Response
 
 from config.settings import settings
 from middleware.error_handler import global_error_handler
+# Re-export: `client_ip` lo importan `routers/horas_publico.py` y los tests desde acá.
+from utils._rate_limit_keys import client_ip, usuario_o_ip  # noqa: F401
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -75,42 +78,6 @@ from utils.logger import logger
 BASELINE = "300/minute"
 
 _MENSAJE_429 = "Demasiadas solicitudes. Esperá un momento y volvé a intentar."
-
-
-def client_ip(request: Request) -> str:
-    """IP del cliente a usar como clave del contador, resistente a falsificación.
-
-    `X-Forwarded-For` se construye de izquierda a derecha: cada proxy AGREGA la IP de quien le
-    habló. Por eso las entradas de la DERECHA las escribió nuestra propia infraestructura y son
-    confiables, y las de la IZQUIERDA las pudo inventar el cliente. Con N capas de proxy
-    confiables adelante, la IP real del cliente es `hops[-N]`.
-
-    Ejemplo con Vercel (N=1): si el cliente manda `X-Forwarded-For: 1.2.3.4` falsificado, el
-    edge appendea la IP real de la conexión y al app le llega `"1.2.3.4, 200.0.0.9"`.
-    `hops[-1]` = `200.0.0.9`: el valor inyectado se descarta solo, sin lógica extra.
-
-    Si el header trae MENOS saltos de los declarados —mala configuración, o alguien pegándole
-    directo al origin sin pasar por el proxy— no se adivina cuál sirve: se cae a la IP de la
-    conexión, que es lo único que el cliente no puede falsificar. Con `trusted_proxy_hops=0`
-    (local, sin proxy) el header se ignora por completo.
-
-    NO usar `slowapi.util.get_ipaddr` para esto: busca el header `"X_FORWARDED_FOR"` con
-    guiones bajos, que no es un nombre de header HTTP válido. La búsqueda de Starlette es
-    case-insensitive pero no equipara `_` con `-`, así que esa rama nunca se ejecuta y la
-    función termina devolviendo siempre `request.client.host`, en silencio.
-
-    Args:
-        request: Request entrante.
-
-    Returns:
-        La IP a usar como clave. "127.0.0.1" si no hay ninguna forma de determinarla.
-    """
-    hops_confiables = settings.trusted_proxy_hops
-    if hops_confiables > 0:
-        hops = [h.strip() for h in request.headers.get("X-Forwarded-For", "").split(",") if h.strip()]
-        if len(hops) >= hops_confiables:
-            return hops[-hops_confiables]
-    return request.client.host if request.client else "127.0.0.1"
 
 
 # ⚠️ headers_enabled se deja en False (el default) A PROPÓSITO, y no es un olvido.
@@ -126,6 +93,16 @@ limiter = Limiter(
     default_limits=[BASELINE],
     storage_uri=settings.rate_limit_storage_uri,
 )
+
+
+# La franja de export, EN UN SOLO LUGAR: los 26 endpoints aplican este decorador en vez de
+# repetir la cadena `shared_limit(...)`, que es la forma en que dos exports terminan con límites
+# distintos sin que nadie lo decida. Reusar UN objeto decorador entre 26 funciones es seguro:
+# slowapi resuelve el nombre de registro (`f"{func.__module__}.{func.__name__}"`) y el key_func
+# DENTRO del decorador, una vez por aplicación (slowapi/extension.py:663-664).
+# 100/hora POR USUARIO reemplaza a 30/hora por IP: con 10 empresas, 26 exports y el modo
+# consolidado, un cierre de mes normal agotaba los 30 en minutos.
+limite_export = limiter.shared_limit("100/hour", scope="export", key_func=usuario_o_ip)
 
 
 def _retry_after(request: Request) -> int | None:

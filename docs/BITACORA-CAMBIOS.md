@@ -40,6 +40,153 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-13 · 🔴 Migración 116 — LA ÚLTIMA ANTES DE CONSTRUIR · commit pendiente
+
+**Qué cambió:** se escribió `116_columnas_finales.sql` (**no se corrió**: la corre Franco). 11
+columnas, 1 `DROP NOT NULL` y 1 índice único parcial. Es la última ventana de DDL: después de
+esta, un campo nuevo significa coordinar con vos en medio de la migración.
+
+**Impacto en infraestructura:**
+
+- 🔴 **MIGRACIÓN NUEVA: `116_columnas_finales.sql`. ANTES del deploy, sin ventana.** Aditiva
+  salvo un `ALTER COLUMN ... DROP NOT NULL`, que **afloja** una restricción y por eso no puede
+  fallar ni invalidar una fila. Idempotente y **validada dos veces contra una base local**
+  (exit 0 las dos). Las tablas que toca están **en 0 filas en producción**, así que no hay
+  backfill ni revalidación.
+  - **11 columnas:** `perfiles_puesto.ofrecemos` · `vacantes.ofrecemos` ·
+    `recategorizaciones.categoria_anterior/_nueva` · `capacitaciones.entidad_capacitadora/
+    modalidad/tipo` · `empleado_capacitacion.proyecto/anio/mes/nombre_libre`. Todas `text NULL`.
+  - **`empleado_capacitacion.empleado_id` pasa a NULLABLE.**
+  - **1 índice único parcial** `ux_ec_nombre_libre`.
+
+- 🟠 **UN CAMBIO DE INVARIANTE QUE NO SE VE EN EL DDL, y hay que saberlo del otro lado.** Con
+  `empleado_id` NULL:
+  - `ec_empleado_empresa_fk (empleado_id, empresa_id)` es **MATCH SIMPLE** (verificado:
+    `confmatchtype='s'`), así que en esas filas **la constraint no se evalúa**. No falla, pero
+    tampoco valida. `empresa_id` conserva su FK propia a `empresas`.
+  - `UNIQUE (capacitacion_id, empleado_id)` **deja de proteger** esas filas (dos NULL son
+    distintos en SQL). Eso es lo que cubre `ux_ec_nombre_libre` — y **es un índice POR
+    EXPRESIÓN**, así que no sirve como target de `on_conflict` de PostgREST: el import tiene que
+    consultar-y-decidir o capturar el 23505. Mismo límite que `ux_clientes_nombre_global`.
+
+- ⚠️ **CÓDIGO QUE HAY QUE ARREGLAR ANTES DE QUE EXISTA LA PRIMERA FILA CON NULL.** Hoy la
+  migración es inerte (0 filas), pero el día que el import escriba una, sin estos cambios **se
+  cae el listado entero de asignaciones, no solo la fila**: `asignacion_repo.py:24` manda
+  `id=in.(null,…)` a PostgREST → 400; y `schemas/capacitacion.py:72` (`empleado_id: str` no
+  opcional) → ValidationError → 500. Además `_capacitaciones_export.py:31` y
+  `frontend/types/capacitacion.ts`. **No es trabajo de infraestructura, pero condiciona el orden
+  del deploy: la migración puede ir sola, el import no.**
+
+**`db/schema.sql`** quedó con las 11 columnas y el índice; **replay limpio verificado en una base
+nueva** (los 4 pasos exit 0 · 55 tablas · 46 triggers · 253 índices) y la 116 corrida encima da
+**12/12 no-op**, o sea que el archivo la contiene entera.
+**Variables de entorno / buckets / endpoints / auth / dependencias:** sin cambios.
+
+> 📌 **Corrección de numeración:** en este repo la migración de índices de escala es la **115**
+> (`115_indices_escala.sql`) y **no existe ninguna 116 previa**. Verificado contra el catálogo:
+> 113, 114 y 115 están las tres corridas. Esta es la 116.
+
+---
+## 2026-08-13 · Migración 115 (índices de escala) + export por usuario · commit pendiente
+
+**Qué cambió:** se implementó lo único del diagnóstico de escala con fecha de vencimiento. Una
+migración nueva (**no se corrió**: la corre Franco), la franja de export pasó de por-IP a
+por-usuario, y el tope de filas del export subió de 5.000 a 20.000.
+
+**Impacto en infraestructura:**
+
+- 🔴 **MIGRACIÓN NUEVA: `115_indices_escala.sql`. ADITIVA PURA, va ANTES del deploy, sin
+  ventana.** Crea **6 índices compuestos** `(empresa_id, <fecha>)` y **no dropea ni modifica
+  nada**: `idx_costos_nomina_empresa_periodo` · `idx_auditoria_empresa_created` ·
+  `idx_sv_empresa_fecha` · `idx_sa_empresa_fecha` · `idx_vp_empresa_periodo` ·
+  `idx_hp_proyecto_fecha`. Idempotente (`IF NOT EXISTS`), verificada contra el catálogo vivo
+  (ninguno existía) y **corrida dos veces contra la base local de diagnóstico**: exit 0 las dos.
+  **No depende de la 113 ni de la 114, ni ellas de ella** — puede ir en cualquier orden.
+  - Usa `CREATE INDEX` y **no `CONCURRENTLY`**, a propósito: CONCURRENTLY no puede correr dentro
+    de una transacción (que es como el editor SQL de Supabase manda los statements) y con los
+    volúmenes de hoy (auditoría: 156 filas) el lock dura milisegundos.
+  - **Ningún índice viejo se dropea, y NO es un olvido.** `idx_costos_nomina_periodo (anio, mes)`
+    tiene **608 escaneos** en producción — el más usado de su tabla— porque es el que sirve al
+    **modo consolidado**, donde la query sale sin filtro de empresa. Regla que sale de ahí y vale
+    para todo índice futuro: *un índice que empieza por la fecha sirve al consolidado; uno que
+    empieza por `empresa_id` sirve al modo por empresa; los dos modos existen, así que hacen
+    falta los dos.*
+
+- 🟠 **`RATE_LIMIT_STORAGE_URI=redis://` sigue siendo necesario, y ahora cambia lo que hay que
+  configurar.** La franja de export pasó de `30/hora por IP` a **`100/hora POR USUARIO`**
+  (`utils/rate_limit.py::limite_export`, aplicado en los 26 endpoints). Dos consecuencias para
+  infraestructura:
+  - **El límite de export ya NO depende de `TRUSTED_PROXY_HOPS`.** Era la franja donde un valor
+    mal puesto dejaba al equipo entero afuera; ahora la clave es el `user_id`. El resto de las
+    franjas (login, refresh, import, público) **siguen dependiendo de ese valor**.
+  - Con Redis conectado el límite pasa a ser real por primera vez. 100/usuario/hora está
+    dimensionado para 10 empresas × 26 exports; con `memory://` el efectivo sigue siendo N×.
+
+- 🟠 **El export de auditoría puede tardar hasta ~90 s con volumen real, y eso toca el techo de
+  la plataforma.** `LIMITE_FILAS_EXPORT` subió de 5.000 a **20.000** porque con 10 empresas el
+  5.000 no alcanzaba ni para un mes. **Medido:** construir el archivo es el 92% del tiempo (la
+  base aporta el 8%), y el costo depende del FORMATO: sobre 27.597 filas, CSV 4 s · Excel 39-53 s
+  · **PDF 126 s**. El techo que rige es el de la función (**300 s en Vercel**), no el timeout
+  httpx de 30 s que el código afirmaba. **Al dimensionar el equivalente en AWS (Lambda/ECS/ALB),
+  el timeout de la función tiene que ser ≥ 300 s o este export se corta.**
+
+**Variables de entorno / buckets / endpoints / auth / dependencias:** sin cambios.
+**`db/schema.sql`** quedó actualizado con los 6 índices (va por delante de producción hasta que
+se corran 113, 114 y 115).
+
+---
+## 2026-08-13 · Diagnóstico de escala (Fase 2.5) — 10 empresas / 1.005 colaboradores · commit pendiente
+
+**Qué cambió:** sesión de MEDICIÓN, read-only sobre el código de `backend/` y `frontend/`. Se
+agregaron dos scripts (`scripts/seed_escala.py`, `scripts/medir_escala.py`) y el informe
+`docs/DIAGNOSTICO-ESCALA.md`. **Cero cambios en backend, frontend, migraciones o schema.**
+**Supabase no se tocó:** todo corrió contra una base local (`HR Karstec`, PostgreSQL 16.13).
+
+**Impacto en infraestructura — hay cuatro cosas que le sirven al dev de AWS:**
+
+- 🟢 **PRIMER REPLAY REAL DEL SCHEMA FUERA DE SUPABASE, Y SALIÓ LIMPIO.** Los cuatro pasos de
+  `docs/handoff-aws/README.md` (`schema.sql` → `funciones_y_triggers.sql` → 077 → `seed.sql`)
+  más las migraciones 113 y 114 dieron **exit 0** contra un Postgres pelado. **No hay
+  bloqueante de reconstrucción.** Estado final: 55 tablas, 46 triggers, 140 FKs, 246 índices.
+
+- 🟠 **DOS CORRECCIONES AL PROCEDIMIENTO DE RECONSTRUCCIÓN, las dos en `handoff-aws/README.md`:**
+  1. Su bloque de verificación dice que tiene que dar **43** triggers y da **46** (35 `updated_at`
+     + **3** de las tablas nuevas de la 113 + 8 `trg_emp_*`). Tal como está, **un replay correcto
+     se lee como fallido.**
+  2. **La 113 y la 114 son NO-OP contra `schema.sql`** — ya están incorporadas. Quien reconstruya
+     desde `schema.sql` **no las necesita**; correrlas igual es inofensivo (son idempotentes,
+     verificado), pero listarlas induce a creer que falta un paso.
+
+- 🔴 **UN TECHO DE PLATAFORMA QUE HAY QUE CONFIRMAR ANTES DEL CUTOVER: el largo máximo de URL del
+  gateway.** Los repos batchean los lookups mandando los ids **en la URL** (`?id=in.(uuid,…)`).
+  Con 31 colaboradores son 1,1 KB; con 1.005 son **37 KB**, y `/api/inventario/items` en
+  consolidado llega a **51 KB y ya devuelve 500**.
+  **El techo de producción está MEDIDO: 25.107 bytes.** GETs de lectura contra
+  `grmdiwxcvcjorlohpwji` el 13/8 (filtro que no matchea nada → `[]`, cero escrituras), borde
+  determinista 5/5. **Quien corta es Cloudflare**, no Kong ni PostgREST. Con ese número, **6
+  endpoint×modo rompen a la escala objetivo** —los 6 en modo consolidado, que es el default del
+  sidebar— y `/api/inventario/items` de **una sola empresa** ya va por el **81% del techo**.
+  A la escala de HOY (31 personas) no rompe nada: la URL más grande ronda 1,2 KB.
+  - 🔴 **LO QUE NECESITO DE INFRAESTRUCTURA: ¿cuál es el largo máximo de URL del ALB y de
+    CloudFront tal como los vas a configurar?** Si el destino queda **por debajo de 25.107**, el
+    cutover **rompe endpoints que hoy andan** — la lista ordenada está en §5.4 del informe.
+  - 🔑 **La contracara:** en AWS con asyncpg el problema **desaparece solo** (`WHERE id = ANY($1)`
+    va por el protocolo binario, sin techo de URL). El riesgo existe **solo si hay una ventana en
+    que la app siga hablando PostgREST detrás de un gateway de AWS**. Si el porteo a asyncpg es
+    simultáneo al cutover, no hay nada que hacer.
+
+- 🟠 **`RATE_LIMIT_STORAGE_URI=redis://` va a CREAR un problema que hoy no se ve.** La franja de
+  export es `30/hora` **compartida entre los 26 endpoints y keyed por IP**. Con `memory://` el
+  contador es por proceso y el límite efectivo es N×, así que nadie lo nota. **Conectar Redis —que
+  es lo correcto— lo vuelve real**, y el equipo de RRHH (3 personas, una IP de oficina) pasa a
+  compartir 30 exports por hora. Revisar el número junto con la conexión de Redis, no después.
+
+**Migraciones:** ninguna nueva. El informe **propone cuatro índices** (§7.2 de
+`DIAGNOSTICO-ESCALA.md`, con la mejora medida de cada uno: 12× a 47×) que deberían entrar en el
+lote que congela el schema el 21/8. **No se escribieron: es decisión de Franco.**
+**Variables de entorno / buckets / endpoints / auth / dependencias:** sin cambios.
+
+---
 ## 2026-08-13 · 🔴 EL LOTE QUE CONGELA EL SCHEMA — migraciones 113 y 114 · commit pendiente
 
 **Qué cambió:** se escribieron las dos migraciones del lote de features (**NO se corrieron**: las

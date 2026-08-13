@@ -32,11 +32,31 @@
 --
 -- 🔄 ESTE ARCHIVO **VA POR DELANTE DE PRODUCCION** (desde el 2026-08-13).
 --
--- PENDIENTES DE CORRER, en este orden:
---   · backend/migrations/113_lote_features_aditivo.sql      -> ANTES del deploy del codigo nuevo
---   · backend/migrations/114_lote_features_post_deploy.sql  -> DESPUES del deploy
+-- 🔄 ESTADO AL 2026-08-13 (segunda actualizacion del dia): las migraciones **113, 114 y 115 YA
+-- SE CORRIERON** — verificado contra el catalogo vivo objeto por objeto: 55 tablas, las 7
+-- columnas del lote y los 6 indices de escala. Este archivo ya no va por delante por ESAS.
 --
--- Lo que este archivo declara y produccion TODAVIA NO tiene:
+-- PENDIENTE DE CORRER, una sola:
+--   · backend/migrations/116_columnas_finales.sql  -> ANTES del deploy. Aditiva salvo un
+--     DROP NOT NULL (que AFLOJA, asi que no puede fallar). Sin ventana.
+--     🔴 ES LA ULTIMA MIGRACION ANTES DE CONSTRUIR: despues de esta, un campo nuevo es
+--     coordinar DDL con el dev de infra en medio de su migracion.
+--
+-- Lo que este archivo declara y produccion TODAVIA NO tiene (todo de la 116):
+--   · 11 columnas: perfiles_puesto.ofrecemos · vacantes.ofrecemos ·
+--     recategorizaciones.categoria_anterior/_nueva · capacitaciones.entidad_capacitadora/
+--     modalidad/tipo · empleado_capacitacion.proyecto/anio/mes/nombre_libre
+--   · `empleado_capacitacion.empleado_id` pasa a NULLABLE (formacion de alguien sin matchear
+--     en el padron, o que ya no trabaja aca)
+--   · 1 indice unico parcial: `ux_ec_nombre_libre`, que reemplaza a la UNIQUE existente en las
+--     filas sin empleado (con NULL, `UNIQUE (capacitacion_id, empleado_id)` deja de proteger)
+--
+-- ── Lo que sigue es el registro de las TRES QUE YA SE CORRIERON, no un pendiente ───────────
+--   · backend/migrations/113_lote_features_aditivo.sql      -> ✅ corrida
+--   · backend/migrations/114_lote_features_post_deploy.sql  -> ✅ corrida
+--   · backend/migrations/115_indices_escala.sql             -> ✅ corrida
+--
+-- Lo que aportaron (ya esta en produccion):
 --   · 3 tablas nuevas: perfiles_puesto, recategorizaciones, eventos_agenda (52 -> 55)
 --   · 7 columnas nuevas: empleados.fecha_ingreso_prevista, empleados.fecha_baja_prevista,
 --     adjuntos.fecha_vencimiento, vacantes.perfil_puesto_id (113) +
@@ -45,6 +65,9 @@
 --   · 8 indices nuevos + `ux_objetivo_responsable_titulo` REEMPLAZADO por su version de cuatro
 --     expresiones (es el UNICO objeto destructivo del lote: DROP + CREATE en la misma
 --     transaccion de la 114)
+--   · 6 indices compuestos `(empresa_id, <fecha>)` de la 115 — idx_costos_nomina_empresa_periodo,
+--     idx_auditoria_empresa_created, idx_sv_empresa_fecha, idx_sa_empresa_fecha,
+--     idx_vp_empresa_periodo, idx_hp_proyecto_fecha. NINGUNO reemplaza a un indice existente
 --   · 3 triggers updated_at nuevos (35 -> 38, tambien en migracionAWS/.../077)
 --
 -- 🚩 AL CORRER LAS DOS, este bloque vuelve a "AL DIA" y este parrafo se borra — en la MISMA
@@ -301,6 +324,9 @@ CREATE TABLE public.capacitaciones (
     descripcion text,
     categoria text,
     duracion_horas numeric,
+    entidad_capacitadora text,
+    modalidad text,
+    tipo text,
     obligatoria boolean NOT NULL DEFAULT false,
     activo boolean NOT NULL DEFAULT true,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -350,12 +376,16 @@ CREATE TABLE public.empleado_capacitacion (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     empresa_id uuid NOT NULL,
     capacitacion_id uuid NOT NULL,
-    empleado_id uuid NOT NULL,
+    empleado_id uuid,
     estado text NOT NULL DEFAULT 'pendiente'::text,
     fecha_asignacion date,
     fecha_limite date,
     fecha_completado date,
     certificado_url text,
+    proyecto text,
+    anio text,
+    mes text,
+    nombre_libre text,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
@@ -987,6 +1017,7 @@ CREATE TABLE public.vacantes (
     formacion text,
     experiencia text,
     conocimientos_tecnicos text,
+    ofrecemos text,
     -- Token del aviso de LinkedIn ("asunto [VAC-0001]") y clave del matcher de CVs.
     -- El DEFAULT es lo que garantiza que TODA fila nazca con código, venga del backend o de un
     -- INSERT a mano: nextval es atómico, así que no hay condición de carrera. Ver migración 097.
@@ -1017,6 +1048,7 @@ CREATE TABLE public.perfiles_puesto (
     formacion text,
     experiencia text,
     conocimientos_tecnicos text,
+    ofrecemos text,
     modalidad character varying(20),
     tipo_contrato character varying(20),
     nivel character varying(20),
@@ -1041,6 +1073,8 @@ CREATE TABLE public.recategorizaciones (
     rol_nuevo text,
     seniority_anterior text,
     seniority_nueva text,
+    categoria_anterior text,
+    categoria_nueva text,
     motivo text NOT NULL,
     impacto_salarial numeric,
     registrado_por uuid,
@@ -1475,8 +1509,15 @@ CREATE INDEX idx_assessment_resultados_empresa ON public.assessment_resultados U
 CREATE INDEX idx_resultados_campana ON public.assessment_resultados USING btree (campana_id);
 CREATE INDEX idx_resultados_candidato ON public.assessment_resultados USING btree (candidato_id);
 CREATE INDEX idx_resultados_empleado ON public.assessment_resultados USING btree (empleado_id);
+-- ── Indices compuestos (empresa_id, <fecha>) — migracion 115 ─────────────────────────────
+-- Los SEIS `..._empresa_<fecha>` / `..._empresa_periodo` de abajo sirven al patron
+-- `WHERE empresa_id = $1 ORDER BY <fecha> DESC LIMIT n` de los listados paginados. NO
+-- reemplazan a los indices de fecha suelta que estan al lado: esos son los que sirven al MODO
+-- CONSOLIDADO, donde la query sale sin filtro de empresa. Los dos modos existen, asi que hacen
+-- falta los dos — el porque, con las mediciones, esta en migrations/115_indices_escala.sql.
 CREATE INDEX idx_auditoria_created ON public.auditoria USING btree (created_at DESC);
 CREATE INDEX idx_auditoria_empresa ON public.auditoria USING btree (empresa_id);
+CREATE INDEX idx_auditoria_empresa_created ON public.auditoria USING btree (empresa_id, created_at DESC);
 CREATE INDEX idx_auditoria_entidad ON public.auditoria USING btree (entidad, registro_id);
 CREATE INDEX idx_auditoria_registro ON public.auditoria USING btree (tabla, registro_id);
 CREATE INDEX idx_auditoria_tabla ON public.auditoria USING btree (tabla);
@@ -1491,6 +1532,7 @@ CREATE INDEX idx_cesiones_empresa ON public.cesiones USING btree (empresa_id);
 CREATE INDEX idx_costos_nomina_empleado ON public.costos_nomina USING btree (empleado_id);
 CREATE INDEX idx_costos_nomina_empresa ON public.costos_nomina USING btree (empresa_id);
 CREATE INDEX idx_costos_nomina_periodo ON public.costos_nomina USING btree (anio, mes);
+CREATE INDEX idx_costos_nomina_empresa_periodo ON public.costos_nomina USING btree (empresa_id, anio, mes);
 CREATE INDEX idx_ec_capacitacion_id ON public.empleado_capacitacion USING btree (capacitacion_id);
 CREATE INDEX idx_ec_empleado_id ON public.empleado_capacitacion USING btree (empleado_id);
 CREATE INDEX idx_ec_empresa_id ON public.empleado_capacitacion USING btree (empresa_id);
@@ -1507,6 +1549,7 @@ CREATE INDEX idx_evaluacion_evaluados_empleado ON public.evaluacion_evaluados US
 CREATE INDEX idx_hp_asignacion ON public.horas_proyecto USING btree (asignacion_id);
 CREATE INDEX idx_hp_empresa ON public.horas_proyecto USING btree (empresa_id);
 CREATE INDEX idx_hp_fecha ON public.horas_proyecto USING btree (fecha);
+CREATE INDEX idx_hp_proyecto_fecha ON public.horas_proyecto USING btree (proyecto_id, fecha DESC);
 CREATE INDEX idx_hp_proyecto ON public.horas_proyecto USING btree (proyecto_id);
 -- Migracion 103. Parciales: las filas del camino viejo (sin cliente ni empleado) no los tocan.
 -- idx_hp_cliente sostiene "horas por cliente"; idx_hp_empleado_fecha, "lo que cargo esta
@@ -1572,12 +1615,15 @@ CREATE INDEX idx_reportes_created_at ON public.reportes_generados USING btree (c
 CREATE INDEX idx_reportes_generados_empresa ON public.reportes_generados USING btree (empresa_id);
 CREATE INDEX idx_sa_empleado_id ON public.solicitudes_ausencia USING btree (empleado_id);
 CREATE INDEX idx_sa_empresa_id ON public.solicitudes_ausencia USING btree (empresa_id);
+CREATE INDEX idx_sa_empresa_fecha ON public.solicitudes_ausencia USING btree (empresa_id, fecha_desde DESC);
 CREATE INDEX idx_solicitudes_vacaciones_empresa_tipo ON public.solicitudes_vacaciones USING btree (empresa_id, tipo);
 CREATE INDEX idx_sv_empleado_id ON public.solicitudes_vacaciones USING btree (empleado_id);
 CREATE INDEX idx_sv_empresa_id ON public.solicitudes_vacaciones USING btree (empresa_id);
+CREATE INDEX idx_sv_empresa_fecha ON public.solicitudes_vacaciones USING btree (empresa_id, fecha_desde DESC);
 CREATE INDEX idx_sv_periodo ON public.solicitudes_vacaciones USING btree (empleado_id, periodo) WHERE (periodo IS NOT NULL);
 CREATE INDEX idx_vp_empleado ON public.vacaciones_pendientes USING btree (empleado_id);
 CREATE INDEX idx_vp_empresa ON public.vacaciones_pendientes USING btree (empresa_id);
+CREATE INDEX idx_vp_empresa_periodo ON public.vacaciones_pendientes USING btree (empresa_id, periodo DESC);
 CREATE INDEX idx_vacantes_area ON public.vacantes USING btree (area_id);
 CREATE INDEX idx_esp_empresa ON public.empleado_superior_pendiente USING btree (empresa_id);
 -- Identidad de una ausencia (mig 089) y de una vacacion (mig 110): sostienen la idempotencia del
@@ -1650,6 +1696,12 @@ CREATE INDEX idx_intentos_ip ON public.intentos_identificacion USING btree (ip, 
 -- Unicidad GLOBAL y case-insensitive del nombre del perfil. Lo escribe RRHH a mano: "Analista
 -- SSR" y "analista ssr" son el mismo perfil. Molde: ux_clientes_nombre_global.
 CREATE UNIQUE INDEX ux_perfiles_puesto_nombre_global ON public.perfiles_puesto USING btree (lower(nombre));
+-- Identidad de una formacion cargada SIN empleado matcheado (mig 116). Reemplaza a
+-- `UNIQUE (capacitacion_id, empleado_id)` en esas filas: con empleado_id NULL esa unique
+-- deja de proteger (dos NULL son distintos en SQL) y el import del Excel duplicaria en
+-- silencio. El coalesce NO es cosmetico: sin el, dos filas sin anio vuelven a ser
+-- distintas entre si y el indice no cubre justo las filas incompletas.
+CREATE UNIQUE INDEX ux_ec_nombre_libre ON public.empleado_capacitacion USING btree (capacitacion_id, lower(nombre_libre), COALESCE(anio, ''::text), COALESCE(lower(mes), ''::text)) WHERE ((empleado_id IS NULL) AND (nombre_libre IS NOT NULL));
 -- Listado por defecto: WHERE activo ORDER BY nombre. Parcial + clave `nombre` = sirve al filtro
 -- Y al orden, sin ordenar en memoria.
 CREATE INDEX idx_perfiles_puesto_activos ON public.perfiles_puesto USING btree (nombre) WHERE activo;

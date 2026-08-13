@@ -61,7 +61,7 @@ class ObjetivoService:
         🔴 EL ARCHIVO TRAE PADRES E HIJOS, así que el tope de filas se cuenta sobre el árbol
         APLANADO y no sobre las raíces: `find_all` devuelve raíces con hijos anidados, y
         `len(items)` diría bastante menos de lo que se va a escribir. Con el conteo equivocado,
-        un export de 4.000 raíces con 4.000 hijos pasaría el tope de 5.000 y produciría 8.000
+        un export de 15.000 raíces con 15.000 hijos pasaría el tope de 20.000 y produciría 30.000
         filas — que es justo el archivo demasiado grande que el tope existe para evitar."""
         items = self._repo.find_all(empresa_id, estado, responsable_id, prioridad)
         verificar_limite_export(contar_con_hijos(items))

@@ -14,7 +14,7 @@ from fastapi.responses import Response
 from services.evaluacion_reportes_service import EvaluacionReportesService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
-from utils.rate_limit import limiter
+from utils.rate_limit import limite_export
 
 router = APIRouter()
 _GATE = [Depends(require_permission(Seccion.EVALUACIONES, Accion.READ))]
@@ -25,7 +25,7 @@ def _svc() -> EvaluacionReportesService:
 
 
 @router.get("/lotes/{lote_id}/evaluados/export", dependencies=_GATE)
-@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+@limite_export  # 100/hora por usuario — utils/rate_limit.py
 async def exportar(request: Request, lote_id: UUID, empresa: Optional[UUID] = Depends(get_empresa_id),
                    svc: EvaluacionReportesService = Depends(_svc),
                    formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"),

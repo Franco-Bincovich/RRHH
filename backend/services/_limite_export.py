@@ -7,17 +7,43 @@ tope) y armaba el archivo con lo que entrara. Un pedido más grande salía **inc
 ninguna señal**: el usuario recibía un Excel que parecía correcto y no lo era. Es la misma
 familia de bug que el resto del bloque B — un resultado plausible pero falso.
 
-🔴 POR QUÉ 5.000 Y NO 100.000. Porque el techo real de un export NO es la cantidad de filas,
-es el TIEMPO, y el 100.000 nunca se alcanzaba:
-  · 30 s — timeout httpx del cliente de Supabase (settings.supabase_timeout). Es el más bajo
-    de los techos del backend y el que corta primero.
-  · posiblemente 8 s — statement_timeout del rol `authenticator` con el que PostgREST se
-    conecta (`service_role` no tiene override propio, así que hereda de la sesión).
-  · 120 s — statement_timeout de la instancia. Nunca llega a regir, los de arriba pegan antes.
-  · el límite de Vercel, que además puede no ser el declarado (ver la bitácora).
-5.000 filas es 250× el padrón actual (19 empleados) y queda cómodo debajo de todos ellos. Un
-número alto "por las dudas" reproduciría el mismo bug con otra cara: en vez de un archivo
-truncado, un timeout sin mensaje.
+🔴 EL TECHO REAL DE UN EXPORT NO ES LA CANTIDAD DE FILAS, ES EL TIEMPO. Eso sigue siendo
+cierto y es la razón de que exista esta constante. Lo que cambió el 13/8/2026 es CUÁL de los
+techos de tiempo es el que corta, porque se midió en vez de suponerse.
+
+⚠️ CORRECCIÓN DE LO QUE ESTE MISMO ARCHIVO AFIRMABA. Decía que el techo más bajo era el
+**timeout httpx de 30 s** del cliente de Supabase. **No es cierto en este camino, y por
+bastante.** Medido sobre 27.597 filas de auditoría (base local de escala, 10 empresas):
+  · traer las filas de la base ........  4,2 s   ← el fetch, o sea lo que ese timeout cubre
+  · export completo en CSV ............  4,1 s   ← construir el CSV es gratis
+  · export completo en Excel .......... 39-53 s  ← openpyxl: ~35-49 s de CPU en Python
+  · export completo en PDF ............  126 s   ← ~122 s de CPU en Python
+O sea: **la base aporta el 8% del tiempo y el 92% es construir el archivo.** El timeout httpx
+nunca llega a dispararse. El techo que de verdad rige es **el de la función de Vercel: 300 s**
+(ver `settings.import_presupuesto_segundos`, donde está verificado contra la doc de la
+plataforma), y el de la paciencia de quien aprieta el botón, que es más bajo todavía.
+
+🔴 DE DÓNDE SALE EL 20.000. De la tasa REAL de eventos, no de un número redondo:
+  · Producción, medida el 13/8/2026: 156 eventos de auditoría en 29 días con 31 empleados.
+    = 5,38 eventos/día = **0,174 eventos por empleado por día**.
+  · Proyectado a 1.005 colaboradores: ~175 eventos/día → **~16.000 por trimestre**.
+  · 20.000 cubre el trimestre con margen, y a ese volumen el export tarda ~3 s en CSV,
+    ~28-38 s en Excel y ~91 s en PDF: por debajo de los 300 s de Vercel en los tres formatos.
+  · El 5.000 anterior ya no alcanzaba ni para UN MES a esa escala (5.250 proyectados). Ese es
+    el bug que esto cierra: el módulo del que RRHH exporta el histórico era el único que a
+    escala no se podía exportar nunca.
+
+🔴 LO QUE 20.000 **NO** CUBRE, Y HAY QUE DECIRLO: EL AÑO ENTERO. Son ~64.000 eventos
+proyectados, que en Excel darían ~2 minutos y en PDF pasarían los 300 s de Vercel. **Un export
+anual de auditoría no se arregla subiendo este número**: pide otra cosa (export asíncrono con
+link de descarga, o paginado por trimestre desde la UI). Mientras tanto, RRHH exporta por
+trimestre — cuatro archivos por año.
+
+⚠️ Y OJO CON EL FORMATO, que pesa más que las filas: entre CSV y PDF hay **31×** de
+diferencia sobre el MISMO conjunto de filas. Este límite es uno solo para los tres, así que
+está calibrado para que el más lento entre; si el export en PDF de listados largos se vuelve
+un caso de uso real, el límite tiene que pasar a depender del formato. Hoy no lo hace a
+propósito: un límite por formato es una decisión de producto, no un ajuste.
 
 CONSTANTE DE MÓDULO, NO variable de entorno: no es algo que se deba poder subir sin pensar.
 Subirlo exige revisar los techos de tiempo de arriba, y eso es una decisión, no configuración.
@@ -33,7 +59,7 @@ pide un `contar()` por repo, y eso es una tanda propia.
 """
 from utils.errors import AppError
 
-LIMITE_FILAS_EXPORT = 5000
+LIMITE_FILAS_EXPORT = 20000
 
 _CODE = "EXPORT_DEMASIADAS_FILAS"
 

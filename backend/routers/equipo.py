@@ -11,7 +11,7 @@ from fastapi.responses import Response
 from schemas.equipo import EquipoMiembroResponse
 from services.equipo_service import EquipoService
 from utils.permisos import Accion, Seccion, require_permission
-from utils.rate_limit import limiter
+from utils.rate_limit import limite_export
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ async def list_equipo(request: Request, service: EquipoService = Depends(_svc)) 
 # Este router NO tiene ruta /{id}, así que el orden de /exportar no es load-bearing acá (en los
 # demás módulos sí: "exportar" matchearía como un id). Queda igual pegado al listado por simetría.
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+@limite_export  # 100/hora por usuario — utils/rate_limit.py
 async def exportar_equipo(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), service: EquipoService = Depends(_svc)) -> Response:
     # 🔴 El universo sale del USUARIO del request, no de un Query: acá el filtro es el ownership.
     u = request.state.user

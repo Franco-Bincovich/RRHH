@@ -102,6 +102,51 @@ class TestClientIp:
         assert client_ip(_req("1.2.3.4 ,  , 200.0.0.9 ")) == "200.0.0.9"
 
 
+class TestUsuarioOIp:
+    """La clave de la franja de export. Si esto falla, las 3 personas de RRHH vuelven a
+    compartir un contador detrás de la IP de la oficina — que es justo el bug que cerró.
+
+    🔑 QUÉ TENDRÍA QUE SER DISTINTO PARA QUE ESTOS TESTS FALLEN: que `usuario_o_ip` ignore
+    `request.state.user` y devuelva siempre la IP. Los dos primeros lo detectan porque usan
+    la MISMA IP con usuarios distintos y exigen claves distintas — comparar contra una clave
+    literal sin variar el usuario no probaría nada."""
+
+    @staticmethod
+    def _con_usuario(user_id: str | None, xff: str = "200.0.0.9") -> Request:
+        """Request con la misma IP siempre: lo único que varía entre casos es el usuario."""
+        r = _req(xff)
+        if user_id is not None:
+            r.state.user = {"id": user_id, "rol": "admin_rrhh"}
+        return r
+
+    def test_dos_usuarios_en_la_misma_ip_no_comparten_contador(self) -> None:
+        from utils.rate_limit import usuario_o_ip
+        a, b = self._con_usuario("user-aaa"), self._con_usuario("user-bbb")
+        assert usuario_o_ip(a) != usuario_o_ip(b)
+        assert client_ip(a) == client_ip(b)  # la IP SÍ es la misma: eso es lo que se corrige
+
+    def test_la_clave_es_el_user_id(self) -> None:
+        from utils.rate_limit import usuario_o_ip
+        assert usuario_o_ip(self._con_usuario("user-aaa")) == "u:user-aaa"
+
+    def test_sin_usuario_cae_a_la_ip(self) -> None:
+        """Ruta pública o endpoint sin gate: el contador no puede quedar sin clave."""
+        from utils.rate_limit import usuario_o_ip
+        assert usuario_o_ip(self._con_usuario(None)) == "ip:200.0.0.9"
+
+    def test_un_state_user_raro_no_explota_y_cae_a_la_ip(self) -> None:
+        """Fail-safe: si `state.user` no es el dict esperado, se limita por IP igual."""
+        from utils.rate_limit import usuario_o_ip
+        r = _req("200.0.0.9")
+        r.state.user = "no-soy-un-dict"
+        assert usuario_o_ip(r) == "ip:200.0.0.9"
+
+    def test_usuario_e_ip_no_comparten_bucket(self) -> None:
+        """Los prefijos existen para esto: un user_id y una IP nunca caen en la misma clave."""
+        from utils.rate_limit import usuario_o_ip
+        assert usuario_o_ip(self._con_usuario("200.0.0.9")) != usuario_o_ip(self._con_usuario(None))
+
+
 # ─── Comportamiento end-to-end ────────────────────────────────────────────────
 
 
@@ -289,7 +334,7 @@ class TestFranjaExport:
 
     @pytest.mark.parametrize("modulo,funcion", ENDPOINTS)
     def test_valor(self, modulo: str, funcion: str) -> None:
-        assert _valores(modulo, funcion) == {"30 per 1 hour"}
+        assert _valores(modulo, funcion) == {"100 per 1 hour"}
 
     @pytest.mark.parametrize("modulo,funcion", ENDPOINTS)
     def test_comparten_bucket(self, modulo: str, funcion: str) -> None:
@@ -313,7 +358,7 @@ class TestFranjaExport:
         export a `*_escrituras.py` habría cambiado la clave y este assert miraría una clave
         inexistente — pasando en verde sin comprobar nada. (El barrido de arriba ya no tiene ese
         problema: saca módulo y función del objeto de ruta vivo, no de un string.)"""
-        assert _valores(modulo, funcion) == {"30 per 1 hour"}
+        assert _valores(modulo, funcion) == {"100 per 1 hour"}
         assert {lim.scope for lim in _limites(modulo, funcion)} == {"export"}
 
     def test_ningun_export_quedo_bajo_el_baseline(self) -> None:
@@ -326,8 +371,8 @@ class TestFranjaExport:
     def test_un_solo_contador_para_todos_los_exports(self) -> None:
         """🔴 Lo que el decorador NO alcanza a probar: que la cuota sea COMPARTIDA.
 
-        Ver el decorador puesto no distingue 30/hora repartidos entre los 19 de 30/hora PARA
-        CADA UNO (570/hora reales, 19× el techo que se quiso poner). La diferencia está en cómo
+        Ver el decorador puesto no distingue 100/hora repartidos entre los 26 de 100/hora PARA
+        CADA UNO (2.600/hora reales, 26× el techo que se quiso poner). La diferencia está en cómo
         slowapi arma la clave del bucket: `limit_scope = lim.scope or endpoint`
         (slowapi/extension.py). Con scope, el endpoint desaparece de la clave.
 
@@ -342,7 +387,7 @@ class TestFranjaExport:
         limiter.limiter.hit(emisor.limit, ip, emisor.scope)
         restante = limiter.limiter.get_window_stats(otro.limit, ip, otro.scope).remaining
         limiter.reset()
-        assert restante == 29, (
+        assert restante == 99, (
             "Exportar empleados no descontó del saldo de objetivos: cada export tiene su propia "
             "cuota de 30/hora en vez de compartir una."
         )

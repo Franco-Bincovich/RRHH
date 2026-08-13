@@ -15,7 +15,7 @@ from schemas.area import AreaResponse
 from services.area_service import AreaService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
-from utils.rate_limit import limiter
+from utils.rate_limit import limite_export
 
 router = APIRouter()
 SECCION = Seccion.AREAS
@@ -41,7 +41,7 @@ async def list_areas(
 
 # ⚠️ ANTES de /{id}: si fuera después, "exportar" matchearía como un id y daría 422 de UUID.
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+@limite_export  # 100/hora por usuario — utils/rate_limit.py
 async def exportar_areas(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), empresa_id: Optional[str] = Query(None, description="Filtrar por empresa"), service: AreaService = Depends(_service)) -> Response:
     d = service.exportar(empresa_id, formato)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})

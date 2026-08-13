@@ -15,7 +15,7 @@ from schemas.costo import DashboardCostosResponse, HistorialSalarialItem, Nomina
 from services.costo_service import CostoService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
-from utils.rate_limit import limiter
+from utils.rate_limit import limite_export
 
 router = APIRouter()
 SECCION = Seccion.COSTOS
@@ -46,7 +46,7 @@ async def get_nomina(
 
 
 @router.get("/nomina/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+@limite_export  # 100/hora por usuario — utils/rate_limit.py
 async def exportar_nomina(
     request: Request,
     mes: int = Query(..., ge=1, le=12),

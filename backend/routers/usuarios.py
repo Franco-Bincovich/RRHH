@@ -13,7 +13,7 @@ from fastapi.responses import Response
 from schemas.usuario import CambiarPasswordRequest, CambiarPasswordResponse
 from services.usuario_service import UsuarioService
 from utils.permisos import Accion, Seccion, require_permission
-from utils.rate_limit import limiter
+from utils.rate_limit import limite_export, limiter
 
 router = APIRouter()
 SECCION = Seccion.USUARIOS
@@ -35,7 +35,7 @@ async def list_usuarios(request: Request, service: UsuarioService = Depends(_svc
 # ⚠️ ANTES de cualquier ruta /{...}: si un GET /{user_id} se agregara arriba, "exportar"
 # matchearía como un uuid y este endpoint devolvería 422 en vez de un archivo.
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-@limiter.shared_limit("30/hour", scope="export")  # franja "export" — utils/rate_limit.py
+@limite_export  # 100/hora por usuario — utils/rate_limit.py
 async def exportar_usuarios(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), service: UsuarioService = Depends(_svc)) -> Response:
     d = service.exportar(formato)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
