@@ -13,10 +13,8 @@ import { Button } from "@/components/ui/button"
 import { AreaFormFields } from "@/components/features/areas/AreaFormFields"
 import { EMPTY, type FormData, type FormErrors } from "@/components/features/areas/areaForm"
 import { guardarArea } from "@/components/features/areas/guardarArea"
-import { fetchEmpleados } from "@/services/empleados"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
-import type { Empleado } from "@/types/empleado"
 import type { Empresa } from "@/types/empresa"
 import type { Area } from "@/types/area"
 
@@ -35,15 +33,7 @@ export function AreaModal({ open, onClose, onSuccess, area, empresaId }: AreaMod
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [serverError, setServerError] = useState("")
-  const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [empresas, setEmpresas] = useState<Empresa[]>([])
-
-  useEffect(() => {
-    if (!open) return
-    fetchEmpleados({ page: 1, pageSize: 100, estado: "activo", empresaId })
-      .then((res) => setEmpleados(res.items))
-      .catch(() => setEmpleados([]))
-  }, [open, empresaId])
 
   useEffect(() => {
     // Solo en el alta: en la edición el select no se muestra (un área no se muda de sociedad).
@@ -102,8 +92,10 @@ export function AreaModal({ open, onClose, onSuccess, area, empresaId }: AreaMod
         </DialogHeader>
 
         <form id="area-form" onSubmit={handleSubmit} noValidate>
-          <AreaFormFields form={form} errors={errors} empleados={empleados}
-                          empresas={empresas} isEdit={isEdit} onField={handleField} />
+          <AreaFormFields form={form} errors={errors} empresas={empresas}
+                          responsableNombre={area?.responsable_nombre ?? undefined}
+                          onResponsable={(id) => setForm((p) => ({ ...p, responsable_id: id }))}
+                          isEdit={isEdit} onField={handleField} />
 
           {serverError && (
             <p className="mt-2 text-sm text-destructive" role="alert">{serverError}</p>

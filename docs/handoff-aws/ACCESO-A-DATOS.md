@@ -88,8 +88,12 @@ En `repositories/` hay 5 funciones que reciben la tabla como argumento. **No son
 difícil**: sus callers están en el mismo módulo y pasan constantes, así que el nombre se lee del
 código.
 
-`_ausencia_row.py:29` · `asignacion_repo.py:15` · `dashboard_equipo_repo.py:46` ·
+`_ausencia_row.py:29` · `_asignacion_row.py:18` · `dashboard_equipo_repo.py:46` ·
 `evaluacion_repo.py:25` · `_evaluacion_lotes_enrich.py:38`
+
+> ⚠️ El segundo estaba escrito como `asignacion_repo.py:15`: el `_q` se mudó a `_asignacion_row.py`
+> el 13/8/2026 al dividir ese repo (97/100). **Le nació además una guarda de lista vacía** — con
+> `ids` vacía no consulta, porque `.in_("id", [])` se renderiza `id=in.()` y PostgREST lo rechaza.
 
 ---
 

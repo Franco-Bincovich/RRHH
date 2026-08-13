@@ -30,7 +30,7 @@ interface Props {
  */
 export function EnviarPlantillaModal({ open, plantilla, onClose }: Props) {
   const {
-    visibles, cargando, errorCarga, recargar, sinEmpresa, search, setSearch, sel, toggle,
+    visibles, empleados, total, cargando, errorCarga, recargar, sinEmpresa, search, setSearch, sel, toggle,
     elegidos, paso, setPaso, enviando, resultado, error, confirmar,
     modo, setModo, libre, bloqueado, usaVariables,
   } = useEnvioPlantilla(open, plantilla?.clave ?? "", plantilla?.usa_variables ?? false)
@@ -54,7 +54,8 @@ export function EnviarPlantillaModal({ open, plantilla, onClose }: Props) {
               />
             ) : (
               <EnvioDestinatarios
-                visibles={visibles} sel={sel} search={search} cargando={cargando && !sinEmpresa}
+                visibles={visibles} total={total} traidos={empleados.length}
+                sel={sel} search={search} cargando={cargando && !sinEmpresa}
                 error={errorCarga} onSearch={setSearch} onToggle={toggle} onReintentar={recargar}
               />
             )}

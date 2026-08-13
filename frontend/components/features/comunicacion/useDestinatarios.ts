@@ -27,6 +27,12 @@ import type { Empleado } from "@/types/empleado"
  */
 export function useDestinatarios(open: boolean, habilitado: boolean) {
   const [empleados, setEmpleados] = useState<Empleado[]>([])
+  // 🔴 CUÁNTOS HAY DE VERDAD, que puede ser MÁS de los que se traen. Este modal sigue pidiendo
+  // una página de 100 —es multi-selección y la búsqueda server-side rompería la selección: ver
+  // `useSeleccionEmpleados`— así que con 400 activos se están mostrando 100. Lo que NO puede
+  // seguir pasando es que no se diga: una lista recortada en silencio se lee como la lista
+  // entera, y acá el desenlace es un comunicado que no le llega a 300 personas.
+  const [total, setTotal] = useState(0)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState(false)
   // Cambiarlo re-dispara el efecto: es lo que hace que "Reintentar" sea una línea y no un
@@ -41,11 +47,11 @@ export function useDestinatarios(open: boolean, habilitado: boolean) {
     // bienvenida a alguien dado de baja es el error que no se puede deshacer.
     void cargarEmpleados(
       { page: 1, pageSize: MAX_PAGE_SIZE, estado: "activo" },
-      { setEmpleados, setCargando, setError },
+      { setEmpleados, setCargando, setError, setTotal },
     )
   }, [open, habilitado, intento])
 
   const recargar = useCallback(() => setIntento((n) => n + 1), [])
 
-  return { empleados, cargando, error, recargar }
+  return { empleados, total, cargando, error, recargar }
 }

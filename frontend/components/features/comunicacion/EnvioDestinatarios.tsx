@@ -10,6 +10,16 @@ export const ERROR_DESTINATARIOS = "No se pudieron cargar los empleados."
 interface Props {
   /** Los que se ven con el filtro de búsqueda aplicado. */
   visibles: Destinatario[]
+  /**
+   * Cuántos activos hay EN TOTAL. Cuando supera a los que se trajeron, la pantalla lo dice.
+   *
+   * Opcional porque el aviso es aditivo: una pantalla que no conoce su total simplemente no
+   * afirma nada. Lo que no puede volver a pasar es afirmar de más — mostrar 100 de 400 sin una
+   * palabra se lee como el padrón entero, y acá eso termina en un comunicado que no llega.
+   */
+  total?: number
+  /** Los que se trajeron, antes del filtro de búsqueda. Es contra esto que se compara `total`. */
+  traidos?: number
   sel: Set<string>
   search: string
   cargando: boolean
@@ -37,7 +47,7 @@ interface Props {
  * mostrarlos igual fue lo que hizo invisible el `page_size=200` durante meses.
  */
 export function EnvioDestinatarios({
-  visibles, sel, search, cargando, error, onSearch, onToggle, onReintentar,
+  visibles, total = 0, traidos = 0, sel, search, cargando, error, onSearch, onToggle, onReintentar,
 }: Props) {
   // El buscador no se renderiza en el estado de error: filtrar una lista que no se pudo traer
   // sugiere que el problema es el filtro. Lo único accionable acá es reintentar.
@@ -71,6 +81,19 @@ export function EnvioDestinatarios({
           ))}
         </div>
       </div>
+
+      {/*
+        🔴 El aviso compara contra los TRAÍDOS, no contra los visibles: si comparara con
+        `visibles.length`, cada búsqueda que filtra dispararía el cartel y diría "faltan" cuando
+        lo que hubo fue un filtro. Acá "faltan" significa una sola cosa: hay activos que esta
+        pantalla NO trajo y a los que no se les puede mandar nada desde acá.
+      */}
+      {total > traidos && (
+        <p className="text-xs text-amber-600 dark:text-amber-500">
+          Esta lista trae {traidos} de {total} empleados activos. A los {total - traidos} restantes
+          no se les puede enviar desde acá todavía.
+        </p>
+      )}
     </div>
   )
 }

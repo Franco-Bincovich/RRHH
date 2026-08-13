@@ -7,13 +7,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { createAsignacion } from "@/services/capacitaciones"
 import { fetchCapacitaciones } from "@/services/capacitaciones"
-import { fetchEmpleados } from "@/services/empleados"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { AsignacionCreate, Capacitacion } from "@/types/capacitacion"
-import type { Empleado } from "@/types/empleado"
 import type { Empresa } from "@/types/empresa"
 
 interface Props {
@@ -56,9 +55,7 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
 
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [capacitaciones, setCapacitaciones] = useState<Capacitacion[]>([])
-  const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [loadingCap, setLoadingCap] = useState(false)
-  const [loadingEmp, setLoadingEmp] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -73,17 +70,13 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
   }, [open])
 
   useEffect(() => {
-    if (!form.empresa_id) { setCapacitaciones([]); setEmpleados([]); return }
+    if (!form.empresa_id) { setCapacitaciones([]); return }
     setLoadingCap(true)
     fetchCapacitaciones(form.empresa_id, true)
       .then((r) => setCapacitaciones(r.items))
       .catch(() => setCapacitaciones([]))
       .finally(() => setLoadingCap(false))
-    setLoadingEmp(true)
-    fetchEmpleados({ page: 1, pageSize: 100, estado: "activo", empresaId: form.empresa_id })
-      .then((r) => setEmpleados(r.items))
-      .catch(() => setEmpleados([]))
-      .finally(() => setLoadingEmp(false))
+    // Los empleados ya no se precargan acá: los busca `EmpleadoCombobox` contra el backend.
   }, [form.empresa_id])
 
   function field(key: keyof FormData) {
@@ -156,12 +149,15 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="asig_emp">Empleado <span className="text-destructive" aria-hidden>*</span></Label>
-              <select id="asig_emp" className={SEL} value={form.empleado_id} onChange={field("empleado_id")} disabled={!form.empresa_id || loadingEmp} aria-required aria-invalid={Boolean(errors.empleado_id)}>
-                <option value="">
-                  {!form.empresa_id ? "Seleccioná primero una empresa" : loadingEmp ? "Cargando..." : "Seleccionar empleado"}
-                </option>
-                {empleados.map((e) => <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>)}
-              </select>
+              <EmpleadoCombobox
+                id="asig_emp" value={form.empleado_id} empresaId={form.empresa_id || undefined}
+                disabled={!form.empresa_id} mensajeDeshabilitado="Seleccioná primero una empresa"
+                invalid={Boolean(errors.empleado_id)}
+                onChange={(emp) => {
+                  setForm((p) => ({ ...p, empleado_id: emp?.id ?? "" }))
+                  setErrors((p) => ({ ...p, empleado_id: undefined }))
+                }}
+              />
               {errors.empleado_id && <p className="text-xs text-destructive" role="alert">{errors.empleado_id}</p>}
             </div>
 

@@ -151,6 +151,22 @@ round trip HTTP, la serialización Pydantic y el armado del JSON.
 
 ## 4. 🔴 HALLAZGO #1 — Los selectores de empleado se cortan en 100, en silencio
 
+> ✅ **RESUELTO EL 13/8/2026.** Los seis usan `components/features/shared/EmpleadoCombobox.tsx`:
+> se escribe, **el backend filtra** (`/api/empleados` ya aceptaba `search` — no hubo que agregar
+> nada) y vuelven 20. El universo dejó de ser "los primeros 100" y pasó a ser la tabla entera, así
+> que el `le=100` ya no es el techo de lo alcanzable. Además la lista **DICE** cuántos hay del otro
+> lado ("Mostrando 20 de 400"), que era la mitad del defecto: 100 de 400 se veía igual que 100 de
+> 100. Cubierto por `buscarEmpleados.test.ts` (padrón de 400, busca al que está en la posición 350)
+> y `ResultadosEmpleados.test.tsx`. **El diagnóstico de abajo queda como estaba** — es el registro
+> de lo que se encontró, no una lista de pendientes.
+>
+> ⚠️ **Lo que NO cambió: la selección múltiple del envío de mails** (`useSeleccionEmpleados`, §
+> más abajo). Sigue trayendo 100 y buscando en memoria, a propósito: su `destinatarios()` interseca
+> la selección con la lista que tiene a mano, así que con búsqueda server-side alguien tildado
+> desaparecería del envío en silencio. Necesita que la selección pase de `Set<id>` a
+> `Map<id, Destinatario>` primero. **Lo que sí se le hizo es sacarle el silencio: la pantalla avisa
+> cuántos activos quedaron fuera.**
+
 **No es lentitud: es que el usuario no puede hacer su trabajo, y la pantalla no se lo dice.**
 
 Todos los selectores de empleado del front piden **una sola página de 100** y renderizan el

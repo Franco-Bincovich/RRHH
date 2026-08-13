@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react"
 
+import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { Label } from "@/components/ui/label"
-import { fetchEmpleados } from "@/services/empleados"
 import { fetchEmpresas } from "@/services/empresas"
 import { fetchEquipo } from "@/services/equipo"
-import type { Empleado } from "@/types/empleado"
 import type { Empresa } from "@/types/empresa"
 import type { EquipoMiembro } from "@/types/equipo"
 
@@ -37,7 +36,6 @@ export function SeleccionEmpleado({
   isMando, empresaId, empleadoId, onEmpresaChange, onEmpleadoChange, errorEmpresa, errorEmpleado,
 }: SeleccionEmpleadoProps) {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
-  const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [equipo, setEquipo] = useState<EquipoMiembro[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -52,13 +50,13 @@ export function SeleccionEmpleado({
     fetchEmpresas().then((r) => setEmpresas(r.items.filter((e) => e.activa))).catch(() => setEmpresas([]))
   }, [isMando])
 
-  useEffect(() => {
-    if (isMando || !empresaId) { setEmpleados([]); return }
-    setLoading(true)
-    fetchEmpleados({ page: 1, pageSize: 100, estado: "activo", empresaId })
-      .then((r) => setEmpleados(r.items)).catch(() => setEmpleados([])).finally(() => setLoading(false))
-  }, [isMando, empresaId])
+  // Los empleados de la rama admin/gerencia ya no se precargan: los busca `EmpleadoCombobox`
+  // contra el backend. La rama `isMando` SIGUE con `fetchEquipo` — ver el comentario de abajo.
 
+  // 🔴 ESTA RAMA NO USA `EmpleadoCombobox`, Y NO ES UN OLVIDO. `mandos_medios` no tiene permiso
+  // sobre `Seccion.EMPLEADOS`, así que buscar contra `/api/empleados` le daría 403 donde hoy
+  // funciona. Su universo es `/api/equipo` (roster por ownership, cross-empresa, sin paginar) y
+  // es CORTO por definición: son sus subordinados, no el padrón. No hay truncamiento que sacar.
   if (isMando) {
     return (
       <div className="flex flex-col gap-1.5">
@@ -87,12 +85,12 @@ export function SeleccionEmpleado({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="empleado_id">Empleado <span className="text-destructive" aria-hidden>*</span></Label>
-        <select id="empleado_id" className={SELECT_CLASS} value={empleadoId} onChange={(e) => onEmpleadoChange(e.target.value)} disabled={!empresaId || loading} aria-required aria-invalid={Boolean(errorEmpleado)}>
-          <option value="">
-            {!empresaId ? "Seleccioná primero una empresa" : loading ? "Cargando..." : "Seleccionar empleado"}
-          </option>
-          {empleados.map((e) => <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>)}
-        </select>
+        <EmpleadoCombobox
+          id="empleado_id" value={empleadoId} empresaId={empresaId || undefined}
+          disabled={!empresaId} mensajeDeshabilitado="Seleccioná primero una empresa"
+          invalid={Boolean(errorEmpleado)}
+          onChange={(e) => onEmpleadoChange(e?.id ?? "")}
+        />
         {errorEmpleado && <p className="text-xs text-destructive" role="alert">{errorEmpleado}</p>}
       </div>
     </>

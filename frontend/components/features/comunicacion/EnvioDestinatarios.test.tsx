@@ -33,11 +33,13 @@ const EMPLEADOS = [
 ]
 
 function render(
-  sel: string[], extra: Partial<{ search: string; cargando: boolean; error: boolean }> = {},
+  sel: string[],
+  extra: Partial<{ search: string; cargando: boolean; error: boolean; total: number; traidos: number }> = {},
 ): string {
   const html = renderToStaticMarkup(
     <EnvioDestinatarios
       visibles={EMPLEADOS} sel={new Set(sel)} search={extra.search ?? ""}
+      total={extra.total ?? 0} traidos={extra.traidos ?? 0}
       cargando={extra.cargando ?? false} error={extra.error ?? false}
       onSearch={() => {}} onToggle={() => {}} onReintentar={() => {}}
     />,
@@ -157,5 +159,32 @@ describe("estados vacíos", () => {
     )
     expect(html).not.toContain("No hay empleados activos")
     expect(html).toContain("animate-pulse")
+  })
+})
+
+/**
+ * 🔴 La lista sigue trayendo UNA página de 100 (ver el porqué en `useSeleccionEmpleados`), pero
+ * ya no lo hace en silencio. Lo que se prueba acá es la diferencia entre recortar y ocultar.
+ */
+describe("avisa cuántos activos quedaron fuera de la lista", () => {
+  it("🔴 con 400 activos y 100 traídos, lo dice y dice cuántos faltan", () => {
+    const html = render([], { total: 400, traidos: 100 })
+
+    expect(html).toContain("100 de 400")
+    expect(html).toContain("300")
+  })
+
+  it("🔴 si los trajo a todos, NO dice nada", () => {
+    // El contraste: sin esto, el de arriba pasaría con un cartel incondicional que le avisaría
+    // "faltan" a una empresa de tres personas.
+    expect(render([], { total: 3, traidos: 3 })).not.toContain("de 3 empleados activos")
+  })
+
+  it("🔴 y una BÚSQUEDA que filtra no dispara el aviso", () => {
+    // La trampa: si el aviso comparara contra los VISIBLES en vez de contra los traídos, cada
+    // término escrito diría "faltan 97" — convirtiendo un filtro que funciona en una alarma.
+    const html = render([], { total: 100, traidos: 100, search: "Ana" })
+
+    expect(html).not.toContain("empleados activos.")
   })
 })

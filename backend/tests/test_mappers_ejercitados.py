@@ -105,20 +105,29 @@ _EJERCITADOS: dict[str, str] = {
     # `_mapa` se ejercita TRANSITIVAMENTE desde `build`, igual que los `_nombres` de arriba.
     "_hora_row.build":                          "test_horas_carga_directa",
     "_hora_row._mapa":                          "test_horas_carga_directa",
+    # 🚩 Estaba en _SIN_EJERCITAR como `asignacion_repo._build`, con el motivo
+    # "empleado_capacitacion: 0 filas. Cuelga de capacitaciones, así que se mueve con ella".
+    # La migración 116 lo adelantó: hizo `empleado_id` NULLABLE, y el cuerpo NO ejercitado era
+    # justo el que se cae con la primera fila sin empleado. Se probó ANTES de que haya datos —
+    # la situación exacta en la que estaba `_ausencia_row` cuando se le encontró el NameError—
+    # y el mapper se mudó a `_asignacion_row.py` al dividir el repo (quedaba en 97/100).
+    "_asignacion_row._build":                   "test_capacitacion_nombre_libre",
+    # `_q` entró al barrido en la misma sesión: le nació el early-return al agregarle la guarda
+    # de lista vacía (`.in_("id", [])` no es un filtro válido), que es el borde del mismo bug.
+    # Los tests lo llaman CON elementos en los dos sentidos — con ids y con la lista vacía.
+    "_asignacion_row._q":                        "test_capacitacion_nombre_libre",
 }
 
 # ── mapper → por qué NO se ejercita todavía ───────────────────────────────────
 # 🚩 Esto NO es una lista de excepciones permanentes: es la deuda, visible. Cada entrada que se
 # borra es un cuerpo de mapper que pasó a estar probado. El orden de prioridad lo da si la tabla
 # tiene datos en producción — un mapper con datos reales es una bomba con la mecha encendida.
-# Los DOS que quedan tienen su tabla en 0 filas Y no entran en el bloque I. Cada razón dice
-# QUÉ los movería a urgente, para que la decisión no haya que rehacerla desde cero.
+# El que queda tiene su tabla en 0 filas Y no entra en el bloque I. La razón dice QUÉ lo movería
+# a urgente, para que la decisión no haya que rehacerla desde cero.
 _SIN_EJERCITAR: dict[str, str] = {
     "capacitacion_repo._build":
         "capacitaciones: 0 filas y NO entra en el bloque I (que es vacaciones, ausencias e "
         "inventario). Disparador: que RRHH cargue el primer catálogo de capacitaciones.",
-    "asignacion_repo._build":
-        "empleado_capacitacion: 0 filas. Cuelga de capacitaciones, así que se mueve con ella.",
 }
 
 

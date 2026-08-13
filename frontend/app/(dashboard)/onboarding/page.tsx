@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/layout/PageHeader"
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { OnboardingChecklist } from "@/components/features/onboarding/OnboardingChecklist"
-import { fetchEmpleados } from "@/services/empleados"
+import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { exportarOnboardings, fetchOnboardingEmpleado, fetchOnboardings, fetchTemplates, iniciarOnboarding } from "@/services/onboarding"
 import { getEmpresaActivaId } from "@/services/empresaStore"
@@ -34,33 +34,27 @@ interface IniciarModalProps {
 }
 
 function IniciarModal({ activos, onClose, onSuccess }: IniciarModalProps) {
-  const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [templates, setTemplates] = useState<OnboardingTemplate[]>([])
-  const [loadingEmp, setLoadingEmp] = useState(true)
-  const [selectedId, setSelectedId] = useState("")
+  // 🔴 El empleado se guarda ENTERO, no solo su id: la lista de la que antes se lo recuperaba
+  // (`empleados.find`) ya no existe —el combobox busca contra el backend— y `empresa_id` es lo
+  // que filtra los templates. Con solo el id, ese filtro se caería a "todos los templates".
+  const [selected, setSelected] = useState<Empleado | null>(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState("")
   const [iniciando, setIniciando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const selectedId = selected?.id ?? ""
 
   useEffect(() => {
-    const ids = new Set(activos.map((o) => o.empleado_id))
-    Promise.all([
-      fetchEmpleados({ page: 1, pageSize: 100, estado: "activo" }),
-      fetchTemplates(),
-    ])
-      .then(([emps, tmpls]) => {
-        setEmpleados(emps.items.filter((e) => !ids.has(e.id)))
-        setTemplates(tmpls)
-      })
-      .catch(() => setError("No se pudieron cargar los datos"))
-      .finally(() => setLoadingEmp(false))
-  }, [activos])
+    fetchTemplates().then(setTemplates).catch(() => setError("No se pudieron cargar los datos"))
+  }, [])
+
+  // Quienes ya tienen uno en curso no se pueden elegir: el backend los rechaza con 409.
+  const yaTienen = activos.map((o) => o.empleado_id)
 
   // Filtra templates para mostrar solo los de la misma empresa que el empleado elegido
-  const selectedEmpleado = empleados.find((e) => e.id === selectedId)
   const filteredTemplates =
-    selectedId && selectedEmpleado?.empresa_id
-      ? templates.filter((t) => t.empresa_id === selectedEmpleado.empresa_id)
+    selected?.empresa_id
+      ? templates.filter((t) => t.empresa_id === selected.empresa_id)
       : templates
 
   useEffect(() => {
@@ -126,33 +120,22 @@ function IniciarModal({ activos, onClose, onSuccess }: IniciarModalProps) {
               Empleado
             </label>
 
-            {loadingEmp ? (
-              <div className="h-10 animate-pulse rounded-lg bg-muted" />
-            ) : (
-              <select
-                id="emp-select"
-                value={selectedId}
-                onChange={(e) => setSelectedId(e.target.value)}
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
-              >
-                <option value="">Seleccioná un empleado…</option>
-                {empleados.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.nombre} {e.apellido}
-                    {e.roles?.[0] ?? e.cargo ? ` — ${e.roles?.[0] ?? e.cargo}` : ""}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {!loadingEmp && !error && empleados.length === 0 && (
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Todos los empleados activos ya tienen un onboarding en curso.
-              </p>
-            )}
+            {/*
+              El cartel "Todos los empleados activos ya tienen un onboarding en curso" se fue con
+              la lista precargada: con búsqueda contra el backend nadie tiene el padrón entero en
+              memoria, así que esa afirmación no se puede sostener. El combobox dice lo que sí
+              sabe — "sin resultados para lo que buscaste" —, que además era el mensaje correcto
+              en el caso frecuente (alguien que no aparecía por estar fuera de los primeros 100).
+            */}
+            <EmpleadoCombobox
+              id="emp-select"
+              value={selectedId}
+              excluirIds={yaTienen}
+              onChange={setSelected}
+            />
           </div>
 
-          {!loadingEmp && selectedId && (
+          {selectedId && (
             <div>
               <label
                 htmlFor="tmpl-select"
@@ -198,7 +181,7 @@ function IniciarModal({ activos, onClose, onSuccess }: IniciarModalProps) {
           <button
             type="button"
             onClick={handleIniciar}
-            disabled={!selectedId || !selectedTemplateId || iniciando || loadingEmp}
+            disabled={!selectedId || !selectedTemplateId || iniciando}
             className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
             {iniciando ? "Iniciando…" : "Iniciar"}

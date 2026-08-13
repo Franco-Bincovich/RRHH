@@ -40,6 +40,63 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-13 · El selector de empleados pasa a buscar contra el backend · commit pendiente
+
+**Qué cambió:** los seis selectores de empleado del front pedían **una página de 100** y pintaban
+un `<select>` plano: con 400 colaboradores, 300 no se podían elegir y la pantalla no lo decía.
+Ahora los seis usan `components/features/shared/EmpleadoCombobox.tsx`, que manda el término al
+backend y trae 20 — más un cartel que dice cuántos hay del otro lado. Es el hallazgo #1 de
+`docs/DIAGNOSTICO-ESCALA.md` §4, marcado ahí como resuelto.
+
+**Impacto en infraestructura:**
+
+- **Ninguna migración, variable de entorno, dependencia ni endpoint nuevo.** `/api/empleados` **ya
+  aceptaba `search`** (`empleado_repo.py:56-58`, `ilike` sobre nombre y apellido, compuesto con la
+  barrera de empresa): no hubo que tocar backend. La suite de Python no se modificó.
+- 🔴 **CAMBIA EL PERFIL DE CARGA CONTRA `/api/empleados`, y conviene saberlo antes del cutover.**
+  Antes: 1 request de 100 filas al abrir cada modal. Ahora: 1 request de 20 filas por término
+  tipeado, con **debounce de 250 ms** en el cliente. Más requests, cada uno mucho más chico y
+  todos con `WHERE ... ILIKE`. Dos consecuencias para AWS:
+  - **El rate limit baseline es `300/minute` por IP** (`utils/rate_limit.py`). Con
+    `TRUSTED_PROXY_HOPS` mal puesto **todo el equipo comparte un contador** y este endpoint pasa a
+    ser el que primero lo agota. Ya estaba escrito que ese valor cambia en AWS; ahora tiene un
+    consumidor sensible.
+  - El `ILIKE '%term%'` **no usa índice** (no es prefijo). Con 400 filas es irrelevante; si el
+    padrón crece de verdad, el candidato es un índice trigram (`pg_trgm`). No hace falta hoy.
+- **Sin cambios de contrato:** mismos endpoints, mismos parámetros, mismos permisos.
+- **Tests:** front 650 → **672** (22 nuevos). Backend sin cambios (3278). Las dos mutaciones
+  obligatorias rojearon (5 y 1 test).
+
+---
+## 2026-08-13 · Los 4 arreglos del `empleado_id` nullable + un endpoint que estaba apagado · commit pendiente
+
+**Qué cambió:** se escribió el código que la migración 116 necesita para que una fila sin
+empleado no tumbe el listado de asignaciones de capacitación (hoy es inerte: la tabla está en 0
+filas). Los cuatro: el repo filtra los `None` antes del lookup por lote, el schema declara
+`empleado_id` opcional y expone `nombre_libre`, el export cae a `nombre_libre` y suma una columna
+"Empleado vinculado" Sí/No, y el tipo de TS deja de mentir. **Al escribir el test que atraviesa
+HTTP apareció algo que no era del NULL: `GET /api/capacitaciones/asignaciones` respondía 422.**
+
+**Impacto en infraestructura:**
+
+- 🔴 **BUG DE PRODUCCIÓN CORREGIDO, sin migración ni variable de por medio.** El listado de
+  asignaciones de capacitación estaba **inalcanzable**: `/api/capacitaciones/{id}` se registraba
+  ANTES que `/api/capacitaciones/asignaciones`, y Starlette resuelve por **orden de registro**,
+  no por especificidad — el pedido matcheaba con `id="asignaciones"` y moría en un 422
+  `PEDIDO_INVALIDO`. Se invirtió el orden de los dos `include_router` en `registro_routers.py`.
+  No se había notado porque `empleado_capacitacion` y `capacitaciones` están en 0 filas.
+  - ⚠️ **`tests/test_callers_huerfanos` no podía verlo**: la ruta ESTÁ montada, así que el
+    barrido la da por viva. "Montado" no es "alcanzable".
+  - ✅ Barrido puntual de las **228 rutas** de la app: **era el único caso**, y quedó en cero.
+- **Archivo nuevo en `repositories/`:** `_asignacion_row.py` (47 líneas), el enriquecido que
+  salió de `asignacion_repo.py` (97 → 79) para que entrara el manejo del NULL. **Es un repo más
+  a portar a asyncpg** (molde `_ausencia_row.py`).
+- **Ninguna migración, variable de entorno, dependencia, bucket ni endpoint nuevo.** El endpoint
+  del párrafo anterior no es nuevo: es uno existente que volvió a ser alcanzable.
+- **Tests:** backend 3265 → **3278**; front 647 → **650**. Las dos mutaciones obligatorias
+  rojearon (7 tests cada una).
+
+---
 ## 2026-08-13 · 🔴 Migración 116 — LA ÚLTIMA ANTES DE CONSTRUIR · commit pendiente
 
 **Qué cambió:** se escribió `116_columnas_finales.sql` (**no se corrió**: la corre Franco). 11

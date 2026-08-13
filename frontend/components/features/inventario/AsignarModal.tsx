@@ -4,12 +4,11 @@ import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { asignarItem, fetchItems } from "@/services/inventario"
-import { fetchEmpleados } from "@/services/empleados"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { AsignacionCreate, InventarioItem } from "@/types/inventario"
-import type { Empleado } from "@/types/empleado"
 import type { Empresa } from "@/types/empresa"
 
 interface Props { open: boolean; onClose: () => void; onSuccess: () => void }
@@ -35,9 +34,7 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
   const [serverError, setServerError] = useState("")
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [items, setItems] = useState<InventarioItem[]>([])
-  const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [loadingItems, setLoadingItems] = useState(false)
-  const [loadingEmp, setLoadingEmp] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -51,13 +48,11 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
   }, [open])
 
   useEffect(() => {
-    if (!form.empresa_id) { setItems([]); setEmpleados([]); return }
+    if (!form.empresa_id) { setItems([]); return }
     setLoadingItems(true)
     fetchItems({ empresaIdOverride: form.empresa_id, estado: "disponible" })
       .then((r) => setItems(r.items)).catch(() => setItems([])).finally(() => setLoadingItems(false))
-    setLoadingEmp(true)
-    fetchEmpleados({ page: 1, pageSize: 100, estado: "activo", empresaId: form.empresa_id })
-      .then((r) => setEmpleados(r.items)).catch(() => setEmpleados([])).finally(() => setLoadingEmp(false))
+    // Los empleados ya no se precargan acá: los busca `EmpleadoCombobox` contra el backend.
   }, [form.empresa_id])
 
   function field(key: keyof FormData) {
@@ -110,10 +105,15 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="asig_emp">Empleado <span className="text-destructive" aria-hidden>*</span></Label>
-              <select id="asig_emp" className={SEL} value={form.empleado_id} onChange={field("empleado_id")} disabled={!form.empresa_id || loadingEmp} aria-required aria-invalid={Boolean(errors.empleado_id)}>
-                <option value="">{!form.empresa_id ? "Seleccioná una empresa primero" : loadingEmp ? "Cargando..." : "Seleccionar empleado"}</option>
-                {empleados.map((e) => <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>)}
-              </select>
+              <EmpleadoCombobox
+                id="asig_emp" value={form.empleado_id} empresaId={form.empresa_id || undefined}
+                disabled={!form.empresa_id} mensajeDeshabilitado="Seleccioná una empresa primero"
+                invalid={Boolean(errors.empleado_id)}
+                onChange={(emp) => {
+                  setForm((p) => ({ ...p, empleado_id: emp?.id ?? "" }))
+                  setErrors((p) => ({ ...p, empleado_id: undefined }))
+                }}
+              />
               {errors.empleado_id && <p className="text-xs text-destructive" role="alert">{errors.empleado_id}</p>}
             </div>
           </div>

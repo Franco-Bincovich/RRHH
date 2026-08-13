@@ -6,10 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SELECT_CLASS } from "./_sucesion_ui"
-import { fetchEmpleados } from "@/services/empleados"
+import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { createPlanCarrera } from "@/services/sucesion"
-import type { Empleado } from "@/types/empleado"
 
 const FORM_VACIO = { empleado_id: "", cargo_objetivo: "", fecha_objetivo: "", readiness: 0 }
 
@@ -20,19 +18,16 @@ export function NuevoPlanModal({
   onOpenChange: (open: boolean) => void
   onCreado: () => void
 }) {
-  const [empleados, setEmpleados] = useState<Empleado[]>([])
   const [form, setForm]           = useState(FORM_VACIO)
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState<string | null>(null)
 
-  // Al abrir: form limpio y lista de empleados activos fresca (igual que el openPlan viejo).
+  // Al abrir: form limpio. La lista de empleados ya no se precarga — la trae el combobox cuando
+  // el usuario escribe, así el universo es el padrón entero y no los primeros 100.
   useEffect(() => {
     if (!open) return
     setForm(FORM_VACIO)
     setError(null)
-    fetchEmpleados({ page: 1, pageSize: 100, estado: "activo" })
-      .then((res) => setEmpleados(res.items))
-      .catch(() => setEmpleados([]))
   }, [open])
 
   async function handleSubmit() {
@@ -68,19 +63,11 @@ export function NuevoPlanModal({
             <Label htmlFor="plan-empleado">
               Empleado <span className="text-destructive" aria-hidden>*</span>
             </Label>
-            <select
+            <EmpleadoCombobox
               id="plan-empleado"
               value={form.empleado_id}
-              onChange={(e) => { setForm((p) => ({ ...p, empleado_id: e.target.value })); setError(null) }}
-              className={`h-9 w-full ${SELECT_CLASS}`}
-            >
-              <option value="">Seleccioná un empleado</option>
-              {empleados.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.nombre} {emp.apellido} — {emp.roles?.[0] ?? emp.cargo}
-                </option>
-              ))}
-            </select>
+              onChange={(emp) => { setForm((p) => ({ ...p, empleado_id: emp?.id ?? "" })); setError(null) }}
+            />
           </div>
 
           <div className="space-y-1.5">

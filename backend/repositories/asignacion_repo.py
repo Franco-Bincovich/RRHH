@@ -4,32 +4,15 @@ from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+
+# El enriquecido vive en `_asignacion_row` (molde `_ausencia_row`): este archivo estaba en 97/100
+# y el manejo de `empleado_id` NULL de la migración 116 no entraba con su porqué escrito.
+from repositories._asignacion_row import _build
 from schemas.capacitacion import AsignacionResponse
 from utils.errors import AppError
 from utils.logger import logger
 
 _T = "empleado_capacitacion"
-
-
-def _q(table: str, cols: str, ids: list) -> list:
-    return supabase_admin.table(table).select(cols).in_("id", ids).execute().data or []
-
-def _build(rows: List[dict]) -> List[AsignacionResponse]:
-    """Enriquece filas con empresa/capacitacion/empleado/area nombre."""
-    if not rows:
-        return []
-    emp_map = {e["id"]: e["nombre"] for e in _q("empresas", "id, nombre", list({r["empresa_id"] for r in rows}))}
-    cap_map = {c["id"]: c["nombre"] for c in _q("capacitaciones", "id, nombre", list({r["capacitacion_id"] for r in rows}))}
-    emp_data = _q("empleados", "id, nombre, apellido, area_id", list({r["empleado_id"] for r in rows}))
-    emp_info = {e["id"]: {"nombre": f"{e['nombre']} {e['apellido']}", "area_id": e.get("area_id")} for e in emp_data}
-    area_ids = list({e["area_id"] for e in emp_data if e.get("area_id")})
-    area_map = {a["id"]: a["nombre"] for a in (_q("areas", "id, nombre", area_ids) if area_ids else [])}
-    result = []
-    for r in rows:
-        emp = emp_info.get(r["empleado_id"]) or {}
-        aid = emp.get("area_id")
-        result.append(AsignacionResponse.model_validate({**r, "empresa_nombre": emp_map.get(r["empresa_id"]), "capacitacion_nombre": cap_map.get(r["capacitacion_id"]), "empleado_nombre": emp.get("nombre"), "area_id": aid, "area_nombre": area_map.get(aid) if aid else None}))
-    return result
 
 
 class AsignacionRepo:

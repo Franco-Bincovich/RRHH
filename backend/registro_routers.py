@@ -132,8 +132,14 @@ def registrar(app: FastAPI) -> None:
     app.include_router(configuracion_router, prefix="/api/configuracion", tags=["configuracion"])
     app.include_router(screening_router, prefix="/api/screening", tags=["screening"])
     app.include_router(screening_criterio_router, prefix="/api/screening/criterio", tags=["screening"])
-    app.include_router(capacitaciones_router, prefix="/api/capacitaciones", tags=["capacitaciones"])
+    # 🔴 EL ORDEN ENTRE ESTOS DOS NO ES COSMÉTICO — invertirlo APAGA el listado de asignaciones.
+    # Starlette resuelve por ORDEN DE REGISTRO, no por especificidad: `/api/capacitaciones/{id}`
+    # matchea `/api/capacitaciones/asignaciones` con `id="asignaciones"`, y como `id` es UUID el
+    # pedido muere en un 422 `PEDIDO_INVALIDO` antes de llegar al handler correcto. Estuvo así
+    # hasta el 13/8/2026; no se notó porque la tabla está en 0 filas y nadie abrió la pantalla.
+    # La regla es la de FastAPI: la ruta LITERAL se monta antes que la que lleva parámetro.
     app.include_router(asignaciones_cap_router, prefix="/api/capacitaciones/asignaciones", tags=["capacitaciones"])
+    app.include_router(capacitaciones_router, prefix="/api/capacitaciones", tags=["capacitaciones"])
     app.include_router(evaluaciones_import_router, prefix="/api/evaluaciones/importar", tags=["evaluaciones"])
     app.include_router(evaluaciones_resultados_export_router, prefix="/api/evaluaciones/resultados", tags=["evaluaciones"])
     app.include_router(evaluaciones_resultados_router, prefix="/api/evaluaciones/resultados", tags=["evaluaciones"])

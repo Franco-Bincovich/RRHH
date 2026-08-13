@@ -38,7 +38,7 @@ export function useEnvioPlantilla(open: boolean, clave: string, usaVariables = f
   // `errorCarga` (no se pudo TRAER la lista) es distinto de `error` (falló el ENVÍO): el primero
   // se resuelve reintentando la consulta, el segundo hablando con el backend. Fusionarlos daría
   // un "reintentar" que no se sabe qué reintenta.
-  const { empleados, cargando, error: errorCarga, recargar } =
+  const { empleados, total, cargando, error: errorCarga, recargar } =
     useDestinatarios(open, sinEmpresa === false)
   const seleccion = useSeleccionEmpleados(open, empleados)
   const libre = useEnvioLibre(open)
@@ -68,7 +68,7 @@ export function useEnvioPlantilla(open: boolean, clave: string, usaVariables = f
   }
 
   return {
-    empleados, cargando, errorCarga, recargar, sinEmpresa: sinEmpresa === true,
+    empleados, total, cargando, errorCarga, recargar, sinEmpresa: sinEmpresa === true,
     visibles: seleccion.visibles, search: seleccion.search, setSearch: seleccion.setSearch,
     sel: seleccion.sel, toggle: seleccion.toggle,
     elegidos, paso, setPaso, enviando, resultado, error, confirmar,

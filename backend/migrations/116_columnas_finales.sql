@@ -125,7 +125,12 @@ ALTER TABLE public.empleado_capacitacion ADD COLUMN IF NOT EXISTS nombre_libre t
 --     en SQL dos NULL son distintos, así que la misma persona podría entrar N veces. Eso es lo
 --     que cierra el índice del punto 7 — sin él, el import del Excel duplica en silencio.
 --
--- ⚠️ LO QUE HAY QUE ARREGLAR EN EL CÓDIGO **ANTES** DE QUE EXISTA LA PRIMERA FILA CON NULL.
+-- ✅ LOS CUATRO ESTÁN HECHOS (13/8/2026) — la lista queda porque explica POR QUÉ cada uno, y
+-- porque es el inventario que hay que revisar si mañana aparece una quinta superficie que lea
+-- `empleado_id`. Los cubre `tests/test_capacitacion_nombre_libre.py` (13 tests, atraviesan HTTP).
+-- El 1 se arregló en `repositories/_asignacion_row.py`, no en `asignacion_repo.py`: el
+-- enriquecido se mudó ahí al dividir el repo, que estaba en 97/100.
+-- ⚠️ LO QUE HABÍA QUE ARREGLAR EN EL CÓDIGO **ANTES** DE QUE EXISTA LA PRIMERA FILA CON NULL.
 -- Hoy no hay ninguna (la tabla está en 0), así que esta migración es inerte; el día que el
 -- import escriba una, sin estos cuatro cambios el listado se cae:
 --   1. `repositories/asignacion_repo.py:24` — `{r["empleado_id"] for r in rows}` mete None en el

@@ -1,17 +1,19 @@
 "use client"
 
+import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { SELECT_CLASS, type FormData, type FormErrors } from "@/components/features/areas/areaForm"
-import type { Empleado } from "@/types/empleado"
 import type { Empresa } from "@/types/empresa"
 
 interface Props {
   form: FormData
   errors: FormErrors
-  empleados: Empleado[]
   empresas: Empresa[]
+  /** Nombre del responsable ya guardado, para que la EDICIÓN no muestre un campo en blanco. */
+  responsableNombre?: string
+  onResponsable: (id: string) => void
   /** En la edición el select de empresa no se muestra: un área no se muda de sociedad. */
   isEdit: boolean
   onField: (key: keyof FormData) => (
@@ -25,7 +27,9 @@ interface Props {
  * Existe como componente aparte para que `AreaModal` no vuelva a pasarse de 150 líneas. Molde:
  * `ObjetivoFormFields.tsx`, que hace exactamente esto para el modal de objetivos.
  */
-export function AreaFormFields({ form, errors, empleados, empresas, isEdit, onField }: Props) {
+export function AreaFormFields({
+  form, errors, empresas, responsableNombre, onResponsable, isEdit, onField,
+}: Props) {
   return (
     <div className="flex flex-col gap-4 py-2">
       {!isEdit && (
@@ -83,19 +87,17 @@ export function AreaFormFields({ form, errors, empleados, empresas, isEdit, onFi
         <Label htmlFor="responsable_id">
           Responsable <span className="text-muted-foreground">(opcional)</span>
         </Label>
-        <select
+        {/*
+          Es OPCIONAL: "Cambiar" en el combobox deja el campo vacío otra vez, que acá significa
+          "sin responsable asignado" — el `<option value="">` que reemplaza.
+        */}
+        <EmpleadoCombobox
           id="responsable_id"
           value={form.responsable_id}
-          onChange={onField("responsable_id")}
-          className={SELECT_CLASS}
-        >
-          <option value="">Sin responsable asignado</option>
-          {empleados.map((emp) => (
-            <option key={emp.id} value={emp.id}>
-              {emp.nombre} {emp.apellido} — {emp.roles?.[0] ?? emp.cargo}
-            </option>
-          ))}
-        </select>
+          empresaId={form.empresa_id || undefined}
+          etiquetaInicial={responsableNombre}
+          onChange={(emp) => onResponsable(emp?.id ?? "")}
+        />
       </div>
     </div>
   )

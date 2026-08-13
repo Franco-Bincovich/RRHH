@@ -12,6 +12,16 @@ export interface EstadoEmpleados {
   setCargando: (v: boolean) => void
   /** `true` = la consulta FALLÓ. Es lo que distingue el error de una lista vacía de verdad. */
   setError: (v: boolean) => void
+  /**
+   * Cuántos hay EN TOTAL del otro lado, que casi nunca es `items.length`.
+   *
+   * 🔴 OPCIONAL PERO NO DECORATIVO: es el dato con el que una pantalla puede DECIR que está
+   * mostrando una parte. El bug que motivó esto no era lentitud — con 400 colaboradores, un
+   * selector traía 100 y los otros 300 no se podían elegir **sin que nada lo dijera**, así que
+   * el usuario concluía que el dato no estaba cargado. `items.length` no alcanza para detectarlo:
+   * 100 de 100 y 100 de 400 se ven igual.
+   */
+  setTotal?: (n: number) => void
 }
 
 /**
@@ -44,10 +54,14 @@ export async function cargarEmpleados(
   try {
     const data = await fetchEmpleados(filtros)
     estado.setEmpleados(data.items ?? [])
+    // `?? items.length` cubre el 200 sin `total`: mostrar "N de N" es peor que no mostrar nada,
+    // pero inventar un total mayor sería afirmar que hay gente escondida que no existe.
+    estado.setTotal?.(data.total ?? (data.items ?? []).length)
   } catch {
     // La lista se vacía ADEMÁS de marcar el error: si quedara la anterior, la pantalla mostraría
     // datos viejos al lado de un cartel que dice que no se pudieron cargar.
     estado.setEmpleados([])
+    estado.setTotal?.(0)
     estado.setError(true)
   } finally {
     estado.setCargando(false)

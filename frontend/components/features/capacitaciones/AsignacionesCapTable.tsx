@@ -81,7 +81,19 @@ export function AsignacionesCapTable({
       <TableBody>
         {asignaciones.map((a) => (
           <TableRow key={a.id}>
-            <TableCell className="font-medium">{a.empleado_nombre ?? "—"}</TableCell>
+            {/*
+              Fila sin empleado vinculado (mig 116): se muestra el nombre crudo del Excel TAL
+              CUAL y la marca va al lado, nunca dentro del nombre. Molde exacto:
+              EvaluadosResultadosTable.tsx, que resuelve el mismo problema con nombres de CSV.
+              🔴 Dice "Sin vincular" y no "Sin asignar" (el literal de evaluaciones) porque acá
+              el módulo ENTERO se llama asignaciones: "sin asignar" se leería como "el curso no
+              está asignado", que es lo contrario de lo que pasa. "Sin vincular" ya es el literal
+              del repo para esto (usuarios/EmpleadoLiderSelect.tsx).
+            */}
+            <TableCell className="font-medium">
+              {a.empleado_nombre ?? a.nombre_libre ?? "—"}
+              {!a.empleado_id && <Badge variant="outline" className="ml-2">Sin vincular</Badge>}
+            </TableCell>
             <TableCell>{a.capacitacion_nombre ?? "—"}</TableCell>
             <TableCell>
               <Badge variant={ESTADO_BADGE[a.estado] ?? "outline"}>{ESTADO_LABEL[a.estado] ?? a.estado}</Badge>

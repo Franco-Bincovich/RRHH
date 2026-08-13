@@ -69,8 +69,13 @@ class AsignacionResponse(BaseModel):
     empresa_nombre: Optional[str] = None
     capacitacion_id: str
     capacitacion_nombre: Optional[str] = None
-    empleado_id: str
+    # 🔴 `empleado_id` es OPCIONAL desde la migración 116: una fila de nombre libre no cuelga de
+    # ningún colaborador del sistema. Con `str` a secas, Pydantic tira ValidationError al armar
+    # la respuesta y el endpoint devuelve 500. `nombre_libre` es el nombre crudo del Excel de
+    # formación, y es lo ÚNICO que identifica a esa persona: sin él la fila sale anónima.
+    empleado_id: Optional[str] = None
     empleado_nombre: Optional[str] = None
+    nombre_libre: Optional[str] = None
     area_id: Optional[str] = None
     area_nombre: Optional[str] = None
     estado: str

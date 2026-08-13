@@ -158,10 +158,17 @@ function llamadas(): Llamada[] {
 
 const LLAMADAS = llamadas()
 
-// Hoy son 12: 8 `fetchEmpleados` directos + 2 vía `cargarEmpleados` + 2 query strings a mano.
+// Hoy son 7: 3 `fetchEmpleados` directos + 2 vía `cargarEmpleados` + 2 query strings a mano.
+//
+// 🔴 ERAN 12 HASTA EL 13/8/2026, y la caída NO es una regresión del barrido: es el arreglo del
+// selector de empleados. Los seis modales que pedían una página de 100 y pintaban un `<select>`
+// plano dejaron de pedir páginas — ahora usan `EmpleadoCombobox`, que busca contra el backend.
+// La que entró en su lugar es `buscarEmpleados.ts`, que sigue pasando por acá porque sigue
+// pidiendo una página (de 20) y sigue teniendo el mismo tope.
+//
 // El mínimo va con margen para absorber que se borre un modal, no para absorber que el
 // descubrimiento se rompa: eso no baja un 25%, colapsa.
-const MINIMO_LLAMADAS = 9
+const MINIMO_LLAMADAS = 5
 
 describe("el barrido está mirando algo", () => {
   it("🔴 la raíz apunta al front (si no, no lee ningún archivo y todo pasa en el vacío)", () => {

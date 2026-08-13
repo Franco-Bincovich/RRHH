@@ -81,11 +81,19 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `asignacion_repo.py:49` | `asignacion_service.py:31` | header | `AsignacionesTab.tsx:106` | ✅ |
-| área | `asignacion_repo.py:40-42` (subquery a empleados) | ✅ | `asignaciones_capacitacion.py:24` | `AsignacionesTab.tsx:112` | ✅ |
-| estado | `asignacion_repo.py:55` | ✅ | `:23` `estado` | `AsignacionesTab.tsx:117` | ✅ |
-| empleado | `asignacion_repo.py:51` | ✅ | `:21` `empleado_id` | `useFiltrosAsignacionesCap.ts` | ✅ |
-| capacitación | `asignacion_repo.py:53` | ✅ | `:22` `capacitacion_id` | `useFiltrosAsignacionesCap.ts` | ✅ |
+| empresa | `asignacion_repo.py:32` | `asignacion_service.py:31` | header | `AsignacionesTab.tsx:106` | ✅ |
+| área | `asignacion_repo.py:22-27` (subquery a empleados) | ✅ | `asignaciones_capacitacion.py:24` | `AsignacionesTab.tsx:112` | ✅ |
+| estado | `asignacion_repo.py:38` | ✅ | `:23` `estado` | `AsignacionesTab.tsx:117` | ✅ |
+| empleado | `asignacion_repo.py:34` | ✅ | `:21` `empleado_id` | `useFiltrosAsignacionesCap.ts` | ✅ |
+| capacitación | `asignacion_repo.py:36` | ✅ | `:22` `capacitacion_id` | `useFiltrosAsignacionesCap.ts` | ✅ |
+
+> 🔴 **EL FILTRO POR ÁREA ESCONDE LAS FILAS DE NOMBRE LIBRE, Y NO LO AVISA.** Desde la migración
+> 116 una asignación puede no tener empleado (`nombre_libre`). El filtro por área resuelve primero
+> los empleados del área y después hace `.in_("empleado_id", emp_ids)` (`asignacion_repo.py:40`),
+> así que esas filas se caen: un NULL nunca satisface un `IN`. **Es correcto —el área sale del
+> empleado, y sin empleado no hay área— pero el usuario ve menos filas y nada se lo dice.** Mismo
+> caso que el filtro por proyecto en evaluaciones, que sí lo tiene escrito como decisión. Fijado
+> en `tests/test_capacitacion_nombre_libre.py::TestElFiltroPorAreaEscondeLasFilasSueltas`.
 
 ### Inventario — ítems
 
@@ -624,7 +632,8 @@ Mi lectura, ordenada por **valor / esfuerzo**. El criterio es cuántos cortes de
 | `repositories/nomina_repo.py` | **107** 🔴 | filtros de costos |
 | `repositories/proyectos_repo.py` | **104** 🔴 | filtros de proyectos |
 | `repositories/onboarding_repo.py` 100 · `evaluacion_repo.py` 100 | al límite | histórico de onboarding |
-| `objetivo_repo.py` 99 · `offboarding_repo.py` 99 · `empresa_repo.py` 98 · `inventario_items_repo.py` 98 · `vacante_repo.py` 98 · `area_repo.py` 97 · `asignacion_repo.py` 97 · `vacaciones_repo.py` 97 | sin margen | |
+| `objetivo_repo.py` 99 · `offboarding_repo.py` 99 · `empresa_repo.py` 98 · `inventario_items_repo.py` 98 · `vacante_repo.py` 98 · `area_repo.py` 97 · `vacaciones_repo.py` 97 | sin margen | |
+| ✅ ~~`asignacion_repo.py` 97~~ → **79** | ✅ | **CERRADO 13/8/2026**: el enriquecido se fue a `repositories/_asignacion_row.py` (47) para que entrara el manejo de `empleado_id` NULL de la mig 116 |
 | `audit_repo.py` 93 · `ausencias_repo.py` 93 | 7 líneas de margen | rango de fechas |
 
 **Corte propuesto para `vacaciones_service.py`** (ya identificado en `CLAUDE.md`, sigue vigente):
