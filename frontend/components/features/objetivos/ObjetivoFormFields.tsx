@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { ObjetivoCamposOpcionales, SEL } from "@/components/features/objetivos/ObjetivoCamposOpcionales"
 import type { Objetivo, PrioridadObjetivo, UserItem } from "@/types/objetivo"
 import type { Empresa } from "@/types/empresa"
 
@@ -17,6 +17,16 @@ import type { Empresa } from "@/types/empresa"
  *
  * El movimiento fue PURO: el JSX, las clases y los ids son idénticos a los que estaban
  * embebidos en el modal.
+ *
+ * ── Segundo corte (125/150 → acá) ────────────────────────────────────────────
+ * Los cuatro campos OPCIONALES —fecha de entrega, objetivo padre, otros responsables y
+ * descripción— se fueron a ObjetivoCamposOpcionales.tsx, que es donde entran los dos campos
+ * nuevos del módulo. Acá quedan los que la UI marca con asterisco, más `prioridad`, que comparte
+ * grilla con `responsable` y no se puede separar sin cambiar el markup. El porqué del límite
+ * elegido está escrito en el encabezado de ese archivo.
+ *
+ * Este archivo sigue siendo el dueño de `FormData` y `FormErrors` —los importa ObjetivoModal— y
+ * la única punta que el modal conoce: el corte de abajo no cambió una sola línea del modal.
  */
 
 export type FormData = {
@@ -32,8 +42,6 @@ export type FormData = {
 }
 
 export type FormErrors = Partial<Record<keyof FormData, string>>
-
-const SEL = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
 
 interface Props {
   form: FormData
@@ -85,41 +93,10 @@ export function ObjetivoFormFields({
           </select>
         </div>
       </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="obj_fecha">Fecha de entrega <span className="text-xs text-muted-foreground font-normal">(opcional)</span></Label>
-        <Input id="obj_fecha" type="date" value={form.fecha_entrega} onChange={field("fecha_entrega")} />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="obj_padre">Objetivo padre <span className="text-xs text-muted-foreground font-normal">(opcional)</span></Label>
-        {/* Solo raíces: la jerarquía admite dos niveles, así que colgar de un subobjetivo daría
-            un 422 del backend. El selector no ofrece lo que el backend va a rechazar. */}
-        <select id="obj_padre" className={SEL} value={form.parent_id} onChange={field("parent_id")}>
-          <option value="">Sin padre — es un objetivo principal</option>
-          {padres.map((p) => <option key={p.id} value={p.id}>{p.titulo}</option>)}
-        </select>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label>Otros responsables <span className="text-xs text-muted-foreground font-normal">(opcional)</span></Label>
-        {/* Checkboxes y NO un <select multiple>: el nativo exige ctrl/cmd+click, que es justo
-            lo que un usuario no descubre solo. Mismo criterio que FiltersBar del bloque B. */}
-        <div className="flex max-h-28 flex-col gap-1 overflow-y-auto rounded-lg border border-input p-2">
-          {usuarios.filter((u) => u.id !== form.responsable_id).map((u) => (
-            <label key={u.id} className="flex items-center gap-2 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={form.responsables.includes(u.id)}
-                onChange={() => onToggleResponsable(u.id)}
-              />
-              {u.nombre} {u.apellido}
-            </label>
-          ))}
-          {usuarios.length <= 1 && <p className="text-xs text-muted-foreground">No hay otros usuarios.</p>}
-        </div>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="obj_desc">Descripción <span className="text-xs text-muted-foreground font-normal">(opcional)</span></Label>
-        <Textarea id="obj_desc" value={form.descripcion} onChange={field("descripcion")} rows={2} className="resize-none" />
-      </div>
+      <ObjetivoCamposOpcionales
+        form={form} usuarios={usuarios} padres={padres}
+        field={field} onToggleResponsable={onToggleResponsable}
+      />
     </div>
   )
 }

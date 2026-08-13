@@ -30,14 +30,32 @@
 -- vigente es el del bloque de abajo, fechado 12/8. Este parrafo queda como
 -- registro de la verificacion anterior, no como descripcion del archivo.
 --
--- ✅ AL DIA CON PRODUCCION (verificado objeto por objeto el 2026-08-12, despues de
--- que Franco corriera la 109).
+-- 🔄 ESTE ARCHIVO **VA POR DELANTE DE PRODUCCION** (desde el 2026-08-13).
 --
+-- PENDIENTES DE CORRER, en este orden:
+--   · backend/migrations/113_lote_features_aditivo.sql      -> ANTES del deploy del codigo nuevo
+--   · backend/migrations/114_lote_features_post_deploy.sql  -> DESPUES del deploy
+--
+-- Lo que este archivo declara y produccion TODAVIA NO tiene:
+--   · 3 tablas nuevas: perfiles_puesto, recategorizaciones, eventos_agenda (52 -> 55)
+--   · 7 columnas nuevas: empleados.fecha_ingreso_prevista, empleados.fecha_baja_prevista,
+--     adjuntos.fecha_vencimiento, vacantes.perfil_puesto_id (113) +
+--     objetivos.periodicidad, objetivos.areas_involucradas,
+--     parametros_empresa.periodo_prueba_dias, parametros_empresa.dias_aviso_evento (114)
+--   · 8 indices nuevos + `ux_objetivo_responsable_titulo` REEMPLAZADO por su version de cuatro
+--     expresiones (es el UNICO objeto destructivo del lote: DROP + CREATE en la misma
+--     transaccion de la 114)
+--   · 3 triggers updated_at nuevos (35 -> 38, tambien en migracionAWS/.../077)
+--
+-- 🚩 AL CORRER LAS DOS, este bloque vuelve a "AL DIA" y este parrafo se borra — en la MISMA
+-- sesion, que es la regla de abajo y la razon por la que ya se desfasó tres veces.
+--
+-- ── Estado ANTERIOR, verificado objeto por objeto el 2026-08-12 ──────────────
 -- CORRIDAS: 080, 089, 102..107 (modulo de carga de horas), 108 y 109 (clientes como
 -- catalogo global), 110, 111 y 112. Verificado en el catalogo: `clientes` ya NO
 -- tiene `empresa_id`, le quedan 2 indices (`clientes_pkey` y
 -- `ux_clientes_nombre_global`) y 0 FKs salientes, con los 4 clientes y su hora
--- imputada intactos. El conteo de tablas da 52 de los dos lados, y 133 FKs
+-- imputada intactos. El conteo de tablas daba 52 de los dos lados, y 133 FKs
 -- declaradas contra 134 en produccion: la de mas es `users.id -> auth.users(id)`,
 -- que este archivo NO declara a proposito (ver el bloque de auth mas abajo).
 --
@@ -99,13 +117,23 @@
 -- refresh_tokens), asi que la FK no tendria a que apuntar.
 --
 -- 🔴 TAMPOCO INCLUYE FUNCIONES NI TRIGGERS: el catalogo se leyo para tablas,
--- columnas, constraints, indices y defaults. En produccion hay 43 triggers no
--- internos y este archivo trae 0. Se recrean aparte, con los pasos 3 y 4 de arriba:
---   - los 35 de updated_at  -> migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql
+-- columnas, constraints, indices y defaults. Con el lote 113 corrido produccion va
+-- a tener 46 triggers no internos y este archivo trae 0. Se recrean aparte, con los
+-- pasos 3 y 4 de arriba:
+--   - los 38 de updated_at  -> migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql
+--     (35 + los 3 de las tablas nuevas del lote 113)
 --   - los 8  trg_emp_*      -> db/funciones_y_triggers.sql
--- ⚠️ NO se usa `backend/migrations/094_recrear_triggers_empresa.sql`: quedo
--- desincronizada de la 112 (declara un noveno trigger sobre `sucesion_posiciones`,
--- tabla que ya no existe) y abortaria el replay. Queda como historial.
+-- ⚠️ NO se usa `backend/migrations/094_recrear_triggers_empresa.sql`. Ese archivo se
+-- CORRIGIO el 2026-08-13 —se le saco el noveno trigger, sobre `sucesion_posiciones`,
+-- tabla que la 112 dropeo y que hacia abortar el script— pero sigue sin ser el camino
+-- de reconstruccion: queda como historial, y el rebuild mira db/funciones_y_triggers.sql.
+--
+-- ⚠️ NINGUNA de las tres tablas nuevas del lote 113 lleva trigger `trg_emp_*`, y no es
+-- un olvido: `perfiles_puesto` no tiene empresa_id (es global), `eventos_agenda` solo
+-- referencia a `users` (que no tiene empresa) y `recategorizaciones` usa una FK
+-- COMPUESTA contra empleados(id, empresa_id), que hace cumplir lo mismo con una
+-- constraint. Es lo que db/funciones_y_triggers.sql declara: donde esta la FK
+-- compuesta, el trigger sobra.
 -- ============================================================================
 
 SET statement_timeout = 0;
@@ -142,7 +170,11 @@ CREATE TABLE public.adjuntos (
     estado text NOT NULL DEFAULT 'activo'::text,
     subido_por uuid,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
-    es_principal boolean DEFAULT false
+    es_principal boolean DEFAULT false,
+    -- Migracion 113. Alimenta la alerta "documentos proximos a vencer". NO resuelve "que
+    -- documentos FALTAN": para eso haria falta un catalogo de tipos obligatorios, y `categoria`
+    -- es texto libre sin CHECK.
+    fecha_vencimiento date
 );
 CREATE TABLE public.areas (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -387,7 +419,13 @@ CREATE TABLE public.empleados (
     co_sourcing boolean,
     product_owner boolean,
     liderazgo text,
-    motivo_baja text
+    motivo_baja text,
+    -- Migracion 113. Fechas del TRAMITE, distintas de fecha_ingreso/fecha_egreso, que son las
+    -- EFECTIVAS. El tramite arranca el 1/1 y la persona entra el 15/1. NO se toco el CHECK de
+    -- `estado`: un valor nuevo ahi romperia en silencio los dos conteos que hacen
+    -- `.neq(estado,'baja')` (area_repo y sucesion_repo).
+    fecha_ingreso_prevista date,
+    fecha_baja_prevista date
 );
 CREATE TABLE public.empresas (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -541,7 +579,15 @@ CREATE TABLE public.objetivos (
     estado text NOT NULL DEFAULT 'por_hacer'::text,
     fecha_entrega date,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now()
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    -- Migracion 114. TEXTO LIBRE, sin CHECK: la vista anual mira los anuales, pero la otra
+    -- acepta cualquier expresion ("primer trimestre", "tercera semana de septiembre"). NOT NULL
+    -- DEFAULT '' porque entra en `ux_objetivo_responsable_titulo`, y en Postgres los NULL no
+    -- colisionan entre si: nullable ahi haria que el indice deje de deduplicar en silencio.
+    periodicidad text NOT NULL DEFAULT ''::text,
+    -- Migracion 114. Anotacion de contexto, NO una FK a areas: los objetivos son del equipo de
+    -- RRHH (responsable_id -> users) y ese equipo no tiene area.
+    areas_involucradas text
 );
 CREATE TABLE public.offboarding_activos (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -636,7 +682,14 @@ CREATE TABLE public.parametros_empresa (
     primer_anio_dias smallint NOT NULL DEFAULT 5,
     vencimiento_anios smallint NOT NULL DEFAULT 4,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now()
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    -- Migracion 114. Dias del periodo de prueba (LCT: 90). Alimenta el evento "fin de periodo de
+    -- prueba" = fecha_ingreso + periodo_prueba_dias. Va ACA y no en `empresas` porque esta tabla
+    -- ya tiene el patron fila-global + fila-por-empresa-que-pisa, con sus dos UNIQUE parciales.
+    periodo_prueba_dias smallint NOT NULL DEFAULT 90,
+    -- Migracion 114. Default de anticipacion del aviso de un evento de agenda. Cada evento puede
+    -- pisarlo con `eventos_agenda.dias_aviso`.
+    dias_aviso_evento smallint NOT NULL DEFAULT 7
 );
 -- Criterio configurable del clasificador de CVs (mig 100). Tabla PROPIA y no columnas de
 -- parametros_empresa: el upsert de aquella desengancharia a la empresa de las reglas globales
@@ -937,7 +990,81 @@ CREATE TABLE public.vacantes (
     -- Token del aviso de LinkedIn ("asunto [VAC-0001]") y clave del matcher de CVs.
     -- El DEFAULT es lo que garantiza que TODA fila nazca con código, venga del backend o de un
     -- INSERT a mano: nextval es atómico, así que no hay condición de carrera. Ver migración 097.
-    codigo text NOT NULL DEFAULT ('VAC-'::text || lpad((nextval('vacantes_codigo_seq'::regclass))::text, 4, '0'::text))
+    codigo text NOT NULL DEFAULT ('VAC-'::text || lpad((nextval('vacantes_codigo_seq'::regclass))::text, 4, '0'::text)),
+    -- Migracion 113. De que perfil de puesto salio esta vacante. Solo TRAZABILIDAD: los campos
+    -- se COPIAN al crearla y despues son de la vacante. `perfiles_puesto` no tiene empresa_id,
+    -- asi que no hay cruce de empresa que vigilar (mismo caso que horas_proyecto.cliente_id
+    -- despues de la 109).
+    perfil_puesto_id uuid
+);
+
+-- ── Las tres tablas del lote 113 (2026-08-13) ────────────────────────────────
+-- Se agregan al FINAL y no en orden alfabetico: es la convencion que este archivo ya sigue
+-- (empleado_superior_pendiente, plantillas_mail, mail_enviado, tipos_ausencia y vacantes tambien
+-- estan fuera de orden, apendeadas cuando nacieron).
+
+-- Catalogo de plantillas de puesto, GLOBAL AL GRUPO.
+-- 🔴 SIN empresa_id y SIN area_id. Un perfil describe QUE hace un puesto, y eso no cambia segun
+-- de que sociedad cobre la persona. `area_id` ademas lo ataria a una empresa por transitividad
+-- (`areas.empresa_id` es NOT NULL) y chocaria con trg_emp_vacantes al copiar. El area se ELIGE
+-- al crear la vacante. Molde: `clientes` despues de las migraciones 108/109.
+CREATE TABLE public.perfiles_puesto (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    nombre text NOT NULL,
+    descripcion text,
+    funciones text,
+    requisitos text,
+    formacion text,
+    experiencia text,
+    conocimientos_tecnicos text,
+    modalidad character varying(20),
+    tipo_contrato character varying(20),
+    nivel character varying(20),
+    jornada text,
+    activo boolean NOT NULL DEFAULT true,
+    created_by uuid,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+-- Historico de cambios de rol y seniority por empleado.
+-- 🔴 NO duplica a `auditoria`, que ya guarda el diff: lo que aquella NO puede dar es el MOTIVO,
+-- la FECHA EFECTIVA (auditoria.created_at dice cuando se cargo, no desde cuando rige), el
+-- impacto salarial —que vive detras del gate de COSTOS— ni la posibilidad de corregir, porque
+-- `auditoria` es inmutable. Esta es el registro de NEGOCIO; aquella, el TECNICO.
+CREATE TABLE public.recategorizaciones (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    empresa_id uuid NOT NULL,
+    empleado_id uuid NOT NULL,
+    fecha_efectiva date NOT NULL,
+    rol_anterior text,
+    rol_nuevo text,
+    seniority_anterior text,
+    seniority_nueva text,
+    motivo text NOT NULL,
+    impacto_salarial numeric,
+    registrado_por uuid,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now()
+);
+
+-- Eventos manuales del calendario del dashboard.
+-- `es_publica`: mismo nombre y misma semantica que onboarding_templates.es_publica.
+-- `resuelta`: un evento NO desaparece por vencer, desaparece cuando alguien lo marca.
+CREATE TABLE public.eventos_agenda (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    empresa_id uuid NOT NULL,
+    nombre text NOT NULL,
+    fecha date NOT NULL,
+    descripcion text,
+    dias_aviso smallint NOT NULL DEFAULT 7,
+    es_publica boolean NOT NULL DEFAULT true,
+    resuelta boolean NOT NULL DEFAULT false,
+    resuelta_at timestamp with time zone,
+    resuelta_por uuid,
+    created_by uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
 
 
@@ -999,6 +1126,9 @@ ALTER TABLE public.mail_enviado ADD CONSTRAINT mail_enviado_pkey PRIMARY KEY (id
 ALTER TABLE public.mail_enviado ADD CONSTRAINT mail_enviado_estado_check CHECK (estado IN ('enviado', 'fallido'));
 ALTER TABLE public.vacaciones_pendientes ADD CONSTRAINT vacaciones_pendientes_pkey PRIMARY KEY (id);
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_pkey PRIMARY KEY (id);
+ALTER TABLE public.perfiles_puesto ADD CONSTRAINT perfiles_puesto_pkey PRIMARY KEY (id);
+ALTER TABLE public.recategorizaciones ADD CONSTRAINT recategorizaciones_pkey PRIMARY KEY (id);
+ALTER TABLE public.eventos_agenda ADD CONSTRAINT eventos_agenda_pkey PRIMARY KEY (id);
 ALTER TABLE public.areas ADD CONSTRAINT areas_codigo_key UNIQUE (codigo);
 ALTER TABLE public.areas ADD CONSTRAINT areas_id_empresa_uq UNIQUE (id, empresa_id);
 ALTER TABLE public.assessment_campanas ADD CONSTRAINT assessment_campanas_id_empresa_uq UNIQUE (id, empresa_id);
@@ -1132,6 +1262,22 @@ ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_prioridad_check CHECK (((pri
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_rango_salarial_max_check CHECK ((rango_salarial_max >= (0)::numeric));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_rango_salarial_min_check CHECK ((rango_salarial_min >= (0)::numeric));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_tipo_contrato_check CHECK (((tipo_contrato)::text = ANY ((ARRAY['efectivo'::character varying, 'plazo_fijo'::character varying, 'contratado'::character varying, 'pasantia'::character varying])::text[])));
+-- Migracion 113. Los tres CHECK de perfiles_puesto son COPIA LITERAL de los de vacantes: si se
+-- escribieran "parecido", un perfil podria guardar un valor que la vacante rechaza al copiarlo y
+-- el error saldria recien al crear la busqueda.
+ALTER TABLE public.perfiles_puesto ADD CONSTRAINT perfiles_puesto_modalidad_check CHECK (((modalidad)::text = ANY ((ARRAY['presencial'::character varying, 'remoto'::character varying, 'hibrido'::character varying])::text[])));
+ALTER TABLE public.perfiles_puesto ADD CONSTRAINT perfiles_puesto_nivel_check CHECK (((nivel)::text = ANY ((ARRAY['junior'::character varying, 'semi_senior'::character varying, 'senior'::character varying, 'lider'::character varying, 'manager'::character varying, 'director'::character varying, 'c_level'::character varying])::text[])));
+ALTER TABLE public.perfiles_puesto ADD CONSTRAINT perfiles_puesto_tipo_contrato_check CHECK (((tipo_contrato)::text = ANY ((ARRAY['efectivo'::character varying, 'plazo_fijo'::character varying, 'contratado'::character varying, 'pasantia'::character varying])::text[])));
+-- Migracion 113. Ni rol_nuevo ni seniority_nueva pueden ser NOT NULL por separado (una
+-- recategorizacion puede cambiar solo una), pero las DOS en NULL es una fila que no dice nada.
+ALTER TABLE public.recategorizaciones ADD CONSTRAINT recategorizaciones_algo_cambia_check CHECK (((rol_nuevo IS NOT NULL) OR (seniority_nueva IS NOT NULL)));
+ALTER TABLE public.eventos_agenda ADD CONSTRAINT eventos_agenda_dias_aviso_check CHECK (((dias_aviso >= 0) AND (dias_aviso <= 365)));
+-- Migracion 113. Si esta resuelta, tiene que decir CUANDO. NO toca `resuelta_por`: su FK es
+-- ON DELETE SET NULL, y un CHECK sobre esa columna haria FALLAR el borrado de ese usuario.
+ALTER TABLE public.eventos_agenda ADD CONSTRAINT eventos_agenda_resuelta_coherente_check CHECK (((NOT resuelta) OR (resuelta_at IS NOT NULL)));
+-- Migracion 114.
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT parametros_empresa_periodo_prueba_check CHECK (((periodo_prueba_dias > 0) AND (periodo_prueba_dias <= 730)));
+ALTER TABLE public.parametros_empresa ADD CONSTRAINT parametros_empresa_dias_aviso_check CHECK (((dias_aviso_evento >= 0) AND (dias_aviso_evento <= 365)));
 ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_base_dias_check CHECK (((base_dias_habiles >= 1) AND (base_dias_habiles <= 31)));
 ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_corte_mes_check CHECK (((corte_antiguedad_mes >= 1) AND (corte_antiguedad_mes <= 12)));
 ALTER TABLE public.parametros_empresa ADD CONSTRAINT pe_vac_desde_check CHECK (((periodo_vacacional_desde_mes >= 1) AND (periodo_vacacional_desde_mes <= 12)));
@@ -1287,6 +1433,22 @@ ALTER TABLE public.usuario_integraciones ADD CONSTRAINT usuario_integraciones_us
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_area_id_fkey FOREIGN KEY (area_id) REFERENCES areas(id) ON DELETE RESTRICT;
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_empresa_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE RESTRICT;
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_responsable_id_fkey FOREIGN KEY (responsable_id) REFERENCES users(id) ON DELETE SET NULL;
+-- Migracion 113. ON DELETE SET NULL: borrar un perfil no puede llevarse la vacante, que ya copio
+-- los campos y es independiente — ese es el punto del modelo de COPIA.
+ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_perfil_puesto_id_fkey FOREIGN KEY (perfil_puesto_id) REFERENCES perfiles_puesto(id) ON DELETE SET NULL;
+ALTER TABLE public.perfiles_puesto ADD CONSTRAINT perfiles_puesto_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE public.recategorizaciones ADD CONSTRAINT recategorizaciones_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
+-- 🔴 FK COMPUESTA, y es lo que hace que esta tabla NO necesite un trigger trg_emp_*. Una FK
+-- simple contra empleados(id) garantiza que el empleado existe; NO que sea de la MISMA empresa
+-- que la recategorizacion. Se apoya en el indice `empleados_id_empresa_uq`, que ya existe. Es el
+-- patron de las 22 FKs compuestas del modelo. Ver db/funciones_y_triggers.sql.
+ALTER TABLE public.recategorizaciones ADD CONSTRAINT recat_empleado_empresa_fk FOREIGN KEY (empleado_id, empresa_id) REFERENCES empleados(id, empresa_id);
+ALTER TABLE public.recategorizaciones ADD CONSTRAINT recategorizaciones_registrado_por_fkey FOREIGN KEY (registrado_por) REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE public.eventos_agenda ADD CONSTRAINT eventos_agenda_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id);
+-- SIN ON DELETE, igual que objetivos.responsable_id: borrar un usuario con eventos se BLOQUEA.
+-- Un evento privado sin autor no lo podria ver nadie — seria una fila inalcanzable.
+ALTER TABLE public.eventos_agenda ADD CONSTRAINT eventos_agenda_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id);
+ALTER TABLE public.eventos_agenda ADD CONSTRAINT eventos_agenda_resuelta_por_fkey FOREIGN KEY (resuelta_por) REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE public.parametros_empresa ADD CONSTRAINT parametros_empresa_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
 ALTER TABLE public.parametros_screening ADD CONSTRAINT parametros_screening_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
 ALTER TABLE public.reglas_vacaciones_escala ADD CONSTRAINT reglas_vacaciones_escala_empresa_id_fkey FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE;
@@ -1365,7 +1527,11 @@ CREATE INDEX idx_obj_parent ON public.objetivos USING btree (parent_id);
 -- PLANILLA: las dos columnas que el import declara requeridas, titulo y responsable. NO va el
 -- titulo solo —dos responsables pueden tener legitimamente el mismo objetivo— ni `fecha_entrega`,
 -- que es NULLABLE y desactivaria el indice en silencio para todo objetivo sin fecha.
-CREATE UNIQUE INDEX ux_objetivo_responsable_titulo ON public.objetivos USING btree (empresa_id, responsable_id, lower(titulo));
+-- 🔄 Migracion 114: se le agrego `lower(periodicidad)` como CUARTA expresion. Con la clave de
+-- tres, "Cerrar el trimestre" mensual y anual del mismo responsable colisionaban y el segundo
+-- rebotaba con 23505 — una clave mas angosta que la identidad real rechaza datos buenos. El
+-- `lower()` va por el mismo motivo que el de `titulo`: es texto que RRHH escribe a mano.
+CREATE UNIQUE INDEX ux_objetivo_responsable_titulo ON public.objetivos USING btree (empresa_id, responsable_id, lower(titulo), lower(periodicidad));
 CREATE INDEX idx_obj_resp_user ON public.objetivo_responsables USING btree (user_id);
 CREATE INDEX idx_oauth_states_expires_at ON public.oauth_states USING btree (expires_at);
 CREATE INDEX idx_offboarding_activos_empresa ON public.offboarding_activos USING btree (empresa_id);
@@ -1473,6 +1639,56 @@ CREATE UNIQUE INDEX ux_hp_idempotencia ON public.horas_proyecto USING btree (ide
 CREATE INDEX idx_intentos_created ON public.intentos_identificacion USING btree (created_at DESC);
 CREATE INDEX idx_intentos_dni ON public.intentos_identificacion USING btree (dni, created_at DESC);
 CREATE INDEX idx_intentos_ip ON public.intentos_identificacion USING btree (ip, created_at DESC) WHERE (ip IS NOT NULL);
+
+-- ── Migracion 113 (2026-08-13) ───────────────────────────────────────────────
+-- 🔴 TODOS ESTOS INDICES ESTAN DIMENSIONADOS PARA ~10 EMPRESAS Y ~1000 COLABORADORES, no para
+-- los 2 y 31 de hoy. Una tabla se crea UNA vez; agregar un indice despues del handoff a
+-- infraestructura es coordinar. Cada uno dice contra que consulta esta puesto.
+-- El patron que se repite es el PARCIAL: en las columnas de fecha nuevas la enorme mayoria de
+-- las filas tiene NULL, y un indice completo indexaria 1000 filas para servir 10.
+
+-- Unicidad GLOBAL y case-insensitive del nombre del perfil. Lo escribe RRHH a mano: "Analista
+-- SSR" y "analista ssr" son el mismo perfil. Molde: ux_clientes_nombre_global.
+CREATE UNIQUE INDEX ux_perfiles_puesto_nombre_global ON public.perfiles_puesto USING btree (lower(nombre));
+-- Listado por defecto: WHERE activo ORDER BY nombre. Parcial + clave `nombre` = sirve al filtro
+-- Y al orden, sin ordenar en memoria.
+CREATE INDEX idx_perfiles_puesto_activos ON public.perfiles_puesto USING btree (nombre) WHERE activo;
+
+-- El historial de UNA persona, en su ficha: WHERE empleado_id = ? ORDER BY fecha_efectiva DESC.
+CREATE INDEX idx_recat_empleado ON public.recategorizaciones USING btree (empleado_id, fecha_efectiva DESC);
+-- 🔴 El listado del modulo, PAGINADO: WHERE empresa_id = ? ORDER BY fecha_efectiva DESC LIMIT.
+-- Sin este, con 10 empresas cada pagina lee la tabla entera y la ordena en memoria para devolver
+-- 20 filas — y el sort se paga de nuevo en CADA pagina.
+CREATE INDEX idx_recat_empresa_fecha ON public.recategorizaciones USING btree (empresa_id, fecha_efectiva DESC);
+
+-- La consulta del dashboard, que corre en cada carga de pantalla:
+--   WHERE empresa_id = ? AND NOT resuelta AND fecha <= current_date + dias_aviso
+-- 🔴 PARCIAL sobre NOT resuelta: los resueltos se acumulan para siempre y el dashboard no los
+-- mira nunca. El indice completo creceria sin techo; este se queda en lo pendiente.
+CREATE INDEX idx_eventos_agenda_pendientes ON public.eventos_agenda USING btree (empresa_id, fecha) WHERE (NOT resuelta);
+-- El segundo predicado de la visibilidad: `es_publica OR created_by = <yo>`. Los publicos entran
+-- por el indice de arriba; este sirve la otra mitad.
+CREATE INDEX idx_eventos_agenda_privados_autor ON public.eventos_agenda USING btree (created_by) WHERE (NOT es_publica);
+
+-- "Proximos ingresos / bajas de los proximos N dias". Parciales: en cualquier momento hay un
+-- punado de personas con fecha prevista y ~990 con NULL. Sin ellos el bloque del dashboard
+-- escanea el padron entero en cada carga. Mismo patron que idx_empleados_domicilio_provincia.
+-- Sin `empresa_id` adelante a proposito: el parcial ya reduce a decenas de filas, y con empresa
+-- primero el indice dejaria de servir a la vista consolidada.
+CREATE INDEX idx_empleados_ingreso_previsto ON public.empleados USING btree (fecha_ingreso_prevista) WHERE (fecha_ingreso_prevista IS NOT NULL);
+CREATE INDEX idx_empleados_baja_prevista ON public.empleados USING btree (fecha_baja_prevista) WHERE (fecha_baja_prevista IS NOT NULL);
+
+-- La alerta de documentos por vencer. DOBLEMENTE parcial: la mayoria de los adjuntos (un CV, una
+-- foto) no vence nunca, y los eliminados no tienen por que alertar. `adjuntos` es de las tablas
+-- que mas crece con 1000 colaboradores.
+-- ⚠️ `estado = 'activo'` es parte del indice: la query de la alerta TIENE que incluirlo o el
+-- planner no lo va a poder usar.
+CREATE INDEX idx_adjuntos_vencimiento ON public.adjuntos USING btree (fecha_vencimiento) WHERE ((fecha_vencimiento IS NOT NULL) AND (estado = 'activo'::text));
+
+-- "Vacantes de este perfil", y sobre todo: 🔴 POSTGRES NO INDEXA LAS FK AUTOMATICAMENTE. Con
+-- ON DELETE SET NULL, borrar un perfil obliga a buscar las filas hijas — sin indice eso es un
+-- scan de `vacantes` entera por cada borrado.
+CREATE INDEX idx_vacantes_perfil_puesto ON public.vacantes USING btree (perfil_puesto_id) WHERE (perfil_puesto_id IS NOT NULL);
 
 
 -- ============================================================================

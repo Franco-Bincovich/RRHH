@@ -2,23 +2,28 @@
 
 import { useState, useEffect } from "react"
 
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { VacanteCamposBase } from "@/components/features/vacantes/VacanteCamposBase"
+import { useVacanteCatalogos } from "@/components/features/vacantes/useVacanteCatalogos"
+import { EMPTY_VACANTE, payloadVacante, validateVacante } from "@/components/features/vacantes/vacanteForm"
+import type { VacanteFormData, VacanteFormErrors } from "@/components/features/vacantes/vacanteForm"
 import { createVacante } from "@/services/vacantes"
-import { fetchAreas } from "@/services/areas"
-import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
-import type { Area } from "@/types/area"
-import type { Empresa } from "@/types/empresa"
-import type { VacanteCreate } from "@/types/vacantes"
+
+/**
+ * Alta de vacante. Orquestador: estado del form, carga de catálogos, handlers y submit.
+ *
+ * Estaba en 251/150 y el corte NO fue por campos —son cuatro y el DOM los alterna, ver
+ * VacanteCamposBase— sino por CAPAS, en tres: lo puro en vacanteForm.ts, la vista en
+ * VacanteCamposBase, los catálogos en useVacanteCatalogos, y acá la máquina de estado del form.
+ * 📌 Es acá donde aterriza la feature: el handler que copia el perfil al form es orquestación,
+ * y el selector en sí nace en su propio componente.
+ *
+ * 🚩 NO TIENE UN SOLO TEST, verificado por mutación: anular una validación entera deja la suite
+ * en verde. Hoy solo lo cubre `tsc`. Por eso la validación y el payload salieron a un módulo
+ * puro: ahí sí se testean sin montar el modal.
+ */
 
 interface VacanteModalProps {
   open: boolean
@@ -26,75 +31,23 @@ interface VacanteModalProps {
   onSuccess: () => void
 }
 
-type FormData = {
-  empresa_id: string
-  titulo: string
-  area_id: string
-  tipo_contrato: string
-}
-
-type FormErrors = Partial<Record<keyof FormData, string>>
-
-const EMPTY: FormData = {
-  empresa_id: "",
-  titulo: "",
-  area_id: "",
-  tipo_contrato: "efectivo",
-}
-
-const SELECT_CLASS =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-
-function validate(form: FormData): FormErrors {
-  const errors: FormErrors = {}
-  if (!form.empresa_id) errors.empresa_id = "La empresa es requerida"
-  if (!form.titulo.trim()) errors.titulo = "El título es requerido"
-  if (!form.area_id) errors.area_id = "El área es requerida"
-  if (!form.tipo_contrato) errors.tipo_contrato = "El tipo de contrato es requerido"
-  return errors
-}
-
 export function VacanteModal({ open, onClose, onSuccess }: VacanteModalProps) {
-  const [form, setForm] = useState<FormData>(EMPTY)
-  const [errors, setErrors] = useState<FormErrors>({})
+  const [form, setForm] = useState<VacanteFormData>(EMPTY_VACANTE)
+  const [errors, setErrors] = useState<VacanteFormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [serverError, setServerError] = useState("")
-  const [empresas, setEmpresas] = useState<Empresa[]>([])
-  const [areas, setAreas] = useState<Area[]>([])
-  const [areasLoading, setAreasLoading] = useState(false)
+  const { empresas, areas, areasLoading } = useVacanteCatalogos(open, form.empresa_id)
 
   // Inicializar form al abrir, pre-seleccionar empresa activa del topbar
   useEffect(() => {
     if (!open) return
     const activa = getEmpresaActivaId() ?? ""
-    setForm({ ...EMPTY, empresa_id: activa })
+    setForm({ ...EMPTY_VACANTE, empresa_id: activa })
     setErrors({})
     setServerError("")
-    setAreas([])
   }, [open])
 
-  // Cargar empresas al abrir
-  useEffect(() => {
-    if (!open) return
-    fetchEmpresas()
-      .then((res) => setEmpresas(res.items.filter((e) => e.activa)))
-      .catch(() => setEmpresas([]))
-  }, [open])
-
-  // Recargar áreas cuando cambia la empresa seleccionada
-  useEffect(() => {
-    if (!form.empresa_id) {
-      setAreas([])
-      return
-    }
-    setAreasLoading(true)
-    fetchAreas(form.empresa_id)
-      .then(setAreas)
-      .catch(() => setAreas([]))
-      .finally(() => setAreasLoading(false))
-  }, [form.empresa_id])
-
-  function field(key: keyof FormData) {
+  function field(key: keyof VacanteFormData) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const val = e.target.value
       setForm((prev) => ({ ...prev, [key]: val }))
@@ -110,7 +63,7 @@ export function VacanteModal({ open, onClose, onSuccess }: VacanteModalProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const errs = validate(form)
+    const errs = validateVacante(form)
     if (Object.keys(errs).length > 0) {
       setErrors(errs)
       return
@@ -118,13 +71,7 @@ export function VacanteModal({ open, onClose, onSuccess }: VacanteModalProps) {
     setSubmitting(true)
     setServerError("")
     try {
-      const payload: VacanteCreate = {
-        empresa_id: form.empresa_id,
-        titulo: form.titulo.trim(),
-        area_id: form.area_id,
-        tipo_contrato: form.tipo_contrato,
-      }
-      await createVacante(payload)
+      await createVacante(payloadVacante(form))
       onSuccess()
     } catch {
       setServerError("Ocurrió un error al guardar. Intentá de nuevo.")
@@ -141,96 +88,10 @@ export function VacanteModal({ open, onClose, onSuccess }: VacanteModalProps) {
         </DialogHeader>
 
         <form id="vacante-form" onSubmit={handleSubmit} noValidate>
-          <div className="flex flex-col gap-4 py-2">
-
-            {/* Empresa */}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="empresa_id">
-                Empresa
-                <span className="ml-0.5 text-destructive" aria-hidden>*</span>
-              </Label>
-              <select
-                id="empresa_id"
-                className={SELECT_CLASS}
-                value={form.empresa_id}
-                onChange={handleEmpresaChange}
-                aria-invalid={Boolean(errors.empresa_id)}
-                aria-required
-              >
-                <option value="">Seleccionar empresa</option>
-                {empresas.map((e) => (
-                  <option key={e.id} value={e.id}>{e.nombre}</option>
-                ))}
-              </select>
-              {errors.empresa_id && (
-                <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>
-              )}
-            </div>
-
-            {/* Título */}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="titulo">
-                Título
-                <span className="ml-0.5 text-destructive" aria-hidden>*</span>
-              </Label>
-              <Input
-                id="titulo"
-                value={form.titulo}
-                onChange={field("titulo")}
-                aria-invalid={Boolean(errors.titulo)}
-                aria-required
-              />
-              {errors.titulo && (
-                <p className="text-xs text-destructive" role="alert">{errors.titulo}</p>
-              )}
-            </div>
-
-            {/* Área — dependiente de empresa */}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="area_id">
-                Área
-                <span className="ml-0.5 text-destructive" aria-hidden>*</span>
-              </Label>
-              <select
-                id="area_id"
-                className={SELECT_CLASS}
-                value={form.area_id}
-                onChange={field("area_id")}
-                disabled={!form.empresa_id || areasLoading}
-                aria-invalid={Boolean(errors.area_id)}
-                aria-required
-              >
-                <option value="">
-                  {!form.empresa_id ? "Seleccioná primero una empresa" : areasLoading ? "Cargando..." : "Seleccionar área"}
-                </option>
-                {areas.map((a) => (
-                  <option key={a.id} value={a.id}>{a.nombre}</option>
-                ))}
-              </select>
-              {errors.area_id && (
-                <p className="text-xs text-destructive" role="alert">{errors.area_id}</p>
-              )}
-            </div>
-
-            {/* Tipo de contrato */}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tipo_contrato">
-                Tipo de contrato
-                <span className="ml-0.5 text-destructive" aria-hidden>*</span>
-              </Label>
-              <select
-                id="tipo_contrato"
-                className={SELECT_CLASS}
-                value={form.tipo_contrato}
-                onChange={field("tipo_contrato")}
-              >
-                <option value="efectivo">Relación de dependencia</option>
-                <option value="plazo_fijo">Plazo fijo</option>
-                <option value="contratado">Contratado</option>
-                <option value="pasantia">Pasantía</option>
-              </select>
-            </div>
-          </div>
+          <VacanteCamposBase
+            form={form} errors={errors} empresas={empresas} areas={areas}
+            areasLoading={areasLoading} onEmpresaChange={handleEmpresaChange} field={field}
+          />
 
           {serverError && (
             <p className="mt-2 text-sm text-destructive" role="alert">{serverError}</p>

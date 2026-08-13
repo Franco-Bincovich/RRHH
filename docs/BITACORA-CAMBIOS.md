@@ -40,6 +40,127 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-13 · 🔴 EL LOTE QUE CONGELA EL SCHEMA — migraciones 113 y 114 · commit pendiente
+
+**Qué cambió:** se escribieron las dos migraciones del lote de features (**NO se corrieron**: las
+corre Franco). A partir de acá, todo cambio de DDL es coordinación.
+
+**Impacto en infraestructura — ESTA ES LA ENTRADA QUE HAY QUE LEER:**
+
+- 🔴 **DOS MIGRACIONES NUEVAS Y EL ORDEN NO ES INTERCAMBIABLE.**
+  - **`113_lote_features_aditivo.sql`** → **ANTES del deploy**. Aditiva pura, sin ventana: 3
+    tablas nuevas (`perfiles_puesto`, `recategorizaciones`, `eventos_agenda`), 4 columnas
+    (`empleados.fecha_ingreso_prevista`, `empleados.fecha_baja_prevista`,
+    `adjuntos.fecha_vencimiento`, `vacantes.perfil_puesto_id`), 10 índices, 3 triggers.
+    **No borra ni mueve nada.**
+  - **`114_lote_features_post_deploy.sql`** → **DESPUÉS del deploy**. `objetivos.periodicidad` +
+    `.areas_involucradas`, `parametros_empresa.periodo_prueba_dias` + `.dias_aviso_evento`, y el
+    **reemplazo del índice único `ux_objetivo_responsable_titulo`** (pasa a 4 expresiones).
+- 🔴 **UN SOLO OBJETO DESTRUCTIVO EN TODO EL LOTE**: el `DROP INDEX` de la 114, que se recrea en
+  la MISMA transacción. No pierde filas. Verificado que la clave nueva es estrictamente más
+  ancha que la vieja, así que no puede rechazar ninguna fila existente.
+- **Producción pasa de 52 a 55 tablas.** `db/schema.sql` **va por delante** hasta que las dos
+  corran (su encabezado lo dice y lista lo pendiente; al correrlas vuelve a "AL DÍA").
+- 🔴 **`migracionAWS/.../077` pasa de 35 a 38 triggers** `updated_at`. Las tres tablas nuevas los
+  llevan. Verificado con el barrido: 38 = 38, igualdad estricta en las dos direcciones.
+- **`db/funciones_y_triggers.sql` NO cambia de contenido** (sigue en 8 triggers). Ninguna tabla
+  nueva necesita `trg_emp_*`: `perfiles_puesto` no tiene empresa, `eventos_agenda` solo
+  referencia `users`, y **`recategorizaciones` usa FK COMPUESTA** `(empleado_id, empresa_id) →
+  empleados(id, empresa_id)` — es la primera tabla que nace con la constraint en vez del trigger.
+- ⚠️ **`migrations/094` se corrigió**: se le sacó `trg_emp_sucesion`, que apuntaba a
+  `sucesion_posiciones` (dropeada por la 112) y hacía abortar el archivo entero. **No es el
+  camino de reconstrucción** —ese es `db/funciones_y_triggers.sql`— pero ya no destruye nada si
+  alguien lo corre a mano.
+- **`empleados.estado` NO se tocó.** Preingresos y bajas van con fechas previstas: 17 sitios del
+  backend dependen del vocabulario de esa columna y dos de ellos contarían de más en silencio.
+- **Sin RLS** en las tres tablas nuevas, por la regla del porteo.
+- **Env vars, buckets, endpoints, auth: sin cambios.**
+- Suite: **3260 backend / 0 failed**, los 15 barridos verdes, incluidos los tres que leen
+  `schema.sql`.
+
+---
+## 2026-08-12 · División D5 · `VacanteModal.tsx` 251 → 112 (refactor puro) · commit pendiente
+
+**Qué cambió:** nada de lógica. `VacanteModal.tsx` estaba en **251/150** —cien líneas sobre el
+límite antes de que la feature del perfil de puesto lo tocara— y se partió en cuatro por CAPAS:
+`vacanteForm.ts` (**62**, tipo del form + validación + payload, puro, molde `vacacionesForm.ts`),
+`VacanteCamposBase.tsx` (**139**, los cuatro campos, JSX verificado idéntico contra el original),
+`useVacanteCatalogos.ts` (**64**/80, la carga de empresas y áreas) y el modal orquestador (**112**).
+
+🔴 **Corrección al diagnóstico:** `docs/DIAGNOSTICO-FASE-1.md` §11.3 proponía
+`VacanteDatosSection + VacanteRangoSection`. **`VacanteRangoSection` no puede existir**: el modal
+tiene cuatro campos (`empresa_id`, `titulo`, `area_id`, `tipo_contrato`) y ningún rango salarial.
+Ese ítem del diagnóstico se escribió desde el conteo de líneas sin leer el archivo.
+
+**Impacto en infraestructura:** ninguno. Ni migraciones, ni env vars, ni dependencias, ni buckets,
+ni endpoints, ni auth. Solo front, y ningún contrato de API cambió: el payload del
+`POST /api/vacantes` es el mismo (lo arma ahora `payloadVacante`, movido verbatim).
+
+- Suite igual que antes: **3260 backend / 647 front / 0 skipped**, `tsc --noEmit` en 0, los 15
+  barridos verdes.
+- 🚩 **`VacanteModal.tsx` no tiene un solo test** — verificado por mutación: anular una validación
+  entera deja la suite en verde, antes y después de dividir. Es el mismo hueco que `ObjetivoModal`.
+  La validación y el payload salieron a un módulo puro justamente para que se puedan testear sin
+  montar el modal; escribir esos tests es tarea aparte.
+- 🚩 Queda documentado en `useVacanteCatalogos.ts` un **bug preexistente que se conservó tal cual**
+  (refactor puro): reabrir el modal con la MISMA empresa deja el select de áreas vacío, porque el
+  efecto que las carga depende de `empresa_id` y no se vuelve a disparar.
+
+---
+## 2026-08-12 · Divisiones D1–D4 del módulo Objetivos (refactor puro) · commit pendiente
+
+**Qué cambió:** cuatro divisiones de archivo, sin una sola línea de lógica nueva. Los cuatro
+archivos que la feature de objetivos iba a desbordar quedaron con margen: `objetivo_repo.py`
+100→**93** (el armado de la query se fue a `repositories/_objetivo_filtros.py`, **81**),
+`objetivo_service.py` 143→**136** (las validaciones de campo a
+`services/_objetivos_validaciones.py`, **75**), `ObjetivoFormFields.tsx` 125→**102** (los cuatro
+campos opcionales a `ObjetivoCamposOpcionales.tsx`, **87**) y `objetivos/page.tsx` 148→**120**
+(el selector de vista y el área de contenido a `ObjetivosVistas.tsx`, **93**). `ObjetivoModal.tsx`
+no se tocó.
+
+**Impacto en infraestructura:** ninguno. Ni migraciones, ni env vars, ni dependencias, ni buckets,
+ni endpoints, ni cambios de auth. Lo único que le toca al porteo a asyncpg:
+
+- **`repositories/` pasa de 85 a 86 archivos** (`_objetivo_filtros.py`). Es un satélite SIN acceso
+  a la base: recibe la query ya construida y le aplica predicados. `supabase_admin.table(...)`
+  sigue viviendo solo en `objetivo_repo.py`. 🔑 Eso es deliberado y hay que conservarlo al portear:
+  el espía de `test_objetivos.py::TestLaQueryDelRepo` parchea `supabase_admin` módulo por módulo,
+  y un satélite que importe el cliente por su cuenta se saltea el parcheo y pega a la red real.
+- `services/` pasa de 219 a 220 archivos (`_objetivos_validaciones.py`, sin acceso a la base).
+- Suite igual que antes: **3260 backend / 647 front / 0 skipped**, `tsc --noEmit` en 0, los 15
+  barridos verdes.
+
+---
+## 2026-08-12 · Diagnóstico Fase 1 (read-only) · `docs/DIAGNOSTICO-FASE-1.md` · commit pendiente
+
+**Qué cambió:** nada de código. Se agregó **`docs/DIAGNOSTICO-FASE-1.md`**: el diagnóstico completo
+de las cinco features nuevas (perfiles de puesto, objetivos, recategorizaciones, próximos
+ingresos/bajas, dashboard+alertas+eventos), formación vs capacitaciones, navegación y renombre,
+transversales, los 15 barridos y **el lote de DDL que congela el schema**. Verificado contra el
+catálogo vivo y contra el código, no contra `docs/`.
+
+**Impacto en infraestructura:** ninguno **todavía** — pero es el documento que define el trabajo
+que sí lo va a tener. Lo que le importa al dev de infra, adelantado:
+
+- **Migraciones que vienen:** el lote propuesto es **113** (aditivo puro) + **114** (dependiente del
+  deploy del código). **3 tablas nuevas** (`perfiles_puesto`, `recategorizaciones`,
+  `eventos_agenda`), **8 columnas**, **2 CHECKs**, **7 índices**. **Un solo objeto destructivo:**
+  el DROP+CREATE de `ux_objetivo_responsable_titulo` (verificado que entra sin deduplicar nada).
+- 🔴 **`migrations/094_recrear_triggers_empresa.sql` está ROTA y hay que arreglarla en ese lote.**
+  Declara 9 triggers `trg_emp_*`; el noveno es sobre `sucesion_posiciones`, tabla que la 112 dropeó.
+  Producción tiene **8**. Un replay de `schema.sql` + la 094 **aborta**, y `fn_misma_empresa()` es
+  la única defensa a nivel base contra el cruce de empresas por referencia (no está en
+  `schema.sql`). Fix: sacar las líneas 82-85.
+- **Superficie de porteo a asyncpg: +3 repos** (85 → 88). Y **+3 bloques de trigger `updated_at`
+  en `migracionAWS/.../077`** (35 → 38), o el barrido `test_triggers_updated_at.py` rojea y el
+  `updated_at` queda congelado en RDS.
+- **Variables de entorno:** ninguna nueva.
+- **Endpoints nuevos:** ~3-4 routers, **ninguno público**.
+- **Buckets de Storage:** ninguno nuevo.
+- **Riesgo declarado:** el Excel de formación no llegó. Si llega después del 21/8, formación exige
+  un **segundo lote de DDL en medio de la migración**. Ver §10.7 del documento.
+
+---
 ## 2026-08-12 · Fase 0.9 · Las 4 fugas de acceso a datos se mueven a `repositories/` · commit pendiente
 
 **Qué cambió:** cierre de Fase 0. De las 62 llamadas a la base que vivían fuera de

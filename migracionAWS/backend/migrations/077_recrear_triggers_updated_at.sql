@@ -1,6 +1,6 @@
 -- 077_recrear_triggers_updated_at.sql
 --
--- Recrea la función set_updated_at() + los 35 triggers trg_*_updated_at en la
+-- Recrea la función set_updated_at() + los 38 triggers trg_*_updated_at en la
 -- base nueva (RDS). El snapshot db/schema.sql se generó del catálogo y capturó
 -- tablas/columnas/constraints/índices/defaults, pero 0 funciones y 0 triggers,
 -- así que updated_at se pobla en el alta (por el DEFAULT now()) pero NO se
@@ -30,7 +30,10 @@ BEGIN
 END;
 $$;
 
--- 35 triggers, un trigger por tabla con columna updated_at.
+-- 38 triggers, un trigger por tabla con columna updated_at.
+--
+-- 🔄 SUBIERON A 38 el 2026-08-13: el lote 113 agrega `perfiles_puesto`, `recategorizaciones` y
+-- `eventos_agenda`, las tres con `updated_at`. Sus bloques están al final del archivo.
 --
 -- 🔴 ERAN 43 hasta el 2026-08-11. Se sacaron los 8 que apuntaban a tablas que el bloque J5b
 -- dropea (las 5 ev_* + sucesion_posiciones, notificaciones_config y configuracion_empresa).
@@ -246,7 +249,32 @@ CREATE TRIGGER trg_plantillas_mail_updated_at
     BEFORE UPDATE ON public.plantillas_mail
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- Verificación (opcional): debe devolver 35.
+-- ── Las tres tablas del lote 113 (2026-08-13) ────────────────────────────────
+-- 🔴 Sus triggers van en TRES archivos y este es el segundo:
+--   1. backend/migrations/113_lote_features_aditivo.sql → el trigger en Supabase (producción)
+--   2. este archivo                                     → el trigger en RDS
+--   3. backend/db/schema.sql                            → la columna updated_at, de la que
+--      `tests/test_triggers_updated_at.py` DERIVA el candidato y lo compara contra este archivo.
+-- Ese barrido es igualdad estricta en las dos direcciones: si una de las tres tablas queda sin
+-- su bloque acá, rojea. Y si rojeara al revés —un bloque acá sin la tabla en schema.sql— sería
+-- peor, porque en RDS el CREATE TRIGGER aborta la migración entera.
+
+DROP TRIGGER IF EXISTS trg_perfiles_puesto_updated_at ON public.perfiles_puesto;
+CREATE TRIGGER trg_perfiles_puesto_updated_at
+    BEFORE UPDATE ON public.perfiles_puesto
+    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_recategorizaciones_updated_at ON public.recategorizaciones;
+CREATE TRIGGER trg_recategorizaciones_updated_at
+    BEFORE UPDATE ON public.recategorizaciones
+    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+DROP TRIGGER IF EXISTS trg_eventos_agenda_updated_at ON public.eventos_agenda;
+CREATE TRIGGER trg_eventos_agenda_updated_at
+    BEFORE UPDATE ON public.eventos_agenda
+    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- Verificación (opcional): debe devolver 38.
 -- SELECT count(*) FROM pg_trigger t
 --   JOIN pg_proc p ON p.oid = t.tgfoid
 --   WHERE p.proname = 'set_updated_at' AND NOT t.tgisinternal;

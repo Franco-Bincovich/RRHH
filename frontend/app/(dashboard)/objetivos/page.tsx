@@ -3,14 +3,12 @@
 import { useCallback, useEffect, useState } from "react"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
-import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { KanbanView } from "@/components/features/objetivos/KanbanView"
-import { ListView } from "@/components/features/objetivos/ListView"
 import { ObjetivoModal } from "@/components/features/objetivos/ObjetivoModal"
 import { ObjetivosFiltros } from "@/components/features/objetivos/ObjetivosFiltros"
+import { ObjetivosVistas } from "@/components/features/objetivos/ObjetivosVistas"
+import type { Vista } from "@/components/features/objetivos/ObjetivosVistas"
 import { ImportarObjetivosBoton } from "@/components/features/objetivos/ImportarObjetivosBoton"
 import { ImportarObjetivosModal } from "@/components/features/objetivos/ImportarObjetivosModal"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
@@ -20,18 +18,6 @@ import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { EstadoObjetivo, Objetivo, UserItem } from "@/types/objetivo"
 import type { Empresa } from "@/types/empresa"
-
-type Vista = "tablero" | "lista"
-
-function TableSkeleton() {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton key={i} className="h-12 w-full rounded-lg" />
-      ))}
-    </div>
-  )
-}
 
 export default function ObjetivosPage() {
   const canWrite = useCanWrite()
@@ -114,26 +100,12 @@ export default function ObjetivosPage() {
         </div>
       </div>
 
-      <div className="mb-4 flex gap-1 border-b border-border">
-        {(["tablero", "lista"] as Vista[]).map((v) => (
-          <button key={v} onClick={() => setVista(v)}
-            className={cn("px-4 pb-3 pt-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              vista === v ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground")}>
-            {v === "tablero" ? "Tablero" : "Lista"}
-          </button>
-        ))}
-      </div>
-
-      {loading && <TableSkeleton />}
-      {!loading && error && <div className="py-12 text-center text-sm text-destructive">Error al cargar. <button onClick={load} className="underline">Reintentar</button></div>}
-      {!loading && !error && vista === "tablero" && (
-        <KanbanView objetivos={objetivos} onMover={handleMover} moviendo={moviendo} canWrite={canWrite}
-          onEdit={(o) => { setEditing(o); setModalOpen(true) }} onDelete={handleDelete} deletingId={deletingId} />
-      )}
-      {!loading && !error && vista === "lista" && (
-        <ListView objetivos={objetivos} showEmpresa={mostrarEmpresa} canWrite={canWrite}
-          onEdit={(o) => { setEditing(o); setModalOpen(true) }} onDelete={handleDelete} deletingId={deletingId} />
-      )}
+      <ObjetivosVistas
+        vista={vista} onVista={setVista} loading={loading} error={error} onReintentar={load}
+        objetivos={objetivos} mostrarEmpresa={mostrarEmpresa} canWrite={canWrite}
+        onMover={handleMover} moviendo={moviendo} deletingId={deletingId}
+        onEdit={(o) => { setEditing(o); setModalOpen(true) }} onDelete={handleDelete}
+      />
 
       <ImportarObjetivosModal
         open={importOpen} empresaId={empresaDestino}

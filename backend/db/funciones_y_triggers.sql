@@ -12,13 +12,15 @@
 -- regla que gobierna a db/schema.sql: produccion driftea y el catalogo no miente.
 --
 -- 🚨 REEMPLAZA A `backend/migrations/094_recrear_triggers_empresa.sql` EN EL REBUILD.
--- La 094 declara NUEVE triggers; el noveno es `trg_emp_sucesion` sobre
+-- La 094 declaraba NUEVE triggers; el noveno era `trg_emp_sucesion` sobre
 -- `sucesion_posiciones`, una de las once tablas que dropeo la migracion 112. Un replay
--- que use la 094 ABORTA, y no por el trigger: `DROP TRIGGER IF EXISTS x ON tabla` falla
+-- que la usara ABORTABA, y no por el trigger: `DROP TRIGGER IF EXISTS x ON tabla` falla
 -- igual cuando la que no existe es la TABLA. Es la misma mina que el bloque J5a ya
--- desactivo en la 077 de updated_at, y que a la 094 no se le hizo.
--- La 094 NO se toca: queda como historial de cuando esos objetos se rescataron. El
--- camino de reconstruccion no la mira nunca.
+-- desactivo en la 077 de updated_at, y que a la 094 no se le habia hecho.
+-- 🔄 EL 2026-08-13 SE LE SACO ESE BLOQUE, asi que ya no destruye nada si alguien la corre
+-- a mano. Pero sigue SIN ser el camino de reconstruccion: queda como historial de cuando
+-- esos objetos se rescataron, y el rebuild mira este archivo. (Antes esta nota decia "la
+-- 094 NO se toca"; se toco, y por eso se corrige aca en la misma sesion.)
 --
 -- ── QUE INVARIANTE SOSTIENE ──────────────────────────────────────────────────
 -- "Un registro de la empresa A no referencia una fila de la empresa B."
@@ -55,6 +57,20 @@
 --
 -- ⚠️ `planes_carrera` tiene ADEMAS una FK compuesta, pero sobre `empleado_id`, que es
 -- OTRA columna. La que el trigger vigila —`responsable_id`— sigue descubierta.
+--
+-- 🔄 EL LOTE 113 (2026-08-13) AGREGA TRES TABLAS Y NINGUNA SUMA UN TRIGGER ACA. No es un
+-- olvido; es que ninguna tiene un par (columna -> tabla padre) que vigilar:
+--   · `perfiles_puesto`      -> no tiene `empresa_id`. Es un catalogo GLOBAL al grupo, como
+--     `clientes` despues de la 109. Sin empresa propia no hay cruce posible.
+--   · `eventos_agenda`       -> tiene `empresa_id`, pero sus unicas FKs salientes van a
+--     `users`, que NO tiene `empresa_id`. No hay nada que comparar.
+--   · `recategorizaciones`   -> 🔑 ESTA SI TENIA UN PAR QUE VIGILAR (`empleado_id` ->
+--     `empleados`) y se resolvio con la **FK COMPUESTA** `(empleado_id, empresa_id)
+--     REFERENCES empleados(id, empresa_id)`, que es justo lo que el parrafo de arriba pide:
+--     donde esta la FK compuesta, el trigger es redundante. Es la primera tabla nueva que
+--     nace con la constraint en vez de con el trigger.
+-- Y `vacantes.perfil_puesto_id` (misma migracion) tampoco cambia el trigger de `vacantes`:
+-- apunta a una tabla sin empresa.
 --
 -- ⚠️ Los tres triggers de assessment se conservan aunque el modulo este apagado por
 -- `ASSESSMENT_ENABLED`: las tablas existen y el flag se enciende con una variable de

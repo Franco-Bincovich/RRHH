@@ -1,7 +1,15 @@
 -- 094_recrear_triggers_empresa.sql
 --
--- Recrea la función fn_misma_empresa() + los 9 triggers trg_emp_* que hacen cumplir la
+-- Recrea la función fn_misma_empresa() + los 8 triggers trg_emp_* que hacen cumplir la
 -- coherencia de empresa entre un registro y las filas a las que apunta.
+--
+-- ⚠️ ERAN 9 HASTA EL 2026-08-13. Se sacó `trg_emp_sucesion` porque la migración 112 dropeó
+-- `sucesion_posiciones` y el bloque hacía abortar el archivo entero (el porqué, donde estaba).
+--
+-- 🔴 ESTE ARCHIVO YA NO ES EL CAMINO DE RECONSTRUCCIÓN. Lo reemplazó
+-- `backend/db/funciones_y_triggers.sql`, que se lee del catálogo vivo y es el paso 3 de 5 del
+-- rebuild. Este queda como HISTORIAL de cuándo se rescataron estos objetos; se corrigió —en vez
+-- de dejarlo roto— para que correrlo a mano no destruya nada, no para volver a usarlo.
 --
 -- 🔴 POR QUÉ EXISTE ESTE ARCHIVO: hasta hoy estos 9 triggers y su función EXISTÍAN SOLO EN
 -- PRODUCCIÓN. No estaban en db/schema.sql (el snapshot se lee del catálogo y captura tablas,
@@ -51,7 +59,7 @@ BEGIN
   RETURN NEW;
 END; $$;
 
--- ── Los 9 triggers ───────────────────────────────────────────────────────────
+-- ── Los 8 triggers ───────────────────────────────────────────────────────────
 -- El orden de los argumentos importa: son pares (columna, tabla_padre) consecutivos.
 
 DROP TRIGGER IF EXISTS trg_emp_areas ON public.areas;
@@ -79,10 +87,13 @@ CREATE TRIGGER trg_emp_planes_carrera
     BEFORE INSERT OR UPDATE ON public.planes_carrera
     FOR EACH ROW EXECUTE FUNCTION public.fn_misma_empresa('responsable_id', 'empleados');
 
-DROP TRIGGER IF EXISTS trg_emp_sucesion ON public.sucesion_posiciones;
-CREATE TRIGGER trg_emp_sucesion
-    BEFORE INSERT OR UPDATE ON public.sucesion_posiciones
-    FOR EACH ROW EXECUTE FUNCTION public.fn_misma_empresa('area_id', 'areas', 'titular_id', 'empleados', 'sucesor_primario_id', 'empleados', 'sucesor_secundario_id', 'empleados');
+-- 📌 ACÁ VIVÍA `trg_emp_sucesion`, SOBRE `sucesion_posiciones`. Se BORRÓ el 2026-08-13 porque esa
+-- tabla ya no existe: la dropeó la migración 112. Con el bloque puesto, este archivo ABORTABA
+-- entero contra una base reconstruida — y no por el trigger: `DROP TRIGGER IF EXISTS x ON tabla`
+-- falla igual cuando la que no existe es la TABLA. El `IF EXISTS` cubre el trigger, no la
+-- relación. Es la misma mina que el bloque J5a ya había desactivado en la 077 de `updated_at` y
+-- que a este archivo no se le hizo.
+-- El trigger borrado sigue en el historial de git; recrearlo no tendría sobre qué correr.
 
 DROP TRIGGER IF EXISTS trg_emp_ass_campanas ON public.assessment_campanas;
 CREATE TRIGGER trg_emp_ass_campanas
@@ -99,7 +110,7 @@ CREATE TRIGGER trg_emp_ass_resultados
     BEFORE INSERT OR UPDATE ON public.assessment_resultados
     FOR EACH ROW EXECUTE FUNCTION public.fn_misma_empresa('empleado_id', 'empleados', 'candidato_id', 'candidatos');
 
--- Verificación (opcional): debe devolver 9.
+-- Verificación (opcional): debe devolver 8.
 -- SELECT count(*) FROM pg_trigger t
 --   JOIN pg_proc p ON p.oid = t.tgfoid
 --   WHERE p.proname = 'fn_misma_empresa' AND NOT t.tgisinternal;
