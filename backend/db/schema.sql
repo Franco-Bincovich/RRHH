@@ -32,29 +32,37 @@
 --
 -- 🔄 ESTE ARCHIVO **VA POR DELANTE DE PRODUCCION** (desde el 2026-08-13).
 --
--- 🔄 ESTADO AL 2026-08-13 (segunda actualizacion del dia): las migraciones **113, 114 y 115 YA
--- SE CORRIERON** — verificado contra el catalogo vivo objeto por objeto: 55 tablas, las 7
--- columnas del lote y los 6 indices de escala. Este archivo ya no va por delante por ESAS.
+-- 🔄 ESTADO AL 2026-08-14: las migraciones **113, 114, 115 y 116 YA SE CORRIERON**.
+--
+-- 🔴 LA 116 ESTUVO DECLARADA ACA COMO PENDIENTE DESPUES DE HABERSE CORRIDO. Este parrafo decia
+-- "PENDIENTE DE CORRER, una sola: 116" y listaba sus 11 columnas como lo que produccion
+-- "TODAVIA NO tiene". Ya las tenia. **Es el CUARTO desfasaje de este encabezado y sale de la
+-- misma causa que los tres anteriores: verificar por CONTEO en vez de por OBJETO.** El conteo
+-- de tablas no se movio con la 116 (no crea ni borra ninguna: son columnas, un DROP NOT NULL y
+-- un indice), asi que mirar "55 = 55" no podia detectarla.
+-- **La regla, otra vez: hay que mirar el objeto que la migracion toca.** Verificado asi el
+-- 14/8 contra el catalogo vivo: las 11 columnas existen, `empleado_capacitacion.empleado_id`
+-- quedo nullable, y `ux_ec_nombre_libre` existe.
 --
 -- PENDIENTE DE CORRER, una sola:
---   · backend/migrations/116_columnas_finales.sql  -> ANTES del deploy. Aditiva salvo un
---     DROP NOT NULL (que AFLOJA, asi que no puede fallar). Sin ventana.
---     🔴 ES LA ULTIMA MIGRACION ANTES DE CONSTRUIR: despues de esta, un campo nuevo es
---     coordinar DDL con el dev de infra en medio de su migracion.
+--   · backend/migrations/117_recategorizacion_categoria.sql  -> ANTES del deploy del modulo de
+--     recategorizaciones. UNA linea de DDL: DROP + ADD de
+--     `recategorizaciones_algo_cambia_check` para que `categoria_nueva` tambien cuente.
+--     AFLOJA el constraint (de dos formas aceptadas a tres), asi que no puede fallar por datos
+--     — y ademas la tabla tiene 0 filas. Sin ventana. Idempotente.
+--     🔑 Corrige un olvido de la 116, que agrego `categoria_anterior`/`categoria_nueva` y dejo
+--     el CHECK con dos campos: una recategorizacion de solo categoria rebotaba con 23514, y es
+--     el caso mas frecuente (la categoria es el NIVEL dentro del seniority).
 --
--- Lo que este archivo declara y produccion TODAVIA NO tiene (todo de la 116):
---   · 11 columnas: perfiles_puesto.ofrecemos · vacantes.ofrecemos ·
---     recategorizaciones.categoria_anterior/_nueva · capacitaciones.entidad_capacitadora/
---     modalidad/tipo · empleado_capacitacion.proyecto/anio/mes/nombre_libre
---   · `empleado_capacitacion.empleado_id` pasa a NULLABLE (formacion de alguien sin matchear
---     en el padron, o que ya no trabaja aca)
---   · 1 indice unico parcial: `ux_ec_nombre_libre`, que reemplaza a la UNIQUE existente en las
---     filas sin empleado (con NULL, `UNIQUE (capacitacion_id, empleado_id)` deja de proteger)
+-- Lo que este archivo declara y produccion TODAVIA NO tiene (todo de la 117):
+--   · `recategorizaciones_algo_cambia_check` con el tercer OR (`categoria_nueva IS NOT NULL`).
+--     Es el UNICO objeto en el que este archivo va por delante de produccion.
 --
--- ── Lo que sigue es el registro de las TRES QUE YA SE CORRIERON, no un pendiente ───────────
+-- ── Lo que sigue es el registro de las CUATRO QUE YA SE CORRIERON, no un pendiente ─────────
 --   · backend/migrations/113_lote_features_aditivo.sql      -> ✅ corrida
 --   · backend/migrations/114_lote_features_post_deploy.sql  -> ✅ corrida
 --   · backend/migrations/115_indices_escala.sql             -> ✅ corrida
+--   · backend/migrations/116_columnas_finales.sql           -> ✅ corrida (verificada por objeto)
 --
 -- Lo que aportaron (ya esta en produccion):
 --   · 3 tablas nuevas: perfiles_puesto, recategorizaciones, eventos_agenda (52 -> 55)
@@ -1304,7 +1312,13 @@ ALTER TABLE public.perfiles_puesto ADD CONSTRAINT perfiles_puesto_nivel_check CH
 ALTER TABLE public.perfiles_puesto ADD CONSTRAINT perfiles_puesto_tipo_contrato_check CHECK (((tipo_contrato)::text = ANY ((ARRAY['efectivo'::character varying, 'plazo_fijo'::character varying, 'contratado'::character varying, 'pasantia'::character varying])::text[])));
 -- Migracion 113. Ni rol_nuevo ni seniority_nueva pueden ser NOT NULL por separado (una
 -- recategorizacion puede cambiar solo una), pero las DOS en NULL es una fila que no dice nada.
-ALTER TABLE public.recategorizaciones ADD CONSTRAINT recategorizaciones_algo_cambia_check CHECK (((rol_nuevo IS NOT NULL) OR (seniority_nueva IS NOT NULL)));
+-- Migracion 117. `categoria_nueva` entra al predicado: la categoria es el NIVEL dentro del
+-- seniority, asi que "de 3 a 4" es una recategorizacion legitima -- y la mas frecuente de las
+-- tres. La 116 agrego las dos columnas de categoria y no toco este CHECK, con lo cual ese caso
+-- rebotaba con 23514. Los `*_anterior` NO entran: lo que define que la fila diga algo es el
+-- valor NUEVO. Escrito con `IS NOT NULL` y no con comparaciones porque un CHECK que evalua a
+-- NULL PASA, y ahi la fila vacia entraria sin que nada lo delate.
+ALTER TABLE public.recategorizaciones ADD CONSTRAINT recategorizaciones_algo_cambia_check CHECK (((rol_nuevo IS NOT NULL) OR (seniority_nueva IS NOT NULL) OR (categoria_nueva IS NOT NULL)));
 ALTER TABLE public.eventos_agenda ADD CONSTRAINT eventos_agenda_dias_aviso_check CHECK (((dias_aviso >= 0) AND (dias_aviso <= 365)));
 -- Migracion 113. Si esta resuelta, tiene que decir CUANDO. NO toca `resuelta_por`: su FK es
 -- ON DELETE SET NULL, y un CHECK sobre esa columna haria FALLAR el borrado de ese usuario.

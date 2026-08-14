@@ -90,6 +90,29 @@ class Seccion(str, Enum):
     # El costo es una línea acá y una en `frontend/services/permisos.ts`, y ese espejo NO es a
     # ciegas: `tests/test_espejo_permisos.py` compara los dos enteros y falla si falta una.
     CLIENTES = "clientes"
+    # Catálogo de perfiles de puesto (migraciones 113/116). SECCIÓN PROPIA, por el mismo
+    # criterio que CLIENTES: es un módulo nuevo con routers propios montados en
+    # registro_routers.py, y la invariante declarada de este enum es "una por módulo con router
+    # real registrado".
+    #
+    # NO se reusó VACANTES —que es la vecina obvia, y con la que va a haber un puente— porque
+    # son dos permisos que se van a querer separar: un perfil de puesto es material de consulta
+    # estable del equipo, y una vacante es un proceso de selección en curso. Atarlos hoy
+    # obligaría a partirlos después con datos cargados, que es exactamente el costo que la nota
+    # de CLIENTES describe.
+    PERFILES_PUESTO = "perfiles_puesto"
+    # Recategorizaciones (migraciones 113/116/117). SECCIÓN PROPIA, mismo criterio que las dos
+    # de arriba: módulo nuevo con routers propios registrados.
+    #
+    # NO se reusó EMPLEADOS —que es la vecina obvia, y de cuya ficha cuelga una de las dos
+    # vistas— porque ataría el permiso de RECATEGORIZAR al de editar el legajo, y son dos cosas
+    # distintas: cualquiera que administra empleados corrige un teléfono, no cualquiera decide
+    # que alguien cambió de categoría.
+    #
+    # ⚠️ Y NO reemplaza al gate de COSTOS: `impacto_salarial` se omite de la respuesta según
+    # `Seccion.COSTOS + READ`, aparte de esto. Son dos ejes: esta sección dice quién ve el
+    # módulo, COSTOS dice quién ve el monto adentro.
+    RECATEGORIZACIONES = "recategorizaciones"
 
 
 # mandos_medios solo opera (R+W) sobre estas secciones; en el resto no puede nada.

@@ -99,6 +99,11 @@ SIN_RESOLVER_DECLARADOS = {
     "repositories/_asignacion_row.py": (1, "_q(table, cols, ids): sus 4 callers pasan columnas planas"),
     "repositories/empleado_roles_repo.py": (1, "select(campo): UNA columna de la whitelist CAMPOS_AUTOCOMPLETABLES"),
     "repositories/_evaluacion_lotes_enrich.py": (1, "tabla por parámetro, spec literal 'id, nombre' — sin embed"),
+    # `_mapa(tabla, ids, campos, armar)`: los TRES callers de `build` verificados uno por uno —
+    # "id, nombre, apellido" (empleados), "id, nombre" (empresas) y "id, nombre, apellido"
+    # (users). Columnas planas, ningún embed. Existe justamente PARA no usar embeds: la FK a
+    # `empleados` es COMPUESTA y un embed sobre ella es la clase de spec que termina en PGRST201.
+    "repositories/_recategorizacion_row.py": (1, "_mapa(tabla, ids, campos): 3 callers con columnas planas"),
     "repositories/dashboard_equipo_repo.py": (1, "tabla por parámetro, spec literal 'id' — sin embed"),
     # Counts genéricos con la tabla por parámetro y spec literal sin embed.
     "services/dashboard_service.py": (1, "_count(table, **filtros): select('id', count='exact') — sin embed"),

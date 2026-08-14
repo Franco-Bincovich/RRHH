@@ -116,6 +116,13 @@ _EJERCITADOS: dict[str, str] = {
     # de lista vacía (`.in_("id", [])` no es un filtro válido), que es el borde del mismo bug.
     # Los tests lo llaman CON elementos en los dos sentidos — con ids y con la lista vacía.
     "_asignacion_row._q":                        "test_capacitacion_nombre_libre",
+    # Recategorizaciones. `_mapa` se ejercita TRANSITIVAMENTE desde `build`, igual que los
+    # `_nombres` y el `_mapa` de `_hora_row`. Los dos early-return son guardas de lista vacía
+    # (`.in_("id", [])` no es un filtro válido) y los tests los recorren en los DOS sentidos:
+    # el historial vacío pasa por `build([])`, y una fila con `registrado_por` en NULL pasa por
+    # `_mapa` con la lista de ids vacía teniendo filas.
+    "_recategorizacion_row.build":               "test_recategorizaciones",
+    "_recategorizacion_row._mapa":               "test_recategorizaciones",
 }
 
 # ── mapper → por qué NO se ejercita todavía ───────────────────────────────────

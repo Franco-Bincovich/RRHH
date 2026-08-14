@@ -57,6 +57,18 @@ _MAILS = ("🔴 PENDIENTE, NO INTENCIONAL. `POST /api/plantillas/enviar` YA se c
 _PARA_TESTS = ("existe PARA el test estructural, por diseño, y su docstring lo dice. No tiene "
                "caller de producción y no debe tenerlo.")
 
+_RECAT = ("el backend de recategorizaciones se construyó primero y el front es la sesión "
+          "siguiente. DISPARADOR: sale de esta lista cuando exista "
+          "frontend/app/(dashboard)/recategorizaciones/ con su services/recategorizaciones.ts, "
+          "y la ruta anidada cuando la ficha del empleado tenga su octava sección. Si para "
+          "entonces sigue acá, el módulo quedó publicado e inalcanzable.")
+
+_PERFILES = ("el backend de perfiles de puesto se construyó primero y el front es la sesión "
+             "siguiente. DISPARADOR: sale de esta lista cuando exista "
+             "frontend/app/(dashboard)/perfiles-puesto/ con su services/perfilesPuesto.ts. Si "
+             "para entonces sigue acá, el módulo quedó publicado e inalcanzable — el caso "
+             "POST /api/plantillas/enviar.")
+
 # ── Símbolos sin caller declarados ────────────────────────────────────────────
 # Cada entrada lleva su razón: si alguien agrega una acá sin justificarla, se ve en el diff.
 
@@ -102,6 +114,32 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
         "pedir la fila de vuelta sería una ida a la red por lo que la pantalla ya tiene. Su "
         "wrapper `fetchCliente` se borró el 2026-08-10 tras nacer sin caller; este barrido no "
         "lo vio porque `updateCliente`/`deleteCliente` escriben el MISMO literal de path.",
+
+    # 🔴 PERFILES DE PUESTO — las 6 rutas del módulo, declaradas porque el BACKEND se construyó
+    # primero y el front es la sesión siguiente. NO es "completitud REST": es una feature a
+    # medio cablear, y por eso lleva un DISPARADOR explícito en vez de una razón permanente.
+    # SALEN DE ESTA LISTA cuando exista `frontend/app/(dashboard)/perfiles-puesto/` con su
+    # `services/perfilesPuesto.ts`. Si para entonces siguen acá, el módulo quedó publicado e
+    # inalcanzable — exactamente el caso `POST /api/plantillas/enviar`.
+    # El propio barrido lo va a pedir: `test_las_excepciones_siguen_sin_caller` da rojo cuando
+    # algo declarado empieza a tener caller.
+    # 🔴 RECATEGORIZACIONES — mismo caso y mismo disparador que perfiles: el backend se
+    # construyó primero. Las 6 rutas, incluida la anidada bajo el empleado que alimenta la
+    # octava sección de la ficha.
+    ("GET", "/api/recategorizaciones"): _RECAT,
+    ("POST", "/api/recategorizaciones"): _RECAT,
+    ("GET", "/api/recategorizaciones/exportar"): _RECAT,
+    ("GET", "/api/recategorizaciones/{id}"): _RECAT,
+    ("PUT", "/api/recategorizaciones/{id}"): _RECAT,
+    ("GET", "/api/empleados/{empleado_id}/recategorizaciones"): _RECAT,
+
+    ("GET", "/api/perfiles-puesto"): _PERFILES,
+    ("GET", "/api/perfiles-puesto/campos"): _PERFILES,
+    ("GET", "/api/perfiles-puesto/exportar"): _PERFILES,
+    ("GET", "/api/perfiles-puesto/{id}"): _PERFILES,
+    ("POST", "/api/perfiles-puesto"): _PERFILES,
+    ("PUT", "/api/perfiles-puesto/{id}"): _PERFILES,
+    ("DELETE", "/api/perfiles-puesto/{id}"): _PERFILES,
 
     # Acá vivían las 19 rutas de la familia `ev_*`, declaradas porque los routers seguían
     # montados sin UI que los llamara. Se BORRARON el 2026-08-11 (bloque J5a) junto con sus

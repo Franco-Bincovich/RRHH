@@ -20,6 +20,12 @@ from routers.auth import router as auth_router
 from routers.cesiones import router as cesiones_router
 from routers.clientes import router as clientes_router
 from routers.clientes_escrituras import router as clientes_escrituras_router
+from routers.recategorizaciones import router as recategorizaciones_router
+from routers.recategorizaciones_empleado import router as recategorizaciones_empleado_router
+from routers.recategorizaciones_escrituras import router as recategorizaciones_escrituras_router
+from routers.perfiles_puesto import router as perfiles_puesto_router
+from routers.perfiles_puesto_catalogos import router as perfiles_puesto_catalogos_router
+from routers.perfiles_puesto_escrituras import router as perfiles_puesto_escrituras_router
 from routers.costos import router as costos_router
 from routers.costos_escrituras import router as costos_escrituras_router
 from routers.empleados import router as empleados_router
@@ -91,6 +97,15 @@ def registrar(app: FastAPI) -> None:
     app.include_router(cesiones_router, prefix="/api", tags=["cesiones"])
     app.include_router(clientes_router, prefix="/api/clientes", tags=["clientes"])
     app.include_router(clientes_escrituras_router, prefix="/api/clientes", tags=["clientes"])  # mismo prefijo: las rutas no cambian
+    # 🔴 catalogos ANTES del CRUD: `/campos` es una ruta estática y el CRUD tiene `/{id}`. Al
+    # revés, FastAPI resuelve por orden de declaración y `/campos` entraría como el path param.
+    app.include_router(perfiles_puesto_catalogos_router, prefix="/api/perfiles-puesto", tags=["perfiles-puesto"])
+    app.include_router(perfiles_puesto_router, prefix="/api/perfiles-puesto", tags=["perfiles-puesto"])
+    app.include_router(perfiles_puesto_escrituras_router, prefix="/api/perfiles-puesto", tags=["perfiles-puesto"])  # mismo prefijo: las rutas no cambian
+    app.include_router(recategorizaciones_router, prefix="/api/recategorizaciones", tags=["recategorizaciones"])
+    app.include_router(recategorizaciones_escrituras_router, prefix="/api/recategorizaciones", tags=["recategorizaciones"])  # mismo prefijo: las rutas no cambian
+    # Ruta anidada bajo el empleado (el historial de la ficha), como cesiones: va en /api.
+    app.include_router(recategorizaciones_empleado_router, prefix="/api", tags=["recategorizaciones"])
     app.include_router(ausencias_tipos_router, prefix="/api/ausencias", tags=["ausencias"])  # ANTES de ausencias (rutas estáticas /tipos vs /{id})
     app.include_router(ausencias_router, prefix="/api/ausencias", tags=["ausencias"])
     app.include_router(vacaciones_empleado_router, prefix="/api/vacaciones", tags=["vacaciones"])  # ANTES de vacaciones (rutas estáticas /saldo y /empleado vs /{id})

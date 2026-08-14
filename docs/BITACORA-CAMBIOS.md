@@ -40,6 +40,121 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-14 · Recategorizaciones — backend completo · commit pendiente
+
+**Qué cambió:** segunda feature del plan. CRUD del registro de cambios de rol, seniority y
+categoría, sobre la tabla `recategorizaciones` (migraciones 113/116/117, **las tres corridas —
+esta sesión NO crea ninguna**). Dos vistas de la misma tabla: la planilla paginada y el historial
+que va dentro de la ficha del colaborador. 14 archivos nuevos, 5 modificados, 60 tests.
+
+**Impacto en infraestructura:**
+
+- **Migraciones: ninguna.** La 117 quedó pendiente de la sesión anterior y ya se corrió;
+  verificado contra el catálogo al empezar (el CHECK tiene los tres OR y la tabla sigue en 0 filas).
+- **Variables de entorno: ninguna. Dependencias: ninguna. Buckets: ninguno.**
+- **6 endpoints nuevos, todos con auth y gate — ninguno público.** `GET/POST
+  /api/recategorizaciones` · `GET/PUT /api/recategorizaciones/{id}` ·
+  `GET /api/recategorizaciones/exportar` · **`GET /api/empleados/{id}/recategorizaciones`**
+  (ruta anidada, para la ficha). Rutas montadas: 232 → 238. **No hay DELETE**, por decisión de
+  producto: se puede editar, no borrar.
+- **Sección de permisos nueva: `recategorizaciones`** (enum 29 → 30) + su espejo en
+  `frontend/services/permisos.ts`.
+- **El export entra en la franja `shared_limit("100/hour", scope="export")`**, compartiendo
+  contador con los otros 20.
+- 🔴 **ESTE MÓDULO ESCRIBE EN `empleados`, y es lo único que no es un CRUD aislado.** Registrar
+  una recategorización pisa `roles[0]`, `seniority` y/o `categoria` del colaborador vía
+  `EmpleadoService.update_empleado` — **pero SOLO si la fila es la más reciente de esa persona**
+  (la fecha efectiva es editable hacia atrás). Consecuencia para monitoreo: **una sola operación
+  de negocio emite DOS eventos de auditoría**, uno con `entidad="recategorizacion"` y otro con
+  `entidad="empleado"`. Es a propósito; si el volumen de `auditoria` se mide por evento, contar
+  el doble en este módulo es lo esperado.
+- 🔴 **HALLAZGO DE PERMISOS, para tenerlo presente en el cutover:** `impacto_salarial` se omite
+  de las cuatro superficies de lectura sin `COSTOS + READ`, **pero hoy no existe ningún rol que
+  pueda leer este módulo y no costos** — `gerencia_lectura` tiene READ en todas las secciones y
+  `mandos_medios` no entra al módulo. O sea: el gate es correcto y **hoy es inalcanzable por
+  rol**. Está declarado en el test con esa misma explicación. El día que se agregue un rol
+  intermedio, empieza a regir sin tocar código.
+- **Nada corre fuera de un request.** Sin jobs ni tareas de fondo; el export acotado por
+  `LIMITE_FILAS_EXPORT` como todos.
+- **Auth, claims, URLs, CORS y OAuth: sin cambios.**
+- ⚠️ **Para AWS:** los ids se tipan `UUID` en Pydantic, como perfiles. Van dos módulos alineados
+  con lo que asyncpg devuelve nativamente; el resto sigue en `str`.
+
+---
+## 2026-08-14 · Migración 117 — el CHECK de recategorizaciones acepta la categoría · commit pendiente
+
+**Qué cambió:** una línea de DDL. `recategorizaciones_algo_cambia_check` pasa de
+`rol_nuevo IS NOT NULL OR seniority_nueva IS NOT NULL` a incluir también
+`categoria_nueva IS NOT NULL`. La 116 había agregado `categoria_anterior`/`categoria_nueva` y no
+tocó el CHECK, así que **una recategorización que solo cambiaba la categoría rebotaba con
+23514** — y Capital Humano definió que la categoría es el nivel dentro del seniority, o sea que
+"de 3 a 4" es el caso más frecuente de los tres. No se escribió código de aplicación: la tabla
+sigue sin tener una sola línea que la nombre.
+
+**Impacto en infraestructura:**
+
+- 🔴 **MIGRACIÓN NUEVA: `117_recategorizacion_categoria.sql`. HAY QUE CORRERLA** — antes del
+  deploy del módulo de recategorizaciones, sin ventana. **No destructiva**: `DROP + ADD` de un
+  constraint que **AFLOJA** (de dos formas aceptadas a tres), así que no puede fallar por datos
+  ni invalidar una fila existente. Y la tabla tiene **0 filas**, o sea que no hay nada que
+  revalidar. Idempotente (`DROP ... IF EXISTS`), se puede correr de nuevo.
+  Va **dentro de una transacción**: entre el DROP y el ADD la tabla queda sin defensa contra la
+  fila vacía, y aunque hoy sea inofensivo, el archivo se puede replayear con datos y tráfico.
+- **Es la última migración antes del handoff.** Después de esta, un cambio de DDL es coordinar
+  con el dev de infra en medio de su migración.
+- **Ninguna variable de entorno, dependencia, bucket, endpoint ni cambio de auth.** Nada corre
+  fuera de un request.
+- 🔴 **`db/schema.sql` tenía la 116 declarada como PENDIENTE habiéndose corrido ya**, y se
+  corrigió en esta misma sesión. **Es el cuarto desfasaje de ese encabezado, y la causa es
+  siempre la misma: se verifica por CONTEO de tablas en vez de por OBJETO.** La 116 no crea ni
+  borra tablas (son columnas, un `DROP NOT NULL` y un índice), así que "55 = 55" no podía
+  detectarla. Se reverificó objeto por objeto contra el catálogo: las 11 columnas existen,
+  `empleado_capacitacion.empleado_id` quedó nullable y `ux_ec_nombre_libre` existe.
+  **Para el dev de infra: la 113, 114, 115 y 116 están todas corridas; la única pendiente es la
+  117.**
+- **El único objeto en el que `schema.sql` va por delante de producción es este CHECK.**
+
+---
+## 2026-08-14 · Perfiles de puesto — backend completo · commit pendiente
+
+**Qué cambió:** primera feature nueva del plan del 6/9. CRUD completo del catálogo de perfiles
+de puesto sobre la tabla `perfiles_puesto` (migraciones 113/116, **las dos ya corridas — esta
+sesión NO crea ninguna migración**): schemas, repo, service, routers, permisos, auditoría y
+export. Un perfil es una plantilla para armar búsquedas; el puente con `vacantes` (copiar los
+campos al crear una vacante) y el front son las dos sesiones siguientes. 11 archivos nuevos,
+5 modificados, 63 tests nuevos.
+
+**Impacto en infraestructura:**
+
+- **Migraciones: ninguna.** La 113 y la 116 ya estaban corridas; se verificó objeto por objeto
+  contra el catálogo vivo al empezar (17 columnas, 3 CHECK, `ux_perfiles_puesto_nombre_global`,
+  `idx_perfiles_puesto_activos`, `trg_perfiles_puesto_updated_at`, FK `created_by → users` y
+  `vacantes.perfil_puesto_id`). **No falta nada.**
+- **Variables de entorno: ninguna.** **Dependencias: ninguna.** **Buckets: ninguno.**
+- **7 endpoints nuevos, TODOS con auth y gate de permiso — ninguno público:**
+  `GET/POST /api/perfiles-puesto` · `GET/PUT/DELETE /api/perfiles-puesto/{id}` ·
+  `GET /api/perfiles-puesto/campos` · `GET /api/perfiles-puesto/exportar`.
+  Rutas montadas: 225 → 232.
+- **Sección de permisos nueva: `perfiles_puesto`**, agregada en `utils/permisos.py` **y** en su
+  espejo `frontend/services/permisos.ts` (sin eso, `test_espejo_permisos` da rojo — se verificó
+  quitándola). El enum pasa de 28 a 29 secciones.
+- **El export nuevo entra en la franja `shared_limit("100/hour", scope="export")`**, o sea que
+  comparte contador con los otros 19. Sin Redis (`RATE_LIMIT_STORAGE_URI`) ese contador sigue
+  siendo por proceso — ya declarado, no cambia con esta tanda.
+- 🔴 **RLS: la tabla viene con `relrowsecurity = true` y CERO políticas**, exactamente igual que
+  `clientes`. No se agregó ninguna (regla del proyecto: la seguridad es app-level). El backend
+  entra con `supabase_admin` (service key), que las saltea. **En RDS esto desaparece y no hay
+  nada que portar** — pero si alguien conectara un cliente con la anon key, la tabla estaría
+  cerrada, no abierta.
+- **Nada corre fuera de un request:** sin jobs, sin tareas de fondo, sin operación larga. El
+  export está acotado por `LIMITE_FILAS_EXPORT` (20.000) como todos los demás.
+- **Auth y claims: sin cambios.** **URLs/CORS/OAuth: sin cambios.**
+- ⚠️ **Para el dev de AWS, el único punto que importa a futuro:** los ids de este módulo se
+  tipan `UUID` en Pydantic (no `str`), que es lo que asyncpg va a devolver nativamente. Es el
+  primer módulo del repo que nace ya alineado con eso; los otros siguen en `str` y son los que
+  hay que revisar en el cutover.
+
+---
 ## 2026-08-13 · El selector de empleados pasa a buscar contra el backend · commit pendiente
 
 **Qué cambió:** los seis selectores de empleado del front pedían **una página de 100** y pintaban

@@ -17,6 +17,7 @@ export type Seccion =
   | "importacion" | "integraciones" | "capacitaciones" | "evaluaciones"
   | "inventario" | "objetivos" | "usuarios" | "procesos" | "proyectos"
   | "auditoria" | "periodos" | "configuracion" | "clientes"
+  | "perfiles_puesto" | "recategorizaciones"
 
 const MANDOS_MEDIOS_SECCIONES: ReadonlySet<Seccion> = new Set<Seccion>([
   "vacaciones",
