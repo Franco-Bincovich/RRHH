@@ -14,12 +14,18 @@ Modelo de roles:
 El enforcement es por dependency (Depends(require_permission(...))), nunca por
 middleware. El cableado a cada router se hace en sub-tareas posteriores (16.3/16.4);
 acá solo vive el núcleo.
+
+⚠️ El enum `Seccion` VIVE EN `utils/_secciones.py` desde que este archivo llegó a 217/200 con la
+sección de la agenda de eventos, y se RE-EXPORTA acá: `from utils.permisos import Seccion` sigue
+siendo el import correcto y ninguno de los ~204 gates del repo cambió. El corte es por
+responsabilidad — el modelo casi no cambia, el catálogo crece con cada módulo.
 """
 from enum import Enum
 from typing import Awaitable, Callable, Optional, Union
 
 from starlette.requests import Request
 
+from utils._secciones import Seccion
 from utils.errors import AppError
 
 
@@ -30,91 +36,6 @@ class Accion(str, Enum):
     WRITE = "write"
 
 
-class Seccion(str, Enum):
-    """
-    Conjunto cerrado de secciones del sistema. Una por módulo con router real
-    registrado en main.py (auth queda fuera: no es una sección de negocio gateada).
-    """
-
-    EMPLEADOS = "empleados"
-    AREAS = "areas"
-    AUSENCIAS = "ausencias"
-    VACACIONES = "vacaciones"
-    VACANTES = "vacantes"
-    CANDIDATOS = "candidatos"
-    ONBOARDING = "onboarding"
-    OFFBOARDING = "offboarding"
-    COSTOS = "costos"
-    SUCESION = "sucesion"
-    ASSESSMENT = "assessment"
-    ORGANIGRAMA = "organigrama"
-    DASHBOARD = "dashboard"
-    EMPRESA = "empresa"
-    REPORTES = "reportes"
-    IMPORTACION = "importacion"
-    INTEGRACIONES = "integraciones"
-    CAPACITACIONES = "capacitaciones"
-    EVALUACIONES = "evaluaciones"
-    INVENTARIO = "inventario"
-    OBJETIVOS = "objetivos"
-    USUARIOS = "usuarios"
-    PROCESOS = "procesos"
-    PROYECTOS = "proyectos"
-    AUDITORIA = "auditoria"
-    PERIODOS = "periodos"
-    # Reglas de negocio configurables (escala de vacaciones, base de días hábiles, tipos de
-    # ausencia). Sección PROPIA a propósito: NO se reusa VACACIONES ni AUSENCIAS porque
-    # mandos_medios tiene WRITE en las dos, y cargar una vacación no es lo mismo que cambiar
-    # la regla con la que se calculan todas.
-    CONFIGURACION = "configuracion"
-    # Catálogo de clientes (migración 102). SECCIÓN PROPIA, y la decisión merece explicación
-    # porque el repo tiene un precedente que dice lo contrario:
-    #
-    # `/comunicacion` NO creó sección y reusa `configuracion`, con el argumento —correcto— de
-    # que `puede()` es genérica: para cualquier sección fuera de MANDOS_MEDIOS_SECCIONES el
-    # resultado es idéntico (admin escribe, gerencia lee, mandos nada), así que una sección
-    # nueva "daría el mismo resultado a cambio de tocar el espejo manual con permisos.py".
-    #
-    # Lo que distingue este caso: comunicación era una RUTA DE FRONT sobre endpoints que YA
-    # existían y ya estaban gateados con `configuracion`. Clientes es un módulo nuevo con
-    # routers propios montados en main.py, y la invariante declarada de este enum es
-    # justamente "una por módulo con router real registrado en main.py". Reusar acá dejaría el
-    # gate del módulo apuntando a una sección que nombra otra cosa, y el día que alguien quiera
-    # que gerencia vea clientes pero no la configuración de reglas, habría que partirlo con
-    # datos ya cargados.
-    #
-    # NO se reusó PROYECTOS —que es la vecina obvia— porque el diseño de la carga de horas dejó
-    # a `proyectos` explícitamente FUERA de ese flujo: el proyecto ahí es texto libre. Atarlos
-    # por el permiso sugeriría un parentesco que el modelo no tiene.
-    #
-    # El costo es una línea acá y una en `frontend/services/permisos.ts`, y ese espejo NO es a
-    # ciegas: `tests/test_espejo_permisos.py` compara los dos enteros y falla si falta una.
-    CLIENTES = "clientes"
-    # Catálogo de perfiles de puesto (migraciones 113/116). SECCIÓN PROPIA, por el mismo
-    # criterio que CLIENTES: es un módulo nuevo con routers propios montados en
-    # registro_routers.py, y la invariante declarada de este enum es "una por módulo con router
-    # real registrado".
-    #
-    # NO se reusó VACANTES —que es la vecina obvia, y con la que va a haber un puente— porque
-    # son dos permisos que se van a querer separar: un perfil de puesto es material de consulta
-    # estable del equipo, y una vacante es un proceso de selección en curso. Atarlos hoy
-    # obligaría a partirlos después con datos cargados, que es exactamente el costo que la nota
-    # de CLIENTES describe.
-    PERFILES_PUESTO = "perfiles_puesto"
-    # Recategorizaciones (migraciones 113/116/117). SECCIÓN PROPIA, mismo criterio que las dos
-    # de arriba: módulo nuevo con routers propios registrados.
-    #
-    # NO se reusó EMPLEADOS —que es la vecina obvia, y de cuya ficha cuelga una de las dos
-    # vistas— porque ataría el permiso de RECATEGORIZAR al de editar el legajo, y son dos cosas
-    # distintas: cualquiera que administra empleados corrige un teléfono, no cualquiera decide
-    # que alguien cambió de categoría.
-    #
-    # ⚠️ Y NO reemplaza al gate de COSTOS: `impacto_salarial` se omite de la respuesta según
-    # `Seccion.COSTOS + READ`, aparte de esto. Son dos ejes: esta sección dice quién ve el
-    # módulo, COSTOS dice quién ve el monto adentro.
-    RECATEGORIZACIONES = "recategorizaciones"
-
-
 # mandos_medios solo opera (R+W) sobre estas secciones; en el resto no puede nada.
 MANDOS_MEDIOS_SECCIONES = frozenset({Seccion.VACACIONES, Seccion.AUSENCIAS})
 
@@ -122,6 +43,20 @@ MANDOS_MEDIOS_SECCIONES = frozenset({Seccion.VACACIONES, Seccion.AUSENCIAS})
 # public.users.rol (migración 057) y con las ramas de puede(). Reusar para validar
 # cualquier rol entrante — NO hardcodear listas nuevas en otros módulos.
 ROLES_VALIDOS = frozenset({"admin_rrhh", "gerencia_lectura", "mandos_medios"})
+
+# Rol que ve las filas PRIVADAS de los demás, en los módulos que tienen visibilidad
+# pública/privada por fila (plantillas de onboarding, agenda de eventos).
+#
+# 🔑 VIVE ACÁ Y NO EN CADA MÓDULO porque es una afirmación sobre el MODELO DE ROLES, no una
+# primitiva de ninguno de los dos: "privada" ahí significa privacidad ENTRE PARES DE RRHH (un
+# borrador que no quiero en la lista de mis compañeros), nunca confidencialidad frente a la
+# dirección — que es lo que `gerencia_lectura` ya significa en todo el sistema. Con una copia por
+# módulo, el día que se decida ocultarle algo a gerencia se cambiaría una y la otra seguiría
+# abierta, en silencio. Al revés (abrir después lo que se cerró) tampoco se puede.
+#
+# NO es una excepción row-level al modelo: es el modelo aplicado. `puede()` no lo consulta —
+# decide sobre secciones, no sobre filas—; lo consultan los filtros de visibilidad de los repos.
+ROL_VE_PRIVADAS_AJENAS = "gerencia_lectura"
 
 
 def puede(

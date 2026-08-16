@@ -40,6 +40,43 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-15 · Agenda de eventos — CRUD (sesión 1 de 2) · commit pendiente
+
+**Qué cambió:** se cableó `eventos_agenda`, la tabla que la migración 113 creó en mayo y que
+hasta hoy no nombraba ni una línea de código. Entra el módulo completo: sección propia
+`Seccion.EVENTOS` con su espejo en `permisos.ts` y su ítem en el sidebar, CRUD paginado con
+visibilidad pública/privada por fila, baja física con snapshot de auditoría, y un endpoint
+`PUT /{id}/resuelta` que marca y desmarca con el mismo camino. Los dos parámetros que la
+migración 114 agregó a `parametros_empresa` (`dias_aviso_evento` y `periodo_prueba_dias`)
+quedaron expuestos en Configuración, en un bloque nuevo del acordeón. **El enganche al dashboard
+es la sesión 2**: `GET /api/eventos/pendientes` ya existe y está probado, pero todavía no lo
+llama nadie desde el front (declarado con su disparador en `test_callers_huerfanos.py`).
+
+**Impacto en infraestructura:**
+
+- **Ninguna migración nueva.** El módulo corre sobre la **113** (`eventos_agenda`, ya corrida) y
+  la **114** (las dos columnas de `parametros_empresa`, ya corrida). No se tocó `schema.sql`.
+- **Ninguna variable de entorno, ninguna dependencia, ningún bucket.**
+- **Siete endpoints nuevos, TODOS autenticados y gateados** por `Seccion.EVENTOS`
+  (`admin_rrhh` escribe, `gerencia_lectura` lee, `mandos_medios` no accede). Ninguno es público:
+  `/api/eventos` (GET, POST) · `/api/eventos/pendientes` (GET) · `/api/eventos/{id}` (GET, PUT,
+  DELETE) · `/api/eventos/{id}/resuelta` (PUT). Sin export, por decisión de producto.
+- 🔴 **`PUT /api/eventos/{id}` es la primera ruta del repo con un DELETE físico en su módulo.**
+  La baja no es lógica: la fila se borra. El rastro queda en `auditoria` con el snapshot previo,
+  así que **cualquier política de retención sobre esa tabla afecta la trazabilidad de este
+  módulo** — es el único donde el borrado es parte del flujo normal.
+- ⚠️ **`utils/permisos.py` se dividió**: el enum `Seccion` se mudó a `utils/_secciones.py` (el
+  archivo llegó a 217/200 al sumar la sección). **Se re-exporta**, así que
+  `from utils.permisos import Seccion` sigue siendo el import correcto y ninguno de los ~204
+  gates cambió. Nada que hacer del lado del deploy; se declara porque toca el archivo del modelo
+  de seguridad.
+- ⚠️ **`ParametrosUpdate` ganó dos campos OBLIGATORIOS** (`periodo_prueba_dias`,
+  `dias_aviso_evento`). El PUT de `/api/configuracion/parametros` manda el juego completo, así
+  que **un cliente viejo que mande solo los siete de antes recibe 422**. El front salió en la
+  misma sesión; si alguna vez se deploya el backend adelantado, esa pantalla queda rota hasta que
+  salga el front.
+
+---
 ## 2026-08-15 · Paginación sesión 5 — candidatos y evaluados · commit pendiente
 
 **Qué cambió:** los dos últimos listados del lote. **Candidatos** pagina PLANO conservando el

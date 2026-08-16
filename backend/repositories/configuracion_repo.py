@@ -14,9 +14,14 @@ from utils.errors import AppError
 
 _PARAMS, _ESCALA = "parametros_empresa", "reglas_vacaciones_escala"
 
+# ⚠️ ESTA LISTA TIENE QUE COINCIDIR CON LOS CAMPOS DE `ParametrosUpdate`. Una columna que esté
+# en el schema y falte acá revienta al construir `ParametrosResponse(**fila)` con un
+# `field required`; una que esté acá y no en el schema, al pasarla como kwarg de más. Las dos
+# últimas las agregó la migración 114 (período de prueba y default de aviso de eventos).
 _COLS_PARAMS = (
     "base_dias_habiles, corte_antiguedad_mes, periodo_vacacional_desde_mes, "
-    "periodo_vacacional_hasta_mes, primer_anio_mes_corte, primer_anio_dias, vencimiento_anios"
+    "periodo_vacacional_hasta_mes, primer_anio_mes_corte, primer_anio_dias, vencimiento_anios, "
+    "periodo_prueba_dias, dias_aviso_evento"
 )
 
 

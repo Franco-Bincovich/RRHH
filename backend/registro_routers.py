@@ -26,6 +26,8 @@ from routers.recategorizaciones_escrituras import router as recategorizaciones_e
 from routers.perfiles_puesto import router as perfiles_puesto_router
 from routers.perfiles_puesto_catalogos import router as perfiles_puesto_catalogos_router
 from routers.perfiles_puesto_escrituras import router as perfiles_puesto_escrituras_router
+from routers.eventos_agenda import router as eventos_agenda_router
+from routers.eventos_agenda_escrituras import router as eventos_agenda_escrituras_router
 from routers.costos import router as costos_router
 from routers.costos_escrituras import router as costos_escrituras_router
 from routers.empleados import router as empleados_router
@@ -108,6 +110,11 @@ def registrar(app: FastAPI) -> None:
     app.include_router(recategorizaciones_escrituras_router, prefix="/api/recategorizaciones", tags=["recategorizaciones"])  # mismo prefijo: las rutas no cambian
     # Ruta anidada bajo el empleado (el historial de la ficha), como cesiones: va en /api.
     app.include_router(recategorizaciones_empleado_router, prefix="/api", tags=["recategorizaciones"])
+    # Agenda de eventos (migración 113). `/pendientes` es una ruta estática y el CRUD tiene
+    # `/{id}`: el orden LITERAL-antes-que-parámetro se resuelve DENTRO de `eventos_agenda.py`,
+    # que las declara en ese orden, así que acá los dos routers van en el orden natural.
+    app.include_router(eventos_agenda_router, prefix="/api/eventos", tags=["eventos"])
+    app.include_router(eventos_agenda_escrituras_router, prefix="/api/eventos", tags=["eventos"])  # mismo prefijo: las rutas no cambian
     app.include_router(ausencias_tipos_router, prefix="/api/ausencias", tags=["ausencias"])  # ANTES de ausencias (rutas estáticas /tipos vs /{id})
     app.include_router(ausencias_router, prefix="/api/ausencias", tags=["ausencias"])
     app.include_router(vacaciones_empleado_router, prefix="/api/vacaciones", tags=["vacaciones"])  # ANTES de vacaciones (rutas estáticas /saldo y /empleado vs /{id})

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Percent } from "lucide-react"
 
+import { AvisosReglas } from "@/components/features/configuracion/AvisosReglas"
 import { CampoNumero } from "@/components/features/configuracion/_campos"
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
 import { useConfiguracion } from "@/components/features/configuracion/useConfiguracion"
@@ -12,12 +13,14 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { Parametros, TramoEscala } from "@/types/configuracion"
 
 /**
- * Las reglas de negocio configurables: Vacaciones y Ausentismo.
+ * Las reglas de negocio configurables: Vacaciones, Ausentismo y Avisos.
  *
- * 🔑 LAS DOS SECCIONES COMPARTEN UN SOLO BORRADOR, y por eso viven bajo un mismo componente
- * aunque en pantalla sean dos bloques del acordeón: los siete valores son UNA fila de
+ * 🔑 LAS TRES SECCIONES COMPARTEN UN SOLO BORRADOR, y por eso viven bajo un mismo componente
+ * aunque en pantalla sean tres bloques del acordeón: los NUEVE valores son UNA fila de
  * parametros_empresa y se guardan con un PUT del juego completo. Con un borrador por sección,
- * guardar en una pisaría con valores viejos lo que la otra acababa de cambiar.
+ * guardar en una pisaría con valores viejos lo que la otra acababa de cambiar — y con la tercera
+ * (migración 114) eso dejó de ser hipotético: guardar la base de días hábiles mandaría el
+ * período de prueba viejo, y el usuario vería revertirse algo que acababa de escribir.
  *
  * ⚠️ Los encabezados se renderizan SIEMPRE, aun cargando o con error, y el estado ocupa el
  * cuerpo. Devolver un Skeleton suelto en vez de las secciones metía un hijo que no es
@@ -98,6 +101,15 @@ export function ReglasSections({ editable }: { editable: boolean }) {
           </div>
         )}
       </ConfigSection>
+
+      <AvisosReglas
+        params={params}
+        fallback={fallback}
+        onCampo={onCampo}
+        editable={editable}
+        guardando={Boolean(ocupado.parametros)}
+        onGuardar={() => params && guardarParametros(params)}
+      />
     </>
   )
 }

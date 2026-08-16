@@ -19,21 +19,17 @@ from services.onboarding_templates_service import OnboardingTemplatesService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
 from utils.rate_limit import limite_export
+from utils.sujeto import sujeto
 
 router = APIRouter()
 SECCION = Seccion.ONBOARDING
 _Svc = Depends(lambda: OnboardingTemplatesService())
 
-
-def sujeto(request: Request) -> tuple[str | None, str | None]:
-    """(user_id, rol) del request — el sujeto de la visibilidad de las plantillas.
-
-    Los dos van juntos siempre: `user_id` decide de quién es una privada y `rol` si hay que
-    filtrar (gerencia_lectura ve todo). Devolverlos por separado invitaba a pasar uno y
-    olvidarse del otro. None solo en un estado imposible: AuthMiddleware es fail-closed.
-    """
-    u = request.state.user
-    return u.get("id"), u.get("rol")
+# ⚠️ `sujeto` VIVÍA ACÁ y se mudó a `utils/sujeto.py` cuando la agenda de eventos (migración 113)
+# pasó a ser el segundo módulo con filas públicas y privadas. Un router exportando un helper que
+# otro router importa era tolerable con un solo caso; con dos, el que importa de un módulo
+# hermano termina copiándolo, y las dos copias se separan. Se re-exporta al importarlo, así los
+# call sites de acá abajo y los de `onboarding_templates_escrituras.py` no cambiaron.
 
 
 @router.get("", response_model=list[TemplateResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])

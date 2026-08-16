@@ -27,6 +27,17 @@ class ParametrosUpdate(BaseModel):
     primer_anio_mes_corte: int = Field(ge=1, le=12)
     primer_anio_dias: int = Field(ge=0)
     vencimiento_anios: int = Field(gt=0)
+    # Migración 114. Los dos son de OTRA familia que los cinco de arriba —no son reglas de
+    # vacaciones—, y viven en la misma tabla y en el mismo PUT a propósito: `parametros_empresa`
+    # ya resuelve el patrón fila-global + fila-por-empresa-que-la-pisa, con sus dos UNIQUE
+    # parciales. Una tabla aparte por familia habría duplicado ese mecanismo, y un upsert por
+    # familia habría desenganchado a la empresa de las reglas globales de vacaciones al guardar
+    # cualquiera de estos dos — que es exactamente el motivo por el que `parametros_screening`
+    # sí es tabla propia (ahí el criterio lo escribe otro flujo, no este formulario).
+    periodo_prueba_dias: int = Field(ge=1, le=730)
+    # Anticipación por DEFECTO del aviso de un evento de agenda. Es el valor que toma un evento
+    # nuevo que no trae `dias_aviso` propio; cada evento puede pisarlo. Ver schemas/evento_agenda.
+    dias_aviso_evento: int = Field(ge=0, le=365)
 
 
 class ParametrosResponse(ParametrosUpdate):

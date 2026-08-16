@@ -10,6 +10,8 @@ satélite había llegado a 159 líneas contra el límite de 100.
 from typing import Optional
 from uuid import UUID
 
+from utils.permisos import ROL_VE_PRIVADAS_AJENAS
+
 
 def with_empresa(query, empresa_id: Optional[UUID]):
     """Aplica filtro de empresa a una query de Supabase si empresa_id no es None."""
@@ -17,7 +19,12 @@ def with_empresa(query, empresa_id: Optional[UUID]):
 
 
 # Rol que ve TODAS las plantillas, incluidas las privadas de los demás. Ver with_visibilidad.
-ROL_VE_TODO = "gerencia_lectura"
+#
+# ⚠️ El literal SE MUDÓ a `utils/permisos.ROL_VE_PRIVADAS_AJENAS` cuando la agenda de eventos
+# (migración 113) pasó a ser el segundo módulo con visibilidad por fila: es una afirmación sobre
+# el modelo de roles, y dos copias podrían separarse. El alias queda para no tocar los callers
+# ni los tests de este módulo, que lo nombran así desde que se escribió.
+ROL_VE_TODO = ROL_VE_PRIVADAS_AJENAS
 
 
 def with_visibilidad(query, user_id: Optional[str], rol: Optional[str] = None):

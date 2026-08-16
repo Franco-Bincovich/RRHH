@@ -44,11 +44,16 @@ from utils.permisos import Accion, Seccion, puede
 EMPRESA_A = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 EMPRESA_B = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
-# Los valores que la migración 085 siembra en la fila global.
+# Los valores que la migración 085 siembra en la fila global, más los dos que agregó la 114
+# (período de prueba y default de aviso de eventos). El juego COMPLETO, no una muestra: el PUT de
+# parámetros manda los siete de vacaciones y estos dos juntos, y un fake al que le falte uno hace
+# fallar la construcción del `ParametrosResponse` por un motivo que no tiene nada que ver con lo
+# que el test dice estar probando.
 GLOBAL = {
     "base_dias_habiles": 22, "corte_antiguedad_mes": 10,
     "periodo_vacacional_desde_mes": 10, "periodo_vacacional_hasta_mes": 4,
     "primer_anio_mes_corte": 7, "primer_anio_dias": 5, "vencimiento_anios": 4,
+    "periodo_prueba_dias": 90, "dias_aviso_evento": 7,
 }
 ESCALA_GLOBAL = [
     {"antiguedad_anios": 0, "dias": 14},

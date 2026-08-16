@@ -4,6 +4,7 @@ import {
   UserPlus, UserMinus, Umbrella, CalendarX2, DollarSign, TrendingUp,
   BarChart3, GraduationCap, ClipboardCheck, Package, Target, ScrollText,
   CalendarClock, Settings, Building2, UserCog, UserSearch, Network, Mail, Handshake, Clock,
+  CalendarHeart,
 } from "lucide-react"
 
 import type { Accion, Seccion } from "@/services/permisos"
@@ -79,6 +80,11 @@ export const NAV_GROUPS: ReadonlyArray<NavGroupDef> = [
     // MANDAN mails, y eso es operación recurrente, no configuración. La `seccion` sigue siendo
     // "configuracion" a propósito — es el permiso que el backend ya exige; ver la página.
     { label: "Comunicación", href: "/comunicacion", icon: Mail, seccion: "configuracion" },
+    // Agenda de eventos (migración 113). Va en Operación y NO en Administración, donde están
+    // Áreas y Clientes: aquellos son CATÁLOGOS que se cargan una vez y casi no se tocan, y esto
+    // se usa todas las semanas — se carga un evento, se lo ve venir en el dashboard y se lo
+    // resuelve. Es el mismo criterio con el que Comunicación se mudó acá desde Configuración.
+    { label: "Eventos", href: "/eventos", icon: CalendarHeart, seccion: "eventos" },
   ] },
   { label: "Desempeño", items: [
     { label: "Capacitaciones", href: "/capacitaciones", icon: GraduationCap, seccion: "capacitaciones" },

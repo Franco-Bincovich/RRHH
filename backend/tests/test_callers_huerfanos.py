@@ -109,6 +109,11 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
         "completitud REST: el listado ya acepta `empleado_id` como Query y es el que usa el front.",
     ("GET", "/api/ausencias/{id}"): "completitud REST: el front nunca pide una ausencia sola.",
     ("GET", "/api/capacitaciones/{id}"): "completitud REST: el front nunca pide una sola.",
+    ("GET", "/api/eventos/{id}"):
+        "completitud REST: el modal de edición recibe el objeto entero del listado, así que "
+        "pedir la fila de vuelta sería una ida a la red por lo que la pantalla ya tiene. Es el "
+        "MISMO caso que /api/clientes/{id}, y por eso services/eventos.ts nace sin su "
+        "`fetchEvento` en vez de con un wrapper que nadie llama.",
     ("GET", "/api/clientes/{id}"):
         "completitud REST: el modal de edición recibe el objeto entero del listado, así que "
         "pedir la fila de vuelta sería una ida a la red por lo que la pantalla ya tiene. Su "
@@ -132,6 +137,17 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     ("GET", "/api/recategorizaciones/{id}"): _RECAT,
     ("PUT", "/api/recategorizaciones/{id}"): _RECAT,
     ("GET", "/api/empleados/{empleado_id}/recategorizaciones"): _RECAT,
+
+    # 🔴 AGENDA DE EVENTOS — UNA sola ruta declarada, y por un motivo distinto al de las dos
+    # familias de arriba: acá el front SÍ se construyó en la misma sesión que el backend, así que
+    # las otras cinco rutas del módulo tienen caller real. `/pendientes` es lo que va a consumir
+    # la tarjeta del dashboard, que es la SESIÓN 2. DISPARADOR: sale de esta lista cuando
+    # `frontend/services/eventos.ts` gane su `fetchEventosPendientes` y el dashboard lo llame. Si
+    # para entonces sigue acá, el endpoint quedó publicado e inalcanzable.
+    ("GET", "/api/eventos/pendientes"):
+        "lo consume la tarjeta del dashboard, que es la sesión 2 de esta feature. El endpoint "
+        "sale de la sesión 1 porque el filtro de ventana de aviso es lo que había que dejar "
+        "probado. DISPARADOR: sale de acá cuando el dashboard lo llame.",
 
     ("GET", "/api/perfiles-puesto"): _PERFILES,
     ("GET", "/api/perfiles-puesto/campos"): _PERFILES,

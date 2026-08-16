@@ -29,6 +29,10 @@ const PARAMS: Parametros = {
   primer_anio_mes_corte: 7,
   primer_anio_dias: 5,
   vencimiento_anios: 4,
+  // Los dos de la migración 114. NO los muestra este bloque —viven en "Avisos y período de
+  // prueba"— pero el juego de parámetros es UNA fila y viaja entero, así que el tipo los exige.
+  periodo_prueba_dias: 90,
+  dias_aviso_evento: 7,
 }
 
 const TRAMOS = [

@@ -129,6 +129,16 @@ _EJERCITADOS: dict[str, str] = {
     # `_mapa` con la lista de ids vacía teniendo filas.
     "_recategorizacion_row.build":               "test_recategorizaciones",
     "_recategorizacion_row._mapa":               "test_recategorizaciones",
+    # Agenda de eventos. `_mapa` se ejercita TRANSITIVAMENTE desde `build`, igual que en
+    # recategorizaciones y en `_hora_row`. Los tests recorren `build` en los DOS sentidos: con
+    # filas (todo el archivo) y con la lista vacía (`test_la_agenda_vacia_no_rompe`, que es
+    # además el estado real de producción hasta que RRHH cargue el primero).
+    # ⚠️ El early-return de `_mapa` —lote de ids vacío— NO es alcanzable desde este módulo, y no
+    # es un hueco de cobertura: `empresa_id` y `created_by` son NOT NULL, así que con al menos
+    # una fila los dos lotes tienen elementos, y sin filas `build` corta antes. La guarda queda
+    # porque `_mapa` es genérico y el próximo caller puede pasarle una columna nullable.
+    "_evento_agenda_row.build":                  "test_eventos_agenda",
+    "_evento_agenda_row._mapa":                  "test_eventos_agenda",
 }
 
 # ── mapper → por qué NO se ejercita todavía ───────────────────────────────────

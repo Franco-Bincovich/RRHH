@@ -108,6 +108,11 @@ _PRECONDICIONES = {
         "base_dias_habiles": 22, "corte_antiguedad_mes": 10,
         "periodo_vacacional_desde_mes": 10, "periodo_vacacional_hasta_mes": 4,
         "primer_anio_mes_corte": 7, "primer_anio_dias": 5, "vencimiento_anios": 4,
+        # Los agregó la migración 114. Van acá aunque ningún reporte los use: la fila entera
+        # tiene que poder validar como `ParametrosResponse`, y si falta un campo obligatorio el
+        # KPI de ausentismo muere con un error de Pydantic — que este barrido reporta como
+        # "columna inexistente" y manda a buscar el bug al lado equivocado.
+        "periodo_prueba_dias": 90, "dias_aviso_evento": 7,
     },
 }
 

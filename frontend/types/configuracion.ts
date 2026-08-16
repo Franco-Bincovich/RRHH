@@ -26,6 +26,24 @@ export interface Parametros {
   primer_anio_dias: number
   /** Años que sobreviven los días no tomados antes de vencer. */
   vencimiento_anios: number
+  /**
+   * Migración 114. Días del período de prueba (LCT: 90). El "fin de período de prueba" de una
+   * persona se calcula como `fecha_ingreso + periodo_prueba_dias`.
+   *
+   * ⚠️ HOY SOLO SE GUARDA Y SE MUESTRA: todavía no hay nada que lo calcule ni que avise. Está
+   * expuesto porque es el valor que va a regir cuando eso se construya, y porque configurarlo
+   * antes es gratis. Mismo estado que la ventana del período vacacional.
+   */
+  periodo_prueba_dias: number
+  /**
+   * Migración 114. Anticipación POR DEFECTO del aviso de un evento de agenda: con cuántos días
+   * antes de la fecha aparece en el dashboard.
+   *
+   * 🔑 Es un DEFAULT, no una regla global: cada evento puede pisarlo con su propio `dias_aviso`.
+   * Un evento que no lo trae toma este valor EN EL MOMENTO DEL ALTA y lo guarda como columna
+   * propia, así que cambiarlo acá afecta a los eventos NUEVOS, no a los ya cargados.
+   */
+  dias_aviso_evento: number
 }
 
 export interface ParametrosResponse extends Parametros {

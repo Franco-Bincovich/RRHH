@@ -111,6 +111,11 @@ SIN_RESOLVER_DECLARADOS = {
     # (users). Columnas planas, ningún embed. Existe justamente PARA no usar embeds: la FK a
     # `empleados` es COMPUESTA y un embed sobre ella es la clase de spec que termina en PGRST201.
     "repositories/_recategorizacion_row.py": (1, "_mapa(tabla, ids, campos): 3 callers con columnas planas"),
+    # Mismo `_mapa`, mismo motivo y un agravante propio: `eventos_agenda` tiene DOS FKs a `users`
+    # (`created_by` y `resuelta_por`), así que un embed `users(nombre)` desde esa tabla es
+    # ambiguo DE ENTRADA y responde 300 PGRST201. Los 2 callers de `build` verificados uno por
+    # uno: "id, nombre" (empresas) y "id, nombre, apellido" (users). Sin embeds.
+    "repositories/_evento_agenda_row.py": (1, "_mapa(tabla, ids, campos): 2 callers con columnas planas"),
     "repositories/dashboard_equipo_repo.py": (1, "tabla por parámetro, spec literal 'id' — sin embed"),
     # Counts genéricos con la tabla por parámetro y spec literal sin embed.
     "services/dashboard_service.py": (1, "_count(table, **filtros): select('id', count='exact') — sin embed"),

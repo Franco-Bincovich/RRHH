@@ -17,7 +17,7 @@ export type Seccion =
   | "importacion" | "integraciones" | "capacitaciones" | "evaluaciones"
   | "inventario" | "objetivos" | "usuarios" | "procesos" | "proyectos"
   | "auditoria" | "periodos" | "configuracion" | "clientes"
-  | "perfiles_puesto" | "recategorizaciones"
+  | "perfiles_puesto" | "recategorizaciones" | "eventos"
 
 const MANDOS_MEDIOS_SECCIONES: ReadonlySet<Seccion> = new Set<Seccion>([
   "vacaciones",
@@ -78,6 +78,7 @@ const RUTA_SECCION: Readonly<Record<string, Seccion>> = {
   periodos: "periodos",
   usuarios: "usuarios",
   clientes: "clientes",
+  eventos: "eventos",
   // La vista interna de horas gatea con PROYECTOS: el dato son filas de horas_proyecto, cuyo
   // gate publicado ya es ese. Ver el encabezado de routers/horas_cliente.py.
   "horas-por-cliente": "proyectos",
@@ -121,6 +122,7 @@ const RUTAS_ORDENADAS: ReadonlyArray<{ ruta: string; seccion: Seccion }> = [
   { ruta: "/auditoria", seccion: "auditoria" },
   { ruta: "/periodos", seccion: "periodos" },
   { ruta: "/clientes", seccion: "clientes" },
+  { ruta: "/eventos", seccion: "eventos" },
   { ruta: "/horas-por-cliente", seccion: "proyectos" },
 ]
 
