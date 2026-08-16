@@ -14,7 +14,8 @@ from repositories.asignacion_repo import AsignacionRepo
 from repositories.capacitacion_repo import CapacitacionRepo
 from schemas.capacitacion import AsignacionCreate, AsignacionListResponse, AsignacionResponse, AsignacionUpdate
 from services._capacitaciones_export import construir_filas_export
-from services._limite_export import verificar_limite_export
+from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
+from services._paginacion import cantidad_paginas
 from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
@@ -28,16 +29,21 @@ class AsignacionService:
         self._repo = repo or AsignacionRepo()
         self._cap_repo = cap_repo or CapacitacionRepo()
 
-    def get_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, capacitacion_id: Optional[UUID] = None, estado: Optional[str] = None, area_id: Optional[UUID] = None) -> AsignacionListResponse:
-        """Retorna asignaciones filtradas (empresa None = todas)."""
-        items = self._repo.find_all(empresa_id, empleado_id, capacitacion_id, estado, area_id)
-        return AsignacionListResponse(items=items, total=len(items))
+    def get_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None,
+                capacitacion_id: Optional[UUID] = None, estado: Optional[str] = None,
+                area_id: Optional[UUID] = None, page: int = 1, page_size: int = 20) -> AsignacionListResponse:
+        """Página de asignaciones filtradas (empresa None = todas). `total` = count del filtro."""
+        items, total = self._repo.find_all(empresa_id, empleado_id, capacitacion_id, estado,
+                                           area_id, page, page_size)
+        return AsignacionListResponse(items=items, total=total, page=page, page_size=page_size,
+                                      total_pages=cantidad_paginas(total, page_size))
 
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", empleado_id: Optional[UUID] = None, capacitacion_id: Optional[UUID] = None, estado: Optional[str] = None, area_id: Optional[UUID] = None) -> Descarga:
         """Exporta las asignaciones de capacitación (columnas legibles, sin UUIDs) respetando los filtros (empleado/capacitación/estado/área)."""
-        items = self.get_all(empresa_id, empleado_id, capacitacion_id, estado, area_id).items
-        verificar_limite_export(len(items))
-        filas = construir_filas_export(items)
+        pagina = self.get_all(empresa_id, empleado_id, capacitacion_id, estado, area_id,
+                              1, LIMITE_FILAS_EXPORT)
+        verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
+        filas = construir_filas_export(pagina.items)
         return build_export(nombre="Capacitaciones", datos={"Asignaciones": filas}, filename_base="capacitaciones", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> AsignacionResponse:

@@ -124,10 +124,18 @@ class _SupabaseEspia:
         self._rows = [r for r in self._rows if str(r.get(campo)) in texto.split(",")]
         return self
 
+    def range(self, desde, hasta):
+        self._rango = (desde, hasta)
+        return self
+
     def execute(self):
         if self._una:
             return SimpleNamespace(data=self._rows[0] if self._rows else None)
-        return SimpleNamespace(data=self._rows)
+        # `count` es el del filtro y el `.range()` recorta DESPUÉS — el orden de PostgREST.
+        total = len(self._rows)
+        rango = getattr(self, "_rango", None)
+        filas = self._rows[rango[0]:rango[1] + 1] if rango else self._rows
+        return SimpleNamespace(data=filas, count=total)
 
 
 def _fila(empleado_id, nombre_libre=None) -> dict:

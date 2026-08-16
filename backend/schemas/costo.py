@@ -35,6 +35,18 @@ class NominaResponse(BaseModel):
     total: float
 
 
+class NominaListResponse(BaseModel):
+    """Página del listado de nómina de un período. Contrato del molde de paginación."""
+    items: List[NominaResponse]
+    # `total` es el del FILTRO sin paginar (`count="exact"` de la misma query), NO el largo de
+    # `items`. Es lo que la barra necesita para saber cuántas páginas hay y lo que el export
+    # chequea contra el tope: derivarlo de `items` diría 20 y el archivo saldría incompleto.
+    total: int
+    page: int = 1
+    page_size: int = 0
+    total_pages: int = 0
+
+
 class HistorialSalarialItem(BaseModel):
     """Un período de la serie salarial de un empleado.
 

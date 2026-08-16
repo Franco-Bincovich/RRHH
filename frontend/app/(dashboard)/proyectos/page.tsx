@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { Button } from "@/components/ui/button"
 import { FiltersBar } from "@/components/ui/FiltersBar"
+import { Pagination } from "@/components/ui/Pagination"
 import { cargarProyectos } from "@/components/features/proyectos/cargarProyectos"
 import { ProyectoModal } from "@/components/features/proyectos/ProyectoModal"
 import { ProyectosGrid } from "@/components/features/proyectos/ProyectosGrid"
@@ -16,6 +17,8 @@ import { createProyecto, exportarProyectos, updateProyecto } from "@/services/pr
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Proyecto, ProyectoCreate, ProyectoUpdate } from "@/types/proyecto"
 
+const PAGE_SIZE = 20
+
 export default function ProyectosPage() {
   const canWrite = useCanWrite()
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
@@ -23,15 +26,19 @@ export default function ProyectosPage() {
   const [error, setError]         = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing]     = useState<Proyecto | null>(null)
-  // Este listado no pagina, así que no hay page que resetear.
-  const { filtros, campos } = useFiltrosProyectos(() => {})
+  const [page, setPage]           = useState(1)
+  const [total, setTotal]         = useState(0)
+  // 🔴 Cambiar cualquier filtro vuelve a la página 1 (invariante 4 del bloque B): filtrar parado
+  // en la 7 pediría una página que el resultado nuevo no tiene y la grilla saldría vacía sobre
+  // un filtro que sí tiene proyectos.
+  const { filtros, campos } = useFiltrosProyectos(() => setPage(1))
 
   // La carga vive en cargarProyectos: apaga el loading en un finally y se testea sin renderizar
   // (vitest corre sin jsdom, así que acá adentro no habría forma de verificarlo).
   const load = useCallback(async () => {
-    await cargarProyectos(filtros, { setProyectos, setLoading, setError })
+    await cargarProyectos(filtros, { setProyectos, setLoading, setError, setTotal }, page, PAGE_SIZE)
     // filtros es un objeto nuevo por render; se serializa para no re-fetchear de más.
-  }, [JSON.stringify(filtros)])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(filtros), page])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -67,6 +74,10 @@ export default function ProyectosPage() {
         onEdit={(p) => { setEditing(p); setModalOpen(true) }}
         onCrear={() => { setEditing(null); setModalOpen(true) }}
       />
+
+      {total > PAGE_SIZE && (
+        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+      )}
 
       <ProyectoModal open={modalOpen} proyecto={editing}
         onClose={() => { setModalOpen(false); setEditing(null) }} onSave={handleSave} />

@@ -1,6 +1,6 @@
 """Repositorio de asignaciones de capacitaciones (empleado_capacitacion). supabase_admin."""
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
@@ -16,7 +16,8 @@ _T = "empleado_capacitacion"
 
 
 class AsignacionRepo:
-    def find_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, capacitacion_id: Optional[UUID] = None, estado: Optional[str] = None, area_id: Optional[UUID] = None) -> List[AsignacionResponse]:
+    def find_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[UUID] = None, capacitacion_id: Optional[UUID] = None, estado: Optional[str] = None, area_id: Optional[UUID] = None,
+                 page: int = 1, page_size: int = 20) -> Tuple[List[AsignacionResponse], int]:
         """Retorna asignaciones filtradas por empresa, empleado, capacitación, estado y/o área."""
         emp_ids: Optional[List[str]] = None
         if area_id:
@@ -25,9 +26,11 @@ class AsignacionRepo:
                 q = q.eq("empresa_id", str(empresa_id))
             data = q.execute().data or []
             if not data:
-                return []
+                return [], 0
             emp_ids = [e["id"] for e in data]
-        q = supabase_admin.table(_T).select("*").order("created_at", desc=True)
+        # `.order("id")` = desempate: una asignación masiva entra toda con el mismo
+        # `created_at`. ASC aunque la fecha vaya DESC — forma de `idx_ec_empresa_created` (118).
+        q = supabase_admin.table(_T).select("*", count="exact").order("created_at", desc=True).order("id")
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if empleado_id:
@@ -38,7 +41,8 @@ class AsignacionRepo:
             q = q.eq("estado", estado)
         if emp_ids:
             q = q.in_("empleado_id", emp_ids)
-        return _build(q.execute().data or [])
+        res = q.range((page - 1) * page_size, page * page_size - 1).execute()
+        return _build(res.data or []), (res.count or 0)
 
     def find_by_id(self, id: str, empresa_id: Optional[UUID] = None) -> Optional[AsignacionResponse]:
         q = supabase_admin.table(_T).select("*").eq("id", id)

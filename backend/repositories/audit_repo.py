@@ -74,7 +74,11 @@ class AuditRepo:
 
         Filtros opcionales por empresa, usuario, entidad, evento, registro_id y rango de
         fechas (fecha_hasta incluye todo el día). Resuelve nombre de usuario y empresa."""
-        q = supabase_admin.table(_T).select("*", count="exact").order("created_at", desc=True)
+        # `.order("id")` = desempate. Es el listado donde mas importa: una importacion emite su
+        # evento por LOTE y varios eventos comparten `created_at` al milisegundo, asi que sin el
+        # desempate paginar la auditoria puede mostrar dos veces el mismo evento o esconderlo.
+        # `id` ASC aunque la fecha vaya DESC — forma del indice `idx_auditoria_empresa_created`.
+        q = supabase_admin.table(_T).select("*", count="exact").order("created_at", desc=True).order("id")
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if usuario_id:

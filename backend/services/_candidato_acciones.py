@@ -13,7 +13,7 @@ from typing import Optional
 from uuid import UUID
 
 from integrations import storage
-from schemas.vacante import CandidatoResponse
+from schemas.candidato import CandidatoResponse
 from utils.errors import AppError
 from utils.logger import logger
 

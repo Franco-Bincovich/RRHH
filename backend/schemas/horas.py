@@ -85,3 +85,11 @@ class HoraResponse(BaseModel):
 class HoraListResponse(BaseModel):
     items: List[HoraResponse]
     total: int
+    # 🔴 LOS DOS TOTALES VIAJAN DESDE EL BACKEND Y NO SE CALCULAN EN LA PANTALLA. `items` es UNA
+    # página; sumarla da el total de lo que se ve, no el del proyecto — la pantalla decía "9 h"
+    # sobre un proyecto de 400 y el número cambiaba al pasar de página. Son de TODAS las cargas
+    # del proyecto, calculados en `_proyectos_enrich.totales_de_proyecto`.
+    # ⚠️ `total_costo` suma como 0 las cargas sin `valor_hora_snapshot` (no costeables). Es lo
+    # correcto para un total y NO habilita imprimirlo como "$ 0" fila por fila.
+    total_horas: float = 0.0
+    total_costo: float = 0.0

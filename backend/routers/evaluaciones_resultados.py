@@ -57,9 +57,11 @@ async def evaluados(lote_id: UUID, empresa: Optional[UUID] = Depends(get_empresa
                     svc: EvaluacionReportesService = Depends(_svc),
                     sector: Optional[str] = Query(None), perfil: Optional[str] = Query(None),
                     con_nota: Optional[str] = Query(None),
-                    proyecto_id: Optional[UUID] = Query(None)) -> EvaluadoListadoResponse:
-    """Listado filtrable de evaluados del lote."""
-    return svc.listado(lote_id, empresa, sector, perfil, con_nota, proyecto_id)
+                    proyecto_id: Optional[UUID] = Query(None),
+                    page: int = Query(1, ge=1),
+                    page_size: int = Query(20, ge=1, le=100)) -> EvaluadoListadoResponse:
+    """Listado filtrable y paginado de evaluados del lote."""
+    return svc.listado(lote_id, empresa, sector, perfil, con_nota, proyecto_id, page, page_size)
 
 
 @router.get("/lotes/{lote_id}/evaluados/{evaluado_id}/ficha", response_model=FichaResponse, dependencies=_GATE)

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ApiError } from "@/services/api"
 import { revisarCasilla } from "@/services/vacantes"
-import type { IngestaResultado } from "@/types/vacantes"
+import type { IngestaResultado } from "@/types/vacantesIngesta"
 
 /**
  * "Revisar casilla": lee la casilla del sistema, matchea cada mail por el código del asunto y

@@ -13,7 +13,7 @@ storage. Quien necesita el CV lo baja desde la ficha, que sí firma la URL.
 """
 from typing import List
 
-from schemas.vacante import CandidatoGrupoResponse
+from schemas.candidato import CandidatoGrupoResponse
 
 
 def _fecha(v) -> str:

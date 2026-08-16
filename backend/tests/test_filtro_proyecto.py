@@ -27,6 +27,7 @@ for _k, _v in _TEST_ENV.items():
 from uuid import uuid4
 
 import pytest
+from types import SimpleNamespace
 
 import repositories._scope_filtros as scope
 from services._ownership_filter import resolver_filtro_empleados
@@ -174,31 +175,84 @@ class TestFailClosedPorEje:
 
 class TestEvaluadosSinEmpleado:
     """`evaluacion_evaluados.empleado_id` es NULLABLE: 'sin_candidato' es un estado válido
-    (el CSV trae solo nombre y no matcheó). En producción hay 1 de 10 así."""
+    (el CSV trae solo nombre y no matcheó). En producción hay 1 de 10 así.
 
-    def _pasa(self, empleado_id, del_proyecto):
-        from schemas.evaluacion_reportes import EvaluadoListadoItem
-        from services.evaluacion_reportes_service import _pasa
-        item = EvaluadoListadoItem(
-            id="x", empleado_id=empleado_id, apellido="P", nombre="A",
-            tipos=[], perfil="general", asignado=empleado_id is not None,
-        )
-        return _pasa(item, None, None, None, del_proyecto)
+    🔴 BAJÓ UN ESCALÓN EL 15/8/2026: estas cuatro definiciones se verificaban contra `_pasa`,
+    el predicado de Python del service. Al mudarse los filtros al WHERE ese predicado se borró,
+    y las definiciones ahora las sostiene `.in_("empleado_id", ids)`. Se verifican sobre el
+    RESULTADO DE LA QUERY, con un doble que aplica la semántica de SQL: un NULL nunca satisface
+    un `IN`. Ese detalle es exactamente lo que hace que la regla siga valiendo sin código propio
+    — y también lo que la volvería invisible si el doble tratara `None` como un valor más.
+    """
 
-    def test_sin_empleado_queda_excluido_al_filtrar_por_proyecto(self) -> None:
+    class _Tabla:
+        """Doble de la tabla con semántica SQL de `IN` sobre NULL."""
+
+        # Filas completas (el repo las valida contra `EvaluadoResponse`), con `empleado_id`
+        # como única diferencia: es la columna que este filtro mira.
+        _BASE = {"lote_id": "00000000-0000-0000-0000-0000000000aa",
+                 "created_at": "2026-08-15T10:00:00", "perfil": "general",
+                 "apellido_evaluado": "Pérez", "nombre_evaluado": "Ana"}
+        FILAS = [dict(_BASE, id="00000000-0000-0000-0000-000000000001",
+                      empleado_id="00000000-0000-0000-0000-0000000000e1"),
+                 dict(_BASE, id="00000000-0000-0000-0000-000000000002",
+                      empleado_id="00000000-0000-0000-0000-0000000000e2"),
+                 dict(_BASE, id="00000000-0000-0000-0000-000000000003", empleado_id=None)]
+
+        def __init__(self) -> None:
+            self.filas, self.conto = list(self.FILAS), False
+
+        def select(self, *_a, **k):
+            self.conto = k.get("count") == "exact"
+            return self
+
+        def eq(self, *_a):
+            return self
+
+        def order(self, *_a, **_k):
+            return self
+
+        def range(self, *_a):
+            return self
+
+        def in_(self, col, valores):
+            # 🔑 `f.get(col) in valores` con f.get(col) = None y valores = [] daría False, pero
+            # con valores = [None] daría True — y SQL diría FALSE igual. Por eso el `is not None`
+            # explícito: la exclusión del NULL no puede depender de qué contenga la lista.
+            self.filas = [f for f in self.filas
+                          if f.get(col) is not None and f.get(col) in valores]
+            return self
+
+        def execute(self):
+            return type("R", (), {"data": list(self.filas),
+                                  "count": len(self.filas) if self.conto else None})()
+
+    E1 = "00000000-0000-0000-0000-0000000000e1"
+
+    def _ids(self, monkeypatch, empleado_ids):
+        import repositories._evaluacion_evaluados_repo as repo_mod
+        tabla = self._Tabla()
+        monkeypatch.setattr(repo_mod, "supabase_admin",
+                            type("C", (), {"table": staticmethod(lambda _t: tabla)})())
+        filas, _total = repo_mod.find_evaluados_pagina("lote-1", empleado_ids=empleado_ids)
+        return [str(f.empleado_id)[-2:] if f.empleado_id else None for f in filas]
+
+    def test_sin_empleado_queda_excluido_al_filtrar_por_proyecto(self, monkeypatch) -> None:
         """No se lo puede atribuir a ningún proyecto — igual que el proyecto sin asignados
         de B3 no aparece bajo ninguna área."""
-        assert self._pasa(None, {"emp-1"}) is False
+        assert self._ids(monkeypatch, [self.E1]) == ["e1"]
 
-    def test_sin_empleado_aparece_cuando_no_se_filtra_por_proyecto(self) -> None:
-        """Excluirlo siempre sería otro bug: el estado es válido y tiene que verse."""
-        assert self._pasa(None, None) is True
+    def test_sin_empleado_aparece_cuando_no_se_filtra_por_proyecto(self, monkeypatch) -> None:
+        """Excluirlo siempre sería otro bug: el estado es válido y tiene que verse. `None`
+        significa NO EMITIR el filtro, y por eso las tres filas vuelven."""
+        assert self._ids(monkeypatch, None) == ["e1", "e2", None]
 
-    def test_con_empleado_del_proyecto_entra(self) -> None:
-        assert self._pasa("emp-1", {"emp-1"}) is True
+    def test_con_empleado_de_otro_proyecto_no_entra(self, monkeypatch) -> None:
+        assert self._ids(monkeypatch, [self.E1]) == ["e1"]
 
-    def test_con_empleado_de_otro_proyecto_no_entra(self) -> None:
-        assert self._pasa("emp-2", {"emp-1"}) is False
+    def test_proyecto_sin_asignados_no_deja_pasar_a_nadie(self, monkeypatch) -> None:
+        """La lista vacía filtra a NADIE, ni siquiera al que no tiene empleado."""
+        assert self._ids(monkeypatch, []) == []
 
 
 # ─── El CABLEADO: que los módulos usen la resolución, no solo que exista ──────
@@ -214,6 +268,9 @@ class _QueryEmp:
     def eq(self, *_a, **_k): return self
     def or_(self, *_a, **_k): return self
     def range(self, *_a, **_k): return self
+    # No-op encadenable a proposito: este fake audita el filtro por proyecto, no el
+    # orden. El orden se prueba en tests/test_paginacion_orden.py, con un fake que ordena.
+    def order(self, *_a, **_k): return self
 
     def in_(self, col, ids):
         self.registro["in_"] = (col, list(ids))
@@ -245,34 +302,68 @@ class TestCableadoEmpleados:
 
 
 class TestCableadoEvaluaciones:
-    """Que el service RESUELVA el proyecto y se lo pase al predicado."""
+    """Que el service RESUELVA el proyecto y le pase los ids AL REPO.
 
-    def _listar(self, monkeypatch, proyecto_id):
+    🔴 CAMBIÓ DE ESCALÓN EL 15/8/2026, por el mismo motivo que la clase de arriba: antes se
+    miraba que el proyecto llegara a un predicado de Python que filtraba la lista ya traída.
+    Con 1.005 evaluados por lote, filtrar en memoria significa que el filtro sólo encuentra a
+    quien ya estaba en la página que se está mirando. Ahora se mira el ARGUMENTO que recibe
+    el repo, que es lo que termina en el WHERE.
+    """
+
+    class _Repo:
+        """Registra los ids de proyecto que le llegan. Devuelve vacío a propósito: lo que se
+        afirma es el argumento, no el resultado, y un catálogo de filas no agregaría nada."""
+
+        def __init__(self) -> None:
+            self.recibido: list = []
+
+        def find_lote_by_id(self, lote_id):
+            return SimpleNamespace(id=lote_id, empresa_id=None)
+
+        def find_evaluados_pagina(self, lote_id, page=1, page_size=20, sector=None,
+                                  perfil=None, con_nota=None, empleado_ids=None):
+            self.recibido.append(empleado_ids)
+            return [], 0
+
+        def find_resultados_por_evaluados(self, ids):
+            return []
+
+        def sectores_del_lote(self, lote_id):
+            return []
+
+    def _listar(self, monkeypatch, proyecto_id, empleados=("emp-1",)):
         import services.evaluacion_reportes_service as svc_mod
-        visto: dict = {}
-        monkeypatch.setattr(svc_mod, "empleados_de_proyecto", lambda p: ["emp-1"])
-        monkeypatch.setattr(svc_mod, "_pasa",
-                            lambda i, s, p, c, dp=None: visto.setdefault("del_proyecto", dp) or True)
-        monkeypatch.setattr(svc_mod.EvaluacionReportesService, "_lote_rows",
-                            lambda self, lote_id, empresa_id: ([], []))
-        svc_mod.EvaluacionReportesService().listado(uuid4(), None, proyecto_id=proyecto_id)
-        return visto
+        monkeypatch.setattr(svc_mod, "empleados_de_proyecto", lambda p: list(empleados))
+        repo = self._Repo()
+        svc_mod.EvaluacionReportesService(repo=repo).listado(uuid4(), None, proyecto_id=proyecto_id)
+        return repo.recibido
+
+    def test_con_proyecto_los_ids_LLEGAN_AL_REPO(self, monkeypatch) -> None:
+        assert self._listar(monkeypatch, uuid4()) == [["emp-1"]]
+
+    def test_sin_proyecto_el_repo_recibe_None(self, monkeypatch) -> None:
+        """`None`, no `[]`: son cosas distintas en el WHERE. `[]` es `.in_("empleado_id", [])`,
+        o sea NADIE; `None` es no emitir el filtro. Confundirlos vacía el listado entero."""
+        assert self._listar(monkeypatch, None) == [None]
+
+    def test_proyecto_sin_asignados_llega_como_lista_vacia(self, monkeypatch) -> None:
+        """Un proyecto real sin nadie asignado tiene que filtrar a NADIE, no a todos."""
+        assert self._listar(monkeypatch, uuid4(), empleados=()) == [[]]
 
     def test_con_proyecto_resuelve_los_empleados(self, monkeypatch) -> None:
+        """Y que la resolución se haga UNA vez, con el id que vino del router."""
         import services.evaluacion_reportes_service as svc_mod
         llamado: list = []
-        monkeypatch.setattr(svc_mod, "empleados_de_proyecto", lambda p: llamado.append(p) or ["emp-1"])
-        monkeypatch.setattr(svc_mod.EvaluacionReportesService, "_lote_rows",
-                            lambda self, lote_id, empresa_id: ([], []))
+        monkeypatch.setattr(svc_mod, "empleados_de_proyecto",
+                            lambda p: llamado.append(p) or ["emp-1"])
         pid = uuid4()
-        svc_mod.EvaluacionReportesService().listado(uuid4(), None, proyecto_id=pid)
+        svc_mod.EvaluacionReportesService(repo=self._Repo()).listado(uuid4(), None, proyecto_id=pid)
         assert llamado == [pid]
 
     def test_sin_proyecto_no_resuelve_nada(self, monkeypatch) -> None:
         import services.evaluacion_reportes_service as svc_mod
         llamado: list = []
         monkeypatch.setattr(svc_mod, "empleados_de_proyecto", lambda p: llamado.append(p) or [])
-        monkeypatch.setattr(svc_mod.EvaluacionReportesService, "_lote_rows",
-                            lambda self, lote_id, empresa_id: ([], []))
-        svc_mod.EvaluacionReportesService().listado(uuid4(), None)
+        svc_mod.EvaluacionReportesService(repo=self._Repo()).listado(uuid4(), None)
         assert llamado == []

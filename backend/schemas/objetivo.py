@@ -82,4 +82,15 @@ ObjetivoResponse.model_rebuild()   # `hijos` se referencia a sí misma
 
 class ObjetivoListResponse(BaseModel):
     items: List[ObjetivoResponse]
+    # 🔴 HOY `total == len(items)` PORQUE EL TABLERO NO PAGINA: `objetivo_repo.find_all` devuelve
+    # todo el árbol del filtro.
+    # 🔴 EL DÍA QUE PAGINE, `total` SALE DE `count="exact"` DE LA MISMA QUERY — y acá hay una
+    # trampa propia: `items` son las RAÍCES, con los hijos anidados adentro. O sea `len(items)` ya
+    # no es la cantidad de objetivos ni cuando NO se pagina. `total` cuenta raíces (es lo que
+    # pagina); el conteo aplanado que usa el export es otra cosa y sale de
+    # `_objetivos_arbol.contar_con_hijos`. Confundirlos hace que el tope de export deje pasar el
+    # doble de filas. Los tres pasos de la migración, en `services/_paginacion.py`.
     total: int
+    page: int = 1
+    page_size: int = 0
+    total_pages: int = 0

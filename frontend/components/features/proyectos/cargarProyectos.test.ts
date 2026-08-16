@@ -22,7 +22,7 @@ vi.mock("@/services/proyectos", () => ({ fetchProyectos: (...a: unknown[]) => fe
 const { cargarProyectos, ERROR_CARGA } = await import("@/components/features/proyectos/cargarProyectos")
 
 function espias() {
-  return { setProyectos: vi.fn(), setLoading: vi.fn(), setError: vi.fn() }
+  return { setProyectos: vi.fn(), setLoading: vi.fn(), setError: vi.fn(), setTotal: vi.fn() }
 }
 const PROYECTO = { id: "p1", nombre: "Uno" }
 
@@ -96,11 +96,23 @@ describe("cargarProyectos apaga el loading", () => {
     expect(e.setError).toHaveBeenCalledWith(null)
   })
 
-  it("pasa los filtros tal cual al service", async () => {
+  it("pasa los filtros tal cual al service, junto con la página", async () => {
     fetchProyectos.mockResolvedValue({ items: [], total: 0 })
 
-    await cargarProyectos({ estado: "activo", areaId: "a1" }, espias())
+    await cargarProyectos({ estado: "activo", areaId: "a1" }, espias(), 3, 20)
 
-    expect(fetchProyectos).toHaveBeenCalledWith({ estado: "activo", areaId: "a1" })
+    // Los filtros viajan SIN tocar y la página va aparte: el service es el que la traduce a
+    // params, para que `queryProyectos` —que comparte con el export— no la vea.
+    expect(fetchProyectos).toHaveBeenCalledWith({ estado: "activo", areaId: "a1" }, 3, 20)
+  })
+
+  it("el total sale de la respuesta, no del largo de la página", async () => {
+    // Es el molde: con paginación, un total derivado de `items` diría 2 sobre 137.
+    fetchProyectos.mockResolvedValue({ items: [{}, {}], total: 137 })
+    const e = espias()
+
+    await cargarProyectos({}, e, 1, 2)
+
+    expect(e.setTotal).toHaveBeenCalledWith(137)
   })
 })

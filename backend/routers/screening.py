@@ -21,7 +21,7 @@ ajeno existe).
 from fastapi import APIRouter, Depends, Request
 
 from schemas.screening import ClasificacionUpdate, ScreeningLoteResponse
-from schemas.vacante import CandidatoResponse
+from schemas.candidato import CandidatoResponse
 from services.cv_screening_service import CvScreeningService
 from services.screening_correccion_service import ScreeningCorreccionService
 from utils.empresa import get_empresa_id

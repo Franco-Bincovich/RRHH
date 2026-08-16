@@ -28,6 +28,18 @@ filas ordenadas igual y no podría desmentir nada. Es el caso #3 de la regla del
 ordena en Python" → sacarle el `.order(..., desc=True)` real dejaba todo en verde). Acá el orden
 se afirma sobre `ordenes`, o sea sobre lo que VIAJA EN LA QUERY. Molde:
 `test_historial_salarial::TestElOrdenLoPoneLaQuery`.
+
+## 🔴 `.range()` TAMPOCO RECORTA, POR EL MISMO MOTIVO
+
+Se registra en `rangos` y devuelve las filas enteras. Un doble que recortara dejaría pasar un
+repo que se olvidó del `.range(...)`: el test vería la página del tamaño correcto sin que el
+LIMIT haya viajado nunca, y en producción ese repo se traería la tabla completa por la red.
+
+⚠️ CONSECUENCIA A TENER PRESENTE: acá `data` es el conjunto filtrado ENTERO, así que un repo
+paginado devuelve `total == len(items)` contra este doble. Es correcto —el `count="exact"` de
+PostgREST cuenta el filtro, no la página—, pero significa que **este doble no sirve para
+verificar que el recorte funcione**. Para eso hace falta un fake que rebane, y esos viven en los
+tests de paginación de cada módulo (`test_paginacion_mecanicos`, `test_paginacion_areas`).
 """
 from typing import Dict, List, Optional
 
@@ -37,8 +49,10 @@ class _Query:
         self._fake, self._tabla = fake, tabla
         self._columna: Optional[str] = None
         self._ids: Optional[list] = None
+        self._contar = False
 
     def select(self, *a, **k) -> "_Query":
+        self._contar = k.get("count") == "exact"
         return self
 
     def in_(self, columna: str, ids) -> "_Query":
@@ -54,6 +68,11 @@ class _Query:
         self._fake.ordenes.append((self._tabla, columna, bool(k.get("desc", False))))
         return self
 
+    def range(self, desde: int, hasta: int) -> "_Query":
+        """Registra el recorte pedido y NO recorta. Ver el encabezado del módulo."""
+        self._fake.rangos.append((self._tabla, desde, hasta))
+        return self
+
     def execute(self):
         filas = self._fake.catalogo.get(self._tabla, [])
         if self._ids is not None:
@@ -61,17 +80,23 @@ class _Query:
             filas = [f for f in filas if f.get(self._columna) in self._ids]
         else:
             self._fake.consultas.append((self._tabla, None, []))
-        return type("Respuesta", (), {"data": list(filas)})()
+        # `count` sale sólo si el repo pidió `count="exact"`, y vale el largo del conjunto
+        # FILTRADO. Devolverlo siempre taparía a un repo que se olvidó de pedirlo: leería
+        # `res.count` y encontraría un número, cuando PostgREST le habría devuelto None.
+        return type("Respuesta", (), {"data": list(filas),
+                                      "count": len(filas) if self._contar else None})()
 
 
 class FakeSupabase:
     """`catalogo` es {tabla: [filas]}. `consultas` acumula (tabla, columna, ids) por llamada;
-    `ordenes`, (tabla, columna, desc) de cada `.order()` pedido."""
+    `ordenes`, (tabla, columna, desc) de cada `.order()` pedido; `rangos`, (tabla, desde, hasta)
+    de cada `.range()`."""
 
     def __init__(self, catalogo: Dict[str, List[dict]]) -> None:
         self.catalogo = catalogo
         self.consultas: List[tuple] = []
         self.ordenes: List[tuple] = []
+        self.rangos: List[tuple] = []
 
     def table(self, tabla: str) -> _Query:
         return _Query(self, tabla)

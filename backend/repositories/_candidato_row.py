@@ -19,7 +19,7 @@ tiene joins que resolver. Si alguna vez se le agrega uno, la constante va en est
 `tests/test_selects_repos.py` la resuelve a través del import, igual que hace con `_vacante_row`
 y `_empleado_row`.
 """
-from schemas.vacante import CandidatoResponse
+from schemas.candidato import CandidatoResponse
 
 
 def _crow(r: dict) -> CandidatoResponse:

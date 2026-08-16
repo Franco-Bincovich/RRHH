@@ -46,7 +46,7 @@ import pytest  # noqa: E402
 from schemas.capacitacion import CapacitacionResponse  # noqa: E402
 from schemas.onboarding import InstanciaResponse  # noqa: E402
 from schemas.periodo import PeriodoResponse  # noqa: E402
-from schemas.vacante import CandidatoGrupoResponse  # noqa: E402
+from schemas.candidato import CandidatoGrupoResponse, CandidatosPaginaResponse  # noqa: E402
 from services._limite_export import LIMITE_FILAS_EXPORT  # noqa: E402
 from services.capacitacion_service import CapacitacionService  # noqa: E402
 from services.onboarding_service import OnboardingService  # noqa: E402
@@ -76,6 +76,20 @@ _CANDIDATOS = [_candidato("Ana", "entrevista", "ana@x.com", True),
                _candidato("Beto", "descartado", "beto@x.com", False)]
 
 
+def _pagina(items: list, total: int | None = None) -> CandidatosPaginaResponse:
+    """El listado ahora devuelve una página, y `total` NO es `len(items)`.
+
+    🔴 PODERLOS DESACOPLAR ES EL PUNTO. El export pide una sola página de `LIMITE_FILAS_EXPORT`
+    y controla el límite contra `total` —el count exacto del filtro—, no contra lo que le
+    volvió. Si el fake derivara `total` de `len(items)`, el test del límite tendría que fabricar
+    20.000 filas en memoria para morder, y no podría distinguir "el chequeo mira el count" de
+    "el chequeo mira la página": las dos lecturas darían el mismo número siempre."""
+    n = len(items) if total is None else total
+    return CandidatosPaginaResponse(items=items, total=n, page=1,
+                                    page_size=LIMITE_FILAS_EXPORT,
+                                    total_pages=1, conteo_por_grupo={})
+
+
 class TestExportCandidatos:
 
     def _svc(self):
@@ -83,7 +97,8 @@ class TestExportCandidatos:
 
         llamadas: list = []
         svc = CandidatoService.__new__(CandidatoService)
-        svc.listar_todos_candidatos = lambda e=None, sv=False, cl=None: (llamadas.append(e) or _CANDIDATOS)  # type: ignore[method-assign]
+        svc.listar_todos_candidatos = lambda e=None, sv=False, cl=None, page=1, page_size=20: (  # type: ignore[method-assign]
+            llamadas.append((e, page, page_size)) or _pagina(_CANDIDATOS))
         return svc, llamadas
 
     def test_va_por_el_MISMO_camino_que_el_listado(self) -> None:
@@ -93,7 +108,17 @@ class TestExportCandidatos:
 
         svc.exportar(EMPRESA, "csv")
 
-        assert llamadas == [EMPRESA]
+        assert llamadas == [(EMPRESA, 1, LIMITE_FILAS_EXPORT)]
+
+    def test_el_export_NO_se_pagina(self) -> None:
+        """Pide UNA página del tamaño del límite, no la página 1 de 20. El export nunca se
+        pagina (invariante del Bloque B): si heredara el `page_size` del listado, el archivo
+        saldría con las primeras 20 filas y sin ninguna señal de que faltan las demás."""
+        svc, llamadas = self._svc()
+
+        svc.exportar(EMPRESA, "csv")
+
+        assert llamadas[0][1:] == (1, LIMITE_FILAS_EXPORT)
 
     def test_las_DOS_filas_salen_con_SUS_valores(self) -> None:
         from services._candidatos_export import construir_filas_export
@@ -114,8 +139,11 @@ class TestExportCandidatos:
         assert "cvs/privado" not in str(fila)
 
     def test_el_limite_muerde(self) -> None:
+        """Con DOS filas devueltas y un `total` que se pasa. Es el caso real: el repo trajo la
+        página entera y el count dice que el filtro da más de lo que se puede exportar."""
         svc, _ = self._svc()
-        svc.listar_todos_candidatos = lambda e=None, sv=False, cl=None: _CANDIDATOS * LIMITE_FILAS_EXPORT  # type: ignore[method-assign]
+        svc.listar_todos_candidatos = lambda e=None, sv=False, cl=None, page=1, page_size=20: (  # type: ignore[method-assign]
+            _pagina(_CANDIDATOS, total=LIMITE_FILAS_EXPORT + 1))
 
         with pytest.raises(AppError) as exc:
             svc.exportar(EMPRESA, "csv")

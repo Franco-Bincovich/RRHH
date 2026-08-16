@@ -28,6 +28,8 @@ for _k, _v in _TEST_ENV.items():
 import importlib
 from types import SimpleNamespace
 
+from schemas.inventario import ItemResponse
+
 import pytest
 
 from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
@@ -171,16 +173,25 @@ class _RepoPorFiltro:
     def __init__(self, sin_filtro: int, con_filtro: int) -> None:
         self.sin_filtro, self.con_filtro = sin_filtro, con_filtro
 
-    def find_all(self, empresa_id=None, estado=None, area_id=None):
+    def find_all(self, empresa_id=None, estado=None, area_id=None, page=1, page_size=20):
         # CUALQUIER filtro acota, no solo `estado`: si el fake solo mirara uno, un filtro nuevo
         # que no bajara el total pasaría inadvertido y el consejo "usá los filtros" sería falso.
         n = self.con_filtro if (estado or area_id) else self.sin_filtro
+        # 🔴 EL TOTAL ES EL DEL FILTRO Y LAS FILAS SE RECORTAN, como hace el repo real con
+        # `count="exact"` + `.range()`. Es lo que hace falsable el test del límite: si el fake
+        # devolviera `len(pagina)` como total, un export que se lleva 20 filas de 30.000 pasaría
+        # el tope sin chistar y el archivo saldría incompleto — el bug que este módulo cierra.
+        ini = (page - 1) * page_size
         # SimpleNamespace y no dict: construir_filas_export lee atributos, no claves.
-        return [SimpleNamespace(
+        # 🔴 ItemResponse REAL y no SimpleNamespace: desde que el export va por el listado, las
+        # filas pasan por el wrapper Pydantic, que valida el TIPO de cada item. `model_construct`
+        # las arma sin correr validación de campos — acá se mide el conteo, no el mapeo.
+        filas = [ItemResponse.model_construct(
             empresa_nombre="ACME", nombre=f"item-{i}", tipo="notebook", descripcion=None,
             numero_serie=None, estado="disponible", costo=None, asignado_a=None, notas=None,
             fecha_alta=None, created_at=None,
         ) for i in range(n)]
+        return filas[ini:ini + page_size], n
 
 
 class TestElConteoRespetaLosFiltros:

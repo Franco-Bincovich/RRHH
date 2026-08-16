@@ -30,9 +30,11 @@ async def list_proyectos(
     request: Request,
     estado: Optional[str] = Query(None),
     area_id: Optional[UUID] = Query(None, description="Proyectos con al menos un empleado asignado de esa área"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     service: ProyectosService = Depends(_svc),
 ) -> ProyectoListResponse:
-    return service.get_all(get_empresa_id(request), estado, area_id)
+    return service.get_all(get_empresa_id(request), estado, area_id, page, page_size)
 
 
 # ⚠️ ANTES de /{id}: si fuera después, "exportar" matchearía como un id y daría 422 de UUID.

@@ -21,3 +21,15 @@ export interface AreaUpdate {
   descripcion?: string
   responsable_id?: string
 }
+
+export interface AreaListResponse {
+  items: Area[]
+  /**
+   * 🔴 Total del FILTRO sin paginar (búsqueda incluida), no `items.length`. `items` es una
+   * página: el contador del encabezado tiene que leer esto, o al buscar seguiría diciendo 58.
+   */
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}

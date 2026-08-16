@@ -101,9 +101,14 @@ class _Repo:
         self.llamadas: list[dict] = []
         self._filas = _CATALOGO if filas is None else filas
 
-    def find_all(self, estado=None, empresa_id=None):
+    def find_all(self, estado=None, empresa_id=None, page=1, page_size=20):
         self.llamadas.append({"estado": estado, "empresa_id": empresa_id})
-        return [v for v in self._filas if estado is None or v.estado == estado]
+        filas = [v for v in self._filas if estado is None or v.estado == estado]
+        # (página, total): el TOTAL es el del filtro y el recorte va después, como hace el repo
+        # real con `count="exact"` + `.range()`. Un fake que devolviera `len(página)` como total
+        # no podría desmentir un export que se lleva una página en vez del listado entero.
+        ini = (page - 1) * page_size
+        return filas[ini:ini + page_size], len(filas)
 
 
 def _svc(filas=None):
@@ -133,9 +138,11 @@ def test_el_fake_reparte_las_vacantes_en_tres_estados() -> None:
     """Sin reparto, todo filtro devolvería el total y "filtró" sería indistinguible de "no
     filtró". Y sin la vacante de textos largos, no habría contra qué comprobar que no salen."""
     repo = _Repo()
-    assert len(repo.find_all()) == 4
-    assert len(repo.find_all(estado="nueva")) == 2
-    assert len(repo.find_all(estado="cerrada")) == 1
+    # `find_all` devuelve (página, total) desde que el listado pagina: se mira el TOTAL, que es
+    # lo que el filtro tiene que bajar — la página con el default de 20 traería lo mismo.
+    assert repo.find_all()[1] == 4
+    assert repo.find_all(estado="nueva")[1] == 2
+    assert repo.find_all(estado="cerrada")[1] == 1
     assert _CATALOGO[0].descripcion and _CATALOGO[0].linkedin_post_id
     assert _CATALOGO[3].modalidad is None and _CATALOGO[3].fecha_apertura is None
 

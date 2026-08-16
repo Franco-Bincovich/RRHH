@@ -35,7 +35,10 @@ class VacacionesPendientesRepo:
         arma el service vía _ownership_filter. Los dos ejes conviven: el de empresa NO se
         reemplaza por el de ownership.
         """
-        q = supabase_admin.table(_T).select("*", count="exact").order("periodo", desc=True)
+        # `.order("id")` = desempate: `periodo` es un AÑO, asi que empatan casi todas las filas
+        # entre si. Es el caso mas extremo de los siete listados paginados — sin el `id`, el orden
+        # dentro de un periodo es el que Postgres quiera y cambia entre paginas.
+        q = supabase_admin.table(_T).select("*", count="exact").order("periodo", desc=True).order("id")
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if empleado_ids is not None:

@@ -1,9 +1,16 @@
-"""Repositorio de inventario_asignaciones. Acceso a Supabase con supabase_admin."""
+"""Repositorio de inventario_asignaciones. Acceso a Supabase con supabase_admin.
+
+El mapper y sus tres lookups por lote viven en `_inventario_asignacion_row.py`: este archivo
+estaba en 100/100 cuando le tocaba sumar la paginacion, y el corte es el que ya tienen
+`_empleado_row.py` y `_hora_row.py` — el mapper crece con cada columna que se muestra, el repo
+con cada filtro, y juntos no entran.
+"""
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._inventario_asignacion_row import build as _build
 from repositories._scope_filtros import empleados_de_area
 from schemas.inventario import AsignacionResponse
 from utils.errors import AppError
@@ -12,40 +19,10 @@ from utils.logger import logger
 _T = "inventario_asignaciones"
 
 
-def _build(rows: List[dict]) -> List[AsignacionResponse]:
-    """Enriquece filas con empresa_nombre, campos del ítem y empleado_nombre."""
-    if not rows:
-        return []
-    empresa_map = {
-        e["id"]: e["nombre"]
-        for e in (supabase_admin.table("empresas").select("id, nombre")
-                  .in_("id", list({r["empresa_id"] for r in rows})).execute().data or [])
-    }
-    item_data = (supabase_admin.table("inventario_items")
-                 .select("id, nombre, tipo, numero_serie")
-                 .in_("id", list({r["item_id"] for r in rows})).execute().data or [])
-    item_map = {i["id"]: i for i in item_data}
-
-    emp_data = (supabase_admin.table("empleados").select("id, nombre, apellido")
-                .in_("id", list({r["empleado_id"] for r in rows})).execute().data or [])
-    emp_map = {e["id"]: f"{e['nombre']} {e['apellido']}" for e in emp_data}
-
-    return [
-        AsignacionResponse.model_validate({
-            **r,
-            "empresa_nombre":    empresa_map.get(r["empresa_id"]),
-            "item_nombre":       item_map.get(r["item_id"], {}).get("nombre"),
-            "item_tipo":         item_map.get(r["item_id"], {}).get("tipo"),
-            "item_numero_serie": item_map.get(r["item_id"], {}).get("numero_serie"),
-            "empleado_nombre":   emp_map.get(r["empleado_id"]),
-        })
-        for r in rows
-    ]
-
-
 class InventarioAsignacionesRepo:
     def find_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[str] = None,
-                 area_id: Optional[UUID] = None) -> List[AsignacionResponse]:
+                 area_id: Optional[UUID] = None, page: int = 1, page_size: int = 20,
+                 ) -> Tuple[List[AsignacionResponse], int]:
         """Asignaciones activas (fecha_devolucion IS NULL), filtradas por empresa, empleado y/o área.
 
         El área se resuelve a empleados en scope_filtros (un lookup batch, no uno por fila). La
@@ -56,16 +33,21 @@ class InventarioAsignacionesRepo:
         if area_id:
             emp_ids = empleados_de_area(area_id, empresa_id)
             if not emp_ids:
-                return []
-        q = (supabase_admin.table(_T).select("*").is_("fecha_devolucion", "null")
-             .order("fecha_asignacion", desc=True))
+                return [], 0
+        # `.order("id")` = desempate: `fecha_asignacion` es FECHA sin hora y un alta masiva entra
+        # toda con la misma, así que los empates son la norma. ASC aunque la fecha vaya DESC —
+        # es la forma de `idx_inv_asig_empresa_fecha` (migración 118), que además es PARCIAL
+        # sobre `fecha_devolucion IS NULL`: exactamente el `.is_()` que esta query ya lleva.
+        q = (supabase_admin.table(_T).select("*", count="exact").is_("fecha_devolucion", "null")
+             .order("fecha_asignacion", desc=True).order("id"))
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if empleado_id:
             q = q.eq("empleado_id", empleado_id)
         if area_id:
             q = q.in_("empleado_id", emp_ids)
-        return _build(q.execute().data or [])
+        res = q.range((page - 1) * page_size, page * page_size - 1).execute()
+        return _build(res.data or []), (res.count or 0)
 
     def find_historial(self, item_id: str) -> List[AsignacionResponse]:
         """Historial completo de asignaciones de un ítem, más reciente primero."""

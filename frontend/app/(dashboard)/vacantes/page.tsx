@@ -2,44 +2,25 @@
 
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Briefcase, Plus } from "lucide-react"
+import { Briefcase } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
+import { Pagination } from "@/components/ui/Pagination"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
 import { VacanteModal } from "@/components/features/vacantes/VacanteModal"
 import { VacantesTable } from "@/components/features/vacantes/VacantesTable"
-import { RevisarCasillaButton } from "@/components/features/vacantes/RevisarCasillaButton"
+import { VacantesFiltros, VacantesTableSkeleton } from "@/components/features/vacantes/VacantesFiltros"
 import { MailsPendientes } from "@/components/features/vacantes/MailsPendientes"
-import { ExportMenu } from "@/components/features/export/ExportMenu"
-import { exportarVacantes, fetchVacantes } from "@/services/vacantes"
+import { VacantesAcciones } from "@/components/features/vacantes/VacantesAcciones"
+import { fetchVacantes } from "@/services/vacantes"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { EstadoVacante, Vacante } from "@/types/vacantes"
 import type { Empresa } from "@/types/empresa"
 
-const SELECT_CLASS =
-  "min-h-[2rem] rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-
-function TableSkeleton() {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton key={i} className="h-12 w-full rounded-lg" />
-      ))}
-    </div>
-  )
-}
-
-function formatFecha(raw: string | null): string {
-  if (!raw) return "—"
-  const d = new Date(raw)
-  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
-}
+const PAGE_SIZE = 20
 
 export default function VacantesPage() {
   const router = useRouter()
@@ -49,13 +30,19 @@ export default function VacantesPage() {
   const [empresaActivaId, setEmpresaActivaIdLocal] = useState<string | null>(null)
 
   const [vacantes, setVacantes] = useState<Vacante[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [estadoFilter, setEstadoFilter] = useState<EstadoVacante | "">("")
+  const [estadoFilter, setEstadoFilterRaw] = useState<EstadoVacante | "">("")
   const [modalOpen, setModalOpen] = useState(false)
 
   // filtro de empresa en columna (solo activo cuando topbar = "Todas")
-  const [empresaFiltro, setEmpresaFiltro] = useState("")
+  const [empresaFiltro, setEmpresaFiltroRaw] = useState("")
+  // 🔴 Cambiar un filtro vuelve a la página 1 (invariante 4 del bloque B): filtrar parado en
+  // la 7 pediría una página que el resultado nuevo no tiene y la grilla saldría vacía.
+  const setEstadoFilter = (v: EstadoVacante | "") => { setPage(1); setEstadoFilterRaw(v) }
+  const setEmpresaFiltro = (v: string) => { setPage(1); setEmpresaFiltroRaw(v) }
   const [empresas, setEmpresas] = useState<Empresa[]>([])
 
   useEffect(() => {
@@ -74,14 +61,15 @@ export default function VacantesPage() {
     try {
       // si topbar = "Todas" y hay filtro de columna activo, pasar override
       const empresaOverride = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
-      const data = await fetchVacantes(estadoFilter || undefined, empresaOverride)
-      setVacantes(data)
+      const data = await fetchVacantes(estadoFilter || undefined, empresaOverride, page, PAGE_SIZE)
+      setVacantes(data.items)
+      setTotal(data.total)
     } catch {
       setError(true)
     } finally {
       setLoading(false)
     }
-  }, [estadoFilter, empresaActivaId, empresaFiltro])
+  }, [estadoFilter, empresaActivaId, empresaFiltro, page])
 
   useEffect(() => {
     load()
@@ -93,56 +81,26 @@ export default function VacantesPage() {
     <div>
       <PageHeader
         title="Vacantes"
-        description={loading ? "Cargando..." : `${vacantes.length} vacante${vacantes.length !== 1 ? "s" : ""}`}
+        // `total` y no `vacantes.length`: en la página 2 el largo de la página no dice cuántas hay.
+        description={loading ? "Cargando..." : `${total} vacante${total !== 1 ? "s" : ""}`}
         action={
-          <div className="flex items-center gap-2">
-            {/* Exporta con el MISMO estado que filtra la pantalla. La empresa viaja por el
-                header, igual que en el listado. Sin filas no se ofrece exportar. */}
-            {!loading && !error && vacantes.length > 0 && (
-              <ExportMenu onExport={(f) => exportarVacantes(f, estadoFilter || undefined, empresaFiltro || undefined)} />
-            )}
-            {/* Revisa la CASILLA entera, no esta pantalla: cada mail elige su vacante por el
-                código del asunto. Por eso vive en el listado y no en la ficha de una vacante. */}
-            {canWrite && <RevisarCasillaButton />}
-            {canWrite && (
-              <Button className="min-h-11" onClick={() => setModalOpen(true)}>
-                <Plus />
-                Nueva vacante
-              </Button>
-            )}
-          </div>
+          <VacantesAcciones
+            // `total > 0` y no `vacantes.length > 0`: en la página 2 el largo de la página no
+            // dice si hay algo que exportar — lo dice el total del filtro.
+            hayFilas={!loading && !error && total > 0}
+            canWrite={canWrite} estadoFiltro={estadoFilter} empresaFiltro={empresaFiltro}
+            onNueva={() => setModalOpen(true)}
+          />
         }
       />
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row">
-        {mostrarFiltroEmpresa && (
-          <select
-            aria-label="Filtrar por empresa"
-            className={SELECT_CLASS}
-            value={empresaFiltro}
-            onChange={(e) => { setEmpresaFiltro(e.target.value) }}
-          >
-            <option value="">Todas las empresas</option>
-            {empresas.map((e) => (
-              <option key={e.id} value={e.id}>{e.nombre}</option>
-            ))}
-          </select>
-        )}
-        <select
-          aria-label="Filtrar por estado"
-          className={SELECT_CLASS}
-          value={estadoFilter}
-          onChange={(e) => setEstadoFilter(e.target.value as EstadoVacante | "")}
-        >
-          <option value="">Todos los estados</option>
-          <option value="nueva">Nueva</option>
-          <option value="en_proceso">En proceso</option>
-          <option value="con_candidatos">Con candidatos</option>
-          <option value="cerrada">Cerrada</option>
-        </select>
-      </div>
+      <VacantesFiltros
+        mostrarEmpresa={mostrarFiltroEmpresa} empresas={empresas}
+        empresaFiltro={empresaFiltro} onEmpresa={setEmpresaFiltro}
+        estadoFiltro={estadoFilter} onEstado={setEstadoFilter}
+      />
 
-      {loading && <TableSkeleton />}
+      {loading && <VacantesTableSkeleton />}
 
       {!loading && error && <ErrorState action={load} />}
 
@@ -160,6 +118,10 @@ export default function VacantesPage() {
           mostrarEmpresa={!empresaActivaId}
           onAbrir={(id) => router.push(`/vacantes/${id}`)}
         />
+      )}
+
+      {total > PAGE_SIZE && (
+        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
       )}
 
       {/* Los mails que no matchearon: se releen de la casilla, no hay estado propio. */}

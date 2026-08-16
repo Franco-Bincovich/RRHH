@@ -11,6 +11,8 @@ export interface EstadoListado {
   setProyectos: (p: Proyecto[]) => void
   setLoading: (v: boolean) => void
   setError: (m: string | null) => void
+  /** Total del FILTRO sin paginar. Opcional: los callers que no dibujan barra no lo pasan. */
+  setTotal?: (n: number) => void
 }
 
 export const ERROR_CARGA = "No se pudieron cargar los proyectos."
@@ -25,15 +27,21 @@ export const ERROR_CARGA = "No se pudieron cargar los proyectos."
  * con el endpoint respondiendo 200. Apagarlo dentro del `try` no alcanza: el camino de error deja
  * la pantalla cargando y el usuario nunca ve el mensaje que el `catch` acaba de escribir.
  */
-export async function cargarProyectos(filtros: ProyectosFiltros, estado: EstadoListado): Promise<void> {
+export async function cargarProyectos(
+  filtros: ProyectosFiltros, estado: EstadoListado, page = 1, pageSize = 20,
+): Promise<void> {
   estado.setLoading(true)
   estado.setError(null)
   try {
-    const data = await fetchProyectos(filtros)
+    const data = await fetchProyectos(filtros, page, pageSize)
     // `?? []` cubre el 200 sin items: sin él la grilla revienta al leer .length y el síntoma
     // sería una pantalla en blanco, otra vez sin decir qué pasó.
     estado.setProyectos(data.items ?? [])
+    // `?? items.length` cubre el 200 sin `total`: mostrar el largo de la página es peor que el
+    // total real, pero inventar uno mayor afirmaría que hay proyectos que no existen.
+    estado.setTotal?.(data.total ?? (data.items ?? []).length)
   } catch {
+    estado.setTotal?.(0)
     estado.setError(ERROR_CARGA)
   } finally {
     estado.setLoading(false)

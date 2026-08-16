@@ -186,11 +186,23 @@ class _FakeNominaRepo:
         self.filas = filas
         self.recibido: dict = {}
 
-    def get_nomina_mes(self, mes, anio, empresa_id=None):
-        self.recibido = {"mes": mes, "anio": anio, "empresa_id": empresa_id}
+    def _del_periodo(self, mes, anio, empresa_id):
         return [f for f in self.filas
                 if f.mes == mes and f.anio == anio
                 and (empresa_id is None or f.empresa_id == str(empresa_id))]
+
+    def get_nomina_mes(self, mes, anio, empresa_id=None):
+        """El período COMPLETO. Es el que usan los KPIs del dashboard, y por eso no pagina."""
+        self.recibido = {"mes": mes, "anio": anio, "empresa_id": empresa_id}
+        return self._del_periodo(mes, anio, empresa_id)
+
+    def find_pagina(self, mes, anio, empresa_id=None, page=1, page_size=20):
+        """El listado. Sigue registrando lo recibido: el `empresa_id` tiene que llegar hasta acá
+        o el archivo sale con las dos empresas (el mutante que sobrevivió la primera pasada)."""
+        self.recibido = {"mes": mes, "anio": anio, "empresa_id": empresa_id}
+        filas = self._del_periodo(mes, anio, empresa_id)
+        ini = (page - 1) * page_size
+        return filas[ini:ini + page_size], len(filas)
 
 
 FILAS_NOM = [_nomina(EMPRESA_A, 7), _nomina(EMPRESA_A, 7, "Beto Ruiz"),
@@ -216,7 +228,7 @@ def _filas_csv(descarga) -> list:
 class TestExportNomina:
     def test_devuelve_lo_mismo_que_el_listado(self) -> None:
         svc, _ = _svc_costos(FILAS_NOM)
-        listado = svc.get_nomina_mes(7, 2026, EMPRESA_A)
+        listado = svc.get_nomina_mes(7, 2026, EMPRESA_A).items
         assert len(_filas_csv(svc.exportar(7, 2026, EMPRESA_A, "csv"))) == len(listado) == 2
 
     def test_el_periodo_llega_al_repo(self) -> None:

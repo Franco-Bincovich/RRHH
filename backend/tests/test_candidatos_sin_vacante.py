@@ -10,7 +10,7 @@ completa, que es lo único que prueba que filtró.
 
 ## 🔴 Y EL FAKE FILTRA EN LA QUERY, NO EN PYTHON
 
-`_Repo.find_all_candidatos` aplica `sin_vacante` sobre sus datos y **registra que lo recibió**. Si
+`_Repo.find_pagina` aplica `sin_vacante` sobre sus datos y **registra que lo recibió**. Si
 en cambio devolviera siempre todo y el filtrado ocurriera en el service, este archivo pasaría
 igual y el EXPORT saldría con más filas que la pantalla — que es el bug que la invariante del
 Bloque B existe para impedir. Por eso hay un test que mira el parámetro que llegó al repo, no
@@ -35,8 +35,9 @@ from uuid import UUID, uuid4  # noqa: E402
 
 import pytest  # noqa: E402
 
+import repositories._candidato_listado_repo as listado_mod  # noqa: E402
 import repositories.candidato_repo as repo_mod  # noqa: E402
-from schemas.vacante import CandidatoResponse  # noqa: E402
+from schemas.candidato import CandidatoResponse  # noqa: E402
 from services.candidato_service import CandidatoService  # noqa: E402
 from tests._fake_supabase import FakeSupabase  # noqa: E402
 from utils.errors import AppError  # noqa: E402
@@ -62,9 +63,7 @@ class _Repo:
         self.recibido: list = []
         self.clasificacion_recibida: list = []
 
-    def find_all_candidatos(self, empresa_id=None, sin_vacante=False, clasificacion=None):
-        self.recibido.append(sin_vacante)
-        self.clasificacion_recibida.append(clasificacion)
+    def _filtrados(self, sin_vacante, clasificacion):
         # 🔴 El fake FILTRA de verdad por los dos ejes. Si aceptara `clasificacion` y lo
         # ignorara, el test de paridad listado↔export pasaría con el filtro desconectado del
         # WHERE — exactamente el verde falso que la doctrina del repo persigue.
@@ -74,6 +73,30 @@ class _Repo:
         if clasificacion:
             return [c for c in salida if c.clasificacion_ia == clasificacion]
         return salida
+
+    def find_pagina(self, empresa_id=None, sin_vacante=False, clasificacion=None,
+                    page=1, page_size=20):
+        """(página, total). El TOTAL es el del filtro, sin recortar: es lo que hace falsable
+        que el export se lleve todo y no una página."""
+        self.recibido.append(sin_vacante)
+        self.clasificacion_recibida.append(clasificacion)
+        filas = self._filtrados(sin_vacante, clasificacion)
+        ini = (page - 1) * page_size
+        return filas[ini:ini + page_size], len(filas)
+
+    def claves_de_grupo(self, empresa_id=None, sin_vacante=False, clasificacion=None):
+        """Las claves de agrupamiento del conjunto ENTERO, no de la página — por eso no recibe
+        `page`. Si devolviera las de la página, el conteo por grupo del encabezado contaría lo
+        que se ve y el test que lo cubre no podría fallar.
+
+        🔴 REGISTRA EL FILTRO IGUAL QUE `find_pagina`, y por eso `recibido` tiene DOS entradas
+        por llamada al listado. No es contabilidad: si esta query no llevara el filtro, el
+        encabezado diría cuántos candidatos hay SIN filtrar sobre una pantalla filtrada — un
+        número que no le corresponde a nada de lo que se está viendo."""
+        self.recibido.append(sin_vacante)
+        self.clasificacion_recibida.append(clasificacion)
+        return [{"vacante_id": c.vacante_id, "busqueda_congelada": c.busqueda_congelada}
+                for c in self._filtrados(sin_vacante, clasificacion)]
 
 
 class _VacanteRepo:
@@ -98,7 +121,9 @@ def _svc(repo=None, candidatos=None):
 class TestFiltroSinVacante:
 
     def test_sin_filtro_vienen_todos(self) -> None:
-        assert len(_svc().listar_todos_candidatos(E1)) == 3
+        # `.total` y no `len(...)`: el listado devuelve una página con su total desde que
+        # pagina. Con 3 filas los dos números coinciden; el que describe el filtro es el total.
+        assert _svc().listar_todos_candidatos(E1).total == 3
 
     def test_con_filtro_vienen_solo_los_huerfanos(self) -> None:
         """La lista filtrada es MÁS CHICA que la completa: es lo único que prueba que filtró.
@@ -107,8 +132,9 @@ class TestFiltroSinVacante:
         huérfanos — ahí las dos listas serían iguales y el test pasaría sin filtro alguno.
         """
         salida = _svc().listar_todos_candidatos(E1, sin_vacante=True)
-        assert [c.id for c in salida] == ["c2", "c3"]
-        assert all(c.vacante_id is None for c in salida)
+        assert [c.id for c in salida.items] == ["c2", "c3"]
+        assert salida.total == 2
+        assert all(c.vacante_id is None for c in salida.items)
 
     def test_el_filtro_LLEGA_al_repo_y_no_se_aplica_en_el_service(self) -> None:
         """🔴 Un escalón más abajo: se mira el parámetro que recibió el repo. Si el service
@@ -116,7 +142,10 @@ class TestFiltroSinVacante:
         que va por el mismo camino, sacaría más filas de las que muestra la pantalla."""
         repo = _Repo()
         _svc(repo).listar_todos_candidatos(E1, sin_vacante=True)
-        assert repo.recibido == [True]
+        # DOS entradas y no una: el listado pide la página Y las claves de grupo, y las dos
+        # tienen que llevar el mismo filtro — si el conteo del encabezado no lo llevara,
+        # diría cuántos hay SIN filtrar sobre una pantalla filtrada.
+        assert repo.recibido == [True, True]
 
     def test_el_export_da_EXACTAMENTE_el_mismo_conjunto_que_el_listado(self) -> None:
         """La invariante del Bloque B, verificada sobre el contenido y no sobre el largo."""
@@ -124,8 +153,8 @@ class TestFiltroSinVacante:
         svc = _svc(repo)
         listado = svc.listar_todos_candidatos(E1, sin_vacante=True)
         svc.exportar(E1, "csv", sin_vacante=True)
-        assert repo.recibido == [True, True], "el export no pidió el mismo filtro que el listado"
-        assert [c.id for c in listado] == ["c2", "c3"]
+        assert repo.recibido == [True] * 4, "el export no pidió el mismo filtro que el listado"
+        assert [c.id for c in listado.items] == ["c2", "c3"]
 
     def test_el_repo_real_manda_el_filtro_EN_LA_QUERY(self, monkeypatch) -> None:
         """🔴 El otro escalón: que el `.is_("vacante_id", "null")` viaje a Supabase. Un filtro en
@@ -140,10 +169,13 @@ class TestFiltroSinVacante:
 
         monkeypatch.setattr(original, "is_", _is, raising=False)
         monkeypatch.setattr(repo_mod, "supabase_admin", fake)
-        repo_mod.CandidatoRepo().find_all_candidatos(E1, sin_vacante=True)
+        # El listado se mudó a su satélite al partir el repo (100/100 exacto): parchear
+        # sólo `candidato_repo` deja la query saliendo a la red de verdad.
+        monkeypatch.setattr(listado_mod, "supabase_admin", fake)
+        repo_mod.CandidatoRepo().find_pagina(E1, sin_vacante=True)
         assert vistos == [("vacante_id", "null")]
         vistos.clear()
-        repo_mod.CandidatoRepo().find_all_candidatos(E1, sin_vacante=False)
+        repo_mod.CandidatoRepo().find_pagina(E1, sin_vacante=False)
         assert vistos == [], "sin el filtro no debería emitirse el is_"
 
 

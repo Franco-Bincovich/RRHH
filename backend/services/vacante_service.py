@@ -8,8 +8,10 @@ from uuid import UUID
 from repositories.candidato_repo import CandidatoRepo
 from repositories.integracion_remitente_repo import IntegracionRemitenteRepo
 from repositories.vacante_repo import VacanteRepo
-from schemas.vacante import AvisoPostulacionResponse, CandidatoCreate, CandidatoResponse, VacanteCreate, VacanteResponse, VacanteUpdate
-from services._limite_export import verificar_limite_export
+from schemas.candidato import CandidatoCreate, CandidatoResponse
+from schemas.vacante import AvisoPostulacionResponse, VacanteCreate, VacanteListResponse, VacanteResponse, VacanteUpdate
+from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
+from services._paginacion import cantidad_paginas
 from services._vacante_aviso import aviso as _aviso
 from services._vacante_candidatos import agregar, mover
 from services._vacantes_export import construir_filas_export
@@ -31,7 +33,8 @@ class VacanteService:
         self._audit = audit or AuditService()
         self._remitente_repo = remitente_repo or IntegracionRemitenteRepo()
 
-    def get_vacantes(self, estado: Optional[str] = None, empresa_id: Optional[UUID] = None) -> List[VacanteResponse]:
+    def get_vacantes(self, estado: Optional[str] = None, empresa_id: Optional[UUID] = None,
+                     page: int = 1, page_size: int = 20) -> VacanteListResponse:
         """
         Retorna la lista de vacantes, opcionalmente filtrada por estado y empresa.
 
@@ -40,9 +43,11 @@ class VacanteService:
             empresa_id: Filtra por empresa. None = todas las empresas (vista consolidada).
 
         Returns:
-            Lista de VacanteResponse ordenada por fecha de creación descendente.
+            Página de VacanteResponse (más recientes primero) + el total del filtro.
         """
-        return self._repo.find_all(estado, empresa_id)
+        items, total = self._repo.find_all(estado, empresa_id, page, page_size)
+        return VacanteListResponse(items=items, total=total, page=page, page_size=page_size,
+                                   total_pages=cantidad_paginas(total, page_size))
 
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel",
                  estado: Optional[str] = None) -> Descarga:
@@ -51,8 +56,9 @@ class VacanteService:
         Va por el mismo `find_all` que `get_vacantes`, así que el archivo no puede traer filas
         que el listado no muestre. Qué columnas salen y por qué, en _vacantes_export.
         """
-        items = self._repo.find_all(estado, empresa_id)
-        verificar_limite_export(len(items))
+        pagina = self.get_vacantes(estado, empresa_id, 1, LIMITE_FILAS_EXPORT)
+        verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
+        items = pagina.items
         datos = {"Vacantes": construir_filas_export(items)}
         return build_export(nombre="Vacantes", datos=datos, filename_base="vacantes", formato=formato)
 

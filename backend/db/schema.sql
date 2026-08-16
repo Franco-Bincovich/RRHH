@@ -44,7 +44,7 @@
 -- 14/8 contra el catalogo vivo: las 11 columnas existen, `empleado_capacitacion.empleado_id`
 -- quedo nullable, y `ux_ec_nombre_libre` existe.
 --
--- PENDIENTE DE CORRER, una sola:
+-- PENDIENTE DE CORRER, dos:
 --   · backend/migrations/117_recategorizacion_categoria.sql  -> ANTES del deploy del modulo de
 --     recategorizaciones. UNA linea de DDL: DROP + ADD de
 --     `recategorizaciones_algo_cambia_check` para que `categoria_nueva` tambien cuente.
@@ -54,9 +54,25 @@
 --     el CHECK con dos campos: una recategorizacion de solo categoria rebotaba con 23514, y es
 --     el caso mas frecuente (la categoria es el NIVEL dentro del seniority).
 --
--- Lo que este archivo declara y produccion TODAVIA NO tiene (todo de la 117):
---   · `recategorizaciones_algo_cambia_check` con el tercer OR (`categoria_nueva IS NOT NULL`).
---     Es el UNICO objeto en el que este archivo va por delante de produccion.
+--   · backend/migrations/118_indices_paginacion.sql  -> ANTES del deploy de la paginacion.
+--     SEIS indices compuestos `(empresa_id, <orden>, id)`. Aditiva pura, idempotente, sin
+--     ventana: un indice nuevo no cambia ningun resultado, solo el plan.
+--     🔑 Es la continuacion declarada de la 115, que probo tres de estos y los difirio por
+--     escrito ("sin LIMIT el planner ni los usa... a esos modulos los arregla la PAGINACION").
+--     Con el LIMIT puesto, re-medidos el 14/8: los seis pasan de Seq Scan a Index Scan.
+--     🔴 De los NUEVE candidatos, tres NO entraron: `objetivos`, `areas` y `proyectos` siguen
+--     sin ser elegidos por el planner incluso con el LIMIT (son catalogos/tablero, no crecen
+--     con la dotacion). Van comentados al final del archivo con su medicion y su disparador.
+--
+-- Lo que este archivo declara y produccion TODAVIA NO tiene:
+--   · (117) `recategorizaciones_algo_cambia_check` con el tercer OR
+--     (`categoria_nueva IS NOT NULL`).
+--   · (118) los 6 indices `idx_empleados_empresa_apellido`, `idx_candidatos_empresa_created`,
+--     `idx_ec_empresa_created`, `idx_inv_asig_empresa_fecha` (PARCIAL),
+--     `idx_inv_items_empresa_nombre`, `idx_vacantes_empresa_created`. NINGUNO reemplaza a un
+--     indice existente — las coincidencias parciales que hay en el catalogo (los
+--     `*_id_empresa_uq`, `empleados_empresa_dni_uq`, `ux_objetivo_responsable_titulo`) estan
+--     analizadas una por una en el encabezado de la 118.
 --
 -- ── Lo que sigue es el registro de las CUATRO QUE YA SE CORRIERON, no un pendiente ─────────
 --   · backend/migrations/113_lote_features_aditivo.sql      -> ✅ corrida
@@ -1540,6 +1556,10 @@ CREATE INDEX idx_candidatos_email ON public.candidatos USING btree (email);
 CREATE INDEX idx_candidatos_empresa ON public.candidatos USING btree (empresa_id);
 CREATE INDEX idx_candidatos_etapa ON public.candidatos USING btree (etapa);
 CREATE INDEX idx_candidatos_vacante ON public.candidatos USING btree (vacante_id);
+-- (mig 118) Listado paginado de /candidatos. La `id` final NO es decoracion: sin ella el
+-- planner abandona el recorrido ordenado y se lleva las 387 filas de la empresa para devolver
+-- 20 (medido). Ver el bloque del tiebreaker en migrations/118_indices_paginacion.sql.
+CREATE INDEX idx_candidatos_empresa_created ON public.candidatos USING btree (empresa_id, created_at DESC, id);
 CREATE INDEX idx_cap_empresa_id ON public.capacitaciones USING btree (empresa_id);
 CREATE INDEX idx_cesiones_empleado ON public.cesiones USING btree (empleado_id);
 CREATE INDEX idx_cesiones_empresa ON public.cesiones USING btree (empresa_id);
@@ -1550,6 +1570,8 @@ CREATE INDEX idx_costos_nomina_empresa_periodo ON public.costos_nomina USING btr
 CREATE INDEX idx_ec_capacitacion_id ON public.empleado_capacitacion USING btree (capacitacion_id);
 CREATE INDEX idx_ec_empleado_id ON public.empleado_capacitacion USING btree (empleado_id);
 CREATE INDEX idx_ec_empresa_id ON public.empleado_capacitacion USING btree (empresa_id);
+-- (mig 118) Listado paginado de asignaciones de capacitacion.
+CREATE INDEX idx_ec_empresa_created ON public.empleado_capacitacion USING btree (empresa_id, created_at DESC, id);
 CREATE INDEX idx_empleados_area ON public.empleados USING btree (area_id);
 CREATE INDEX idx_empleados_desempeno ON public.empleados USING btree (desempeno);
 CREATE INDEX idx_empleados_domicilio_localidad ON public.empleados USING btree (domicilio_localidad) WHERE (domicilio_localidad IS NOT NULL);
@@ -1559,6 +1581,12 @@ CREATE INDEX idx_empleados_estado ON public.empleados USING btree (estado);
 CREATE INDEX idx_empleados_manager ON public.empleados USING btree (manager_id);
 CREATE INDEX idx_empleados_potencial ON public.empleados USING btree (potencial);
 CREATE INDEX idx_empleados_user ON public.empleados USING btree (user_id);
+-- (mig 118) 🔴 El listado de /empleados YA paginaba, y hasta este bloque lo hacia SIN ORDER BY
+-- (`.range()` pelado en empleado_repo.find_all): paginas no estables. Al agregarle el orden que
+-- le faltaba, la query pasa a pedir un orden que ninguna estructura podia darle. El arreglo del
+-- bug CREA la necesidad de este indice — por eso viajan juntos.
+-- ⚠️ NO lo cubre `empleados_empresa_dni_uq (empresa_id, dni)`: arranca bien pero ordena por DNI.
+CREATE INDEX idx_empleados_empresa_apellido ON public.empleados USING btree (empresa_id, apellido, nombre, id);
 CREATE INDEX idx_evaluacion_evaluados_empleado ON public.evaluacion_evaluados USING btree (empleado_id);
 CREATE INDEX idx_hp_asignacion ON public.horas_proyecto USING btree (asignacion_id);
 CREATE INDEX idx_hp_empresa ON public.horas_proyecto USING btree (empresa_id);
@@ -1573,9 +1601,21 @@ CREATE INDEX idx_hp_empleado_fecha ON public.horas_proyecto USING btree (emplead
 CREATE INDEX idx_inv_asig_empleado ON public.inventario_asignaciones USING btree (empleado_id);
 CREATE INDEX idx_inv_asig_empresa ON public.inventario_asignaciones USING btree (empresa_id);
 CREATE INDEX idx_inv_asig_item ON public.inventario_asignaciones USING btree (item_id);
+-- (mig 118) Listado paginado de asignaciones de inventario. 🔑 PARCIAL, y no es un adorno: el
+-- repo NUNCA lista las devueltas (`find_all` arranca con `.is_("fecha_devolucion","null")`
+-- fijo). Un indice pleno cargaria las devueltas para descartarlas con un nodo Filter en cada
+-- pagina — medido: 4,9x mas lento que el parcial, y la brecha crece sola porque las
+-- devoluciones se acumulan para siempre.
+-- ⚠️ El historial de un item (`find_historial`, con devueltas y sin empresa) NO lo usa ni puede:
+-- lo sigue resolviendo `idx_inv_asig_item`, que por eso queda.
+CREATE INDEX idx_inv_asig_empresa_fecha ON public.inventario_asignaciones USING btree (empresa_id, fecha_asignacion DESC, id) WHERE (fecha_devolucion IS NULL);
 CREATE UNIQUE INDEX idx_inv_asig_item_activo ON public.inventario_asignaciones USING btree (item_id) WHERE (fecha_devolucion IS NULL);
 CREATE INDEX idx_inv_items_empresa ON public.inventario_items USING btree (empresa_id);
 CREATE INDEX idx_inv_items_estado ON public.inventario_items USING btree (estado);
+-- (mig 118) Listado paginado del catalogo de items. Ordena por `nombre` y no por una fecha,
+-- igual que idx_vp_empresa_periodo ordena por `periodo`: lo que define al patron es la FORMA de
+-- la query (igualdad por empresa + orden + LIMIT), no que la columna sea temporal.
+CREATE INDEX idx_inv_items_empresa_nombre ON public.inventario_items USING btree (empresa_id, nombre, id);
 CREATE INDEX idx_obj_empresa ON public.objetivos USING btree (empresa_id);
 CREATE INDEX idx_obj_estado ON public.objetivos USING btree (estado);
 CREATE INDEX idx_obj_responsable ON public.objetivos USING btree (responsable_id);
@@ -1665,6 +1705,10 @@ CREATE INDEX idx_mail_enviado_empresa ON public.mail_enviado USING btree (empres
 CREATE INDEX idx_vacantes_empresa ON public.vacantes USING btree (empresa_id);
 CREATE INDEX idx_vacantes_estado ON public.vacantes USING btree (estado);
 CREATE INDEX idx_vacantes_responsable ON public.vacantes USING btree (responsable_id);
+-- (mig 118) Listado paginado de /vacantes. Es la tabla mas chica de las seis (200 filas) y aun
+-- asi el planner lo elige: no entro por volumen sino porque `vacantes` acumula historico (las
+-- cerradas no se borran) y el listado siempre pide las ultimas.
+CREATE INDEX idx_vacantes_empresa_created ON public.vacantes USING btree (empresa_id, created_at DESC, id);
 -- Migracion 085. Los indices son PARCIALES porque en SQL NULL <> NULL: un UNIQUE comun sobre
 -- empresa_id dejaria entrar varias filas globales y la lectura elegiria una al azar.
 -- El de parametros_empresa indexa la CONSTANTE (empresa_id IS NULL) = TRUE, asi que solo

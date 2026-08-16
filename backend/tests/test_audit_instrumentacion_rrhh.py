@@ -33,7 +33,7 @@ from uuid import uuid4
 from schemas.costo import NominaResponse, PresupuestoResponse
 from schemas.empleado import EmpleadoResponse, EmpleadoUpdate
 from schemas.empresa import EmpresaResponse
-from schemas.vacante import CandidatoResponse
+from schemas.candidato import CandidatoResponse
 from services.candidato_service import CandidatoService
 from services.costo_service import CostoService
 from services.empleado_service import EmpleadoService

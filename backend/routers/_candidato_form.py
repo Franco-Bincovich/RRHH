@@ -7,7 +7,7 @@ from typing import Optional, Tuple
 
 from fastapi import File, Form, UploadFile
 
-from schemas.vacante import CandidatoCreate
+from schemas.candidato import CandidatoCreate
 
 
 async def candidato_form(

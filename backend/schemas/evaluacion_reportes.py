@@ -74,7 +74,16 @@ class EvaluadoListadoItem(BaseModel):
 
 class EvaluadoListadoResponse(BaseModel):
     items: List[EvaluadoListadoItem]
+    # Total del FILTRO sin paginar (`count="exact"`), no el largo de `items`.
     total: int
+    page: int = 1
+    page_size: int = 0
+    total_pages: int = 0
+    # 🔴 LOS SECTORES DEL LOTE ENTERO, no los de la página. El desplegable de sector se poblaba
+    # con `Array.from(new Set(todos.map(e => e.sector)))` sobre lo traído: al paginar, ofrecería
+    # sólo los sectores que aparecen en la página 1 y filtrar por cualquier otro sería imposible
+    # — el usuario ni siquiera vería la opción. Salen de una query de una columna sobre el lote.
+    sectores: List[str] = []
 
 
 class FichaResponse(BaseModel):

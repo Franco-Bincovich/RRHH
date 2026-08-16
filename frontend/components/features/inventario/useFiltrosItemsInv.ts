@@ -23,11 +23,12 @@ import type { Area } from "@/types/area"
 import type { Empresa } from "@/types/empresa"
 import type { InventarioItem } from "@/types/inventario"
 
-export function useFiltrosItemsInv() {
+export function useFiltrosItemsInv(page = 1, pageSize = 20) {
   const [empresaActivaId] = useState<string | null>(getEmpresaActivaId)
   const [items, setItems] = useState<InventarioItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [total, setTotal] = useState(0)
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [empresaFiltro, setEmpresaFiltro] = useState("")
   const [estadoFiltro, setEstadoFiltro] = useState("")
@@ -51,11 +52,11 @@ export function useFiltrosItemsInv() {
     setLoading(true); setError(false)
     try {
       const override = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
-      const data = await fetchItems({ empresaIdOverride: override, estado: estadoFiltro || undefined, areaId: areaFiltro || undefined })
-      setItems(data.items)
+      const data = await fetchItems({ empresaIdOverride: override, estado: estadoFiltro || undefined, areaId: areaFiltro || undefined }, page, pageSize)
+      setItems(data.items); setTotal(data.total)
     } catch { setError(true) }
     finally { setLoading(false) }
-  }, [empresaActivaId, empresaFiltro, estadoFiltro, areaFiltro])
+  }, [empresaActivaId, empresaFiltro, estadoFiltro, areaFiltro, page, pageSize])
 
   useEffect(() => { load() }, [load])
 
@@ -73,6 +74,6 @@ export function useFiltrosItemsInv() {
   return {
     empresaActivaId, empresas, empresaFiltro, cambiarEmpresa,
     estadoFiltro, setEstadoFiltro, areaFiltro, setAreaFiltro, opcionesArea,
-    items, loading, error, load, filtros,
+    items, loading, error, load, filtros, total,
   }
 }

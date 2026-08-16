@@ -55,7 +55,8 @@ from uuid import UUID, uuid4
 import pytest
 
 from repositories.candidato_repo import _crow
-from schemas.vacante import CandidatoCreate, CandidatoResponse, VacanteCreate, VacanteResponse, VacanteUpdate
+from schemas.candidato import CandidatoCreate, CandidatoResponse
+from schemas.vacante import VacanteCreate, VacanteResponse, VacanteUpdate
 from services.vacante_service import VacanteService
 
 AHORA = datetime.now(timezone.utc)

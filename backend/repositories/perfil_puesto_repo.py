@@ -52,7 +52,10 @@ class PerfilPuestoRepo:
             q = q.eq("activo", True)
         if search:
             q = q.ilike("nombre", f"%{search}%")
-        res = q.order("nombre").range((page - 1) * page_size, page * page_size - 1).execute()
+        # `.order("id")` = desempate. `nombre` no es unico (no hay UNIQUE sobre la columna: la
+        # unicidad la chequea `existe_nombre` en Python), asi que dos perfiles homonimos empatan
+        # y sin el `id` su orden relativo puede cambiar entre paginas.
+        res = q.order("nombre").order("id").range((page - 1) * page_size, page * page_size - 1).execute()
         return ([PerfilPuestoResponse.model_validate(r) for r in (res.data or [])],
                 res.count or 0)
 

@@ -57,7 +57,17 @@ class ProyectoResponse(BaseModel):
 
 class ProyectoListResponse(BaseModel):
     items: List[ProyectoResponse]
+    # 🔴 HOY `total == len(items)` PORQUE ESTE LISTADO NO PAGINA: `proyectos_repo.find_all` trae
+    # todos los proyectos del filtro.
+    # 🔴 EL DÍA QUE PAGINE, `total` TIENE QUE SALIR DE `count="exact"` DE LA MISMA QUERY.
+    # ⚠️ Y acá el costeo de cada fila lo resuelve `batch_costos` con los ids de `items`: al
+    # paginar, el batch se acota solo a la página, que es lo correcto. Lo que NO hay que hacer es
+    # derivar un total de costo sumando `items` — sería el mismo bug que tuvo HorasTab, con la
+    # plata del portfolio entero. Los tres pasos, en `services/_paginacion.py`.
     total: int
+    page: int = 1
+    page_size: int = 0
+    total_pages: int = 0
 
 
 # ── Asignaciones ───────────────────────────────────────────────────────────────

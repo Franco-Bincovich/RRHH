@@ -44,8 +44,17 @@ export interface ProyectoUpdate {
 }
 
 export interface ProyectoListResponse {
-  items: Proyecto[]
+  items: Proyecto[]
+  /**
+   * 🔴 HOY `total === items.length` porque este listado NO pagina: el backend devuelve todo.
+   * El día que pagine (sesiones 2–5), `total` pasa a ser "cuántas hay" y `items` una página.
+   * Un contador escrito como `items.length` va a seguir compilando y va a decir 20 sobre 400.
+   * Usá `total` para contar y `items` sólo para recorrer.
+   */
   total: number
+  page: number
+  page_size: number
+  total_pages: number
 }
 
 export interface Asignacion {
@@ -158,4 +167,19 @@ export interface HoraCreate {
 export interface HoraListResponse {
   items: Hora[]
   total: number
+  /**
+   * 🔴 Totales de TODAS las cargas del proyecto, no de `items`.
+   *
+   * `items` es una página. Sumarla con un `.reduce()` daba el total de lo que se ve presentado
+   * como el total del proyecto: con 400 cargas la pantalla decía "9 h", y el número cambiaba al
+   * pasar de página. Los calcula el backend sobre el conjunto completo.
+   *
+   * REGLA DEL MOLDE: si un listado pagina, todo agregado sobre él viene del backend. Un total
+   * derivado de la página es correcto solo mientras la página sea todo — o sea, hasta que
+   * alguien agregue paginación, que es justo cuando nadie vuelve a mirar el `.reduce()`.
+   */
+  total_horas: number
+  /** Las cargas sin `valor_hora_snapshot` suman 0 acá (ver `Hora.costo`): para un TOTAL "no
+   *  costeable" aporta cero. Eso NO habilita imprimir "$ 0" fila por fila. */
+  total_costo: number
 }

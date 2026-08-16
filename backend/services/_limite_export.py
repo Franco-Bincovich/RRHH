@@ -48,14 +48,20 @@ propósito: un límite por formato es una decisión de producto, no un ajuste.
 CONSTANTE DE MÓDULO, NO variable de entorno: no es algo que se deba poder subir sin pensar.
 Subirlo exige revisar los techos de tiempo de arriba, y eso es una decisión, no configuración.
 
-⚠️ ALCANCE REAL DE LA PROTECCIÓN, para no venderla de más. En los exports paginados
-(empleados, vacaciones, ausencias, auditoría) el total llega por `count="exact"` y solo se
-traen las filas del tope: ahí el control actúa ANTES de cargar nada grande. En los cuatro que
-no paginan (capacitaciones, inventario ítems, inventario asignaciones, objetivos) el repo no
-expone un conteo y sus archivos están en o sobre su límite de líneas, así que el chequeo corre
-sobre la lista ya traída — **igual que hoy**: no hay
-regresión, pero un volumen que muera por timeout muere antes de llegar acá. Cerrarlo del todo
-pide un `contar()` por repo, y eso es una tanda propia.
+⚠️ ALCANCE REAL DE LA PROTECCIÓN, para no venderla de más. En los exports paginados el total
+llega por `count="exact"` y solo se traen las filas del tope: ahí el control actúa ANTES de
+cargar nada grande. Hoy son ocho: **empleados, vacaciones, ausencias, auditoría** y, desde la
+sesión 2 de paginación (14/8/2026), **capacitaciones/asignaciones, inventario/ítems,
+inventario/asignaciones y proyectos** — los tres primeros salieron justamente de la lista de
+abajo.
+
+🔴 EL QUE TODAVÍA NO: **objetivos**. Su repo no expone un conteo, así que el chequeo corre sobre
+la lista ya traída — no hay regresión respecto de antes, pero un volumen que muera por timeout
+muere antes de llegar acá. Y tiene una vuelta propia que hay que resolver al paginarlo: el
+archivo trae padres E hijos, así que el tope se cuenta sobre el árbol APLANADO
+(`_objetivos_arbol.contar_con_hijos`) y no sobre las raíces que `find_all` devuelve — un
+`count="exact"` sobre la tabla contaría las dos cosas mezcladas. Está anotado en
+`schemas/objetivo.py`, al lado del campo.
 """
 from utils.errors import AppError
 

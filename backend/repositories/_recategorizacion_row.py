@@ -65,3 +65,12 @@ def build(rows: List[dict]) -> List[RecategorizacionResponse]:
         })
         for r in rows
     ]
+
+
+def con_empresa(q, empresa_id):
+    """Aplica el filtro de empresa si viene. None = consolidado, no restringe.
+
+    Vive con `TABLE`/`SELECT`/`build` y no en el repo porque es la MISMA clase de primitiva:
+    toma una query y devuelve una query. Molde: `_empleado_row.with_empresa`.
+    """
+    return q.eq("empresa_id", str(empresa_id)) if empresa_id else q

@@ -75,10 +75,28 @@ class _Repo:
 
     def __init__(self) -> None:
         self.llamadas: list = []
+        self.busquedas: list = []
 
-    def find_all(self, empresa_id=None):
+    def _filtradas(self, empresa_id, search):
+        filas = [a for a in _CATALOGO if empresa_id is None or a.empresa_id == empresa_id]
+        # El `search` filtra DE VERDAD: si lo ignorara, "el export respeta la búsqueda" sería
+        # indistinguible de "el export trae todo".
+        if search:
+            filas = [a for a in filas if search.lower() in a.nombre.lower()]
+        return filas
+
+    def find_all(self, empresa_id=None, search=None):
+        """El catálogo completo (`/api/areas/opciones`). No pagina."""
         self.llamadas.append(empresa_id)
-        return [a for a in _CATALOGO if empresa_id is None or a.empresa_id == empresa_id]
+        return self._filtradas(empresa_id, search)
+
+    def find_pagina(self, empresa_id=None, search=None, page=1, page_size=20):
+        """El listado de gestión. (página, total) — el total es el del FILTRO, sin recortar."""
+        self.llamadas.append(empresa_id)
+        self.busquedas.append(search)
+        filas = self._filtradas(empresa_id, search)
+        ini = (page - 1) * page_size
+        return filas[ini:ini + page_size], len(filas)
 
 
 def _svc():
@@ -195,10 +213,13 @@ class TestElRouter:
         svc = SimpleNamespace(exportar=lambda *a: recibido.update(args=a) or SimpleNamespace(
             content=b"x", media_type="text/csv", filename="areas.csv"))
 
+        # `search=None` explícito por el mismo motivo que `empresa_id` abajo: llamando a la
+        # función directo, FastAPI no resuelve los defaults y llegaría el objeto `Query(None)`.
         await router_mod.exportar_areas(request=_request(), formato="csv",
-                                        empresa_id=EMPRESA_B, service=svc)
+                                        empresa_id=EMPRESA_B, search=None, service=svc)
 
-        assert recibido["args"] == (EMPRESA_B, "csv")
+        # El 3er argumento es el `search`, que el router pasa siempre (None si no vino).
+        assert recibido["args"] == (EMPRESA_B, "csv", None)
 
     async def test_sin_query_NO_cae_al_header_de_empresa(self) -> None:
         """🔴 La empresa del export sale del QUERY, no del header — igual que el listado, que
@@ -216,9 +237,9 @@ class TestElRouter:
             content=b"x", media_type="text/csv", filename="areas.csv"))
 
         await router_mod.exportar_areas(request=_request(), formato="csv",
-                                        empresa_id=None, service=svc)
+                                        empresa_id=None, search=None, service=svc)
 
-        assert recibido["args"] == (None, "csv")
+        assert recibido["args"] == (None, "csv", None)
         assert EMPRESA_A not in recibido["args"], "cayó al header X-Empresa-Id"
 
     async def test_devuelve_el_archivo_con_su_nombre(self) -> None:
@@ -235,7 +256,11 @@ class TestElRouter:
 
 def test_el_export_chequea_el_limite_de_filas() -> None:
     muchas = [_CATALOGO[0]] * (LIMITE_FILAS_EXPORT + 1)
-    svc = AreaService(repo=SimpleNamespace(find_all=lambda *a, **k: muchas))
+    # Devuelve (pagina, total): el corte lo dispara el TOTAL, no el largo de lo que llegó.
+    svc = AreaService(repo=SimpleNamespace(
+        find_all=lambda *a, **k: muchas,
+        find_pagina=lambda *a, **k: (muchas, len(muchas)),
+    ))
 
     with pytest.raises(AppError) as exc:
         svc.exportar(EMPRESA_A, "excel")

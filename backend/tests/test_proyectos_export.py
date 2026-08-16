@@ -70,10 +70,15 @@ class _Repo:
     def __init__(self) -> None:
         self.llamadas: list = []
 
-    def find_all(self, empresa_id=None, estado=None, area_id=None):
+    def find_all(self, empresa_id=None, estado=None, area_id=None, page=1, page_size=20):
         self.llamadas.append({"empresa_id": empresa_id, "estado": estado, "area_id": area_id})
-        return [p for p, area in _CATALOGO
-                if (estado is None or p.estado == estado) and (area_id is None or area == area_id)]
+        filas = [p for p, area in _CATALOGO
+                 if (estado is None or p.estado == estado) and (area_id is None or area == area_id)]
+        # El total es el del FILTRO (sin recortar), y el recorte se aplica después: es lo que hace
+        # el repo real con `count="exact"` + `.range()`. Un fake que devolviera `len(pagina)` como
+        # total no podría desmentir un export que se lleva solo la primera página.
+        ini = (page - 1) * page_size
+        return filas[ini:ini + page_size], len(filas)
 
 
 def _svc():
@@ -96,10 +101,12 @@ def _request() -> Request:
 def test_el_fake_reparte_los_proyectos_en_dos_estados_y_dos_areas() -> None:
     """Sin reparto, todo filtro devolvería el total y "filtró" sería indistinguible de "no filtró"."""
     repo = _Repo()
-    assert len(repo.find_all()) == 4
-    assert len(repo.find_all(estado="activo")) == 2
-    assert len(repo.find_all(area_id=AREA_A)) == 2
-    assert len(repo.find_all(estado="activo", area_id=AREA_A)) == 1
+    # `find_all` devuelve (pagina, total) desde que el listado pagina. Se mira el TOTAL, que es
+    # lo que el filtro tiene que bajar — la página con el default de 20 traería lo mismo.
+    assert repo.find_all()[1] == 4
+    assert repo.find_all(estado="activo")[1] == 2
+    assert repo.find_all(area_id=AREA_A)[1] == 2
+    assert repo.find_all(estado="activo", area_id=AREA_A)[1] == 1
 
 
 # ── 1. Los filtros llegan del service al repo ─────────────────────────────────
@@ -214,7 +221,10 @@ def test_el_export_chequea_el_limite_de_filas() -> None:
     from utils.errors import AppError
 
     muchos = [_CATALOGO[0][0]] * (LIMITE_FILAS_EXPORT + 1)
-    svc = ProyectosService(repo=SimpleNamespace(find_all=lambda *a, **k: muchos))
+    # Devuelve (pagina, total): el corte lo dispara el TOTAL, no el largo de lo que llegó. Con
+    # el service pidiendo LIMITE_FILAS_EXPORT filas, un fake que devolviera solo la página nunca
+    # superaría el tope y este test no podría fallar.
+    svc = ProyectosService(repo=SimpleNamespace(find_all=lambda *a, **k: (muchos, len(muchos))))
 
     with pytest.raises(AppError) as exc:
         svc.exportar(EMPRESA, "excel")

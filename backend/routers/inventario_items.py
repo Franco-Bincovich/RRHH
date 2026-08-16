@@ -30,9 +30,11 @@ def _svc() -> InventarioItemsService:
 async def list_items(
     request: Request,
     estado: Optional[str] = Query(None), area_id: Optional[UUID] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     service: InventarioItemsService = Depends(_svc),
 ) -> ItemListResponse:
-    return service.get_all(get_empresa_id(request), estado, area_id)
+    return service.get_all(get_empresa_id(request), estado, area_id, page, page_size)
 
 
 # ⚠️ ANTES de /{id}: si fuera después, "exportar" matchearía como un id y daría 422 de UUID.

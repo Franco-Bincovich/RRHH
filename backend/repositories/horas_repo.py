@@ -3,27 +3,18 @@
 El mapper y sus lookups por lotes viven en `_hora_row.py` (este archivo llegaba a 118/100 al
 sumarle la migración 103).
 
-🔴 UNA SOLA TABLA, DOS CAMINOS DE ESCRITURA. `save` acepta los campos de los dos y manda solo
-los que recibe: el camino viejo (asignación + proyecto + snapshot) y la carga directa (cliente +
-empleado + modalidad + textos). Ninguno de los dos ve los campos del otro en el payload.
+🔴 UNA SOLA TABLA, DOS CAMINOS DE ESCRITURA — el camino viejo (asignación + proyecto + snapshot)
+y la carga directa (cliente + empleado + modalidad + textos). El INSERT que los atiende a los dos
+vive en `_horas_write_repo.py`, con el porqué de que sea UNO solo.
 """
 from typing import List, Optional, Tuple
 
 from integrations.supabase_client import supabase_admin
 from repositories._hora_row import build
+from repositories._horas_write_repo import guardar
 from schemas.horas import HoraResponse
-from utils.errors import AppError
 
 _T = "horas_proyecto"
-
-# Campos que solo van al INSERT si el caller los trae. `descripcion` y `cargado_por` estaban
-# antes con un `if <valor>:` (truthiness); acá el criterio es `is not None` para los nuevos, que
-# es lo correcto para textos: `proyecto_texto=""` es un dato que el usuario escribió, no un
-# campo ausente. Se dejan los dos viejos con su comportamiento original.
-_OPCIONALES = ("asignacion_id", "proyecto_id", "valor_hora_snapshot",
-               "cliente_id", "empleado_id", "modalidad", "proyecto_texto", "tarea_texto",
-               "idempotencia")
-
 
 class HorasRepo:
     def find_by_proyecto(self, proyecto_id: str, page: int = 1, page_size: int = 20) -> Tuple[List[HoraResponse], int]:
@@ -31,8 +22,17 @@ class HorasRepo:
 
         Las cargas directas NO aparecen acá: tienen `proyecto_id` NULL y un `.eq()` nunca matchea
         un NULL. Es el comportamiento buscado — no son horas de ningún proyecto."""
+        # `.order("id")` = desempate. `fecha` es una FECHA sin hora y las cargas de un proyecto se
+        # acumulan sobre los mismos días, así que empatan casi todas. Sin el `id`, las páginas de
+        # esta tabla no son estables — y este listado es justo el que muestra un TOTAL, o sea el
+        # lugar donde una fila repetida o perdida se ve como plata mal contada.
+        #
+        # 🚩 PARA EL LOTE DE ÍNDICES: `idx_hp_proyecto_fecha` (migración 115) es
+        # `(proyecto_id, fecha DESC)` — SIN el `id`. Con este desempate, el plan le suma un
+        # Incremental Sort. Es correcto y barato a este volumen, pero si `horas_proyecto` crece
+        # de verdad, el índice que corresponde es `(proyecto_id, fecha DESC, id)`.
         res = (supabase_admin.table(_T).select("*", count="exact")
-               .eq("proyecto_id", proyecto_id).order("fecha", desc=True)
+               .eq("proyecto_id", proyecto_id).order("fecha", desc=True).order("id")
                .range((page - 1) * page_size, page * page_size - 1).execute())
         return build(res.data or []), res.count or 0
 
@@ -40,25 +40,9 @@ class HorasRepo:
         self, empresa_id: str, empleado_empresa_id: str, fecha: str, horas: float,
         descripcion: Optional[str] = None, cargado_por: Optional[str] = None, **opcionales,
     ) -> HoraResponse:
-        """Inserta un registro. Los campos de cada camino llegan por `opcionales`.
-
-        Obligatorios en los DOS caminos: empresa, empresa del empleado, fecha y horas.
-        `valor_hora_snapshot` ya viene congelado por el service (camino viejo)."""
-        payload: dict = {
-            "empresa_id": empresa_id, "empleado_empresa_id": empleado_empresa_id,
-            "fecha": fecha, "horas": horas,
-        }
-        payload.update({k: v for k, v in opcionales.items()
-                        if k in _OPCIONALES and v is not None})
-        if descripcion:
-            payload["descripcion"] = descripcion
-        if cargado_por:
-            payload["cargado_por"] = cargado_por
-        res = supabase_admin.table(_T).insert(payload).execute()
-        if not res.data:
-            raise AppError("Error al registrar las horas", "DB_ERROR", 500)
-        rows = supabase_admin.table(_T).select("*").eq("id", str(res.data[0]["id"])).execute().data or []
-        return build(rows)[0]
+        """Inserta un registro de horas. Delegado a _horas_write_repo.guardar."""
+        return guardar(empresa_id, empleado_empresa_id, fecha, horas,
+                       descripcion, cargado_por, **opcionales)
 
     def total_horas_del_dia(self, empleado_id: str, fecha: str) -> float:
         """Suma de las horas ya cargadas por ese empleado ese día. Insumo del tope de 12.

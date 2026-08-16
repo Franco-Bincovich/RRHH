@@ -22,7 +22,7 @@ from types import SimpleNamespace
 import pytest
 
 from schemas.screening import ClasificacionUpdate
-from schemas.vacante import CandidatoResponse
+from schemas.candidato import CandidatoResponse
 from services._screening_candidato import PREFIJO_FALLO
 from services.cv_screening_service import CvScreeningService
 from services.screening_correccion_service import ScreeningCorreccionService

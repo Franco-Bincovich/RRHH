@@ -2,7 +2,6 @@
 Servicio de empleados. Lógica de negocio del módulo de Empleados.
 Flujo: router → service → repository → DB
 """
-import math
 from typing import Optional
 from uuid import UUID
 
@@ -14,6 +13,7 @@ from services._empleados_export import construir_filas_export
 from services._empleados_utils import empleado_or_404
 from services._empleados_write import actualizar, crear, desactivar
 from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
+from services._paginacion import cantidad_paginas
 from services.audit_service import AuditService
 from services.export import Descarga, build_export
 
@@ -78,8 +78,10 @@ class EmpleadoService:
         """
         proyecto_ids = empleados_de_proyecto(proyecto_id) if proyecto_id else None
         items, total = self._repo.find_all(page, page_size, empresa_id, area_id, estado, search, es_lider, proyecto_ids, sin_manager)
-        total_pages = math.ceil(total / page_size) if page_size > 0 else 0
-        return EmpleadoListResponse(items=items, total=total, page=page, page_size=page_size, total_pages=total_pages)
+        # La división vive en `_paginacion.cantidad_paginas`, no acá: estaba escrita a mano y era
+        # la única copia hasta que aparecieron cinco listados más con el mismo cálculo.
+        return EmpleadoListResponse(items=items, total=total, page=page, page_size=page_size,
+                                    total_pages=cantidad_paginas(total, page_size))
 
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", area_id: Optional[str] = None, estado: Optional[str] = None, search: Optional[str] = None, es_lider: Optional[bool] = None, proyecto_id: Optional[UUID] = None, sin_manager: Optional[bool] = None) -> Descarga:
         """Exporta empleados (columnas legibles del legajo, sin UUIDs) con los MISMOS filtros que el listado; sin paginar."""

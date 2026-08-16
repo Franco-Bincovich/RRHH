@@ -30,12 +30,16 @@ export function HorasTab({ proyectoId, onRefresh, canWrite }: Props) {
   const [modalOpen, setModalOpen]       = useState(false)
   const [page, setPage]                 = useState(1)
   const [total, setTotal]               = useState(0)
+  // 🔴 Los totales son ESTADO propio traído del backend, no un derivado de `horas`. Ver abajo.
+  const [totalHoras, setTotalHoras]     = useState(0)
+  const [totalCosto, setTotalCosto]     = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const [h, a] = await Promise.all([fetchHoras(proyectoId, page, PAGE_SIZE), fetchAsignaciones(proyectoId)])
       setHoras(h.items); setTotal(h.total); setAsignaciones(a.items)
+      setTotalHoras(h.total_horas); setTotalCosto(h.total_costo)
     } catch { toast.error("No se pudieron cargar las horas.") }
     finally { setLoading(false) }
   }, [proyectoId, page])
@@ -62,12 +66,18 @@ export function HorasTab({ proyectoId, onRefresh, canWrite }: Props) {
     } catch { toast.error("No se pudo eliminar el registro.") }
   }
 
-  const totalHoras = horas.reduce((s, h) => s + h.horas, 0)
-  // `costo` y `valor_hora_snapshot` son null en las cargas del link público (no tienen
-  // `valor_hora_snapshot` con qué costear). Se suman como 0 —para un TOTAL, "no costeable"
-  // aporta cero— pero abajo NO se imprimen como "$ 0": eso diría que costaron nada, cuando lo
-  // cierto es que no se pueden costear. Ver types/proyecto.ts::Hora.
-  const totalCosto = horas.reduce((s, h) => s + (h.costo ?? 0), 0)
+  // 🔴 ACA HABIA DOS `.reduce()` SOBRE `horas`, Y `horas` ES UNA PAGINA. El pie decía "9 h"
+  // sobre un proyecto de 400 y el número cambiaba al pasar de página — un total que se mueve al
+  // navegar no es un total, y nada en la pantalla delataba que estaba mal.
+  // Ahora los dos vienen del backend (`total_horas` / `total_costo`), calculados sobre TODAS las
+  // cargas del proyecto en `_proyectos_enrich.totales_de_proyecto`.
+  //
+  // ⚠️ NO los vuelvas a derivar de `horas` "para no pedir un campo más": el bug es invisible
+  // mientras el proyecto entre en una página, que es exactamente el caso en el que se prueba.
+  //
+  // Las cargas del link público no tienen `valor_hora_snapshot` con qué costear y suman 0 al
+  // total —para un TOTAL, "no costeable" aporta cero— pero abajo NO se imprimen como "$ 0": eso
+  // diría que costaron nada. Ver types/proyecto.ts::Hora.
 
   if (loading) return (
     <div className="space-y-2 animate-pulse">
@@ -79,7 +89,12 @@ export function HorasTab({ proyectoId, onRefresh, canWrite }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {total} registro{total !== 1 ? "s" : ""} en total · esta página: {totalHoras.toFixed(1)} h · {ARS.format(totalCosto)}
+          {/* 🔴 DECÍA "esta página:", y era CIERTO mientras los números salían de un `.reduce()`
+              sobre `horas`. Ahora son del proyecto entero, así que el texto tenía que cambiar
+              con ellos: dejarlo habría convertido un subtotal honesto en un total mal rotulado,
+              que es peor que el punto de partida. Si un número cambia de alcance, su etiqueta
+              es parte del cambio. */}
+          {total} registro{total !== 1 ? "s" : ""} · {totalHoras.toFixed(1)} h · {ARS.format(totalCosto)} en todo el proyecto
         </p>
         {canWrite && (
           <Button size="sm" className="min-h-[2.75rem] gap-1.5" onClick={() => setModalOpen(true)}>

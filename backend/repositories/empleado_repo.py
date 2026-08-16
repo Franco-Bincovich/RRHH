@@ -14,7 +14,7 @@ from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from repositories._empleado_lookup_repo import por_dni, por_id, por_legajo
-from repositories._empleado_row import SELECT, TABLE, row, with_empresa
+from repositories._empleado_row import SELECT, TABLE, ordenado as _ordenado, row, with_empresa
 from repositories._empleado_write_repo import actualizar, baja_logica, dar_de_baja, guardar
 from schemas.empleado import EmpleadoCreate, EmpleadoResponse, EmpleadoUpdate
 
@@ -58,7 +58,7 @@ class EmpleadoRepo:
                 f"nombre.ilike.%{search}%,apellido.ilike.%{search}%"
             )
 
-        result = query.range(start, end).execute()
+        result = _ordenado(query).range(start, end).execute()
 
         total = result.count if result.count is not None else 0
         return [row(r) for r in result.data], total

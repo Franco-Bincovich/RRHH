@@ -114,6 +114,12 @@ class _Q:
     def range(self, *_a, **_k) -> "_Q":
         return self
 
+    def order(self, *_a, **_k):
+        # No-op ENCADENABLE y permisivo A PROPOSITO: este fake audita el PREDICADO de la
+        # query, no su orden ni su paginacion (`range` ya es no-op por lo mismo). El orden
+        # tiene su propio archivo, tests/test_paginacion_orden.py, con un fake que si ordena.
+        return self
+
     def or_(self, *_a, **_k) -> "_Q":
         return self
 

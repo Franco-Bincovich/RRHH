@@ -1,5 +1,5 @@
 import { apiFetch, API_BASE, ApiError, authHeaders, descargarArchivo, type FormatoExport } from "@/services/api"
-import type { CandidatoConGrupo, FiltroClasificacion } from "@/types/candidato"
+import type { CandidatoConGrupo, CandidatosPagina, FiltroClasificacion } from "@/types/candidato"
 
 export interface CandidatosFiltros {
   /** Solo los huérfanos: los que entraron sin matchear ninguna búsqueda. */
@@ -19,12 +19,21 @@ function queryCandidatos(f: CandidatosFiltros): Record<string, string | undefine
   return { sin_vacante: f.sinVacante ? "true" : undefined, clasificacion: f.clasificacion }
 }
 
-/** Lista los candidatos de la empresa activa, con su grupo resuelto. */
-export function getCandidatos(filtros: CandidatosFiltros = {}): Promise<CandidatoConGrupo[]> {
+/**
+ * Una página de candidatos de la empresa activa, con su grupo resuelto.
+ *
+ * 🔴 `page`/`pageSize` NO entran en `queryCandidatos`, y no es un olvido: son lo ÚNICO que el
+ * listado tiene y el export no. El export no se pagina (invariante del Bloque B), así que si
+ * el traductor compartido los emitiera, el archivo saldría con las primeras 20 filas.
+ */
+export function getCandidatos(
+  filtros: CandidatosFiltros = {}, page = 1, pageSize = 20,
+): Promise<CandidatosPagina> {
   const params = new URLSearchParams()
   for (const [k, v] of Object.entries(queryCandidatos(filtros))) if (v) params.set(k, v)
-  const query = params.toString() ? `?${params}` : ""
-  return apiFetch<CandidatoConGrupo[]>(`/api/candidatos${query}`)
+  params.set("page", String(page))
+  params.set("page_size", String(pageSize))
+  return apiFetch<CandidatosPagina>(`/api/candidatos?${params}`)
 }
 
 /** Exporta con los MISMOS filtros que muestra la pantalla, por el mismo traductor. */

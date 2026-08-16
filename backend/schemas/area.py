@@ -3,7 +3,7 @@ Schemas Pydantic para el módulo de áreas.
 AreaCreate → AreaUpdate → AreaResponse
 """
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -38,3 +38,15 @@ class AreaResponse(BaseModel):
     responsable_nombre: Optional[str] = None
     cantidad_empleados: int
     created_at: datetime
+
+
+class AreaListResponse(BaseModel):
+    """Página del listado de gestión de áreas. Contrato del molde de paginación."""
+    items: List[AreaResponse]
+    # `total` es el del FILTRO sin paginar (`count="exact"` de la misma query), y desde esta
+    # sesión el filtro incluye el `search`: buscar "Sistemas" y que el contador siga diciendo 58
+    # sería peor que no tenerlo. NO es el largo de `items`.
+    total: int
+    page: int = 1
+    page_size: int = 0
+    total_pages: int = 0

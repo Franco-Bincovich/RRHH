@@ -43,11 +43,17 @@ export function exportarProyectos(formato: FormatoExport, filtros: ProyectosFilt
   )
 }
 
-export function fetchProyectos(filtros: ProyectosFiltros = {}): Promise<ProyectoListResponse> {
+export function fetchProyectos(
+  filtros: ProyectosFiltros = {}, page = 1, pageSize = 20,
+): Promise<ProyectoListResponse> {
   const params = new URLSearchParams()
   for (const [k, v] of Object.entries(queryProyectos(filtros))) {
     if (v) params.set(k, v)
   }
+  // `page`/`page_size` van aparte de la traducción compartida con el export: el export no se
+  // pagina, y colarlos ahí haría que el archivo saliera con una página en vez del listado.
+  params.set("page", String(page))
+  params.set("page_size", String(pageSize))
   const qs = params.size ? `?${params}` : ""
   return apiFetch<ProyectoListResponse>(
     `${BASE}${qs}`,

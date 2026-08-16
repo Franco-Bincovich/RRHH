@@ -32,6 +32,19 @@ function queryAsignaciones(f: AsignacionesInventarioFiltros): Record<string, str
   return { empleado_id: f.empleadoId, area_id: f.areaId }
 }
 
+/**
+ * 🔴 `page`/`page_size` van APARTE de `queryX` a propósito. `queryX` es la traducción que
+ * COMPARTEN el listado y el export, y el export no se pagina: si la paginación entrara ahí, el
+ * archivo saldría con una página de 20 filas en vez del listado entero, sin error y sin aviso.
+ * Del lado del backend lo verifica `test_paridad_list_export.py`; de este lado, la separación.
+ */
+function conPagina(
+  params: Record<string, string | undefined>, page: number, pageSize: number,
+): Record<string, string | undefined> {
+  return { ...params, page: String(page), page_size: String(pageSize) }
+}
+
+
 function headersEmpresa(empresaIdOverride?: string): Record<string, string> | undefined {
   return empresaIdOverride ? { "X-Empresa-Id": empresaIdOverride } : undefined
 }
@@ -66,9 +79,12 @@ export function exportarInventarioItems(
   )
 }
 
-export async function fetchItems(filtros: ItemsFiltros = {}): Promise<ItemListResponse> {
+export async function fetchItems(
+  filtros: ItemsFiltros = {}, page = 1, pageSize = 20,
+): Promise<ItemListResponse> {
   return apiFetch<ItemListResponse>(
-    `${ITEMS}${aQuery(queryItems(filtros))}`, override(filtros.empresaIdOverride),
+    `${ITEMS}${aQuery(conPagina(queryItems(filtros), page, pageSize))}`,
+    override(filtros.empresaIdOverride),
   )
 }
 
@@ -93,10 +109,11 @@ export async function fetchHistorialItem(id: string): Promise<AsignacionListResp
 }
 
 export async function fetchAsignaciones(
-  filtros: AsignacionesInventarioFiltros = {},
+  filtros: AsignacionesInventarioFiltros = {}, page = 1, pageSize = 20,
 ): Promise<AsignacionListResponse> {
   return apiFetch<AsignacionListResponse>(
-    `${ASIG}${aQuery(queryAsignaciones(filtros))}`, override(filtros.empresaIdOverride),
+    `${ASIG}${aQuery(conPagina(queryAsignaciones(filtros), page, pageSize))}`,
+    override(filtros.empresaIdOverride),
   )
 }
 

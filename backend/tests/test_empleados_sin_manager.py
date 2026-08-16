@@ -98,6 +98,12 @@ class _Query:
     def range(self, *_a, **_k) -> "_Query":
         return self
 
+    def order(self, *_a, **_k):
+        # No-op ENCADENABLE y permisivo A PROPOSITO: este fake audita el PREDICADO de la
+        # query, no su orden ni su paginacion (`range` ya es no-op por lo mismo). El orden
+        # tiene su propio archivo, tests/test_paginacion_orden.py, con un fake que si ordena.
+        return self
+
     def _match(self, fila: dict) -> bool:
         if any(str(fila.get(c)) != v for c, v in self._eq.items()):
             return False

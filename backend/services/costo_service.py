@@ -11,13 +11,15 @@ from repositories.nomina_repo import NominaRepo
 from repositories.periodo_repo import PeriodoRepo
 from repositories.presupuesto_repo import PresupuestoRepo
 from schemas.costo import (
-    CostoArea, DashboardCostosResponse, HistorialSalarialItem, NominaCreate, NominaResponse,
+    CostoArea, DashboardCostosResponse, HistorialSalarialItem, NominaCreate,
+    NominaListResponse, NominaResponse,
     PresupuestoCreate, PresupuestoResponse,
 )
 from services._costos_write import cargar_nomina, set_presupuesto_area
 from services._empleado_scope import ensure_empleado_de_empresa
-from services._limite_export import verificar_limite_export
+from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
 from services._nomina_export import construir_filas_export
+from services._paginacion import cantidad_paginas
 from services.audit_service import AuditService
 from services.export import Descarga, build_export
 
@@ -82,16 +84,16 @@ class CostoService:
             evolucion_mensual=self._nomina.get_evolucion(mes, anio, empresa_id),
         )
 
-    def get_nomina_mes(self, mes: int, anio: int, empresa_id: Optional[UUID] = None) -> List[NominaResponse]:
-        """
-        Retorna todos los registros de nómina para el período dado.
+    def get_nomina_mes(self, mes: int, anio: int, empresa_id: Optional[UUID] = None,
+                       page: int = 1, page_size: int = 20) -> NominaListResponse:
+        """Página de la nómina del período, ordenada por apellido del empleado.
 
-        Args:
-            mes: Mes del período (1–12).
-            anio: Año del período.
-            empresa_id: Filtra por empresa. None = todas.
+        Va por `find_pagina`, NO por `get_nomina_mes` del repo: ése devuelve el período entero y
+        es el que alimenta los KPIs del dashboard, que necesitan el conjunto completo.
         """
-        return self._nomina.get_nomina_mes(mes, anio, empresa_id)
+        items, total = self._nomina.find_pagina(mes, anio, empresa_id, page, page_size)
+        return NominaListResponse(items=items, total=total, page=page, page_size=page_size,
+                                  total_pages=cantidad_paginas(total, page_size))
 
     def get_historial_salarial(self, empleado_id: UUID, empresa_id: Optional[UUID] = None) -> List[HistorialSalarialItem]:
         """Serie salarial de un empleado, del período más reciente al más viejo.
@@ -125,9 +127,9 @@ class CostoService:
     def exportar(self, mes: int, anio: int, empresa_id: Optional[UUID] = None, formato: str = "excel") -> Descarga:
         """Exporta la nómina del período con los MISMOS filtros que `get_nomina_mes` — lo que
         se ve en la pantalla es lo que sale en el archivo. El motor genérico no se toca."""
-        rows = self._nomina.get_nomina_mes(mes, anio, empresa_id)
-        verificar_limite_export(len(rows))
-        datos = {"Nómina": construir_filas_export(rows)}
+        pagina = self.get_nomina_mes(mes, anio, empresa_id, 1, LIMITE_FILAS_EXPORT)
+        verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
+        datos = {"Nómina": construir_filas_export(pagina.items)}
         # Guion y no barra: openpyxl rechaza "/" en el título de la hoja y el export moriría
         # con EXPORT_ERROR en vez de entregar el archivo.
         return build_export(nombre=f"Nómina {mes:02d}-{anio}", datos=datos, filename_base="nomina", formato=formato)

@@ -12,7 +12,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
-from schemas.vacante import AvisoPostulacionResponse, CandidatoResponse, VacanteResponse
+from schemas.candidato import CandidatoResponse
+from schemas.vacante import AvisoPostulacionResponse, VacanteListResponse, VacanteResponse
 from services.vacante_service import VacanteService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
@@ -26,11 +27,13 @@ def _svc() -> VacanteService:
     return VacanteService()
 
 
-@router.get("", response_model=List[VacanteResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@router.get("", response_model=VacanteListResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def list_vacantes(
-    request: Request, estado: Optional[str] = Query(None), service: VacanteService = Depends(_svc)
-) -> List[VacanteResponse]:
-    return service.get_vacantes(estado, get_empresa_id(request))
+    request: Request, estado: Optional[str] = Query(None),
+    page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    service: VacanteService = Depends(_svc),
+) -> VacanteListResponse:
+    return service.get_vacantes(estado, get_empresa_id(request), page, page_size)
 
 
 # ⚠️ ANTES de /{id}: si fuera después, "exportar" matchearía como un id y daría 422 de UUID.

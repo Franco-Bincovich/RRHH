@@ -49,6 +49,7 @@ from uuid import uuid4  # noqa: E402
 import pytest  # noqa: E402
 
 import repositories._hora_row as hora_row  # noqa: E402
+import repositories._horas_write_repo as horas_write_mod  # noqa: E402
 import repositories.horas_repo as horas_repo_mod  # noqa: E402
 from repositories.horas_repo import HorasRepo  # noqa: E402
 from schemas.horas import HoraCreate  # noqa: E402
@@ -221,6 +222,9 @@ class _Escritor:
 def escritor(fake, monkeypatch) -> _Escritor:
     e = _Escritor(fake)
     monkeypatch.setattr(horas_repo_mod, "supabase_admin", e)
+    # El INSERT se mudó a su satélite al partir el repo (102/100): sin este segundo
+    # parche, `save` sale a la red de verdad en vez de contra el espía.
+    monkeypatch.setattr(horas_write_mod, "supabase_admin", e)
     return e
 
 

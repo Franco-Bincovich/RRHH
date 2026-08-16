@@ -1,5 +1,5 @@
 """Repositorio de inventario_items. Acceso a Supabase con supabase_admin."""
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
@@ -14,7 +14,8 @@ _T = "inventario_items"
 
 class InventarioItemsRepo:
     def find_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None,
-                 area_id: Optional[UUID] = None) -> List[ItemResponse]:
+                 area_id: Optional[UUID] = None, page: int = 1, page_size: int = 20,
+                 ) -> Tuple[List[ItemResponse], int]:
         """Retorna ítems filtrados por empresa, estado y/o área, ordenados por nombre.
 
         El área se resuelve a ítems en `_inventario_scope`, que documenta qué significa el
@@ -23,15 +24,22 @@ class InventarioItemsRepo:
         if area_id:
             ids = items_de_area(area_id, empresa_id)
             if not ids:
-                return []   # área sin ítems en mano: `.in_([])` no es un WHERE válido
-        q = supabase_admin.table(_T).select("*").order("nombre")
+                # área sin ítems en mano: `.in_([])` no es un WHERE válido. El total es 0, no
+                # `len([])` de una lista que nunca se consultó — son lo mismo acá, pero el
+                # contrato de la tupla no admite devolver solo la lista.
+                return [], 0
+        # `.order("id")` = desempate: `nombre` no es único (dos notebooks del mismo modelo
+        # empatan), y sin él una fila puede salir en dos páginas o en ninguna. ASC, que es la
+        # forma de `idx_inv_items_empresa_nombre` (migración 118).
+        q = supabase_admin.table(_T).select("*", count="exact").order("nombre").order("id")
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if estado:
             q = q.eq("estado", estado)
         if area_id:
             q = q.in_("id", ids)
-        return _build(q.execute().data or [])
+        res = q.range((page - 1) * page_size, page * page_size - 1).execute()
+        return _build(res.data or []), (res.count or 0)
 
     def find_by_id(self, id: str, empresa_id: Optional[UUID] = None) -> Optional[ItemResponse]:
         q = supabase_admin.table(_T).select("*").eq("id", id)

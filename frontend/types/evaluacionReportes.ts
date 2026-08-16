@@ -87,7 +87,18 @@ export interface EvaluadoListadoItem {
 
 export interface EvaluadoListadoResponse {
   items: EvaluadoListadoItem[]
+  /** Total del FILTRO sin paginar (`count="exact"`), no el largo de `items`. */
   total: number
+  page: number
+  page_size: number
+  total_pages: number
+  /**
+   * 🔴 LOS SECTORES DEL LOTE ENTERO, no los de la página. El desplegable se poblaba con
+   * `new Set(todos.map(e => e.sector))` sobre lo traído: al paginar ofrecería sólo los
+   * sectores que aparecen en la página 1, y filtrar por cualquier otro sería imposible —
+   * el usuario ni siquiera vería la opción.
+   */
+  sectores: string[]
 }
 
 export interface FichaResponse {

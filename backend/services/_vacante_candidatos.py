@@ -12,7 +12,7 @@ idénticos a antes de la división.
 from typing import Optional
 from uuid import UUID
 
-from schemas.vacante import CandidatoCreate, CandidatoResponse
+from schemas.candidato import CandidatoCreate, CandidatoResponse
 from utils.errors import AppError
 from utils.logger import logger
 

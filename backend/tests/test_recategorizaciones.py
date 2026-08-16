@@ -95,7 +95,7 @@ class _Q:
         self._neq: List[tuple] = []
         self._cmp: List[tuple] = []
         self._in: Optional[tuple] = None
-        self._orden: Optional[tuple] = None
+        self._orden: list = []
         self._rango: Optional[tuple] = None
         self._limit: Optional[int] = None
         self._single = False
@@ -130,7 +130,11 @@ class _Q:
         return self
 
     def order(self, c, **k) -> "_Q":
-        self._orden = (c, bool(k.get("desc")))
+        # ACUMULA las claves en vez de pisarlas. Guardaba solo la última, así que
+        # `.order("fecha_efectiva", desc=True).order("id")` terminaba ordenando por `id` a secas
+        # — el fake no modelaba un ORDER BY de varias columnas y volvía indistinguible el orden
+        # correcto del que solo desempata.
+        self._orden.append((c, bool(k.get("desc"))))
         return self
 
     def range(self, d, h) -> "_Q":
@@ -192,9 +196,9 @@ class _Q:
                 f.update(self._payload)
             return _Resp(tocadas)
         hall = [f for f in filas if self._match(f)]
-        if self._orden:
-            col, desc = self._orden
-            hall = sorted(hall, key=lambda f: str(f.get(col, "")), reverse=desc)
+        # Multi-clave con sort estable: de la última a la primera, como cualquier ORDER BY.
+        for col, desc in reversed(self._orden):
+            hall = sorted(hall, key=lambda f, c=col: str(f.get(c, "")), reverse=desc)
         total = len(hall)
         if self._rango:
             hall = hall[self._rango[0]:self._rango[1] + 1]

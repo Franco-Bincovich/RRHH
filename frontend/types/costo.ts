@@ -20,6 +20,18 @@ export interface Nomina {
   total: number
 }
 
+export interface NominaListResponse {
+  items: Nomina[]
+  /**
+   * 🔴 Total del FILTRO sin paginar, no `items.length`. `items` es una página de 20: un contador
+   * escrito como `items.length` compila igual y dice 20 sobre 858.
+   */
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
 /**
  * Un período de la serie salarial de un empleado.
  * Sin `total`: esa columna es bruto+cargas (el costo para la empresa), no lo que cobra la

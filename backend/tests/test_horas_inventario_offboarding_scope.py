@@ -69,7 +69,11 @@ class _HorasRepo:
 
 
 def _horas_svc(horas_repo=None):
-    return HorasService(repo=horas_repo or _HorasRepo(), proyectos_repo=_ProyectosRepo())
+    # `totales` va stubbeado igual que los repos: es la agregación de horas/costo del proyecto,
+    # que no es lo que este archivo audita (acá se prueba el SCOPE de empresa). Sin el stub la
+    # dependencia real sale a la red y el test se cuelga en vez de fallar.
+    return HorasService(repo=horas_repo or _HorasRepo(), proyectos_repo=_ProyectosRepo(),
+                        totales=lambda _pid: (0.0, 0.0))
 
 
 def test_horas_proyecto_ajeno_404_y_no_consulta():

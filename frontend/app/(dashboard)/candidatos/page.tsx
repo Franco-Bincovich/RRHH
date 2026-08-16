@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { CandidatoGrupo } from "@/components/features/candidatos/CandidatoGrupo"
 import { CandidatoDetailPanel } from "@/components/features/candidatos/CandidatoDetailPanel"
 import { agruparCandidatos } from "@/components/features/candidatos/agruparCandidatos"
+import { Pagination } from "@/components/ui/Pagination"
 import { useCandidatos } from "@/hooks/useCandidatos"
 import { LeyendaDescarte } from "@/components/features/candidatos/ClasificacionBadge"
 import type { CandidatoConGrupo, FiltroClasificacion } from "@/types/candidato"
@@ -27,21 +28,28 @@ const OPCIONES: { value: "" | FiltroClasificacion; label: string }[] = [
   { value: "sin_clasificar", label: "Sin clasificar" },
 ]
 
+const PAGE_SIZE = 20
+
 export default function CandidatosPage() {
   // 🔴 El filtro viaja al backend, NO se aplica sobre el array: el export usa el mismo traductor
   // (`queryCandidatos`) y si se filtrara acá el archivo saldría con más filas que la pantalla.
   const [sinVacante, setSinVacante] = useState(false)
   const [clasificacion, setClasificacion] = useState<"" | FiltroClasificacion>("")
+  const [page, setPage] = useState(1)
   const filtros = { sinVacante, clasificacion: clasificacion || undefined }
-  const { candidatos, loading, error, refetch } = useCandidatos(filtros)
-  const grupos = useMemo(() => agruparCandidatos(candidatos), [candidatos])
+  const { candidatos, total, conteoPorGrupo, loading, error, refetch } =
+    useCandidatos(filtros, page, PAGE_SIZE)
+  const grupos = useMemo(() => agruparCandidatos(candidatos, conteoPorGrupo),
+                         [candidatos, conteoPorGrupo])
   const [seleccionado, setSeleccionado] = useState<CandidatoConGrupo | null>(null)
 
   return (
     <div>
       <PageHeader
         title="Candidatos"
-        description={loading ? "Cargando..." : `${candidatos.length} candidato${candidatos.length !== 1 ? "s" : ""}`}
+        /* 🔴 `total` y no `candidatos.length`: con paginación el largo del array es 20 y el
+           encabezado diría "20 candidatos" para siempre, en cualquier padrón. */
+        description={loading ? "Cargando..." : `${total} candidato${total !== 1 ? "s" : ""}`}
         action={<ExportMenu onExport={(f) => exportarCandidatos(f, filtros)} />}
       />
 
@@ -51,7 +59,7 @@ export default function CandidatosPage() {
             type="checkbox"
             className="size-4 rounded border-input"
             checked={sinVacante}
-            onChange={(e) => setSinVacante(e.target.checked)}
+            onChange={(e) => { setSinVacante(e.target.checked); setPage(1) }}
           />
           Solo los que no tienen búsqueda asignada
         </label>
@@ -60,7 +68,13 @@ export default function CandidatosPage() {
           aria-label="Clasificación"
           className="h-9 rounded-md border border-input bg-background px-2 text-sm"
           value={clasificacion}
-          onChange={(e) => setClasificacion(e.target.value as "" | FiltroClasificacion)}
+          /* Volver a 1 al cambiar un filtro (invariante 4 del Bloque B): con menos resultados,
+             la página en la que estabas puede quedar fuera del nuevo total y la pantalla se ve
+             vacía sobre un filtro que sí tiene datos. */
+          onChange={(e) => {
+            setClasificacion(e.target.value as "" | FiltroClasificacion)
+            setPage(1)
+          }}
         >
           {OPCIONES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -91,6 +105,12 @@ export default function CandidatosPage() {
       {!loading && !error && grupos.map((grupo) => (
         <CandidatoGrupo key={grupo.nombre} grupo={grupo} onSelect={setSeleccionado} />
       ))}
+
+      {/* Los grupos se arman DENTRO de la página: la paginación es plana y va al pie de todos,
+          no adentro de cada búsqueda. */}
+      {!loading && !error && total > PAGE_SIZE && (
+        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+      )}
 
       <CandidatoDetailPanel
         candidato={seleccionado}

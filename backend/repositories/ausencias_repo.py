@@ -20,7 +20,9 @@ class AusenciasRepo:
         """Retorna (página filtrada por empresa/empleado_ids/tipo, total real del filtro).
         empleado_ids=None → sin filtro por empleado; la intersección ownership∩área la arma el service.
         desde/hasta → SOLAPAMIENTO con el rango, keyword-only (semántica en _rango_fechas)."""
-        q = supabase_admin.table(_T).select("*", count="exact").order("fecha_desde", desc=True)
+        # `.order("id")` = desempate, simetrico con vacaciones_repo (ver el porque ahi). `id` ASC
+        # aunque la fecha vaya DESC: es la forma del indice `idx_sa_empresa_fecha` + mig 118.
+        q = supabase_admin.table(_T).select("*", count="exact").order("fecha_desde", desc=True).order("id")
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if empleado_ids is not None:

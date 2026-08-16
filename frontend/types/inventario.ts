@@ -37,8 +37,17 @@ export interface InventarioItemUpdate {
 }
 
 export interface ItemListResponse {
-  items: InventarioItem[]
+  items: InventarioItem[]
+  /**
+   * 🔴 HOY `total === items.length` porque este listado NO pagina: el backend devuelve todo.
+   * El día que pagine (sesiones 2–5), `total` pasa a ser "cuántas hay" y `items` una página.
+   * Un contador escrito como `items.length` va a seguir compilando y va a decir 20 sobre 400.
+   * Usá `total` para contar y `items` sólo para recorrer.
+   */
   total: number
+  page: number
+  page_size: number
+  total_pages: number
 }
 
 export interface Asignacion {
@@ -69,6 +78,15 @@ export interface DevolucionRequest {
 }
 
 export interface AsignacionListResponse {
-  items: Asignacion[]
+  items: Asignacion[]
+  /**
+   * 🔴 HOY `total === items.length` porque este listado NO pagina: el backend devuelve todo.
+   * El día que pagine (sesiones 2–5), `total` pasa a ser "cuántas hay" y `items` una página.
+   * Un contador escrito como `items.length` va a seguir compilando y va a decir 20 sobre 400.
+   * Usá `total` para contar y `items` sólo para recorrer.
+   */
   total: number
+  page: number
+  page_size: number
+  total_pages: number
 }

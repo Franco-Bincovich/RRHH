@@ -1,4 +1,5 @@
-import type { AsignacionResultado, AvisoPostulacion, Candidato, CandidatoCreate, EtapaPipeline, IngestaResultado, LinkedinPublicarRequest, LinkedinPublicarResponse, MailPendiente, Vacante, VacanteCreate, VacanteUpdate } from "@/types/vacantes"
+import type { AsignacionResultado, AvisoPostulacion, Candidato, CandidatoCreate, EtapaPipeline, Vacante, VacanteCreate, VacanteListResponse, VacanteUpdate } from "@/types/vacantes"
+import type { IngestaResultado, LinkedinPublicarRequest, LinkedinPublicarResponse, MailPendiente } from "@/types/vacantesIngesta"
 import {
   apiFetch, API_BASE, ApiError, authHeaders, descargarArchivo, postMultipart,
   type FormatoExport,
@@ -15,13 +16,18 @@ function queryVacantes(estado?: string): Record<string, string | undefined> {
   return { estado }
 }
 
-export async function fetchVacantes(estado?: string, empresaIdOverride?: string): Promise<Vacante[]> {
+export async function fetchVacantes(
+  estado?: string, empresaIdOverride?: string, page = 1, pageSize = 20,
+): Promise<VacanteListResponse> {
   const params = new URLSearchParams()
   for (const [k, v] of Object.entries(queryVacantes(estado))) {
     if (v) params.set(k, v)
   }
+  // Aparte de `queryVacantes`, que comparte con el export: el export no se pagina.
+  params.set("page", String(page))
+  params.set("page_size", String(pageSize))
   const query = params.toString() ? `?${params}` : ""
-  return apiFetch<Vacante[]>(
+  return apiFetch<VacanteListResponse>(
     `/api/vacantes${query}`,
     empresaIdOverride ? { headers: { "X-Empresa-Id": empresaIdOverride } } : {},
   )

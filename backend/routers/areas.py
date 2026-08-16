@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
-from schemas.area import AreaResponse
+from schemas.area import AreaListResponse, AreaResponse
 from services.area_service import AreaService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
@@ -31,8 +31,24 @@ def _empresa_str(request: Request) -> Optional[str]:
     return str(eid) if eid else None
 
 
-@router.get("", response_model=List[AreaResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@router.get("", response_model=AreaListResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def list_areas(
+    empresa_id: Optional[str] = Query(None, description="Filtrar por empresa"),
+    search: Optional[str] = Query(None, description="Búsqueda parcial por nombre"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    service: AreaService = Depends(_service),
+) -> AreaListResponse:
+    return service.get_pagina(empresa_id, search, page, page_size)
+
+
+# ⚠️ ANTES de /{id}: si fuera después, "opciones" matchearía como un id y daría 422 de UUID.
+# 🔴 EL CATÁLOGO COMPLETO, SIN PAGINAR — y es una ruta aparte a propósito. Los ~15 selectores de
+# área del front necesitan todas; el listado de arriba pagina porque es la pantalla de gestión.
+# Servir las dos cosas por el mismo endpoint obligaba a elegir cuál de los dos se rompe. Molde:
+# `/api/empleados/seleccionables`, que resolvió exactamente esto para el selector de superior.
+@router.get("/opciones", response_model=List[AreaResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+async def opciones_areas(
     empresa_id: Optional[str] = Query(None, description="Filtrar por empresa"),
     service: AreaService = Depends(_service),
 ) -> List[AreaResponse]:
@@ -42,8 +58,8 @@ async def list_areas(
 # ⚠️ ANTES de /{id}: si fuera después, "exportar" matchearía como un id y daría 422 de UUID.
 @router.get("/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 @limite_export  # 100/hora por usuario — utils/rate_limit.py
-async def exportar_areas(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), empresa_id: Optional[str] = Query(None, description="Filtrar por empresa"), service: AreaService = Depends(_service)) -> Response:
-    d = service.exportar(empresa_id, formato)
+async def exportar_areas(request: Request, formato: Literal["pdf", "excel", "csv", "word"] = Query("excel"), empresa_id: Optional[str] = Query(None, description="Filtrar por empresa"), search: Optional[str] = Query(None, description="Búsqueda parcial por nombre"), service: AreaService = Depends(_service)) -> Response:
+    d = service.exportar(empresa_id, formato, search)
     return Response(content=d.content, media_type=d.media_type, headers={"Content-Disposition": f'attachment; filename="{d.filename}"'})
 
 

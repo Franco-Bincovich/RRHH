@@ -40,6 +40,262 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-15 · Paginación sesión 5 — candidatos y evaluados · commit pendiente
+
+**Qué cambió:** los dos últimos listados del lote. **Candidatos** pagina PLANO conservando el
+agrupamiento por búsqueda dentro de la página, y el encabezado de cada grupo dice cuántos tiene
+en todo el filtro, no cuántos entraron en la página. **Evaluados** movió al WHERE los tres
+filtros que aplicaba sobre el array traído (perfil, sector, con_nota) y después paginó; las
+opciones del desplegable de sector ahora salen del lote entero y no de la página. Cuatro
+divisiones previas en paso propio: `candidato_repo` (100/100) soltó el listado,
+`evaluacion_repo` (152) soltó evaluados e inserts, `schemas/vacante.py` (212/200) soltó los
+schemas de candidato y `routers/candidatos.py` (80/80) soltó las escrituras.
+
+**Impacto en infraestructura:**
+
+- **Ninguna migración, ninguna env var, ninguna dependencia, ningún bucket.** Los índices que
+  esta paginación aprovecha ya estaban escritos en la **118** (`idx_candidatos_empresa_created`),
+  que **sigue sin correrse** — igual que las sesiones 2, 3 y 4, el listado funciona sin ella y
+  gana cuando se aplique.
+- **Ningún endpoint nuevo y ninguna ruta cambió.** `routers/candidatos_escrituras.py` se monta
+  en el MISMO prefijo que `candidatos.py`: el corte es interno, por límite de líneas.
+- ⚠️ **DOS CONTRATOS DE RESPUESTA CAMBIARON — es lo único que hay que mirar acá.**
+  - `GET /api/candidatos` devolvía un **array desnudo** y ahora devuelve
+    `{items, total, page, page_size, total_pages, conteo_por_grupo}`. Acepta `page` y `page_size`
+    (default 20, tope 100).
+  - `GET /api/evaluaciones/resultados/lotes/{id}/evaluados` devolvía `{items, total}` y ahora
+    suma `page`, `page_size`, `total_pages` y **`sectores`**. Acepta `page`/`page_size` y los
+    tres filtros nuevos como Query (`sector`, `perfil`, `con_nota`).
+  Los dos frentes están actualizados en el mismo commit; **si el front sale antes que el
+  backend, las dos pantallas quedan vacías** hasta que el backend deploye. Es el orden de
+  verificación de siempre: backend primero.
+- **El export de los dos NO se paginó** y sigue aceptando exactamente los mismos filtros que su
+  listado, verificado por `test_paridad_list_export`. En evaluados eso significa que el archivo
+  ahora respeta perfil/sector/con_nota, que antes se aplicaban sólo en pantalla: **el export
+  cambió de contenido sin cambiar de firma** — un usuario que exportaba con filtros puestos
+  recibía el lote entero y ahora recibe lo filtrado. Es el arreglo, no una regresión.
+- **Un barrido estructural se endureció y conviene saberlo antes de tocar un repo paginado.**
+  `test_paginacion_orden.py` verificaba el desempate por `id` buscando el TEXTO `.order("id")`
+  en el archivo. Tenía dos agujeros, los dos encontrados por mutación en esta sesión: (1) el
+  alcance era el archivo, así que un repo con un lector paginado y otro sin paginar pasaba con
+  que cualquiera de los dos desempatara; (2) el docstring que EXPLICA el desempate contiene esa
+  cadena, así que la prosa satisfacía sola al test. Ahora es **por AST y por función**, con
+  resolución de un nivel de helpers y de alias de import. Un repo paginado nuevo entra solo.
+
+---
+## 2026-08-15 · Paginación sesión 4 — áreas, con la búsqueda al servidor · commit pendiente
+
+**Qué cambió:** `/areas` pagina, y **el buscador pasó a resolverse en el WHERE**. Es la única
+pantalla del lote que arrastraba un filtro al servidor: filtraba sobre el array ya traído
+(`useAreas.ts:46`), lo que con paginación devuelve "sin resultados" para un área que existe pero
+está en otra página, y hacía que el export no viera el filtro (buscabas 3 áreas y exportabas 58).
+Dos divisiones previas, en paso propio: `area_repo` (100/100) soltó sus primitivas y `useAreas`
+(96/80) soltó el ABM.
+
+**Impacto en infraestructura:**
+
+- 🔴 **ENDPOINT NUEVO: `GET /api/areas/opciones`** — el catálogo completo de áreas, sin paginar.
+  **Existe porque `/api/areas` tenía DIECISÉIS consumidores que esperan la lista entera**: 15 call
+  sites en el front (los selectores y filtros de área de vacaciones, ausencias, inventario ×2,
+  capacitaciones, proyectos ×2, reportes, sucesión, auditoría, empresas y los modales de empleado,
+  vacante y campaña) más `_nomina_catalogos` en el backend, que resuelve nombre→id en el import.
+  Paginar el endpoint sin esto habría dejado cada dropdown mostrando 20 de ~180, sin error.
+  Molde: `/api/empleados/seleccionables`, que resolvió lo mismo para el selector de superior.
+  **Los 14 archivos consumidores NO se tocaron**: el cambio fue interno a `services/areas.ts`.
+- **Contrato de API:** `GET /api/areas` cambia de forma (array → objeto paginado) y acepta
+  `page`, `page_size` y **`search`**. `/api/areas/exportar` acepta el mismo `search`.
+- **Migraciones:** ninguna. 🚩 **Para el próximo lote de índices, si lo hay:** el listado emite
+  `WHERE empresa_id = X AND activo ORDER BY nombre, id LIMIT n`, y hoy sólo existen
+  `idx_areas_empresa` e `idx_areas_activo` sueltos. El compuesto sería `(empresa_id, nombre, id)`.
+  **No se agregó**: la 115 midió que a este volumen (58 filas) el planner no lo usa, y áreas no
+  crece con la dotación. Disparador para revisarlo: que el catálogo pase de unos cientos.
+- **Variables de entorno:** ninguna. **Buckets:** ninguno. **Auth:** sin cambios.
+- **Tests:** 3534 backend (+20) y 709 front. Tres archivos de test tuvieron que actualizar sus
+  fakes: dos por el contrato nuevo y uno porque el conteo por área se mudó a `_area_row`.
+
+---
+## 2026-08-15 · Deuda de la sesión 2 — comentarios restaurados y cuatro repos divididos · commit pendiente
+
+**Qué cambió:** en la sesión 2 se habían **comprimido comentarios para entrar en el límite de
+líneas** en cuatro repos. Se restauraron íntegros y los cuatro archivos se dividieron, que es lo
+que la regla del proyecto pide. **Cero cambio de comportamiento**: es refactor + documentación.
+
+| Repo | Antes | Salió | Queda |
+|---|---|---|---|
+| `empleado_repo.py` | 116 | `ordenado()` → `_empleado_row.py` (donde ya viven `TABLE`/`SELECT`/`with_empresa`) | 96 |
+| `vacaciones_repo.py` | 103 | los 2 lookups sobre `empleados` → `_vacaciones_empleado_repo.py` | 93 |
+| `recategorizacion_repo.py` | 102 | `_con_empresa` → `_recategorizacion_row.py` | 98 |
+| `horas_repo.py` | 102 | el INSERT → `_horas_write_repo.py` | 77 |
+
+**Impacto en infraestructura:**
+
+- **Migraciones:** ninguna. **Env vars:** ninguna. **Endpoints:** ninguno. **Contrato de API:**
+  sin cambios — no se tocó ninguna firma pública; los repos conservan sus métodos y delegan.
+- 🔴 **Cuatro repos MÁS a portar a asyncpg** (regla 14 de CLAUDE.md): `_vacaciones_empleado_repo`,
+  `_horas_write_repo`, y los dos satélites que crecieron. El total de `repositories/` sube.
+- ⚠️ **Dos tests tuvieron que parchear el satélite además del repo** (`test_horas_carga_directa`,
+  y ya antes `test_ids_tipados_uuid` / `test_vacante_codigo`): cuando un write path se muda,
+  `monkeypatch.setattr(repo_mod, "supabase_admin", …)` deja de alcanzar y la llamada sale a la red
+  de verdad. Es el síntoma a reconocer si un test se cuelga después de una división.
+- 🔑 **El barrido `test_paginacion_orden` ahora sigue la delegación un nivel.** Buscaba
+  `.order("id")` dentro del archivo que tiene el `.range()`; al mudarse el orden de empleados a su
+  satélite, marcó el repo como "pagina sin desempate" con el desempate a un import de distancia —
+  o sea, ponía a pelear la regla de límites contra la del test. Ahora suma la fuente de los
+  módulos `repositories.*` que el repo importa. **Verificado que sigue rojeando** con una mutación
+  que saca el desempate del satélite: caza `['empleado_repo.py', '_empleado_row.py']`.
+
+---
+## 2026-08-15 · Paginación sesión 3 — vacantes y costos/nómina · commit pendiente
+
+**Qué cambió:** paginan **vacantes** y **costos/nómina**. Los dos devolvían `List[...]` pelada, así
+que estrenan wrapper (`VacanteListResponse`, `NominaListResponse`). Vacantes ordena por
+`created_at DESC` + `id`; nómina por el **apellido del empleado** + `id`. **Cuatro divisiones
+previas, en paso propio**, porque los archivos no entraban: `vacante_repo` (100/100) y
+`nomina_repo` (119/100) soltaron su write path, `costos/page.tsx` (624/150) se partió en siete, y
+`vacantes/page.tsx` (178/150, deuda previa) soltó filtros y acciones.
+
+**Impacto en infraestructura:**
+
+- **Migraciones:** ninguna nueva. ⚠️ Sigue haciendo falta correr la **118** antes del deploy: el
+  desempate por `id` está puesto para la forma de `idx_vacantes_empresa_created`.
+- 🔴 **El orden de nómina usa una FEATURE de PostgREST, no una columna propia.** El apellido vive
+  en `empleados`, y se ordena con `order=empleados(apellido)` sobre el embed to-one. **Verificado
+  contra el PostgREST 12.2.3 del contenedor local, no supuesto**: la variante con hint de FK
+  (`empleados!costos_nomina_empleado_emp_fkey(apellido)`) y la de punto (`empleados.apellido`) dan
+  **PGRST100**. 🚩 **Para el porteo a AWS: si el reemplazo de PostgREST no soporta ordenar por
+  columna embebida, este listado hay que reescribirlo** — es el único del sistema que lo usa.
+- **Contrato de API — aditivo salvo el default:** `/api/vacantes` y `/api/costos/nomina` aceptan
+  `page`/`page_size` y devuelven `{items, total, page, page_size, total_pages}` en vez de un array.
+  🔴 **Los dos cambian de FORMA de respuesta** (array → objeto), que es más fuerte que en la
+  sesión 2: un cliente que espere un array se rompe. El front de este repo está actualizado.
+- **Variables de entorno:** ninguna. **Dependencias:** ninguna. **Buckets:** ninguno. **Endpoints
+  nuevos:** ninguno. **Auth:** sin cambios. **Procesos fuera de serverless:** ninguno.
+- ⚠️ **`nomina_repo.get_nomina_mes` NO pagina y no hay que "terminar de paginarlo"**: sus tres
+  callers agregan (los KPIs del dashboard, el total del mes anterior y el diff de auditoría del
+  write path). El listado usa `find_pagina`, que es otro método. Está escrito en el repo.
+- **Tests:** 3514 backend (+21) y 709 front. Se actualizaron 4 archivos de test cuyos fakes no
+  modelaban el contrato nuevo o parcheaban en la ubicación vieja del write path.
+
+---
+## 2026-08-14 · Paginación sesión 2 — los cuatro mecánicos · commit pendiente
+
+**Qué cambió:** paginan de verdad **inventario/ítems, inventario/asignaciones,
+capacitaciones/asignaciones y proyectos**. Los cuatro pasaron a `count="exact"` + `.range()` +
+desempate por `id`, sus routers aceptan `page`/`page_size` (el `/exportar` NO, por diseño), sus
+services devuelven el wrapper completo y el export pide `LIMITE_FILAS_EXPORT` en vez de traer
+todo. En el front, los cuatro dibujan `Pagination` y vuelven a la página 1 al cambiar un filtro.
+**Dos divisiones previas, en paso propio**, porque los archivos no entraban: el mapper de
+`inventario_asignaciones_repo` salió a `_inventario_asignacion_row.py` (100/100) y las escrituras
+de `asignaciones_capacitacion.py` (79/80) salieron a su propio router.
+
+**Impacto en infraestructura:**
+
+- **Migraciones:** ninguna nueva. ⚠️ **Esta sesión es la que hace útil a la 118**: sus seis
+  índices están calculados para el patrón `WHERE empresa_id ORDER BY <col>, id LIMIT n` que estos
+  cuatro listados recién ahora emiten. **Correr la 118 antes del deploy**; sin ella el código es
+  correcto igual, pero el plan vuelve a Seq Scan sobre la tabla entera en cada página.
+- **Router nuevo montado:** `asignaciones_capacitacion_escrituras.py`, en el **mismo prefijo**
+  (`/api/capacitaciones/asignaciones`). **Las 7 rutas del módulo son idénticas antes y después** —
+  verificado por introspección de `app.routes`. No hay endpoint nuevo ni borrado.
+- **Contrato de API — aditivo en los cuatro listados:** aceptan `page` (default 1) y `page_size`
+  (default 20, máx 100). 🔴 **Cambia el comportamiento por defecto: sin `page_size`, el listado
+  devuelve 20 filas y no todas.** Un cliente viejo que no pagine ve solo las primeras 20. El front
+  de este repo ya está actualizado; cualquier consumidor externo (no hay ninguno conocido) tendría
+  que pedir su página.
+- **`total` ahora es el del filtro, no el de la página** en esos cuatro. Es el cambio de
+  significado que la sesión anterior dejó anunciado al lado de cada campo.
+- **Variables de entorno:** ninguna. **Dependencias:** ninguna. **Buckets:** ninguno. **Auth:**
+  sin cambios. **Procesos fuera de serverless:** ninguno.
+- 🟢 **Mejora colateral para el gateway:** los mappers resuelven sus lookups con los ids de LA
+  PÁGINA. `/api/inventario/items` en consolidado mandaba un `?id=in.(...)` de 51 KB y devolvía
+  **500** (hallazgo #2 del diagnóstico de escala); ahora manda 20 ids.
+- **Tests:** 3493 backend (+30) y 709 front (+1). Se actualizaron 8 archivos de test cuyos fakes
+  no modelaban el contrato nuevo (`page`/`page_size`, tupla `(filas, total)`, `count` en la
+  respuesta y `.range()` en el cliente falso).
+
+---
+## 2026-08-14 · Molde de paginación — orden total, totales del backend y Pagination numérica · commit pendiente
+
+**Qué cambió:** primera de cinco sesiones de paginación; **no pagina ningún listado nuevo**, arregla
+el molde que las otras cuatro van a copiar. (1) Los **ocho** listados que ya paginaban llevan orden
+TOTAL con desempate por `id` — `empleado_repo` paginaba con `.range()` **sin ningún `.order()`**, y
+los otros siete ordenaban por una columna con empates, así que sus páginas podían repetir o perder
+filas. (2) La pantalla de horas de un proyecto calculaba sus totales con un `.reduce()` sobre la
+página; ahora vienen del backend (`total_horas` / `total_costo`) calculados sobre todas las cargas.
+(3) `components/ui/Pagination.tsx` pasó de Prev/Next a numérica con elipsis, pie "Mostrando 1–12 de
+1.042" y selector opcional de filas por página.
+
+**Impacto en infraestructura:**
+
+- **Migraciones:** ninguna nueva. ⚠️ **Depende de la 118** (escrita en la sesión anterior, todavía
+  sin correr): el desempate por `id` está puesto para la forma exacta de esos índices
+  `(empresa_id, <orden>, id)`. Sin la 118 el código es correcto igual —el orden lo garantiza el
+  `ORDER BY`, no el índice— pero el plan agrega un nodo de sort.
+- 🚩 **Hueco detectado en la 115, para el lote que congela el schema:** `idx_hp_proyecto_fecha` es
+  `(proyecto_id, fecha DESC)`, **sin `id`**. El listado de horas por proyecto ahora desempata por
+  `id`, así que ese índice le suma un Incremental Sort. Correcto y barato al volumen de hoy
+  (`horas_proyecto` tiene 1 fila en producción); si la tabla crece, el índice que corresponde es
+  `(proyecto_id, fecha DESC, id)`. Está anotado en `horas_repo.py`.
+- **Contrato de API — un campo nuevo, aditivo:** `GET /api/proyectos/{id}/horas` devuelve además
+  `total_horas` y `total_costo`. Tienen default `0.0`, así que un cliente viejo no se rompe.
+- **Variables de entorno:** ninguna. **Dependencias:** ninguna. **Buckets:** ninguno. **Endpoints
+  nuevos:** ninguno. **Auth:** sin cambios. **Procesos fuera de serverless:** ninguno.
+- ⚠️ **Una consulta más por request** en `GET /proyectos/{id}/horas`: el agregado de totales no
+  pagina (trae las filas del proyecto para sumarlas). Es el mismo patrón que ya usa `batch_costos`
+  para el costeo del listado. Si `horas_proyecto` creciera de verdad, esto pide un agregado en la
+  base (RPC), no volver a sumar en la pantalla.
+- **Contrato de API — tres campos nuevos en CINCO listados, todos aditivos:** `inventario/items`,
+  `inventario/asignaciones`, `capacitaciones/asignaciones`, `proyectos` y `objetivos` pasaron de
+  `{items, total}` a `{items, total, page, page_size, total_pages}`. **Hoy no cambia ningún valor**:
+  esos listados devuelven todo, así que `total` sigue siendo `len(items)` y los nuevos campos valen
+  `page=1, page_size=total, total_pages=1`. Se agregan ahora para no tocar los mismos services dos
+  veces cuando paginen (sesiones 2–5). Cada uno lleva escrito **al lado del campo** que el día que
+  pagine `total` tiene que salir de `count="exact"` y no de `len(items)`.
+- **`services/_paginacion.py` (nuevo):** única definición de `total_pages` del backend. La división
+  estaba escrita a mano en `empleado_service`, que ahora también la usa.
+- **Tests:** 3479 backend (+53) y 708 front (+36). Cinco fakes preexistentes tuvieron que
+  actualizarse porque no modelaban `.order()`; uno de ellos (`test_recategorizaciones`) guardaba
+  **una sola** clave de orden y ordenaba por la última, así que no distinguía un ORDER BY de varias
+  columnas.
+
+---
+## 2026-08-14 · Migración 118 — índices que la paginación habilita · commit pendiente
+
+**Qué cambió:** solo se escribió `backend/migrations/118_indices_paginacion.sql` y se actualizó
+`db/schema.sql`. **Cero código de aplicación.** Son SEIS índices compuestos
+`(empresa_id, <orden>, id)` para los listados que pasan a paginar. Es la continuación declarada
+de la 115, que había probado tres de estos y los difirió por escrito porque sin `LIMIT` el
+planner no los usa; con la paginación puesta, re-medidos contra la base local de escala, los
+seis pasan de Seq Scan a Index Scan. De los nueve candidatos que el diagnóstico levantó,
+**tres NO entraron** (`objetivos`, `areas`, `proyectos`): siguen sin ser elegidos incluso con el
+LIMIT, porque son catálogos/tablero y no crecen con la dotación. Van comentados al final del
+archivo con su medición y su disparador.
+
+**Impacto en infraestructura:**
+
+- **Migración nueva: 118.** Aditiva pura, **no destructiva**, idempotente
+  (`CREATE INDEX IF NOT EXISTS`), **sin ventana** — un índice no cambia ningún resultado, solo
+  el plan. Va **antes** del deploy de la paginación. Verificado contra el catálogo vivo el
+  14/8: ninguno de los seis existe. Validada por replay en la base local dentro de una
+  transacción revertida: parsea, los seis quedan `indisvalid = t`, y la segunda corrida no
+  falla.
+- **Orden respecto de la 117:** independientes, no se pisan (la 117 toca un CHECK de
+  `recategorizaciones`, la 118 no toca esa tabla). Pueden correrse en cualquier orden.
+- `CREATE INDEX` y **no** `CONCURRENTLY`, mismo criterio que la 115: `CONCURRENTLY` no puede
+  correr dentro de una transacción, que es como el editor SQL de Supabase manda los statements.
+  Con los volúmenes de hoy (1.005 filas en la tabla mayor de la lista) el lock dura
+  milisegundos. 🚩 Si alguna de estas tablas llegara a millones de filas antes de correrlo, hay
+  que pasar a `CONCURRENTLY` y mandar cada statement suelto.
+- **Uno de los seis es PARCIAL** (`idx_inv_asig_empresa_fecha … WHERE fecha_devolucion IS NULL`).
+  Si al verificar el `EXPLAIN` aparece una línea `Filter:`, se creó el pleno en vez del parcial
+  y hay que rehacerlo: medido, el pleno es 4,9× más lento y engorda solo.
+- **Variables de entorno:** ninguna. **Dependencias:** ninguna. **Buckets:** ninguno.
+  **Endpoints:** ninguno. **Auth:** sin cambios. **Procesos fuera de serverless:** ninguno.
+- ⚠️ **Lo que esta migración NO arregla, y está medido:** la paginación **profunda**. Con
+  `OFFSET 200` el planner vuelve a Seq Scan con y sin el índice (0,766 vs 0,778 ms). Un OFFSET
+  es O(offset) con cualquier plan; eso se resuelve con paginación por cursor, no con un índice.
+
+---
 ## 2026-08-14 · Recategorizaciones — backend completo · commit pendiente
 
 **Qué cambió:** segunda feature del plan. CRUD del registro de cambios de rol, seniority y

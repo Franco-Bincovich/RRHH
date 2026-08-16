@@ -50,6 +50,7 @@ from routers.integraciones import router as integraciones_router
 from routers.reportes import router as reportes_router
 from routers.sucesion import router as sucesion_router
 from routers.candidatos import router as candidatos_router
+from routers.candidatos_escrituras import router as candidatos_escrituras_router
 from routers.ausencias import router as ausencias_router
 from routers.ausencias_tipos import router as ausencias_tipos_router
 from routers.configuracion import router as configuracion_router
@@ -65,6 +66,7 @@ from routers.vacantes_escrituras import router as vacantes_escrituras_router
 from routers.vacantes_integraciones import router as vacantes_integraciones_router
 from routers.capacitaciones import router as capacitaciones_router
 from routers.asignaciones_capacitacion import router as asignaciones_cap_router
+from routers.asignaciones_capacitacion_escrituras import router as asignaciones_cap_escrituras_router
 from routers.evaluaciones_import import router as evaluaciones_import_router
 from routers.evaluaciones_resultados import router as evaluaciones_resultados_router
 from routers.evaluaciones_resultados_export import router as evaluaciones_resultados_export_router
@@ -117,6 +119,7 @@ def registrar(app: FastAPI) -> None:
     app.include_router(vacantes_escrituras_router, prefix="/api/vacantes", tags=["vacantes"])  # mismo prefijo: las rutas no cambian
     app.include_router(vacantes_integraciones_router, prefix="/api/vacantes", tags=["vacantes"])  # ídem: LinkedIn y Gmail
     app.include_router(candidatos_router, prefix="/api/candidatos", tags=["candidatos"])
+    app.include_router(candidatos_escrituras_router, prefix="/api/candidatos", tags=["candidatos"])  # mismo prefijo: las rutas no cambian
     app.include_router(onboarding_templates_router, prefix="/api/onboarding/templates", tags=["onboarding"])
     app.include_router(onboarding_templates_escrituras_router, prefix="/api/onboarding/templates", tags=["onboarding"])
     app.include_router(onboarding_router, prefix="/api/onboarding", tags=["onboarding"])
@@ -154,6 +157,7 @@ def registrar(app: FastAPI) -> None:
     # hasta el 13/8/2026; no se notó porque la tabla está en 0 filas y nadie abrió la pantalla.
     # La regla es la de FastAPI: la ruta LITERAL se monta antes que la que lleva parámetro.
     app.include_router(asignaciones_cap_router, prefix="/api/capacitaciones/asignaciones", tags=["capacitaciones"])
+    app.include_router(asignaciones_cap_escrituras_router, prefix="/api/capacitaciones/asignaciones", tags=["capacitaciones"])  # mismo prefijo: las rutas no cambian
     app.include_router(capacitaciones_router, prefix="/api/capacitaciones", tags=["capacitaciones"])
     app.include_router(evaluaciones_import_router, prefix="/api/evaluaciones/importar", tags=["evaluaciones"])
     app.include_router(evaluaciones_resultados_export_router, prefix="/api/evaluaciones/resultados", tags=["evaluaciones"])

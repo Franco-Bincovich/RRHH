@@ -36,7 +36,8 @@ from schemas.onboarding import TemplateResponse
 from schemas.periodo import PeriodoResponse
 from schemas.proyectos import CosteoResumen, ProyectoResponse
 from schemas.vacaciones_pendientes import VacacionPendienteResponse
-from schemas.vacante import CandidatoGrupoResponse, VacanteResponse
+from schemas.candidato import CandidatoGrupoResponse
+from schemas.vacante import VacanteResponse
 from services._inventario_export import construir_filas_export as filas_inventario
 from services._objetivos_export import construir_filas_export as filas_objetivos
 from services._areas_export import construir_filas_export as filas_areas

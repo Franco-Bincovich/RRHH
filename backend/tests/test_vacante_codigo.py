@@ -50,6 +50,7 @@ from uuid import uuid4  # noqa: E402
 
 import pytest  # noqa: E402
 
+import repositories._vacante_write_repo as write_mod  # noqa: E402
 import repositories.vacante_repo as repo_mod  # noqa: E402
 from repositories._vacante_row import _vrow  # noqa: E402
 from schemas.vacante import VacanteCreate, VacanteResponse  # noqa: E402
@@ -125,6 +126,9 @@ class _FakeSupabase:
 def base(monkeypatch) -> _FakeSupabase:
     fake = _FakeSupabase()
     monkeypatch.setattr(repo_mod, "supabase_admin", fake)
+    # El write path se mudó a su satélite al partir el repo (estaba en 100/100): sin este
+    # segundo parche, `save`/`update` salen a la red de verdad y el test se cuelga.
+    monkeypatch.setattr(write_mod, "supabase_admin", fake)
     return fake
 
 

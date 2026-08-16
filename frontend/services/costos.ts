@@ -1,5 +1,6 @@
 import type {
-  DashboardCostos, HistorialSalarialItem, Nomina, NominaCreate, Presupuesto, PresupuestoCreate,
+  DashboardCostos, HistorialSalarialItem, Nomina, NominaCreate, NominaListResponse, Presupuesto,
+  PresupuestoCreate,
 } from "@/types/costo"
 import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
 
@@ -16,9 +17,15 @@ function queryNomina(mes: number, anio: number): Record<string, string | undefin
   return { mes: String(mes), anio: String(anio) }
 }
 
-export async function fetchNominaMes(mes: number, anio: number): Promise<Nomina[]> {
+export async function fetchNominaMes(
+  mes: number, anio: number, page = 1, pageSize = 20,
+): Promise<NominaListResponse> {
   const q = new URLSearchParams(queryNomina(mes, anio) as Record<string, string>)
-  return apiFetch<Nomina[]>(`/api/costos/nomina?${q}`)
+  // `page`/`page_size` NO pasan por `queryNomina`, que es la traducción que comparte con el
+  // export: el export no se pagina, y colarlos ahí haría que el archivo saliera con 20 filas.
+  q.set("page", String(page))
+  q.set("page_size", String(pageSize))
+  return apiFetch<NominaListResponse>(`/api/costos/nomina?${q}`)
 }
 
 /** Exporta la nómina del período con los MISMOS filtros que el listado. */

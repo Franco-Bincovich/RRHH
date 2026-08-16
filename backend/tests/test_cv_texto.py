@@ -286,7 +286,7 @@ def test_el_warning_llega_al_schema() -> None:
     from datetime import datetime, timezone
 
     from repositories._candidato_row import _crow
-    from schemas.vacante import CandidatoResponse
+    from schemas.candidato import CandidatoResponse
 
     fila = {"id": str(uuid4()), "vacante_id": None, "empresa_id": str(uuid4()), "nombre": "Ana",
             "apellido": "Pérez", "email": "a@x.com", "etapa": "postulado",

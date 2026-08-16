@@ -76,12 +76,12 @@ _EJERCITADOS: dict[str, str] = {
     "_inventario_items_row._build":             "test_inventario_filtro_area",
     "_evaluacion_lotes_enrich.enriquecer_lotes": "test_evaluacion_lotes_historial",
     # Los tres de abajo se ejercitan TRANSITIVAMENTE, por su caller: `_nombres` y
-    # `_nombres_usuarios` desde `enriquecer_lotes`; `_insert_completo` desde
-    # `crear_evaluados`/`crear_resultados`; `_scores_por_empleado` desde el análisis batch.
+    # `_nombres_usuarios` desde `enriquecer_lotes`; `insert_completo` —hoy en
+    # `_evaluacion_insert`— desde `crear_evaluados`/`crear_resultados`; `_scores_por_empleado`
+    # desde el análisis batch.
     # Por eso el vínculo se verifica contra el MÓDULO del mapper y no solo contra su nombre.
     "_evaluacion_lotes_enrich._nombres":        "test_evaluacion_lotes_historial",
     "_evaluacion_lotes_enrich._nombres_usuarios": "test_evaluacion_lotes_historial",
-    "evaluacion_repo._insert_completo":         "test_evaluacion_repo_inserts",
     "nomina_import_repo.batch_upsert_nomina":   "test_import_costos_auditoria",
     "sucesion_repo._scores_por_empleado":       "test_sucesion_analisis_batch",
     # Los tres con DATOS HOY en producción (307 / 143 / 31 filas), cubiertos el 9/8/2026.
@@ -92,7 +92,10 @@ _EJERCITADOS: dict[str, str] = {
     # cubren ANTES de que haya datos a propósito: es la situación exacta en la que estaba
     # `_ausencia_row` cuando se le encontró el NameError.
     "_vacaciones_utils.enriquecer":             "test_mappers_bloque_i",
-    "inventario_asignaciones_repo._build":      "test_mappers_bloque_i",
+    # Se mudó de `inventario_asignaciones_repo` a su satélite al paginar el módulo (el repo
+    # estaba en 100/100). El barrido lo cazó en las DOS direcciones: mapper nuevo sin declarar
+    # y declaración vieja apuntando a algo que ya no existe.
+    "_inventario_asignacion_row.build":         "test_mappers_bloque_i",
     # 🚩 Su declaración decía "se mueve a urgente con la primera vacante con candidatos". Esa
     # sesión llegó el 9/8/2026 con la ingesta de CVs por mail: la declaración se borró y el test
     # se escribió. Es el ciclo que la lista pretende — cada entrada que se va es un cuerpo probado.
@@ -104,6 +107,9 @@ _EJERCITADOS: dict[str, str] = {
     # doctrina del repo pide para que la aserción restante no se quede sin nada que mirar.
     # `_mapa` se ejercita TRANSITIVAMENTE desde `build`, igual que los `_nombres` de arriba.
     "_hora_row.build":                          "test_horas_carga_directa",
+    # Salió de `evaluacion_repo` al partirlo por entidad (sesión 5): lo usan los dos lados
+    # —evaluados y resultados— así que no podía quedar en ninguno.
+    "_evaluacion_insert.insert_completo":       "test_evaluacion_repo_inserts",
     "_hora_row._mapa":                          "test_horas_carga_directa",
     # 🚩 Estaba en _SIN_EJERCITAR como `asignacion_repo._build`, con el motivo
     # "empleado_capacitacion: 0 filas. Cuelga de capacitaciones, así que se mueve con ella".

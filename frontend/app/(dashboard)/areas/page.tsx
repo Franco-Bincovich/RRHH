@@ -10,20 +10,26 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { AreaModal } from "@/components/features/areas/AreaModal"
 import { AreasTabla } from "@/components/features/areas/AreasTabla"
-import { useAreas } from "@/components/features/areas/useAreas"
+import { PAGE_SIZE, useAreas } from "@/components/features/areas/useAreas"
+import { useAreasAcciones } from "@/components/features/areas/useAreasAcciones"
 import { AreaEliminarDialog } from "@/components/features/areas/AreaEliminarDialog"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { exportarAreas } from "@/services/areas"
+import { Pagination } from "@/components/ui/Pagination"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
 
 export default function AreasPage() {
   const canWrite = useCanWrite()
   const {
-    areas, filtradas, loading, error, search, setSearch,
-    modalOpen, setModalOpen, editing, confirmDelete, setConfirmDelete, deleting,
-    load, handleDelete, openCreate, openEdit, onModalSuccess,
+    areas, total, page, setPage, loading, error, search, setSearch, buscado, load,
   } = useAreas()
+  // El ABM recarga la lista al crear, editar o borrar: las tres cambian el TOTAL, no sólo las
+  // filas que se ven.
+  const {
+    modalOpen, setModalOpen, editing, confirmDelete, setConfirmDelete, deleting,
+    handleDelete, openCreate, openEdit, onModalSuccess,
+  } = useAreasAcciones(load)
 
   if (loading) {
     return (
@@ -54,7 +60,9 @@ export default function AreasPage() {
     <div>
       <PageHeader
         title="Áreas"
-        description={`${areas.length} área${areas.length !== 1 ? "s" : ""}`}
+        // `total` y no `areas.length`: `areas` es una página, y con búsqueda el total es el
+        // del filtro. Leer el largo diría 20 sobre 58, y 3 sobre 3 al buscar.
+        description={`${total} área${total !== 1 ? "s" : ""}`}
         action={
           <div className="flex items-center gap-2">
             {/* El MISMO filtro de empresa que el listado. ⚠️ El buscador de abajo es
@@ -62,7 +70,9 @@ export default function AreasPage() {
                 el buscador deja a la vista. Con 12 áreas es tolerable; el día que crezca, ese
                 `search` tiene que pasar al backend (regla del bloque B). */}
             <ExportMenu
-              onExport={(formato) => exportarAreas(formato, getEmpresaActivaId() ?? undefined)}
+              // 🔴 El MISMO `buscado` que filtra la pantalla. Antes el buscador era local y el
+              // archivo salía con todo: buscabas 3 áreas y exportabas 58.
+              onExport={(formato) => exportarAreas(formato, getEmpresaActivaId() ?? undefined, buscado || undefined)}
             />
             {canWrite && (
               <Button className="min-h-11" onClick={openCreate}>
@@ -86,7 +96,7 @@ export default function AreasPage() {
         </div>
       </div>
 
-      {filtradas.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           icon={<Layers />}
           title={search ? "Sin resultados" : "Sin áreas"}
@@ -105,8 +115,13 @@ export default function AreasPage() {
           }
         />
       ) : (
-        <AreasTabla areas={filtradas} canWrite={canWrite}
-                    onEdit={openEdit} onDelete={setConfirmDelete} />
+        <>
+          <AreasTabla areas={areas} canWrite={canWrite}
+                      onEdit={openEdit} onDelete={setConfirmDelete} />
+          {total > PAGE_SIZE && (
+            <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+          )}
+        </>
       )}
 
       <AreaModal

@@ -98,6 +98,13 @@ SIN_RESOLVER_DECLARADOS = {
     "repositories/_ausencia_row.py": (1, "_q(table, cols, ids): sus 4 callers pasan columnas planas"),
     "repositories/_asignacion_row.py": (1, "_q(table, cols, ids): sus 4 callers pasan columnas planas"),
     "repositories/empleado_roles_repo.py": (1, "select(campo): UNA columna de la whitelist CAMPOS_AUTOCOMPLETABLES"),
+    # Los dos de abajo salieron de la sesión 5 de paginación: sus queries base reciben las
+    # COLUMNAS por parámetro para poder servir la página ("*") y el conteo por grupo/sector
+    # (una o dos columnas planas) con una sola definición. Verificado caller por caller: los
+    # tres specs son "*", "vacante_id, busqueda_congelada" y "sector" — ninguno lleva embed.
+    # 2 y no 1: la query base tiene un `select(` por rama (con y sin `count="exact"`).
+    "repositories/_candidato_listado_repo.py": (2, "base(columnas): 3 callers, specs planos sin embed"),
+    "repositories/_evaluacion_evaluados_repo.py": (2, "_del_lote(columnas): 3 callers, specs planos sin embed"),
     "repositories/_evaluacion_lotes_enrich.py": (1, "tabla por parámetro, spec literal 'id, nombre' — sin embed"),
     # `_mapa(tabla, ids, campos, armar)`: los TRES callers de `build` verificados uno por uno —
     # "id, nombre, apellido" (empleados), "id, nombre" (empresas) y "id, nombre, apellido"

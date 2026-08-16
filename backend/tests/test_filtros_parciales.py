@@ -100,10 +100,13 @@ class _AsignacionRepoEspia:
         self.args: dict = {}
 
     def find_all(self, empresa_id=None, empleado_id=None, capacitacion_id=None,
-                 estado=None, area_id=None):
+                 estado=None, area_id=None, page=1, page_size=20):
         self.args = {"empresa_id": empresa_id, "empleado_id": empleado_id,
                      "capacitacion_id": capacitacion_id, "estado": estado, "area_id": area_id}
-        return []
+        # `page`/`page_size` + tupla `(filas, total)`: es el contrato del repo desde que el
+        # listado pagina. Un fake que devuelva la lista pelada rompe con TypeError en vez de
+        # mentir, que es lo correcto — pero tiene que modelar el contrato para poder desmentir.
+        return [], 0
 
 
 class TestAsignacionesCapacitacion:
@@ -152,9 +155,9 @@ class _InventarioRepoEspia:
     def __init__(self) -> None:
         self.args: dict = {}
 
-    def find_all(self, empresa_id=None, empleado_id=None, area_id=None):
+    def find_all(self, empresa_id=None, empleado_id=None, area_id=None, page=1, page_size=20):
         self.args = {"empresa_id": empresa_id, "empleado_id": empleado_id, "area_id": area_id}
-        return []
+        return [], 0
 
 
 class TestAsignacionesInventario:

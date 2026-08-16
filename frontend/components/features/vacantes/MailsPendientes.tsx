@@ -6,7 +6,8 @@ import { Inbox, Paperclip } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { asignarMail, fetchMailsPendientes, fetchVacantes } from "@/services/vacantes"
-import type { MailPendiente, Vacante } from "@/types/vacantes"
+import type { Vacante } from "@/types/vacantes"
+import type { MailPendiente } from "@/types/vacantesIngesta"
 
 /**
  * Los mails de la casilla que no matchearon ninguna búsqueda, con el selector para asignarlos.
@@ -38,9 +39,12 @@ export function MailsPendientes() {
     setLoading(true)
     setError(null)
     try {
-      const [m, v] = await Promise.all([fetchMailsPendientes(), fetchVacantes()])
+      // ⚠️ Es un SELECTOR, no un listado: necesita todas las vacantes elegibles, así que pide
+      // el tope del endpoint (100, el `le` del router). Si alguna vez hay más de 100 abiertas,
+      // esto pasa a ser un combobox con búsqueda server-side, no un `page_size` más grande.
+      const [m, v] = await Promise.all([fetchMailsPendientes(), fetchVacantes(undefined, undefined, 1, 100)])
       setMails(m)
-      setVacantes(v)
+      setVacantes(v.items)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron leer los mails pendientes.")
     } finally {

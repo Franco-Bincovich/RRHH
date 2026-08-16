@@ -4,9 +4,11 @@ Cubre las tres tablas del lote: evaluacion_lotes / _evaluados / _resultados. Esc
 lote (bulk insert) + lecturas por padre. Sin lógica de import. Patrón defensivo de respuesta
 Supabase (res and res.data), como en cesion_repo/empleado_repo. Un repo más a portar a asyncpg.
 """
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from integrations.supabase_client import supabase_admin
+from repositories import _evaluacion_evaluados_repo as _ev
+from repositories._evaluacion_insert import insert_completo
 from repositories._evaluacion_lotes_enrich import enriquecer_lotes
 from schemas.evaluacion_resultados import EvaluadoResponse, LoteResponse, ResultadoResponse
 from utils.errors import AppError
@@ -15,17 +17,6 @@ from utils.logger import logger
 _LOTES = "evaluacion_lotes"
 _EVALUADOS = "evaluacion_evaluados"
 _RESULTADOS = "evaluacion_resultados"
-
-
-def _insert_completo(tabla: str, filas: List[dict], error_msg: str) -> List[dict]:
-    """Inserta `filas` (bulk); [] si no hay. DB_ERROR si el insert no devuelve TODAS las esperadas
-    (no silencia parcial/vacío) — para que la verificación por conteo del import sea confiable."""
-    if not filas:
-        return []
-    data = supabase_admin.table(tabla).insert(filas).execute().data or []
-    if len(data) != len(filas):
-        raise AppError(error_msg, "DB_ERROR", 500)
-    return data
 
 
 class EvaluacionRepo:
@@ -68,22 +59,30 @@ class EvaluacionRepo:
         res = q.order("created_at", desc=True).execute()
         return enriquecer_lotes(res.data or [] if res else [])
 
-    # ── Evaluados ──
+    # ── Evaluados (delegados a _evaluacion_evaluados_repo) ──
+
     def crear_evaluados(self, filas: List[dict]) -> List[EvaluadoResponse]:
-        """Inserta N evaluados (bulk). [] si no hay; DB_ERROR si el insert no devuelve todas."""
-        data = _insert_completo(_EVALUADOS, filas, "Error al guardar los evaluados del lote")
-        return [EvaluadoResponse.model_validate(r) for r in data]
+        """Alta en lote. Delegado a _evaluacion_evaluados_repo."""
+        return _ev.crear_evaluados(filas)
 
     def find_evaluados(self, lote_id: str) -> List[EvaluadoResponse]:
-        """Evaluados de un lote, ordenados por apellido y nombre."""
-        res = (supabase_admin.table(_EVALUADOS).select("*").eq("lote_id", lote_id)
-               .order("apellido_evaluado").order("nombre_evaluado").execute())
-        return [EvaluadoResponse.model_validate(r) for r in (res.data or [])] if res else []
+        """El lote ENTERO (métricas y ficha). Delegado a _evaluacion_evaluados_repo."""
+        return _ev.find_evaluados(lote_id)
+
+    def find_evaluados_pagina(self, lote_id: str, page: int = 1, page_size: int = 20,
+                              sector=None, perfil=None, con_nota=None, empleado_ids=None):
+        """Una página con los filtros en el WHERE. Delegado a _evaluacion_evaluados_repo."""
+        return _ev.find_evaluados_pagina(lote_id, page, page_size, sector, perfil, con_nota,
+                                         empleado_ids)
+
+    def sectores_del_lote(self, lote_id: str) -> List[str]:
+        """Los sectores distintos del lote. Delegado a _evaluacion_evaluados_repo."""
+        return _ev.sectores_del_lote(lote_id)
 
     # ── Resultados ──
     def crear_resultados(self, filas: List[dict]) -> List[ResultadoResponse]:
         """Inserta N resultados (bulk). [] si no hay; DB_ERROR si el insert no devuelve todas."""
-        data = _insert_completo(_RESULTADOS, filas, "Error al guardar los resultados del lote")
+        data = insert_completo(_RESULTADOS, filas, "Error al guardar los resultados del lote")
         return [ResultadoResponse.model_validate(r) for r in data]
 
     def find_resultados_por_evaluados(self, ids: List[str]) -> List[ResultadoResponse]:

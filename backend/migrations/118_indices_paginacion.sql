@@ -1,0 +1,388 @@
+-- 118_indices_paginacion.sql
+--
+-- QUE HACE: agrega SEIS indices compuestos `(empresa_id, <orden>, id)` sobre las tablas cuyos
+-- listados pasan a paginar en este bloque. Nada mas: no crea tablas, no toca columnas, no
+-- mueve un solo dato.
+--
+-- ADITIVA PURA Y NO DESTRUCTIVA. No dropea ningun indice existente.
+-- Idempotente: `CREATE INDEX IF NOT EXISTS`. Se puede correr de nuevo sin efecto.
+-- Va ANTES del deploy y sin ventana: un indice nuevo no cambia ningun resultado, solo el plan.
+-- NO se ejecuta aca (la corre Franco).
+--
+-- Verificado contra el catalogo vivo (grmdiwxcvcjorlohpwji) el 2026-08-14: **ninguno de los
+-- seis existe**. Las tres coincidencias parciales que si existen estan documentadas abajo, en
+-- "LO QUE YA EXISTE Y NO ALCANZA" — ninguna sirve para este patron.
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 🔴 POR QUE AHORA Y NO EN LA 115 — la propia 115 lo dejo escrito
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- La 115 probo estos mismos compuestos en `empleado_capacitacion`, `candidatos` e
+-- `inventario_asignaciones` y los DESCARTO, con este argumento textual en su encabezado:
+--
+--     "el planner ni los usa — sigue haciendo Seq Scan + Sort, porque sin LIMIT leer todo y
+--      ordenar es mas barato que recorrer un indice. Por eso no estan aca: serian costo de
+--      escritura puro. A esos modulos los arregla la PAGINACION, y el indice recien tiene
+--      sentido el dia que la tengan."
+--
+-- Ese dia es este. La paginacion entra en este bloque y con ella el `LIMIT 20`, que es
+-- exactamente la pieza que le faltaba al planner para elegir el indice. Re-medido el 14/8
+-- contra la misma base local de escala (10 empresas, 1.005 colaboradores): los seis pasan de
+-- Seq Scan a Index Scan.
+--
+-- 🔑 Y EL CRITERIO DE LA 115 SE APLICO OTRA VEZ, NO SE HEREDO. De los NUEVE candidatos que el
+-- diagnostico de paginacion levanto, TRES siguen sin ser elegidos por el planner incluso con
+-- el LIMIT puesto — y por eso NO estan en esta migracion. Van comentados al final, con su
+-- medicion y su disparador. Copiarlos "porque estaban en la lista" habria reintroducido
+-- justo el costo de escritura puro que la 115 evito.
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 🔴 LA COLUMNA `id` AL FINAL NO ES DECORACION — ES LA MITAD DEL INDICE
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- Todos los listados paginados pasan a ordenar con `id` como desempate final, porque ningun
+-- orden actual es TOTAL: `ORDER BY fecha_desde DESC` con 1.005 colaboradores tiene decenas de
+-- filas empatadas, y Postgres no garantiza el mismo desempate entre dos ejecuciones con
+-- OFFSET distinto. Sin desempate, una fila puede salir en dos paginas o en ninguna.
+--
+-- ⚠️ LA CORRECCION LA DA EL `ORDER BY`, NO EL INDICE. Con el desempate en la query, el
+-- resultado ya es correcto exista o no el indice. Lo que decide el indice es si ese desempate
+-- sale GRATIS o CARO. Y la respuesta es que sale carisimo, medido:
+--
+--   empleados, empresa grande, ORDER BY apellido, nombre, id LIMIT 20
+--     indice (empresa_id, apellido, nombre) ...... Index Scan + **Incremental Sort**  0,851 ms
+--     indice (empresa_id, apellido, nombre, id) .. Index Scan puro                    0,416 ms
+--
+--   candidatos, empresa grande, ORDER BY created_at DESC, id LIMIT 20
+--     indice (empresa_id, created_at DESC) ....... **Bitmap Heap Scan de las 387 filas**
+--                                                  + top-N heapsort           1,352 ms
+--     indice (empresa_id, created_at DESC, id) ... Index Scan de 20 filas     0,204 ms
+--
+-- 🔑 MIREN EL SEGUNDO CASO, QUE ES EL QUE DECIDE. Sin el `id` en el indice, el planner
+-- ABANDONA el recorrido ordenado y se lleva las 387 filas de la empresa para ordenarlas y
+-- quedarse con 20. O sea: **el indice sin `id` degenera justo cuando los empates son densos,
+-- que es exactamente la situacion para la que se puso el desempate.** Los dos problemas son
+-- el mismo problema, y se arreglan en el mismo lugar.
+--
+-- ⚠️ El `id` va ASCENDENTE aunque la fecha vaya DESC, porque asi lo emite el repo
+-- (`.order("<fecha>", desc=True).order("id")`). Un indice `(..., fecha DESC, id DESC)` NO
+-- sirve para ese ORDER BY: el desempate quedaria al reves y volveria el nodo de sort.
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- LO QUE YA EXISTE Y NO ALCANZA (verificado en el catalogo, no supuesto)
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- Tres tablas tienen un indice que se parece y NO sirve. Se declaran para que nadie los lea
+-- como duplicados de los de abajo y borre el equivocado:
+--
+--   · empleados_id_empresa_uq (id, empresa_id) — y sus gemelos en candidatos, areas e
+--     inventario_items. Llevan `empresa_id` SEGUNDO. Un indice solo se puede usar por un
+--     PREFIJO de sus columnas, asi que con `WHERE empresa_id = $1` (sin `id`) no entra.
+--     Existen para las FK compuestas del modelo multiempresa, no para listar.
+--
+--   · empleados_empresa_dni_uq (empresa_id, dni) — este SI arranca con `empresa_id`, y por eso
+--     el planner lo puede usar para el WHERE. Lo que no puede darle es el ORDEN: entrega las
+--     filas por DNI, asi que despues hay que ordenarlas igual. Sirve para buscar por DNI, que
+--     es otra consulta.
+--
+--   · ux_objetivo_responsable_titulo (empresa_id, responsable_id, lower(titulo), ...) — mismo
+--     caso: arranca bien y ordena por lo que no es.
+--
+-- ── CREATE INDEX y no CREATE INDEX CONCURRENTLY, a proposito ──────────────────────────────
+-- Mismo criterio que la 115, y por la misma razon: `CONCURRENTLY` no puede correr dentro de
+-- una transaccion, que es justo como el editor SQL de Supabase manda los statements. Con los
+-- volumenes de produccion de hoy (1.005 filas en la tabla mas grande de esta lista) el lock de
+-- un `CREATE INDEX` normal dura milisegundos.
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 1. empleados — 🔴 EL MAS URGENTE, y no es de los que empiezan a paginar ahora
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- CONSULTA QUE SIRVE: el listado de /empleados, que YA pagina desde siempre.
+--   SELECT * FROM empleados WHERE empresa_id = $1 ORDER BY apellido, nombre, id LIMIT 20;
+--   (repositories/empleado_repo.py::find_all)
+--
+-- 🔴 POR QUE ES EL MAS URGENTE: `empleado_repo.find_all` hace `.range(start, end)` **sin
+-- ningun `.order()`** — es el unico de los listados paginados sin orden, y por eso hoy sus
+-- paginas no son estables. Al agregarle el ORDER BY que le falta, la query pasa a pedir un
+-- orden que ninguna estructura puede darle: sin este indice, cada pagina se resuelve leyendo
+-- la tabla entera y ordenando. **El arreglo del bug de orden CREA la necesidad de este
+-- indice**, asi que los dos tienen que viajar juntos.
+--
+-- GANANCIA MEDIDA (empresa grande, 400 de 1.005 filas):
+--   hoy ... Seq Scan de 1.005 filas, descarta 605, + top-N heapsort   101 buffers   2,334 ms
+--   con ... Index Scan de 20 filas                                     22 buffers   0,416 ms
+--   → **5,6x en tiempo, 4,6x en buffers, y de 1.005 filas leidas a 20.**
+--
+-- ⚠️ En una empresa CHICA (15 colaboradores) el planner sigue eligiendo Bitmap + Sort y la
+-- ganancia baja a 1,7x (1,187 -> 0,711 ms). Es correcto: con 15 filas ordenar es gratis. El
+-- indice esta para la empresa grande y para el modo consolidado, no para la chica.
+CREATE INDEX IF NOT EXISTS idx_empleados_empresa_apellido
+    ON public.empleados (empresa_id, apellido, nombre, id);
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 2. candidatos — el caso que decidio la forma del indice
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- CONSULTA QUE SIRVE: el listado de /candidatos.
+--   SELECT * FROM candidatos WHERE empresa_id = $1 ORDER BY created_at DESC, id LIMIT 20;
+--   (repositories/candidato_repo.py::find_all_candidatos)
+--
+-- DIFERIDO POR LA 115 por no tener LIMIT. Con la paginacion puesta, el planner lo elige.
+--
+-- GANANCIA MEDIDA (387 candidatos en la empresa grande):
+--   hoy ... Bitmap Heap Scan de las 387 filas + top-N heapsort   1,352 ms
+--   con ... Index Scan de 20 filas                               0,204 ms   → **6,6x**
+--
+-- 🔑 Es la tabla donde el `id` del indice mas se nota: sus 1.000 filas comparten `created_at`
+-- (entraron todas en la misma transaccion del seed), o sea un unico grupo de empates. Ver el
+-- bloque del tiebreaker arriba — sin el `id`, el plan vuelve al Bitmap + sort de las 387.
+CREATE INDEX IF NOT EXISTS idx_candidatos_empresa_created
+    ON public.candidatos (empresa_id, created_at DESC, id);
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 3. empleado_capacitacion — asignaciones de capacitaciones
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- CONSULTA QUE SIRVE: el listado de /capacitaciones (tab de asignaciones).
+--   SELECT * FROM empleado_capacitacion WHERE empresa_id = $1
+--    ORDER BY created_at DESC, id LIMIT 20;
+--   (repositories/asignacion_repo.py::find_all)
+--
+-- DIFERIDO POR LA 115 por no tener LIMIT. Nombrado explicitamente en su encabezado.
+--
+-- GANANCIA MEDIDA (1.558 filas totales, 607 de la empresa grande):
+--   hoy ... Seq Scan de 1.558 filas, descarta 951, + top-N heapsort   28 buffers   1,154 ms
+--   con ... Index Scan de 20 filas                                    20 buffers   0,783 ms
+--   → 1,5x en tiempo, pero **de 607 filas leidas a 20**, que es lo que deja de crecer.
+--
+-- ⚠️ La ganancia en TIEMPO es la mas floja de las seis y se declara asi en vez de inflarse: a
+-- este volumen la tabla entra casi entera en cache. Lo que el indice compra no es el
+-- milisegundo de hoy, es que el trabajo por pagina deje de ser proporcional a la tabla.
+CREATE INDEX IF NOT EXISTS idx_ec_empresa_created
+    ON public.empleado_capacitacion (empresa_id, created_at DESC, id);
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 4. inventario_asignaciones — 🔑 EL UNICO PARCIAL DE LOS SEIS, y esta medido
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- CONSULTA QUE SIRVE: el listado de /inventario (tab de asignaciones).
+--   SELECT * FROM inventario_asignaciones
+--    WHERE empresa_id = $1 AND fecha_devolucion IS NULL
+--    ORDER BY fecha_asignacion DESC, id LIMIT 20;
+--   (repositories/inventario_asignaciones_repo.py::find_all)
+--
+-- DIFERIDO POR LA 115 por no tener LIMIT. Nombrado explicitamente en su encabezado.
+--
+-- 🔴 VA PARCIAL, `WHERE fecha_devolucion IS NULL`, y no es un adorno: **el repo NUNCA lista
+-- las devueltas**. `find_all` arranca con `.is_("fecha_devolucion", "null")` fijo — no es un
+-- filtro opcional que el usuario pueda sacar. Un indice pleno tiene que cargar las devueltas
+-- y descartarlas con un nodo Filter en cada pagina.
+--
+-- GANANCIA MEDIDA (636 filas totales, 177 activas en la empresa grande):
+--   hoy ....... Seq Scan de 636 filas, descarta 459, + top-N heapsort        0,431 ms
+--   pleno ..... Index Scan + Filter (descarta 8 devueltas)      56 kB        0,595 ms
+--   parcial ... Index Scan sin Filter                           48 kB        0,122 ms
+--   → **4,9x del parcial contra el pleno**, y 3,5x contra el estado de hoy.
+--
+-- ⚠️ Y la brecha entre pleno y parcial CRECE sola: las devoluciones se acumulan para siempre y
+-- ninguna vuelve al listado, asi que el indice pleno engorda con filas que nadie va a leer.
+--
+-- ⚠️ LO QUE ESTE INDICE NO SIRVE: el historial de un item
+-- (`find_historial`, sin filtro de empresa y con las devueltas incluidas). Esa consulta la
+-- resuelve `idx_inv_asig_item`, que sigue en su lugar.
+CREATE INDEX IF NOT EXISTS idx_inv_asig_empresa_fecha
+    ON public.inventario_asignaciones (empresa_id, fecha_asignacion DESC, id)
+    WHERE fecha_devolucion IS NULL;
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 5. inventario_items — el catalogo de items
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- CONSULTA QUE SIRVE: el listado de /inventario (tab de items).
+--   SELECT * FROM inventario_items WHERE empresa_id = $1 ORDER BY nombre, id LIMIT 20;
+--   (repositories/inventario_items_repo.py::find_all)
+--
+-- GANANCIA MEDIDA (1.304 filas totales, 520 de la empresa grande):
+--   hoy ... Seq Scan de 1.304 filas, descarta 784, + top-N heapsort   23 buffers   1,771 ms
+--   con ... Index Scan de 20 filas                                    10 buffers   0,525 ms
+--   → **3,4x en tiempo, 2,3x en buffers.**
+--
+-- 🔑 Ordena por `nombre` y no por una fecha, igual que `idx_vp_empresa_periodo` de la 115
+-- ordena por `periodo`. Lo que define al patron es la FORMA de la query —igualdad por empresa
+-- + orden + LIMIT—, no que la columna de orden sea temporal.
+--
+-- 🔴 Y es la tabla del hallazgo #2 del diagnostico de escala: `/api/inventario/items` en modo
+-- consolidado ya devolvia **500** por el largo de la URL contra PostgREST (1.304 ids en un
+-- `?id=in.(...)` de 51 KB). Este indice NO arregla eso — lo arregla la paginacion, que corta
+-- el lote de ids a 20. El indice es lo que hace que esa pagina ademas sea barata.
+CREATE INDEX IF NOT EXISTS idx_inv_items_empresa_nombre
+    ON public.inventario_items (empresa_id, nombre, id);
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 6. vacantes — el listado de busquedas
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- CONSULTA QUE SIRVE: el listado de /vacantes.
+--   SELECT * FROM vacantes WHERE empresa_id = $1 ORDER BY created_at DESC, id LIMIT 20;
+--   (repositories/vacante_repo.py::find_all)
+--
+-- GANANCIA MEDIDA (200 filas totales, 81 de la empresa grande):
+--   hoy ... Seq Scan de 200 filas, descarta 119, + top-N heapsort   0,352 ms
+--   con ... Index Scan de 20 filas                                  0,059 ms   → **6,0x**
+--
+-- ⚠️ Es la tabla mas chica de las seis (200 filas) y aun asi el planner elige el indice: no
+-- entro por volumen sino porque `vacantes` acumula historico (las cerradas no se borran) y el
+-- listado siempre pide las ultimas. Ese es el perfil exacto que un compuesto con LIMIT gana.
+CREATE INDEX IF NOT EXISTS idx_vacantes_empresa_created
+    ON public.vacantes (empresa_id, created_at DESC, id);
+
+
+ANALYZE public.empleados;
+ANALYZE public.candidatos;
+ANALYZE public.empleado_capacitacion;
+ANALYZE public.inventario_asignaciones;
+ANALYZE public.inventario_items;
+ANALYZE public.vacantes;
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 🔴 LOS TRES QUE NO ENTRARON — medidos, no descartados de memoria
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- El diagnostico de paginacion propuso NUEVE indices. Entraron seis. Estos tres se midieron
+-- con el LIMIT ya puesto —o sea, en las condiciones que la 115 pedia para reconsiderarlos— y
+-- **el planner los sigue sin usar**. Quedan escritos para que la proxima sesion no los
+-- re-diagnostique, y COMENTADOS para que no se corran.
+--
+-- POR QUE NO PAGAN, y es la misma razon en los tres: no son tablas que crezcan con la
+-- DOTACION. Estan acotadas por otra cosa, y su "empresa grande" cabe en menos de una pagina.
+--
+--   objetivos ... 420 filas totales, 48 en la empresa grande.
+--                 Es el tablero del equipo de RRHH (3 personas), NO de los 1.005
+--                 colaboradores — decision de producto escrita en CLAUDE.md. No escala con el
+--                 padron.
+--                 costo del plan elegido (Seq Scan + Sort) ... 15,58
+--                 costo del plan por indice (forzado) ........ 17,20   → 1,1x, no lo elige
+--                 🚩 DISPARADOR: es el mas cerca de los tres. Si el tablero pasa de ~500 filas
+--                    por empresa, vuelve a medirse y probablemente entre.
+--
+--   areas ....... 58 filas totales, 18 en la empresa grande. Catalogo por empresa.
+--                 costo elegido 3,15 · costo por indice 12,41  → 3,9x, no lo elige
+--
+--   proyectos ... 31 filas totales, 10 en la empresa grande. Catalogo por empresa.
+--                 costo elegido 1,58 · costo por indice 8,31   → 5,3x, no lo elige
+--
+-- (costos comparados con EXPLAIN a igualdad de query, forzando el segundo plan con
+--  enable_seqscan=off / enable_bitmapscan=off. Medicion read-only, sin insertar datos.)
+--
+-- 🔑 SE APLICO EL CRITERIO DE LA 115, NO SE LO HEREDO: "serian costo de escritura puro".
+-- Agregarlos igual "por las dudas" seria exactamente lo que ese archivo evito, y con el
+-- agravante de que ahora tendriamos la medicion que dice que no sirven.
+--
+-- CREATE INDEX IF NOT EXISTS idx_obj_empresa_entrega
+--     ON public.objetivos (empresa_id, fecha_entrega, id);
+-- CREATE INDEX IF NOT EXISTS idx_areas_empresa_nombre
+--     ON public.areas (empresa_id, nombre, id);
+-- CREATE INDEX IF NOT EXISTS idx_proyectos_empresa_created
+--     ON public.proyectos (empresa_id, created_at DESC, id);
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- VERIFICACION — correr DESPUES de la migracion. Todo comentado: no se ejecuta solo.
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+--
+-- ── 0. Que los seis existan y ninguno haya quedado invalido ──────────────────────────────
+-- Un CREATE INDEX interrumpido deja el indice con `indisvalid = false`: existe, aparece en
+-- pg_indexes, y el planner NO lo usa. Se veria como "el indice esta y no sirve".
+--
+--   SELECT c.relname, i.indisvalid, pg_size_pretty(pg_relation_size(c.oid)) AS tam
+--     FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
+--    WHERE c.relname IN ('idx_empleados_empresa_apellido','idx_candidatos_empresa_created',
+--                        'idx_ec_empresa_created','idx_inv_asig_empresa_fecha',
+--                        'idx_inv_items_empresa_nombre','idx_vacantes_empresa_created')
+--    ORDER BY 1;
+--   -- TIENE QUE DEVOLVER: 6 filas, las 6 con indisvalid = t.
+--
+-- ── 1..6. Un EXPLAIN por indice ──────────────────────────────────────────────────────────
+-- Reemplazar $EMP por el id de la empresa con MAS colaboradores (con la de menos, el planner
+-- elige Seq Scan y hace bien: no es una falla del indice).
+--
+--   SELECT id FROM empresas
+--    ORDER BY (SELECT count(*) FROM empleados e WHERE e.empresa_id = empresas.id) DESC LIMIT 1;
+--
+-- En los seis, lo que hay que ver es la MISMA linea: `Index Scan using <el indice>`, con
+-- `actual rows=20` en el nodo del indice — o sea, leyendo 20 filas y no las de la empresa
+-- entera. Si aparece `Seq Scan`, `Bitmap Heap Scan` o cualquier nodo `Sort` / `Incremental
+-- Sort` encima, el indice NO se esta usando.
+--
+--   -- 1. empleados
+--   EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM empleados
+--    WHERE empresa_id = '$EMP' ORDER BY apellido, nombre, id LIMIT 20;
+--   -- ESPERADO: Index Scan using idx_empleados_empresa_apellido — actual rows=20
+--   -- ANTES:    Seq Scan (rows=1005, Rows Removed by Filter: 605) + Sort top-N, ~101 buffers
+--
+--   -- 2. candidatos
+--   EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM candidatos
+--    WHERE empresa_id = '$EMP' ORDER BY created_at DESC, id LIMIT 20;
+--   -- ESPERADO: Index Scan using idx_candidatos_empresa_created — actual rows=20
+--   -- ANTES:    Bitmap Heap Scan (actual rows=387) + Sort top-N
+--
+--   -- 3. empleado_capacitacion
+--   EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM empleado_capacitacion
+--    WHERE empresa_id = '$EMP' ORDER BY created_at DESC, id LIMIT 20;
+--   -- ESPERADO: Index Scan using idx_ec_empresa_created — actual rows=20
+--   -- ANTES:    Seq Scan (rows=1558, Rows Removed by Filter: 951) + Sort top-N
+--
+--   -- 4. inventario_asignaciones — 🔑 el unico donde ADEMAS hay que mirar que NO haya Filter
+--   EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM inventario_asignaciones
+--    WHERE empresa_id = '$EMP' AND fecha_devolucion IS NULL
+--    ORDER BY fecha_asignacion DESC, id LIMIT 20;
+--   -- ESPERADO: Index Scan using idx_inv_asig_empresa_fecha, SIN linea `Filter:` y SIN
+--   --           `Rows Removed by Filter`. Si aparecen, se creo el indice PLENO en vez del
+--   --           parcial y hay que rehacerlo con su clausula WHERE.
+--   -- ANTES:    Seq Scan (rows=636, Rows Removed by Filter: 459) + Sort top-N
+--
+--   -- 5. inventario_items
+--   EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM inventario_items
+--    WHERE empresa_id = '$EMP' ORDER BY nombre, id LIMIT 20;
+--   -- ESPERADO: Index Scan using idx_inv_items_empresa_nombre — actual rows=20
+--   -- ANTES:    Seq Scan (rows=1304, Rows Removed by Filter: 784) + Sort top-N
+--
+--   -- 6. vacantes
+--   EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM vacantes
+--    WHERE empresa_id = '$EMP' ORDER BY created_at DESC, id LIMIT 20;
+--   -- ESPERADO: Index Scan using idx_vacantes_empresa_created — actual rows=20
+--   -- ANTES:    Seq Scan (rows=200, Rows Removed by Filter: 119) + Sort top-N
+--
+-- ── 7. 🔴 EL CASO QUE DISTINGUE ESTE INDICE DEL "MISMO INDICE SIN id" ────────────────────
+-- Es la unica verificacion que no se ve mirando si hay Index Scan: los dos indices dan Index
+-- Scan en la primera consulta. Lo que los separa es que el de sin-`id` necesita ADEMAS un
+-- nodo de sort para el desempate, y con empates densos se rinde y vuelve al scan completo.
+--
+-- La misma query CON y SIN el desempate en el ORDER BY tiene que dar el MISMO plan:
+--
+--   EXPLAIN (ANALYZE) SELECT * FROM candidatos
+--    WHERE empresa_id = '$EMP' ORDER BY created_at DESC       LIMIT 20;   -- sin desempate
+--   EXPLAIN (ANALYZE) SELECT * FROM candidatos
+--    WHERE empresa_id = '$EMP' ORDER BY created_at DESC, id   LIMIT 20;   -- con desempate
+--
+--   -- ESPERADO: las DOS con `Index Scan using idx_candidatos_empresa_created`, sin ningun
+--   --           nodo Sort. Agregar el desempate no cambia el plan: eso ES el `id` del indice
+--   --           haciendo su trabajo.
+--   -- SI EL INDICE ESTUVIERA SIN `id`: la primera daria Index Scan y la segunda un
+--   --           `Incremental Sort` encima (o, con empates densos como los de candidatos,
+--   --           directamente Bitmap Heap Scan de las 387 filas + top-N heapsort).
+--
+-- ── 8. Que no se rompio el historial de inventario (el que NO usa el indice parcial) ─────
+--   EXPLAIN (ANALYZE) SELECT * FROM inventario_asignaciones
+--    WHERE item_id = (SELECT item_id FROM inventario_asignaciones LIMIT 1)
+--    ORDER BY fecha_asignacion DESC;
+--   -- ESPERADO: sigue usando idx_inv_asig_item. El parcial no lo puede servir (no filtra por
+--   --           fecha_devolucion) y esta bien que no lo sirva.
+--
+-- ── 9. La paginacion PROFUNDA sigue sin arreglarse, y no es de esta migracion ────────────
+-- Igual que en la 115: con OFFSET alto el planner vuelve a Seq Scan y el indice no ayuda.
+-- Verificado el 14/8 sobre empleados: con `OFFSET 200` el plan es Seq Scan + Sort **con y sin**
+-- el indice (0,766 vs 0,778 ms). Un OFFSET es O(offset) con cualquier plan.
+--
+--   EXPLAIN (ANALYZE) SELECT * FROM empleados
+--    WHERE empresa_id = '$EMP' ORDER BY apellido, nombre, id LIMIT 20 OFFSET 200;
+--   -- ESPERADO: Seq Scan + Sort. **NO es una falla de esta migracion.** Si alguien pagina
+--   --           hondo, eso se resuelve con paginacion por cursor, no con un indice.

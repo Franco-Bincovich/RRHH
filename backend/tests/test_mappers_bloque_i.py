@@ -5,7 +5,7 @@ e inventario de prueba. Molde: `test_ausencia_row.py`.
 | Mapper | Tabla | Filas hoy |
 |---|---|---|
 | `_vacaciones_utils.enriquecer`        | `solicitudes_vacaciones`  | 0 |
-| `inventario_asignaciones_repo._build` | `inventario_asignaciones` | 0 |
+| `_inventario_asignacion_row.build` | `inventario_asignaciones` | 0 |
 
 ## 🔴 POR QUÉ SE CUBREN AHORA Y NO CUANDO HAYA DATOS
 
@@ -44,7 +44,7 @@ from uuid import uuid4  # noqa: E402
 import pytest  # noqa: E402
 
 import repositories._vacaciones_utils as vac_mod  # noqa: E402
-import repositories.inventario_asignaciones_repo as inv_mod  # noqa: E402
+import repositories._inventario_asignacion_row as inv_mod  # noqa: E402
 from tests._fake_supabase import FakeSupabase  # noqa: E402
 from tests._mappers_early_return import guarda_de  # noqa: E402
 
@@ -151,7 +151,7 @@ class TestInventarioAsignacionesBuild:
         ]
 
     def test_resuelve_item_empleado_y_empresa_de_CADA_fila(self, base) -> None:
-        a, b = inv_mod._build(self._filas())
+        a, b = inv_mod.build(self._filas())
         assert (a.item_nombre, a.item_tipo, a.item_numero_serie) == \
                ("Notebook", "equipo", "NB-001")
         assert (a.empleado_nombre, a.empresa_nombre) == ("Ana Pérez", "Karstec")
@@ -160,26 +160,26 @@ class TestInventarioAsignacionesBuild:
 
     def test_un_item_sin_numero_de_serie_da_None_no_el_del_anterior(self, base) -> None:
         """El opcional en null, y la trampa: los tres campos del ítem salen del MISMO lookup."""
-        _, b = inv_mod._build(self._filas())
+        _, b = inv_mod.build(self._filas())
         assert b.item_numero_serie is None
         assert b.item_tipo == "equipo"
 
     def test_un_item_desconocido_no_revienta(self, base) -> None:
         """El `.get(..., {}).get(...)` del módulo: un ítem borrado deja los campos en None."""
         fila = {**self._filas()[0], "item_id": str(uuid4())}
-        salida = inv_mod._build([fila])[0]
+        salida = inv_mod.build([fila])[0]
         assert (salida.item_nombre, salida.item_tipo, salida.item_numero_serie) == \
                (None, None, None)
 
     def test_los_lookups_son_batch(self, base) -> None:
         """Tres dimensiones: empresas, ítems y empleados. Nunca uno por fila."""
-        inv_mod._build(self._filas())
+        inv_mod.build(self._filas())
         assert sorted(t for t, _, _ in base.consultas) == \
                ["empleados", "empresas", "inventario_items"]
 
     def test_la_lista_vacia_no_prueba_nada(self, base) -> None:
-        assert inv_mod._build([]) == []
+        assert inv_mod.build([]) == []
         assert base.consultas == [], "con lista vacía no consulta nada: no prueba nada"
 
     def test_el_corto_circuito_sigue_en_la_primera_linea(self) -> None:
-        assert guarda_de(inv_mod._build) == "rows"
+        assert guarda_de(inv_mod.build) == "rows"

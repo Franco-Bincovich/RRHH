@@ -10,7 +10,8 @@ from repositories.proyectos_repo import ProyectosRepo
 from schemas.proyectos import (
     ProyectoCreate, ProyectoListResponse, ProyectoResponse, ProyectoUpdate,
 )
-from services._limite_export import verificar_limite_export
+from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
+from services._paginacion import cantidad_paginas
 from services._proyectos_export import construir_filas_export
 from services.export import Descarga, build_export
 from utils.errors import AppError
@@ -23,23 +24,25 @@ class ProyectosService:
     def __init__(self, repo: Optional[ProyectosRepo] = None) -> None:
         self._repo = repo or ProyectosRepo()
 
-    def get_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None, area_id: Optional[UUID] = None) -> ProyectoListResponse:
+    def get_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None,
+                area_id: Optional[UUID] = None, page: int = 1, page_size: int = 20) -> ProyectoListResponse:
         """
         Lista proyectos de la empresa dueña. None = todas. Costeo calculado en batch.
 
         Returns:
             ProyectoListResponse con cada proyecto incluyendo costo_acumulado, presupuesto_restante, pct_consumido.
         """
-        items = self._repo.find_all(empresa_id, estado, area_id)
-        return ProyectoListResponse(items=items, total=len(items))
+        items, total = self._repo.find_all(empresa_id, estado, area_id, page, page_size)
+        return ProyectoListResponse(items=items, total=total, page=page, page_size=page_size,
+                                    total_pages=cantidad_paginas(total, page_size))
 
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", estado: Optional[str] = None, area_id: Optional[UUID] = None) -> Descarga:
         """Exporta el listado de proyectos (columnas legibles, sin UUIDs) con los MISMOS filtros
         que el listado. Va por el mismo `find_all`, así que el archivo no puede traer filas que
         la pantalla no muestre. None = consolidado. El motor genérico no se toca."""
-        items = self._repo.find_all(empresa_id, estado, area_id)
-        verificar_limite_export(len(items))
-        datos = {"Proyectos": construir_filas_export(items)}
+        pagina = self.get_all(empresa_id, estado, area_id, 1, LIMITE_FILAS_EXPORT)
+        verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
+        datos = {"Proyectos": construir_filas_export(pagina.items)}
         return build_export(nombre="Proyectos", datos=datos, filename_base="proyectos", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> ProyectoResponse:

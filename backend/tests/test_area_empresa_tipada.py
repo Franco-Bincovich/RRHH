@@ -170,11 +170,15 @@ class TestLaSerializacionDelRepo:
     """
 
     def test_save_manda_los_uuid_serializados(self, monkeypatch) -> None:
+        import repositories._area_row as row_mod
         import repositories.area_repo as repo_mod
         from repositories.area_repo import AreaRepo
         from schemas.area import AreaCreate
         espia = _SupabaseEspia()
         monkeypatch.setattr(repo_mod, "supabase_admin", espia)
+        # El conteo por área y el mapper se mudaron a `_area_row` al partir el repo
+        # (100/100): sin este segundo parche, `_counts_by_area` sale a la red de verdad.
+        monkeypatch.setattr(row_mod, "supabase_admin", espia)
 
         AreaRepo().save(AreaCreate(empresa_id=uuid4(), nombre="X", responsable_id=uuid4()))
 
@@ -183,11 +187,15 @@ class TestLaSerializacionDelRepo:
         assert isinstance(enviado["responsable_id"], str)
 
     def test_update_manda_los_uuid_serializados(self, monkeypatch) -> None:
+        import repositories._area_row as row_mod
         import repositories.area_repo as repo_mod
         from repositories.area_repo import AreaRepo
         from schemas.area import AreaUpdate
         espia = _SupabaseEspia()
         monkeypatch.setattr(repo_mod, "supabase_admin", espia)
+        # El conteo por área y el mapper se mudaron a `_area_row` al partir el repo
+        # (100/100): sin este segundo parche, `_counts_by_area` sale a la red de verdad.
+        monkeypatch.setattr(row_mod, "supabase_admin", espia)
 
         AreaRepo().update(str(uuid4()), AreaUpdate(responsable_id=uuid4()))
 

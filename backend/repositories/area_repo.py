@@ -1,58 +1,50 @@
 """
 Repositorio de áreas. Acceso directo a Supabase con supabase_admin.
-Interfaz pública: find_all · find_by_id · save · update · delete
+Interfaz pública: find_pagina (el listado) · find_all (el catálogo completo) · find_by_id ·
+save · update · delete
+
+Las primitivas —tabla, SELECT, conteo de empleados y mapper— viven en `_area_row.py`: este
+archivo estaba en 100/100 cuando le tocaba sumar la paginación y el filtro de búsqueda.
 """
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from integrations.supabase_client import supabase_admin
+from repositories._area_row import SELECT as _SELECT
+from repositories._area_row import TABLE as _TABLE
+from repositories._area_row import base as _base
+from repositories._area_row import counts_by_area as _counts_by_area
+from repositories._area_row import to_response as _to_response
 from schemas.area import AreaCreate, AreaResponse, AreaUpdate
-
-_TABLE = "areas"
-_EMPLEADOS_TABLE = "empleados"
-_SELECT = "*, empleados!fk_areas_responsable(nombre, apellido)"
-
-
-def _counts_by_area() -> dict[str, int]:
-    # Excluye 'baja': licencia sigue siendo headcount del área
-    rows = supabase_admin.table(_EMPLEADOS_TABLE).select("area_id").neq("estado", "baja").execute().data or []
-    counts: dict[str, int] = {}
-    for row in rows:
-        if aid := row.get("area_id"):
-            counts[aid] = counts.get(aid, 0) + 1
-    return counts
-
-
-def _to_response(row: dict, counts: dict[str, int]) -> AreaResponse:
-    emp = row.get("empleados") or {}
-    responsable_nombre = (
-        f"{emp.get('nombre', '')} {emp.get('apellido', '')}".strip() or None
-    )
-    return AreaResponse(
-        id=str(row["id"]),
-        empresa_id=str(row["empresa_id"]) if row.get("empresa_id") else None,
-        nombre=row["nombre"],
-        descripcion=row.get("descripcion"),
-        responsable_id=str(row["responsable_id"]) if row.get("responsable_id") else None,
-        responsable_nombre=responsable_nombre,
-        cantidad_empleados=counts.get(str(row["id"]), 0),
-        created_at=row["created_at"],
-    )
 
 
 class AreaRepo:
-    def find_all(self, empresa_id: Optional[str] = None) -> List[AreaResponse]:
-        """Retorna áreas activas, opcionalmente filtradas por empresa_id."""
-        query = (
-            supabase_admin.table(_TABLE)
-            .select(_SELECT)
-            .eq("activo", True)
-            .order("nombre")
-        )
-        if empresa_id:
-            query = query.eq("empresa_id", empresa_id)
-        res = query.execute()
+    def find_all(self, empresa_id: Optional[str] = None,
+                 search: Optional[str] = None) -> List[AreaResponse]:
+        """TODAS las áreas activas del filtro, sin paginar.
+
+        🔴 NO PAGINA A PROPÓSITO: es el catálogo que alimenta los ~15 selectores de área del
+        front (`/api/areas/opciones`) y la resolución nombre→id del import de nómina
+        (`_nomina_catalogos`). Paginarlo acá habría dejado cada dropdown mostrando 20 de ~180,
+        sin error y sin aviso. La pantalla de gestión usa `find_pagina`.
+        """
+        res = _base(empresa_id, search, contar=False).order("nombre").execute()
         counts = _counts_by_area()
         return [_to_response(r, counts) for r in (res.data or [])]
+
+    def find_pagina(self, empresa_id: Optional[str] = None, search: Optional[str] = None,
+                    page: int = 1, page_size: int = 20) -> Tuple[List[AreaResponse], int]:
+        """Una página del listado de gestión + el total REAL del filtro.
+
+        `.order("id")` = desempate. `nombre` NO es único: las áreas son POR empresa y dos
+        sociedades del grupo pueden tener cada una su "Sistemas" — en el padrón de escala 40 de
+        58 nombres están repetidos. Sin el desempate, en modo consolidado esas homónimas se
+        reordenan entre consultas y una puede salir en dos páginas o en ninguna.
+        ASC, que es la forma que tendría `(empresa_id, nombre, id)` si se agrega el índice.
+        """
+        res = (_base(empresa_id, search, contar=True).order("nombre").order("id")
+               .range((page - 1) * page_size, page * page_size - 1).execute())
+        counts = _counts_by_area()
+        return [_to_response(r, counts) for r in (res.data or [])], (res.count or 0)
 
     def find_by_id(self, id: str, empresa_id: Optional[str] = None) -> Optional[AreaResponse]:
         """Área activa por id. Si empresa_id se provee, valida pertenencia (None = consolidado).

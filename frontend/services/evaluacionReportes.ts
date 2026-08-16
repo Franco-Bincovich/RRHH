@@ -11,8 +11,20 @@ export interface FiltrosEvaluados {
   sector?: string
   perfil?: string
   con_nota?: string
-  /** ÚNICO filtro server-side del panel: resolver quién trabaja en el proyecto necesita la base. */
   proyecto_id?: string
+}
+
+/**
+ * Traducción filtros → query params. FUENTE ÚNICA del listado y del export.
+ *
+ * 🔴 LOS CUATRO SON SERVER-SIDE DESDE EL 15/8/2026. Hasta entonces sólo `proyecto_id` viajaba
+ * y los otros tres se aplicaban sobre el array ya traído: con ~30 filas por lote se veía bien,
+ * pero paginar convierte eso en "filtrar por sector no encuentra a nadie que no esté en la
+ * página que estás mirando". Ahora los cuatro van al WHERE, y el export usa este mismo
+ * traductor — que es lo que hace imposible que un filtro quede en una sola de las dos puntas.
+ */
+function queryEvaluados(f: FiltrosEvaluados): Record<string, string | undefined> {
+  return { sector: f.sector, perfil: f.perfil, con_nota: f.con_nota, proyecto_id: f.proyecto_id }
 }
 
 export async function fetchLotesEvaluaciones(): Promise<LotesResponse> {
@@ -56,14 +68,18 @@ export async function fetchMetricas(loteId: string): Promise<MetricasResponse> {
   return apiFetch<MetricasResponse>(`${BASE}/lotes/${loteId}/metricas`)
 }
 
+/**
+ * Una página de evaluados del lote. `page`/`page_size` quedan FUERA de `queryEvaluados` a
+ * propósito: son lo único que el listado tiene y el export no (el export no se pagina).
+ */
 export async function fetchEvaluadosResultados(
-  loteId: string, filtros: FiltrosEvaluados = {},
+  loteId: string, filtros: FiltrosEvaluados = {}, page = 1, pageSize = 20,
 ): Promise<EvaluadoListadoResponse> {
-  // Solo viajan los filtros server-side; sector/perfil/nota se aplican en el cliente.
   const params = new URLSearchParams()
-  if (filtros.proyecto_id) params.set("proyecto_id", filtros.proyecto_id)
-  const qs = params.size ? `?${params}` : ""
-  return apiFetch<EvaluadoListadoResponse>(`${BASE}/lotes/${loteId}/evaluados${qs}`)
+  for (const [k, v] of Object.entries(queryEvaluados(filtros))) if (v) params.set(k, v)
+  params.set("page", String(page))
+  params.set("page_size", String(pageSize))
+  return apiFetch<EvaluadoListadoResponse>(`${BASE}/lotes/${loteId}/evaluados?${params}`)
 }
 
 export async function fetchFicha(loteId: string, evaluadoId: string): Promise<FichaResponse> {
@@ -73,9 +89,10 @@ export async function fetchFicha(loteId: string, evaluadoId: string): Promise<Fi
 export function exportarEvaluadosResultados(
   loteId: string, formato: string, f: FiltrosEvaluados,
 ): Promise<void> {
-  // Mismos Query que el listado (estándar 1.2), vía descargarArchivo con params.
+  // Mismos Query que el listado (estándar 1.2), por el MISMO traductor: enumerarlos otra vez
+  // acá era la forma de que un filtro nuevo entrara al listado y no al archivo.
   return descargarArchivo(
     `${BASE}/lotes/${loteId}/evaluados/export`, formato, "evaluaciones_resultados", undefined,
-    { sector: f.sector, perfil: f.perfil, con_nota: f.con_nota, proyecto_id: f.proyecto_id },
+    queryEvaluados(f),
   )
 }

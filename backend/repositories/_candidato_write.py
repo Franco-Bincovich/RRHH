@@ -11,7 +11,7 @@ from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from repositories._candidato_row import _crow
-from schemas.vacante import CandidatoCreate, CandidatoResponse
+from schemas.candidato import CandidatoCreate, CandidatoResponse
 from utils.errors import AppError
 from utils.logger import logger
 

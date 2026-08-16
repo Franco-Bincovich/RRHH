@@ -88,4 +88,14 @@ class AsignacionResponse(BaseModel):
 
 class AsignacionListResponse(BaseModel):
     items: List[AsignacionResponse]
+    # 🔴 HOY `total == len(items)` PORQUE ESTE LISTADO NO PAGINA: `asignacion_repo.find_all` trae
+    # todas las asignaciones del filtro. Es el más grande de los cinco (1.558 filas en la base de
+    # escala), o sea el primero al que se le va a notar.
+    # 🔴 EL DÍA QUE PAGINE, `total` TIENE QUE SALIR DE `count="exact"` DE LA MISMA QUERY. Con
+    # `.range(...)` puesto y esto sin tocar, `total` pasa a ser el largo de la página y miente sin
+    # error: el chequeo de límite del export lo lee y va a creer que entra siempre.
+    # Los tres pasos de la migración están en `services/_paginacion.py`.
     total: int
+    page: int = 1
+    page_size: int = 0
+    total_pages: int = 0

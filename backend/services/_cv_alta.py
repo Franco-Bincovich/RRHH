@@ -21,7 +21,7 @@ que es la regla del repo para importaciones. Uno por CV convertiría un click en
 """
 import hashlib
 
-from schemas.vacante import CandidatoCreate
+from schemas.candidato import CandidatoCreate
 from services._cv_texto import extraer
 from services._gmail_mensaje import _parse_from_header
 from utils.logger import logger

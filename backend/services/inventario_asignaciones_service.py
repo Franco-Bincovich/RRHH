@@ -18,7 +18,8 @@ from schemas.inventario import (
     AsignacionCreate, AsignacionListResponse, AsignacionResponse, DevolucionRequest,
 )
 from services._inventario_export import construir_filas_export
-from services._limite_export import verificar_limite_export
+from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
+from services._paginacion import cantidad_paginas, sin_paginar
 from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
@@ -33,17 +34,23 @@ class InventarioAsignacionesService:
         self._repo = repo or InventarioAsignacionesRepo()
         self._items = items_repo or InventarioItemsRepo()
 
-    def get_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[str] = None, area_id: Optional[UUID] = None) -> AsignacionListResponse:
-        """Retorna asignaciones activas (sin fecha_devolucion). None = todas las empresas."""
-        items = self._repo.find_all(empresa_id, empleado_id, area_id)
-        return AsignacionListResponse(items=items, total=len(items))
+    def get_all(self, empresa_id: Optional[UUID] = None, empleado_id: Optional[str] = None,
+                area_id: Optional[UUID] = None, page: int = 1, page_size: int = 20) -> AsignacionListResponse:
+        """Página de asignaciones activas (sin fecha_devolucion). None = todas las empresas.
+
+        `total` sale del `count="exact"` de la misma query: es el total del filtro, no el de la
+        página. ⚠️ `get_historial` sigue SIN paginar y conserva `sin_paginar` — son las
+        asignaciones de UN ítem, y paginar ahí sería un paginador de una página."""
+        items, total = self._repo.find_all(empresa_id, empleado_id, area_id, page, page_size)
+        return AsignacionListResponse(items=items, total=total, page=page, page_size=page_size,
+                                      total_pages=cantidad_paginas(total, page_size))
 
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel", empleado_id: Optional[str] = None, area_id: Optional[UUID] = None) -> Descarga:
         """Exporta las asignaciones activas (columnas legibles, sin UUIDs) respetando el filtro
         de empleado. None = consolidado (todas las empresas). El motor genérico no se toca."""
-        items = self._repo.find_all(empresa_id, empleado_id, area_id)
-        verificar_limite_export(len(items))
-        datos = {"Asignaciones": construir_filas_export(items)}
+        pagina = self.get_all(empresa_id, empleado_id, area_id, 1, LIMITE_FILAS_EXPORT)
+        verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
+        datos = {"Asignaciones": construir_filas_export(pagina.items)}
         return build_export(nombre="Inventario asignado", datos=datos, filename_base="inventario_asignaciones", formato=formato)
 
     def get_historial(self, item_id: UUID, empresa_id: Optional[UUID] = None) -> AsignacionListResponse:
@@ -56,7 +63,7 @@ class InventarioAsignacionesService:
         if not self._items.find_by_id(str(item_id), empresa_id):
             raise AppError("Ítem no encontrado", "ITEM_NOT_FOUND", 404)
         items = self._repo.find_historial(str(item_id))
-        return AsignacionListResponse(items=items, total=len(items))
+        return AsignacionListResponse(items=items, **sin_paginar(items))
 
     def asignar(self, data: AsignacionCreate, created_by: str) -> AsignacionResponse:
         """

@@ -30,15 +30,11 @@ from integrations.supabase_client import supabase_admin
 from repositories._recategorizacion_cadena import previa as cadena_previa
 from repositories._recategorizacion_cadena import ultima as cadena_ultima
 from repositories._recategorizacion_row import SELECT, TABLE, build
+from repositories._recategorizacion_row import con_empresa as _con_empresa
 from repositories._recategorizacion_write_repo import actualizar, guardar
 from schemas.recategorizacion import (
     RecategorizacionCreate, RecategorizacionResponse, RecategorizacionUpdate,
 )
-
-
-def _con_empresa(q, empresa_id: Optional[UUID]):
-    """Aplica el filtro de empresa si viene. None = consolidado, no restringe."""
-    return q.eq("empresa_id", str(empresa_id)) if empresa_id else q
 
 
 class RecategorizacionRepo:
@@ -59,7 +55,10 @@ class RecategorizacionRepo:
             q = q.gte("fecha_efectiva", str(fecha_desde))
         if fecha_hasta:
             q = q.lte("fecha_efectiva", str(fecha_hasta))
-        res = (q.order("fecha_efectiva", desc=True)
+        # `.order("id")` = desempate: `fecha_efectiva` es una FECHA (sin hora) y un lote de
+        # recategorizaciones entra todo con la misma, así que los empates son la norma, no el
+        # borde. `id` ASC aunque la fecha vaya DESC.
+        res = (q.order("fecha_efectiva", desc=True).order("id")
                 .range((page - 1) * page_size, page * page_size - 1).execute())
         return build(res.data or []), (res.count or 0)
 

@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 
-from schemas.costo import DashboardCostosResponse, HistorialSalarialItem, NominaResponse
+from schemas.costo import DashboardCostosResponse, HistorialSalarialItem, NominaListResponse
 from services.costo_service import CostoService
 from utils.empresa import get_empresa_id
 from utils.permisos import Accion, Seccion, require_permission
@@ -35,14 +35,16 @@ async def get_dashboard(
     return service.get_dashboard_costos(mes, anio, get_empresa_id(request))
 
 
-@router.get("/nomina", response_model=List[NominaResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
+@router.get("/nomina", response_model=NominaListResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def get_nomina(
     request: Request,
     mes: int = Query(..., ge=1, le=12),
     anio: int = Query(..., ge=2000, le=2100),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     service: CostoService = Depends(_service),
-) -> List[NominaResponse]:
-    return service.get_nomina_mes(mes, anio, get_empresa_id(request))
+) -> NominaListResponse:
+    return service.get_nomina_mes(mes, anio, get_empresa_id(request), page, page_size)
 
 
 @router.get("/nomina/exportar", dependencies=[Depends(require_permission(SECCION, Accion.READ))])

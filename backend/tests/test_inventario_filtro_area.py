@@ -102,9 +102,19 @@ class _Query:
         self._pred.append(lambda r: r.get(col) is None)
         return self
 
+    def range(self, desde, hasta):
+        self._rango = (desde, hasta)
+        return self
+
     def execute(self):
         filas = [r for r in self._filas if all(p(r) for p in self._pred)]
-        return type("Res", (), {"data": filas})()
+        # 🔴 El `count` es el del FILTRO y el `.range()` recorta DESPUÉS, que es el orden real de
+        # PostgREST. Un fake que contara la página no podría desmentir un total mal calculado.
+        total = len(filas)
+        rango = getattr(self, "_rango", None)
+        if rango:
+            filas = filas[rango[0]:rango[1] + 1]
+        return type("Res", (), {"data": filas, "count": total})()
 
 
 class _Supabase:
@@ -168,7 +178,8 @@ class TestFindAll:
     @staticmethod
     def _nombres(**kw):
         from repositories.inventario_items_repo import InventarioItemsRepo
-        return sorted(i.id for i in InventarioItemsRepo().find_all(**kw))
+        # `find_all` devuelve (pagina, total) desde que el catálogo pagina: se toma [0].
+        return sorted(i.id for i in InventarioItemsRepo().find_all(**kw)[0])
 
     def test_sin_area_trae_todo_el_catalogo(self, base) -> None:
         """Contrapeso: sin esto, un filtro que devolviera siempre vacío pasaría los de abajo."""
@@ -189,7 +200,7 @@ class TestFindAll:
         """El early return del molde: un `.in_([])` no es un WHERE válido. Se verifica que la
         tabla de ítems NO se haya consultado, no solo que el resultado sea []."""
         from repositories.inventario_items_repo import InventarioItemsRepo
-        assert InventarioItemsRepo().find_all(empresa_id=EMPRESA_A, area_id=uuid4()) == []
+        assert InventarioItemsRepo().find_all(empresa_id=EMPRESA_A, area_id=uuid4()) == ([], 0)
         assert "inventario_items" not in base.tablas
 
     def test_el_devuelto_y_el_libre_estan_en_el_catalogo_pero_no_bajo_un_area(self, base) -> None:
@@ -209,9 +220,9 @@ class _RepoEspia:
     def __init__(self) -> None:
         self.args: dict = {}
 
-    def find_all(self, empresa_id=None, estado=None, area_id=None):
+    def find_all(self, empresa_id=None, estado=None, area_id=None, page=1, page_size=20):
         self.args = {"empresa_id": empresa_id, "estado": estado, "area_id": area_id}
-        return []
+        return [], 0
 
 
 class TestElParametroViajaEnteroHastaElRepo:

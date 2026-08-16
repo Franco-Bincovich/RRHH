@@ -1,21 +1,23 @@
 """
 Repositorio de candidatos. Acceso a Supabase con supabase_admin.
-Interfaz pública: find_candidatos · find_all_candidatos · find_by_id · save_candidato ·
+Interfaz pública: find_candidatos · find_pagina · claves_de_grupo · find_by_id · save_candidato ·
 asignar_vacante · update_etapa_candidato · delete · congelar_busqueda
 Todas las operaciones reciben empresa_id opcional para filtrado multiempresa.
 
-El mapper de fila vive en `_candidato_row.py`, el write path en `_candidato_write.py` y las dos
-lecturas de la ingesta por mail en `_candidato_gmail.py` — el repo estaba en 100/100 exacto.
-Molde: `empleado_repo`.
+El mapper de fila vive en `_candidato_row.py`, el write path en `_candidato_write.py`, las dos
+lecturas de la ingesta por mail en `_candidato_gmail.py` y EL LISTADO —con su paginación y su
+conteo por grupo— en `_candidato_listado_repo.py`. El repo llegó a 100/100 exacto dos veces; el
+listado salió la segunda porque es lo único que crece con cada filtro nuevo. Molde: `empleado_repo`.
 """
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from repositories import _candidato_gmail as _g
+from repositories import _candidato_listado_repo as _l
 from repositories import _candidato_write as _w
 from repositories._candidato_row import _crow
-from schemas.vacante import CandidatoCreate, CandidatoResponse
+from schemas.candidato import CandidatoCreate, CandidatoResponse
 
 _C = "candidatos"
 
@@ -31,27 +33,18 @@ class CandidatoRepo:
             q = q.eq("empresa_id", str(empresa_id))
         return [_crow(r) for r in (q.execute().data or [])]
 
-    def find_all_candidatos(self, empresa_id: Optional[UUID] = None,
-                            sin_vacante: bool = False,
-                            clasificacion: Optional[str] = None) -> List[CandidatoResponse]:
-        """TODOS los candidatos de la empresa (con y sin vacante), más recientes primero.
+    # ── El LISTADO (delegado a _candidato_listado_repo, que es la parte que crece) ──
 
-        🔴 `sin_vacante` filtra EN EL WHERE (`.is_("vacante_id", "null")`), no en Python. Es la
-        invariante del Bloque B: el export va por este mismo método, y un filtro aplicado en la
-        capa de arriba haría que el archivo saliera con más filas de las que muestra la pantalla,
-        sin error y sin aviso.
-        """
-        q = supabase_admin.table(_C).select("*").order("created_at", desc=True)
-        if empresa_id:
-            q = q.eq("empresa_id", str(empresa_id))
-        if sin_vacante:
-            q = q.is_("vacante_id", "null")
-        # En el WHERE, no en Python. `sin_clasificar` es un valor; `None` = no filtres.
-        if clasificacion == "sin_clasificar":
-            q = q.is_("clasificacion_ia", "null")
-        elif clasificacion:
-            q = q.eq("clasificacion_ia", clasificacion)
-        return [_crow(r) for r in (q.execute().data or [])]
+    def find_pagina(self, empresa_id: Optional[UUID] = None, sin_vacante: bool = False,
+                    clasificacion: Optional[str] = None, page: int = 1, page_size: int = 20,
+                    ) -> Tuple[List[CandidatoResponse], int]:
+        """Una página del listado + el total del filtro. Delegado a _candidato_listado_repo."""
+        return _l.pagina(empresa_id, sin_vacante, clasificacion, page, page_size)
+
+    def claves_de_grupo(self, empresa_id: Optional[UUID] = None, sin_vacante: bool = False,
+                        clasificacion: Optional[str] = None) -> List[dict]:
+        """La clave de agrupamiento de cada fila del filtro, en UNA query."""
+        return _l.claves_de_grupo(empresa_id, sin_vacante, clasificacion)
 
     def find_by_id(self, candidato_id: str, empresa_id: Optional[UUID] = None) -> Optional[CandidatoResponse]:
         """Busca un candidato por UUID. Si empresa_id se provee, valida pertenencia (fail-closed)."""

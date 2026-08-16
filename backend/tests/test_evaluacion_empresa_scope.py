@@ -73,6 +73,24 @@ class _FakeRepo:
         self.leidos.append(str(lote_id))
         return list(self._por_lote.get(str(lote_id), []))
 
+    def find_evaluados_pagina(self, lote_id, page=1, page_size=20, sector=None,
+                              perfil=None, con_nota=None, ids_proyecto=None):
+        """El camino del LISTADO, que desde la paginación ya no pasa por `find_evaluados`.
+
+        🔴 REGISTRA EN `leidos` IGUAL QUE SU HERMANO, y eso es lo único que le importa a este
+        archivo: la aserción de todos los tests de acá es que un lote ajeno da 404 SIN haber
+        leído un solo evaluado. Si este método no registrara, el listado sería la única de las
+        cuatro superficies que podría leer datos de otra empresa sin que nada rojeara — y es
+        justamente la que se acaba de reescribir."""
+        self.leidos.append(str(lote_id))
+        return list(self._por_lote.get(str(lote_id), [])), len(self._por_lote.get(str(lote_id), []))
+
+    def sectores_del_lote(self, lote_id):
+        """Las opciones del filtro de sector. También cuelgan del lote, así que también se leen
+        después de la barrera; van a `leidos` por el mismo motivo."""
+        self.leidos.append(str(lote_id))
+        return []
+
     def find_resultados_por_evaluados(self, ids):
         return [ResultadoResponse(id=uuid4(), evaluado_id=UUID(i), created_at=AHORA,
                                   tipo_evaluador="PAR", competencia="X", orden=1, nota=7.0)
@@ -157,4 +175,9 @@ def test_evaluados_de_un_lote_ajeno_nunca_se_devuelven(svc, repo):
     """El listado del lote propio trae solo sus evaluados (los del ajeno no se rozan)."""
     items = svc.listado(repo.propio.id, EMPRESA_PROPIA).items
     assert [i.apellido for i in items] == ["Propio"]
-    assert repo.leidos == [str(repo.propio.id)]
+    # Sobre el CONJUNTO de lo leído, no sobre la lista: el listado hace más de una lectura por
+    # llamada (la página y los sectores del filtro) y va a hacer más. Lo que no puede cambiar es
+    # que TODAS cuelguen del lote propio. La guarda de no-vacío es la que impide que esto pase
+    # solo porque nadie leyó nada.
+    assert repo.leidos, "no se leyó nada: la aserción de abajo pasaría en el vacío"
+    assert set(repo.leidos) == {str(repo.propio.id)}

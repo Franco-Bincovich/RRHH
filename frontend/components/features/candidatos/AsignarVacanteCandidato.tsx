@@ -30,7 +30,10 @@ export function AsignarVacanteCandidato({ candidatoId, onAsignada }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchVacantes().then(setVacantes).catch(() => setVacantes([]))
+    // ⚠️ Es un SELECTOR, no un listado: necesita todas las vacantes elegibles, así que pide
+    // el tope del endpoint (100, el `le` del router). Si alguna vez hay más de 100 abiertas,
+    // esto pasa a ser un combobox con búsqueda server-side, no un `page_size` más grande.
+    fetchVacantes(undefined, undefined, 1, 100).then((r) => setVacantes(r.items)).catch(() => setVacantes([]))
   }, [])
 
   async function asignar() {

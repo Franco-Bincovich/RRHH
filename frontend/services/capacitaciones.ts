@@ -102,12 +102,16 @@ function headersEmpresa(empresaIdOverride?: string): Record<string, string> | un
 }
 
 export async function fetchAsignaciones(
-  params: AsignacionesCapacitacionFiltros,
+  params: AsignacionesCapacitacionFiltros, page = 1, pageSize = 20,
 ): Promise<AsignacionListResponse> {
   const q = new URLSearchParams()
   for (const [k, v] of Object.entries(queryAsignaciones(params))) {
     if (v) q.set(k, v)
   }
+  // `page`/`page_size` van aparte de la traducción compartida con el export: el export no se
+  // pagina, y colarlos ahí haría que el archivo saliera con una página en vez del listado.
+  q.set("page", String(page))
+  q.set("page_size", String(pageSize))
   const query = q.size ? `?${q}` : ""
   return apiFetch<AsignacionListResponse>(
     `${BASE_AS}${query}`,

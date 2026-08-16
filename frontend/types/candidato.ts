@@ -45,4 +45,27 @@ export interface GrupoCandidatos {
   nombre: string
   activa: boolean
   candidatos: CandidatoConGrupo[]
+  /**
+   * Cuántos candidatos tiene la búsqueda EN TODO EL FILTRO, no en la página.
+   *
+   * 🔴 ES DISTINTO DE `candidatos.length` Y ESA ES LA RAZÓN DE QUE EXISTA. El listado se
+   * pagina PLANO y la pantalla agrupa dentro de la página: una búsqueda de 40 candidatos
+   * puede aparecer con 4 filas en la página 3. Sin este campo el encabezado diría "4", que
+   * es un número plausible, falso, y que además CAMBIA al pasar de página.
+   *
+   * Lo calcula el backend (`_contar_grupos`) sobre el conjunto filtrado entero, con una sola
+   * query de dos columnas — no un count por búsqueda, que serían N round trips.
+   */
+  totalGrupo: number
+}
+
+/** Una página del listado de candidatos. Espejo de `CandidatosPaginaResponse`. */
+export interface CandidatosPagina {
+  items: CandidatoConGrupo[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  /** nombre de grupo → cuántos tiene en TODO el filtro. Ver `GrupoCandidatos.totalGrupo`. */
+  conteo_por_grupo: Record<string, number>
 }

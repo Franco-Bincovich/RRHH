@@ -344,11 +344,15 @@ class TestLaSerializacionDeNominaRepo:
     """`NominaCreate.empleado_id` es UUID → `save_nomina` tiene que convertirlo en los DOS usos."""
 
     def test_save_nomina_manda_el_uuid_serializado(self, monkeypatch) -> None:
+        import repositories._nomina_write_repo as write_mod
         import repositories.nomina_repo as repo_mod
         from repositories.nomina_repo import NominaRepo
         from schemas.costo import NominaCreate
         espia = _SupabaseEspia(_FILA_NOMINA_DB)
         monkeypatch.setattr(repo_mod, "supabase_admin", espia)
+        # `save_nomina` se mudo a su satelite al partir el repo (119/100): sin este segundo
+        # parche el upsert sale a la red de verdad en vez de contra el espia.
+        monkeypatch.setattr(write_mod, "supabase_admin", espia)
 
         NominaRepo().save_nomina(NominaCreate(empleado_id=UUID(EMPLEADO), mes=6, anio=2026,
                                               monto_bruto=1000.0, monto_neto=800.0))
@@ -358,11 +362,15 @@ class TestLaSerializacionDeNominaRepo:
 
     def test_el_lookup_del_empleado_tambien_va_serializado(self, monkeypatch) -> None:
         """La otra mitad: el `.eq("id", ...)` que resuelve la empresa del empleado."""
+        import repositories._nomina_write_repo as write_mod
         import repositories.nomina_repo as repo_mod
         from repositories.nomina_repo import NominaRepo
         from schemas.costo import NominaCreate
         espia = _SupabaseEspia(_FILA_NOMINA_DB)
         monkeypatch.setattr(repo_mod, "supabase_admin", espia)
+        # `save_nomina` se mudo a su satelite al partir el repo (119/100): sin este segundo
+        # parche el upsert sale a la red de verdad en vez de contra el espia.
+        monkeypatch.setattr(write_mod, "supabase_admin", espia)
 
         NominaRepo().save_nomina(NominaCreate(empleado_id=UUID(EMPLEADO), mes=6, anio=2026,
                                               monto_bruto=1000.0, monto_neto=800.0))

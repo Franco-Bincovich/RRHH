@@ -96,7 +96,9 @@ class _Query:
 
 
 class _Res:
-    def __init__(self, data): self.data = data
+    # `count` acompaña a `data` desde que los listados piden `count="exact"`: el repo lo lee de
+    # la MISMA respuesta. Default `None` para los caminos que no lo piden (el repo hace `or 0`).
+    def __init__(self, data, count=None): self.data, self.count = data, count
 
 
 @pytest.fixture
@@ -207,6 +209,8 @@ class _QueryInv:
 
     def select(self, *_a, **_k): return self
     def order(self, *_a, **_k): return self
+    # No-op encadenable: este doble audita QUÉ FILTROS arma la query, no cuántas filas devuelve.
+    def range(self, *_a, **_k): return self
 
     def is_(self, col, val):
         self.registro[self.tabla]["is_"] = (col, val)
@@ -252,7 +256,7 @@ class TestCableadoInventario:
         monkeypatch.setattr(repo_mod, "supabase_admin",
                             type("C", (), {"table": staticmethod(lambda t: _QueryInv(t, registro))})())
         monkeypatch.setattr(repo_mod, "empleados_de_area", lambda a, e=None: [])
-        assert repo_mod.InventarioAsignacionesRepo().find_all(area_id=AREA_SISTEMAS) == []
+        assert repo_mod.InventarioAsignacionesRepo().find_all(area_id=AREA_SISTEMAS) == ([], 0)
         assert "inventario_asignaciones" not in registro
 
     def test_conserva_la_vigencia(self, monkeypatch) -> None:

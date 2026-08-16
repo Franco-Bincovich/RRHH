@@ -18,8 +18,13 @@ export function CandidatoGrupo({ grupo, onSelect }: Props) {
         ) : (
           <Badge variant="secondary">Búsqueda cerrada</Badge>
         )}
+        {/* 🔴 EL TOTAL DE LA BÚSQUEDA, NO LO VISIBLE. El listado se pagina plano y el grupo se
+            arma dentro de la página, así que `candidatos.length` cambiaría al pasar de página
+            sobre una búsqueda que no cambió. Cuando difieren se muestran los dos: decir "40"
+            arriba de 4 filas, sin explicar el 4, es igual de confuso que decir "4". */}
         <span className="text-sm text-muted-foreground">
-          {grupo.candidatos.length} candidato{grupo.candidatos.length !== 1 ? "s" : ""}
+          {grupo.candidatos.length !== grupo.totalGrupo && `${grupo.candidatos.length} de `}
+          {grupo.totalGrupo} candidato{grupo.totalGrupo !== 1 ? "s" : ""}
         </span>
       </div>
       <div className="space-y-2">

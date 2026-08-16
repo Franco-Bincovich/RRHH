@@ -49,9 +49,23 @@ function initListado(): { headers?: Record<string, string> } | undefined {
   return apiFetch.mock.calls[0][1] as { headers?: Record<string, string> } | undefined
 }
 
-/** Los params del listado, como objeto plano, para comparar contra los del export. */
+/**
+ * Los params del listado, como objeto plano, para comparar contra los del export.
+ *
+ * 🔴 `page`/`page_size` se SACAN, y es la única diferencia legítima: el export NO se pagina, por
+ * diseño. Si viajaran al archivo, saldría con una página de 20 filas en vez del listado entero —
+ * sin error y sin aviso. Es la misma excepción que declara `test_paridad_list_export.py` del lado
+ * del backend (`_SOLO_LISTADO`), y está acá para que las dos puntas digan lo mismo.
+ *
+ * ⚠️ Se sacan SOLO esas dos. Cualquier otro param que el listado mande y el export no, sigue
+ * rompiendo estos tests, que es exactamente lo que tienen que hacer.
+ */
+const SOLO_LISTADO = ["page", "page_size"]
+
 function listadoComoObjeto(): Record<string, string> {
-  return Object.fromEntries(queryListado().entries())
+  const params = queryListado()
+  for (const k of SOLO_LISTADO) params.delete(k)
+  return Object.fromEntries(params.entries())
 }
 
 beforeEach(() => {
@@ -298,9 +312,11 @@ describe("proyectos — área y empresa", () => {
     expect(initListado()?.headers).toEqual({ "X-Empresa-Id": "emp-9" })
   })
 
-  it("sin filtros no manda params", async () => {
+  it("sin filtros no manda más params que la paginación", async () => {
+    // El listado SIEMPRE manda `page`/`page_size` desde que pagina — no son filtros y por eso se
+    // descuentan. Lo que este test cuida es que un filtro vacío no viaje como param vacío.
     await fetchProyectos()
-    expect(queryListado().size).toBe(0)
+    expect(listadoComoObjeto()).toEqual({})
   })
 })
 

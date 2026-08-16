@@ -5,6 +5,7 @@ from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from repositories._rango_fechas import aplicar_rango
+from repositories._vacaciones_empleado_repo import datos_para_saldo, empresa_de_empleado
 from repositories._vacaciones_utils import TABLE, aplicar_filtro_estado, build_responses
 from repositories._vacaciones_write_repo import actualizar, cancelar, guardar
 from schemas.vacaciones import SolicitudVacacionesResponse
@@ -18,7 +19,11 @@ class VacacionesRepo:
         empleado_ids=None → sin filtro por empleado; la intersección ownership∩área la arma el service.
         estado → filtro server-side (el total refleja el estado, para paginar y exportar bien).
         desde/hasta → SOLAPAMIENTO con el rango, keyword-only (semántica en _rango_fechas)."""
-        q = supabase_admin.table(_T).select("*", count="exact").order("fecha_desde", desc=True)
+        # `.order("id")` = desempate. `fecha_desde` sola NO es un orden total (varias solicitudes
+        # arrancan el mismo día) y entre empatadas Postgres no garantiza el mismo orden en dos
+        # consultas con OFFSET distinto: una fila puede salir en dos páginas o en ninguna.
+        # El `id` va ASC aunque la fecha vaya DESC — es la forma del índice de la migración 118.
+        q = supabase_admin.table(_T).select("*", count="exact").order("fecha_desde", desc=True).order("id")
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         if empleado_ids is not None:
@@ -51,26 +56,15 @@ class VacacionesRepo:
             q = q.neq("id", exclude_id)
         return q.execute().data or []
 
+    # ── Lookups sobre `empleados` (delegados a _vacaciones_empleado_repo) ──
+
     def find_empresa_for_empleado(self, empleado_id: str) -> Optional[str]:
-        """Retorna el empresa_id del empleado, o None si no existe."""
-        res = supabase_admin.table("empleados").select("empresa_id").eq("id", empleado_id).maybe_single().execute()
-        return str(res.data["empresa_id"]) if res.data else None
+        """La empresa del empleado. Delegado a _vacaciones_empleado_repo."""
+        return empresa_de_empleado(empleado_id)
 
     def find_datos_para_saldo(self, empleado_id: str, empresa_id: Optional[UUID] = None) -> Optional[dict]:
-        """Los TRES campos del empleado que entran al cálculo del saldo, o None si no existe o
-        es de otra empresa (empresa_id None = consolidado, no restringe).
-
-        Reemplazó a `find_dias_asignados`, que traía una sola columna: desde que el cupo sale de
-        la antigüedad, el saldo necesita además las dos fechas de ingreso. Se traen en la MISMA
-        query a propósito — dos lecturas de la misma fila podrían caer a los dos lados de un
-        UPDATE y calcular la antigüedad contra un override que ya no es el de esa fila."""
-        q = (supabase_admin.table("empleados")
-             .select("fecha_ingreso, fecha_ingreso_reconocida, dias_vacaciones_asignados")
-             .eq("id", empleado_id))
-        if empresa_id:
-            q = q.eq("empresa_id", str(empresa_id))
-        res = q.maybe_single().execute()
-        return res.data if res.data else None
+        """Los tres campos del cálculo de saldo. Delegado a _vacaciones_empleado_repo."""
+        return datos_para_saldo(empleado_id, empresa_id)
 
     def find_vacaciones_empleado(self, empleado_id: str, empresa_id: Optional[UUID] = None) -> List[SolicitudVacacionesResponse]:
         """Solicitudes tipo='vacaciones' no canceladas del empleado (para cálculo de saldo).

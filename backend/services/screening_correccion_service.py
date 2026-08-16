@@ -37,7 +37,7 @@ from uuid import UUID
 from repositories.candidato_repo import CandidatoRepo
 from repositories.candidato_screening_repo import CandidatoScreeningRepo
 from schemas.screening import ClasificacionUpdate
-from schemas.vacante import CandidatoResponse
+from schemas.candidato import CandidatoResponse
 from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
