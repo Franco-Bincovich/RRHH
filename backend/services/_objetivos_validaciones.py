@@ -1,6 +1,19 @@
 """
 Las validaciones de campo del módulo de objetivos: el responsable y la prioridad.
 
+⚠️ La UNICIDAD no está acá: la hace el índice y su traducción a un 409 vive en
+`_objetivos_duplicado.py`. Es otra clase de cosa —esto corre ANTES de escribir y mira un valor;
+aquello traduce el error que la base devuelve DESPUÉS— y además no entraba: con ese bloque adentro
+este archivo quedaba en 168 contra un tope de 150.
+
+🔴 POR QUÉ NO HAY UN `ensure_tipo_valido`, y no es un olvido. `prioridad` es `str` en el schema,
+así que sin `ensure_prioridad_valida` un valor fuera del enum llegaría al CHECK de la base y el
+422 legible se convertiría en un 500 de Postgres. `tipo`, en cambio, es un `Literal` en
+`ObjetivoCreate`/`ObjetivoUpdate`: **Pydantic lo rechaza antes de que exista el objeto**, y FastAPI
+lo devuelve como 422 con el detalle del campo. Un validador acá sería código que no puede fallar
+—el caso que cubriría es inalcanzable— y aparentaría una defensa que ya está una capa más arriba.
+La asimetría es entre los dos SCHEMAS, no entre las dos validaciones.
+
 Salió de `objetivo_service.py`, que estaba en 143/150 contra su límite. Molde:
 `_objetivos_jerarquia.py`, que ya se había separado de ese mismo service por el mismo motivo y
 con el mismo criterio — funciones `ensure_*` libres, que reciben lo que necesitan y levantan

@@ -55,15 +55,26 @@ _CATALOGO = {
 }
 
 
-def _fila(id_, empresa, responsable, titulo, parent=None) -> dict:
+def _fila(id_, empresa, responsable, titulo, parent=None, tipo="anual") -> dict:
+    """Las tres columnas de la migración 119 van en la fila CRUDA, como vienen de la base.
+
+    🔴 `tipo` es OBLIGATORIO en `ObjetivoResponse` (no tiene default, al revés que los otros dos)
+    porque no hay valor neutro: todo objetivo ES anual o ES operativo, y defaultearlo sería
+    inventar a qué vista pertenece una fila que llegó sin decirlo. Por eso una fila sin `tipo`
+    revienta acá — que es lo que se quiere, y lo que hizo rojear a este archivo cuando la columna
+    entró.
+    """
     return {"id": id_, "empresa_id": empresa, "responsable_id": responsable, "titulo": titulo,
             "descripcion": None, "prioridad": "alta", "estado": "en_curso", "fecha_entrega": None,
             "created_at": "2026-01-01T00:00:00+00:00", "updated_at": "2026-01-02T00:00:00+00:00",
-            "parent_id": parent}
+            "parent_id": parent, "tipo": tipo, "periodicidad": "",
+            "areas_involucradas": []}
 
 
 _FILAS = [_fila(O1, E1, U1, "Cerrar el trimestre"),
-          _fila(O2, E2, U2, "Subobjetivo", parent=O1),
+          # Un OPERATIVO colgado de un ANUAL: el tipo no se hereda del padre (decisión de
+          # producto), y este mapper no tiene por qué normalizarlo.
+          _fila(O2, E2, U2, "Subobjetivo", parent=O1, tipo="operativo"),
           _fila(O3, E1, U3, "Sin puente")]
 
 

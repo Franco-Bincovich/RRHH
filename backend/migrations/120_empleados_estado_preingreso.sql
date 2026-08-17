@@ -1,0 +1,257 @@
+-- 120_empleados_estado_preingreso.sql
+--
+-- QUÉ HACE: UN objeto. `empleados_estado_check` pasa de 4 valores a 5, agregando 'preingreso'.
+-- Los cuatro que ya estaban se conservan textualmente. No se toca ninguna columna, ningún
+-- índice, ningún dato.
+--
+-- Idempotente (el par DROP IF EXISTS + ADD converge al mismo CHECK cuantas veces corra).
+-- NO se ejecuta acá (la corre Franco).
+--
+-- ── VERIFICADO CONTRA EL CATÁLOGO VIVO (grmdiwxcvcjorlohpwji) el 2026-08-17 ────────────────
+-- · `empleados_estado_check` vigente, tal como lo devuelve `pg_get_constraintdef`:
+--     CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying,
+--                                          'baja'::character varying,
+--                                          'licencia'::character varying,
+--                                          'suspendido'::character varying])::text[])))
+--   `convalidated = true`. Coincide EXACTAMENTE con lo que decía el diagnóstico: cuatro valores,
+--   ni uno más.
+-- · `empleados` tiene 31 filas y las 31 están en 'activo'. Cero en 'baja', cero en 'licencia',
+--   cero en 'suspendido'.
+-- · `estado` es `character varying NOT NULL DEFAULT 'activo'`. El DEFAULT no se toca.
+--
+-- 🔑 POR ESO ESTA MIGRACIÓN NO PUEDE FALLAR POR DATOS. Un CHECK que se ENSANCHA acepta todo lo
+-- que aceptaba antes: el conjunto nuevo es un superconjunto estricto del viejo, así que las 31
+-- filas satisfacen el CHECK nuevo por construcción. El que falla al revalidar es el que se
+-- angosta, no éste. (Lo cual no lo vuelve inocuo — ver "POR QUÉ EN TRANSACCIÓN".)
+--
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- QUÉ DECISIÓN DE LA 113 REVIERTE, Y CON QUÉ MEDICIÓN
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+--
+-- La 113, en su sección 4, decidió resolver los preingresos con fechas previstas y **sin tocar
+-- este CHECK**. Su argumento, textual: "`estado` gobierna 17 lugares del backend, de los cuales
+-- DOS cuentan de más (`area_repo._counts_by_area` y `sucesion_repo`, los dos con
+-- `.neq('estado','baja')`). Un valor nuevo en el CHECK los rompe en SILENCIO".
+--
+-- Ese argumento es CIERTO y sigue siéndolo. Lo que la 113 **no midió es la otra mitad**: cuánto
+-- cuesta NO agregar el valor. El diagnóstico del 17/8 la midió, archivo por archivo:
+--
+--   · SIN estado propio (preingreso = 'activo', desambiguado por `fecha_ingreso_prevista`):
+--     hay que auditar **18 lecturas de `empleados.estado`** y agregarle a cada una un predicado
+--     sobre la fecha. Las 15 que hoy filtran `= 'activo'` pasan a contar de más, y **la que se
+--     olvide no falla: devuelve un número más grande.** Entre ellas están el KPI de headcount,
+--     los denominadores de las dos tasas de ausentismo, la base de la tasa de rotación, los
+--     saldos de vacaciones, el organigrama, el selector de superior y el gate del link público
+--     de horas.
+--
+--   · CON estado propio: esas 15 quedan correctas **gratis y sin tocarlas**, porque ya preguntan
+--     `= 'activo'` y un preingreso no lo es. Quedan **2 sitios** a arreglar, que son exactamente
+--     los dos que la 113 nombró:
+--         repositories/_area_row.py:53   → `.neq("estado", "baja")` en `counts_by_area`
+--         repositories/sucesion_repo.py:88 → `.neq("estado", "baja")` en `get_analisis_posicion`
+--
+-- 🔑 Y LA DIFERENCIA NO ES SOLO 18 CONTRA 2: ES CÓMO FALLA CADA UNO. Los 18 del primer camino
+-- fallan en KPIs y denominadores — números agregados que nadie puede verificar a ojo, que es la
+-- definición de fallar en silencio. Los 2 del segundo rompen **el contador de empleados de un
+-- área en `/areas`**, que es una lista corta que RRHH mira contra la realidad. La 113 tenía
+-- razón en que esos 2 se rompen; lo que no evaluó es que son los ÚNICOS que se rompen, y los
+-- únicos visibles.
+--
+-- ⚠️ La 113 no se equivocó con los datos que tenía: midió el riesgo de la opción que descartaba
+-- y no el de la que eligió. Queda escrito así, sin corregir la 113 —una migración corrida no se
+-- reescribe—, para que el próximo que compare las dos vea las dos mediciones y no una.
+--
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 'suspendido' SIGUE SIENDO UN VALOR MUERTO — anotado, NO tocado
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+--
+-- Verificado con grep sobre `backend/` y `frontend/` el 17/8: **ningún código escribe ni lee
+-- 'suspendido'.** Sus únicas apariciones son este CHECK y su reflejo en `db/schema.sql`. Cero
+-- filas en producción. Las tres escrituras de `estado` que existen son
+-- `_empleado_write_repo.py:36` ('activo', hardcodeado en el alta), `:72` ('baja', soft_delete) y
+-- `:93` ('baja' + fecha_egreso, offboarding); ninguna lo produce. Y `frontend/types/empleado.ts`
+-- declara la unión como `"activo" | "baja" | "licencia"` — o sea que el front ya no lo contempla.
+--
+-- 🔴 NO SE SACA ACÁ, Y ES A PROPÓSITO. Sacar un valor de un CHECK es la operación INVERSA a la
+-- que hace esta migración: angosta el conjunto, se revalida contra la tabla entera y puede
+-- abortar. Es una decisión propia —"¿este estado no existe, o todavía no lo construimos?"— y
+-- mezclarla acá volvería no-aditiva una migración que hoy no puede fallar por datos. Queda
+-- anotado para que el día que alguien lo saque no tenga que re-descubrir que estaba muerto.
+--
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 🔴 UN PREINGRESO LLEVA `fecha_ingreso` CARGADA CON LA FECHA PREVISTA
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+--
+-- `empleados.fecha_ingreso` es **NOT NULL y esta migración no la toca**. Así que la ficha de un
+-- preingreso nace con `fecha_ingreso` = la fecha prevista de ingreso (la misma que va en
+-- `fecha_ingreso_prevista`, columna que ya existe desde la 113), y se corrige si esa fecha se
+-- mueve.
+--
+-- No es un rodeo para esquivar el NOT NULL: es lo que hace falta para que los cálculos que
+-- cuelgan de esa columna sigan teniendo de dónde salir. La ANTIGÜEDAD y el CUPO DE VACACIONES se
+-- derivan de `fecha_ingreso` (`config/reglas_vacaciones.py`, `_reporte_saldos`,
+-- `fecha_ingreso_reconocida` como override). Con la columna vacía, el día que la persona pasa a
+-- colaborador su antigüedad arrancaría en cero desde la confirmación y no desde el día que
+-- efectivamente entró.
+--
+-- 🔴 LA CONSECUENCIA, QUE ES EL PUNTO CIEGO DE TODA LA FEATURE: hay CINCO contadores que cuentan
+-- gente **por fecha, sin mirar `estado` en absoluto**. Ningún valor del CHECK los protege — ni
+-- 'preingreso', ni ninguno. Tienen que excluirlo EXPLÍCITAMENTE, y son:
+--
+--     services/dashboard_service.py:67          `ingresos_mes`  — WHERE fecha_ingreso IN (mes)
+--     services/reportes/_reporte_dotacion.py:31 `ingresos_periodo` (R1 headcount) — idem
+--     services/reportes/_reporte_dotacion.py:89 `ingresos_periodo` (rotación)     — idem
+--     services/reportes/_reporte_movimientos.py:32 listado nominal de ALTAS       — idem
+--     services/reportes/_reporte_movimientos.py:44 listado nominal de BAJAS — WHERE fecha_egreso
+--
+-- Los cuatro primeros están sobre el MISMO eje: cuentan altas por `fecha_ingreso`, así que un
+-- preingreso de este mes se cuenta como un alta de este mes **sin haber entrado todavía** —y la
+-- misma persona se vuelve a contar si la fecha se corrige. El quinto está sobre el eje contrario
+-- (bajas por `fecha_egreso`) y entra a la lista por un caso más raro pero real: un preingreso que
+-- se cae antes de entrar y al que alguien le carga una fecha de egreso aparecería como una baja
+-- del mes, o sea como una rotación que nunca ocurrió.
+--
+-- ⚠️ Y NINGÚN TEST LOS CUBRE HOY, porque hoy no pueden fallar: con un solo valor de estado en la
+-- tabla, "contar por fecha" y "contar activos por fecha" dan lo mismo. Empiezan a divergir con la
+-- primera fila en 'preingreso'.
+--
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- POR QUÉ EN TRANSACCIÓN, si es un solo objeto
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- Porque un CHECK no se puede reemplazar en un paso: hay que dropearlo y volver a crearlo, y
+-- **entre las dos sentencias la columna queda sin ninguna defensa**. Fuera de una transacción,
+-- una escritura concurrente en esa ventana entra con cualquier basura en `estado` y después el
+-- ADD CONSTRAINT falla al revalidar — dejando la tabla SIN CHECK y con una fila inválida adentro.
+-- Es el mismo criterio con el que la 114 y la 119 envolvieron sus propios DROP + CREATE.
+--
+--
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- ORDEN DE DEPLOY — puede correrse ANTES, y acá está por qué
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- La regla (migración 090, escrita en `schemas/empleado_out.py:43-49`) es que el código que
+-- TOLERA un valor nuevo tiene que estar desplegado ANTES de que la base lo PRODUZCA. Acá la base
+-- no produce nada: **ensanchar un CHECK no genera un solo valor nuevo por sí mismo.** No hay
+-- DEFAULT que cambie, no hay backfill, no hay trigger. El único que puede escribir 'preingreso'
+-- es código que todavía no existe.
+--
+-- O sea: corrida sola, esta migración es INERTE. Con el código viejo desplegado, producción se
+-- comporta exactamente igual que hoy. Y cuando el código nuevo llegue, del lado de la lectura ya
+-- está tolerado: `EmpleadoResponse.estado` es `str` sin `Literal`, así que cualquier valor viaja.
+--
+-- ⚠️ Lo que SÍ hay que tocar cuando el valor empiece a producirse (no es tarea de esta
+-- migración, pero se anota para que no se descubra en el navegador):
+--   · `frontend/types/empleado.ts:22` — la unión `"activo" | "baja" | "licencia"` tiene que
+--     ensancharse. Es tipo de TypeScript, así que no rompe en runtime, pero `tsc` va a rojear en
+--     cuanto algo compare contra el valor nuevo — que es justamente lo que queremos que pase.
+--   · `EmpleadoUpdate.estado` es `Optional[str]` sin validación (`schemas/empleado.py:122`): hoy
+--     cualquier string sale del schema y lo rechaza recién la base. Ensanchar el CHECK no
+--     empeora eso, pero tampoco lo arregla.
+
+BEGIN;
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- 1. empleados_estado_check — cuatro valores → cinco
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+--
+-- Los cuatro que ya estaban van PRIMERO y en el mismo orden que tienen hoy en el catálogo. No es
+-- cosmético: `pg_get_constraintdef` devuelve el ARRAY en el orden en que se escribió, así que
+-- conservarlo hace que el diff contra el CHECK viejo sea exactamente una entrada más al final.
+-- Reordenarlos daría un diff que parece un rewrite y esconde qué cambió de verdad.
+--
+-- Se escribe con `IN` y no con la forma `= ANY (ARRAY[...])` que devuelve el catálogo: son la
+-- misma expresión y Postgres normaliza la primera a la segunda al almacenarla. La verificación de
+-- abajo dice cuál es el texto exacto que hay que esperar de vuelta.
+
+ALTER TABLE public.empleados DROP CONSTRAINT IF EXISTS empleados_estado_check;
+
+ALTER TABLE public.empleados
+    ADD CONSTRAINT empleados_estado_check
+    CHECK (estado IN ('activo', 'baja', 'licencia', 'suspendido', 'preingreso'));
+
+COMMIT;
+
+
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+-- VERIFICACIÓN POSTERIOR — correr DESPUÉS, a mano. Nada de esto se ejecuta con la migración.
+-- ═════════════════════════════════════════════════════════════════════════════════════════
+--
+-- 🔴 LOS TRES BLOQUES VAN POR SEPARADO Y NO SE PUEDEN FUSIONAR. El tercero provoca un error a
+-- propósito, y un error aborta la transacción entera: si estuviera en el mismo BEGIN que los
+-- otros dos, todo lo que viniera después fallaría con "current transaction is aborted" y no se
+-- podría distinguir el rechazo que se busca del daño colateral.
+--
+--
+-- 1. El CHECK quedó con los cinco valores, y en el orden esperado:
+--
+--    SELECT pg_get_constraintdef(oid) FROM pg_constraint
+--     WHERE conrelid = 'public.empleados'::regclass AND conname = 'empleados_estado_check';
+--    -- ESPERADO (texto exacto que devuelve el catálogo, con los casts a varchar):
+--    --   CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying,
+--    --                                        'baja'::character varying,
+--    --                                        'licencia'::character varying,
+--    --                                        'suspendido'::character varying,
+--    --                                        'preingreso'::character varying])::text[])))
+--
+--    SELECT convalidated FROM pg_constraint
+--     WHERE conrelid = 'public.empleados'::regclass AND conname = 'empleados_estado_check';
+--    -- ESPERADO: true. Un `false` significaría NOT VALID y el CHECK no estaría vigilando las
+--    -- filas viejas — no debería pasar (no se usó NOT VALID), pero es barato confirmarlo.
+--
+--
+-- 2. Que una fila con estado='preingreso' ENTRE:
+--
+--    BEGIN;
+--    INSERT INTO public.empleados (empresa_id, nombre, apellido, fecha_ingreso, roles, estado)
+--    SELECT (SELECT id FROM public.empresas LIMIT 1),
+--           'Prueba', 'Preingreso', current_date, ARRAY['Analista'], 'preingreso';
+--    -- ESPERADO: INSERT 0 1, sin error.
+--    ROLLBACK;
+--
+--    (`area_id` y `manager_id` van en NULL a propósito: son las dos columnas que vigilan los
+--     triggers `trg_emp_*` / `fn_misma_empresa`, y con NULL no hay cruce de empresa que validar.
+--     El objetivo del bloque es el CHECK de estado, no ejercitar los triggers.)
+--
+--
+-- 3. Que los CUATRO valores viejos sigan entrando — el control de que no se perdió ninguno:
+--
+--    BEGIN;
+--    INSERT INTO public.empleados (empresa_id, nombre, apellido, fecha_ingreso, roles, estado)
+--    SELECT (SELECT id FROM public.empresas LIMIT 1),
+--           'Prueba', v, current_date, ARRAY['Analista'], v
+--      FROM unnest(ARRAY['activo', 'baja', 'licencia', 'suspendido']) AS v;
+--    -- ESPERADO: INSERT 0 4, sin error. Si entra 3 o menos, el CHECK se reescribió mal y se
+--    -- perdió un valor que producción podría estar usando.
+--    ROLLBACK;
+--
+--
+-- 4. 🔴 EL QUE IMPORTA — que un valor inventado SIGA REBOTANDO:
+--
+--    BEGIN;
+--    INSERT INTO public.empleados (empresa_id, nombre, apellido, fecha_ingreso, roles, estado)
+--    SELECT (SELECT id FROM public.empresas LIMIT 1),
+--           'Prueba', 'Invalido', current_date, ARRAY['Analista'], 'no_existe';
+--    -- ESPERADO: ERROR 23514 check_violation,
+--    --   'new row for relation "empleados" violates check constraint "empleados_estado_check"'.
+--    ROLLBACK;
+--
+--    🔑 ES EL ÚNICO DE LOS TRES QUE PUEDE DETECTAR EL MODO DE FALLA REAL. Si alguien reescribe el
+--    CHECK como `CHECK (true)`, o lo dropea y se olvida de volver a crearlo, o lo crea sobre la
+--    columna equivocada, los bloques 2 y 3 pasan los dos en verde: todo entra, incluido lo que se
+--    quería aceptar. La única pregunta que distingue "el CHECK acepta 'preingreso'" de "no hay
+--    CHECK" es si algo TODAVÍA rebota. Un CHECK que no rechaza nada no es un CHECK.
+--
+--
+-- 5. Que no se haya tocado nada más. El padrón sigue intacto y sin filas en el valor nuevo:
+--
+--    SELECT estado, count(*) FROM public.empleados GROUP BY 1 ORDER BY 1;
+--    -- ESPERADO: una sola fila, activo = 31 (al 2026-08-17). Cero 'preingreso': esta migración
+--    -- no crea ni convierte ninguna fila, solo habilita el valor.
+--
+--    SELECT count(*) FROM pg_constraint
+--     WHERE conrelid = 'public.empleados'::regclass AND contype = 'c';
+--    -- ESPERADO: 5 (desempeno, estado, modalidad_trabajo, potencial, roles_no_vacio). El DROP
+--    -- tiene que haberse llevado UNO solo y el ADD haberlo repuesto.

@@ -124,11 +124,15 @@ class _ObjetivosFake:
         if self._falla_en and data.titulo == self._falla_en:
             raise AppError("El responsable no está activo", "RESPONSABLE_NO_ACTIVO", 422)
         self.creados.append(data)
+        # 🔴 `tipo` y los otros dos salen DE LO RECIBIDO, no fijos: es lo que deja que
+        # `test_el_IMPORT_hereda_el_default_de_producto` (en test_objetivos_filtros_nuevos) pueda
+        # afirmar que lo importado nace 'operativo' sin estar mirando una constante de este fake.
         return ObjetivoResponse(
             id=str(uuid4()), empresa_id=str(data.empresa_id), responsable_id=str(data.responsable_id),
             titulo=data.titulo, prioridad=data.prioridad, estado="por_hacer",
             fecha_entrega=data.fecha_entrega, created_at=datetime(2026, 1, 1),
-            updated_at=datetime(2026, 1, 1),
+            updated_at=datetime(2026, 1, 1), tipo=data.tipo, periodicidad=data.periodicidad,
+            areas_involucradas=list(data.areas_involucradas),
         )
 
 

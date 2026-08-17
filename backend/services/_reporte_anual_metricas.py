@@ -84,6 +84,16 @@ def actividad(eid: Optional[str], ini: str, fin: str, ini_ts: str, fin_ts: str) 
     # 🔴 SOLO RAÍCES: los subobjetivos son filas de la misma tabla desde la 095. Sin el filtro,
     # "objetivos cumplidos en el año" pasaría a contar también las subtareas y el número del
     # reporte anual dejaría de ser comparable con el del año pasado.
+    #
+    # 🔴 Y SIN FILTRO POR `tipo` (migración 119): cuenta ANUALES Y OPERATIVOS JUNTOS, a propósito.
+    # El reporte anual es el consolidado que se presenta hacia arriba y su serie histórica arranca
+    # antes de que existieran las dos vistas; recortarlo a una haría que el número de este año no
+    # se pueda comparar con el del anterior, que es la única razón por la que la métrica sirve.
+    # 🚨 Es el MISMO modo de falla que el párrafo de arriba y por eso queda escrito: agregarle el
+    # filtro no rompería nada —seguiría devolviendo un número, ningún test rojearía— y cambiaría
+    # lo que ese número significa. Este módulo va a `supabase_admin` DIRECTO, sin pasar por
+    # `ObjetivoService` (excepción de familia en `tests/test_acceso_a_datos.py`), así que nada de
+    # lo que se toque en el service o en `_objetivo_filtros` lo alcanza.
     obj_q = supabase_admin.table("objetivos").select("id", count="exact").eq("estado", "terminado").is_("parent_id", "null").gte("updated_at", ini_ts).lte("updated_at", fin_ts)
     if eid:
         obj_q = obj_q.eq("empresa_id", eid)

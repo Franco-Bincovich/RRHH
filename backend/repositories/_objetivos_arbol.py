@@ -24,6 +24,24 @@ de perderse. Es la misma invariante que gobierna los exports del repo: el archiv
 pueden mostrar de más, nunca de menos y en silencio. La alternativa —descartarlo— haría que un
 objetivo terminado no apareciera en ningún lado con ciertos filtros.
 
+🔴 CON EL FILTRO POR `tipo` (migración 119) ESA PROMOCIÓN DEJA DE SER UN CASO BORDE Y PASA A SER
+EL CASO NORMAL, así que hay que decirlo entero: **el mismo objetivo cuenta como HIJO en una vista
+y como RAÍZ en la otra.**
+
+El escenario no es rebuscado, es el que la feature busca: un OPERATIVO colgado de un ANUAL —el
+objetivo del año descompuesto en tareas del trimestre—, que es plausible y por eso el tipo NO se
+hereda entre padre e hijo (decisión de producto, ver `schemas/objetivo.ObjetivoCreate`). Filtrando
+`tipo=anual` ese hijo no pasa y el padre sale solo; filtrando `tipo=operativo` el que no pasa es
+el PADRE, y el hijo se promueve y aparece suelto en el nivel superior.
+
+Es CORRECTO —el hijo es un objetivo operativo y la vista operativa tiene que mostrarlo— pero
+tiene una consecuencia que no se ve leyendo el número: `ObjetivoListResponse.total` cuenta RAÍCES,
+así que la suma de los totales de las dos vistas puede ser MAYOR que la cantidad de objetivos.
+Quien compare "anuales + operativos" contra el total sin filtro va a encontrar una diferencia, y
+la diferencia son exactamente los hijos promovidos, no filas duplicadas.
+⚠️ El conteo APLANADO (`contar_con_hijos`, el que usa el tope de export) no tiene este problema:
+cuenta padres e hijos, así que cada objetivo vale uno en cualquier vista.
+
 La profundidad máxima es 2 (services/_objetivos_jerarquia.py), así que esto no recursiona: un
 hijo no puede tener hijos y su lista queda siempre vacía.
 """

@@ -23,6 +23,7 @@ from schemas.importacion_objetivos import (
 )
 from services import _objetivos_import_transforms as tx
 from services._import_excel import abrir, faltantes, filas, hojas
+from services._objetivos_import_valores import parse_fecha
 from utils.errors import AppError
 
 
@@ -82,11 +83,15 @@ def evaluar_fila(n: int, fila: dict, usuarios: dict
         return None, FilaObjetivoError(
             fila=n, identificador=ident,
             motivo=f"El responsable «{desconocido}» no existe o no está activo.")
-    fecha = tx.parse_fecha(f["fecha_entrega"])
+    fecha = parse_fecha(f["fecha_entrega"])
+    # Los tres de la migración 119 viajan al preview YA NORMALIZADOS por `parsear_fila` (el tipo
+    # caído al default si venía mal, las áreas partidas). El preview los muestra y el confirmar
+    # los persiste: no se vuelven a tocar en el medio.
     return FilaObjetivoPreview(
         fila=n, titulo=f["titulo"], responsable=f["responsable"], responsable_id=dueno["id"],
         responsable_nombre=dueno["nombre"], prioridad=f["prioridad"], fecha_entrega=fecha,
         descripcion=f["descripcion"], responsables_ids=acompanantes,
+        tipo=f["tipo"], periodicidad=f["periodicidad"], areas_involucradas=f["areas"],
         faltantes=[] if fecha or not f["fecha_entrega"] else ["fecha"],
     ), None
 

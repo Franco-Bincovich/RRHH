@@ -53,6 +53,22 @@ def _responsables(o: ObjetivoResponse) -> str:
     return ", ".join(nombres) if nombres else (o.responsable_nombre or "")
 
 
+def _areas(o: ObjetivoResponse) -> str:
+    """Las áreas involucradas como texto, separadas por "; ". Vacío si no hay ninguna.
+
+    🔴 SE UNE CON "; " Y NO CON ", " a propósito, aunque `_responsables` de arriba use la coma:
+    desde la migración 119 un área es un ELEMENTO de un `text[]` y puede tener comas adentro
+    ("Legales, Compliance"). Con coma, ese único área se leería en el Excel como dos, que es
+    justamente la ambigüedad que la migración vino a sacar de la base — reintroducirla en el
+    archivo dejaría el export mintiendo donde el filtro ya no miente. El `;` es además el
+    separador que el import del módulo ya entiende, así que lo exportado se puede volver a subir.
+
+    Un array vacío tiene que salir como celda vacía, no como "[]": el motor de export renderiza
+    escalares, y un `str(lista)` volcaría la representación de Python.
+    """
+    return "; ".join(o.areas_involucradas)
+
+
 def construir_filas_export(items: List[ObjetivoResponse]) -> List[dict]:
     """Proyecta el árbol de objetivos a columnas legibles (sin UUIDs crudos)."""
     return [
@@ -63,9 +79,17 @@ def construir_filas_export(items: List[ObjetivoResponse]) -> List[dict]:
             "Responsables": _responsables(o),
             "Título": o.titulo,
             "Descripción": o.descripcion,
+            # 🔑 "Tipo" va junto a prioridad y estado —las tres clasifican al objetivo— y no al
+            # final: quien abre el archivo para separar los anuales de los operativos tiene que
+            # encontrar la columna sin desplazarse hasta la última.
+            "Tipo": o.tipo,
             "Prioridad": o.prioridad,
             "Estado": o.estado,
+            # Periodicidad pegada a la fecha de entrega: las dos dicen CUÁNDO. En un anual sale
+            # vacía y eso es correcto — un anual ya es del año.
+            "Periodicidad": o.periodicidad,
             "Fecha entrega": _fecha(o.fecha_entrega),
+            "Áreas involucradas": _areas(o),
             "Creada": _fecha(o.created_at),
             "Actualizada": _fecha(o.updated_at),
         }

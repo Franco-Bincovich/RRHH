@@ -60,6 +60,7 @@ from repositories._objetivos_arbol import armar_arbol, contar_con_hijos  # noqa:
 from schemas.objetivo import (  # noqa: E402
     CambiarEstadoRequest, ObjetivoCreate, ObjetivoResponse, ObjetivoUpdate, ResponsableItem,
 )
+from schemas.objetivo_filtros import SIN_FILTROS, ObjetivosFiltros  # noqa: E402
 from services._objetivos_export import construir_filas_export  # noqa: E402
 from services.objetivo_service import ObjetivoService  # noqa: E402
 from utils.errors import AppError  # noqa: E402
@@ -79,7 +80,8 @@ _USERS = {
 
 
 def _obj(titulo: str, empresa, responsable: str, estado: str, prioridad: str,
-         fecha, parent=None, resp_extra=None, parent_titulo=None) -> ObjetivoResponse:
+         fecha, parent=None, resp_extra=None, parent_titulo=None,
+         tipo: str = "anual", periodicidad: str = "", areas=None) -> ObjetivoResponse:
     """`parent_titulo` va explícito porque en producción lo resuelve `_objetivo_row._build` con
     un lookup batch: es un DERIVADO de otra fila, no una columna. Sin modelarlo acá, el test de
     la columna "Objetivo padre" del export no tendría contra qué comparar."""
@@ -91,6 +93,7 @@ def _obj(titulo: str, empresa, responsable: str, estado: str, prioridad: str,
         fecha_entrega=fecha, created_at=datetime(2026, 1, 5, 9, 0, 0),
         updated_at=datetime(2026, 2, 1, 12, 0, 0),
         parent_id=parent, parent_titulo=parent_titulo,
+        tipo=tipo, periodicidad=periodicidad, areas_involucradas=list(areas or []),
         responsables=[ResponsableItem(id=responsable, nombre=nombre),
                       *[ResponsableItem(id=u, nombre="Beto Pérez") for u in (resp_extra or [])]],
     )
@@ -99,13 +102,30 @@ def _obj(titulo: str, empresa, responsable: str, estado: str, prioridad: str,
 # 🔴 Punto 1 + jerarquía real: UN PADRE CON DOS HIJOS y DOS RAÍCES SUELTAS, en 2 empresas, 2
 # responsables, 3 estados y 2 prioridades. Sin un padre con hijos de verdad en el fake, "cuenta
 # solo raíces" y "cuenta todo" darían el MISMO número y las dos serían indistinguibles.
-_PADRE = _obj("Migrar nómina", EMPRESA_A, USER_ACTIVO, "por_hacer", "alta", date(2026, 6, 30))
+#
+# 🔴 PUNTO 6 (migración 119): los tres ejes nuevos están repartidos para que NINGUNO devuelva el
+# total y para que los dos casos que importan existan de verdad en el catálogo:
+#   · **Un OPERATIVO colgado de un ANUAL** (`_HIJO_1` bajo `_PADRE`). Es el caso que la feature
+#     busca —el objetivo del año descompuesto en tareas del trimestre— y el único que puede
+#     ejercitar la promoción a raíz del árbol cuando se filtra por la vista del hijo. Sin él,
+#     "el hijo se promueve" y "el hijo desaparece" darían el mismo resultado.
+#   · **Un área que es PREFIJO de otra**: `_HIJO_1` tiene "Sistemas Corporativos" y `_PADRE` y
+#     `_RAIZ_B` tienen "Sistemas". Es lo único que puede desmentir un `ILIKE '%Sistemas%'`
+#     disfrazado de `.contains()` — sin el prefijo en el catálogo, los dos dan el mismo conjunto
+#     y el motivo entero por el que la columna pasó a `text[]` queda sin probar.
+_PADRE = _obj("Migrar nómina", EMPRESA_A, USER_ACTIVO, "por_hacer", "alta", date(2026, 6, 30),
+              tipo="anual", areas=["Sistemas", "Legales"])
 _HIJO_1 = _obj("Relevar proveedores", EMPRESA_A, USER_INACTIVO, "haciendo", "media",
-               date(2026, 3, 15), parent=_PADRE.id, parent_titulo=_PADRE.titulo)
+               date(2026, 3, 15), parent=_PADRE.id, parent_titulo=_PADRE.titulo,
+               tipo="operativo", periodicidad="primer trimestre",
+               areas=["Sistemas Corporativos"])
 _HIJO_2 = _obj("Validar con contable", EMPRESA_A, USER_ACTIVO, "terminado", "media",
-               date(2026, 9, 1), parent=_PADRE.id, parent_titulo=_PADRE.titulo)
-_RAIZ_A = _obj("Auditar licencias", EMPRESA_A, USER_ACTIVO, "terminado", "media", date(2026, 5, 1))
-_RAIZ_B = _obj("Onboarding DOSUBA", EMPRESA_B, USER_ACTIVO, "por_hacer", "alta", None)
+               date(2026, 9, 1), parent=_PADRE.id, parent_titulo=_PADRE.titulo,
+               tipo="operativo", periodicidad="tercera semana de septiembre")
+_RAIZ_A = _obj("Auditar licencias", EMPRESA_A, USER_ACTIVO, "terminado", "media", date(2026, 5, 1),
+               tipo="anual", areas=["Legales"])
+_RAIZ_B = _obj("Onboarding DOSUBA", EMPRESA_B, USER_ACTIVO, "por_hacer", "alta", None,
+               tipo="operativo", periodicidad="mensual", areas=["Sistemas"])
 
 # 5 filas planas: 3 raíces (_PADRE, _RAIZ_A, _RAIZ_B) + 2 hijos.
 _CATALOGO = [_HIJO_1, _RAIZ_A, _PADRE, _HIJO_2, _RAIZ_B]
@@ -131,22 +151,27 @@ class _Repo:
         self.escrituras: list[dict] = []
         self._filas = list(_CATALOGO if filas is None else filas)
 
-    def _plano(self, empresa_id=None, estado=None, responsable_id=None, prioridad=None):
+    def _plano(self, empresa_id, f: ObjetivosFiltros):
         return [
             o for o in self._filas
             if (empresa_id is None or o.empresa_id == str(empresa_id))
-            and (estado is None or o.estado == estado)
-            and (responsable_id is None
-                 or responsable_id in [r.id for r in o.responsables]
-                 or o.responsable_id == responsable_id)
-            and (prioridad is None or o.prioridad == prioridad)
+            and (f.estado is None or o.estado == f.estado)
+            and (f.responsable_id is None
+                 or f.responsable_id in [r.id for r in o.responsables]
+                 or o.responsable_id == f.responsable_id)
+            and (f.prioridad is None or o.prioridad == f.prioridad)
+            and (f.tipo is None or o.tipo == f.tipo)
+            and (f.periodicidad is None or o.periodicidad == f.periodicidad)
+            # 🔴 CONTENCIÓN POR ELEMENTO, no `in` sobre un texto. Un `f.area in " ".join(...)`
+            # haría que "Sistemas" matcheara "Sistemas Corporativos" y el fake dejaría de poder
+            # desmentir el bug que el `.contains()` real evita.
+            and (f.area is None or f.area in o.areas_involucradas)
         ]
 
-    def find_all(self, empresa_id=None, estado=None, responsable_id=None, prioridad=None):
-        self.llamadas.append({"empresa_id": empresa_id, "estado": estado,
-                              "responsable_id": responsable_id, "prioridad": prioridad})
+    def find_all(self, empresa_id=None, filtros: ObjetivosFiltros = SIN_FILTROS):
+        self.llamadas.append({"empresa_id": empresa_id, "filtros": filtros})
         planas = [o.model_copy(update={"hijos": []})
-                  for o in self._plano(empresa_id, estado, responsable_id, prioridad)]
+                  for o in self._plano(empresa_id, filtros)]
         return armar_arbol(planas)
 
     def tiene_hijos(self, id, empresa_id=None) -> bool:
@@ -161,8 +186,12 @@ class _Repo:
     def save(self, data: ObjetivoCreate) -> ObjetivoResponse:
         """Construye la respuesta A PARTIR de lo recibido (punto 4), nunca prefabricada."""
         self.escrituras.append({"op": "save", "data": data})
+        # Los tres de la 119 también salen DE LO RECIBIDO. Con un `tipo="anual"` fijo acá, el
+        # test de que el alta nace 'operativo' estaría afirmando sobre la constante del fake.
         return _obj(data.titulo, data.empresa_id, str(data.responsable_id),
-                    "por_hacer", data.prioridad, data.fecha_entrega)
+                    "por_hacer", data.prioridad, data.fecha_entrega,
+                    tipo=data.tipo, periodicidad=data.periodicidad,
+                    areas=data.areas_involucradas)
 
     def update(self, id, data: ObjetivoUpdate, empresa_id=None):
         self.escrituras.append({"op": "update", "id": id, "data": data, "empresa_id": empresa_id})
@@ -260,12 +289,19 @@ def test_el_repo_falso_filtra_y_ningun_filtro_devuelve_el_total() -> None:
 
     ⚠️ Los números son RAÍCES, no filas: desde la jerarquía `find_all` devuelve el árbol."""
     repo = _Repo()
+    f = ObjetivosFiltros
     assert len(repo.find_all()) == 3                                   # 5 filas, 3 raíces
     assert len(repo.find_all(empresa_id=EMPRESA_A)) == 2
-    assert len(repo.find_all(estado="por_hacer")) == 2
-    assert len(repo.find_all(responsable_id=USER_ACTIVO)) == 3
-    assert len(repo.find_all(prioridad="alta")) == 2
-    assert len(repo.find_all(empresa_id=EMPRESA_A, estado="por_hacer")) == 1
+    assert len(repo.find_all(filtros=f(estado="por_hacer"))) == 2
+    assert len(repo.find_all(filtros=f(responsable_id=USER_ACTIVO))) == 3
+    assert len(repo.find_all(filtros=f(prioridad="alta"))) == 2
+    assert len(repo.find_all(EMPRESA_A, f(estado="por_hacer"))) == 1
+    # Los tres ejes de la 119. `operativo` da 3 y no 1 porque los dos hijos operativos se
+    # PROMUEVEN: su padre es anual y no pasa el filtro (ver _objetivos_arbol).
+    assert len(repo.find_all(filtros=f(tipo="anual"))) == 2
+    assert len(repo.find_all(filtros=f(tipo="operativo"))) == 3
+    assert len(repo.find_all(filtros=f(periodicidad="mensual"))) == 1
+    assert len(repo.find_all(filtros=f(area="Legales"))) == 2
 
 
 def test_el_fake_tiene_un_padre_con_dos_hijos_y_dos_raices_sueltas() -> None:
@@ -529,11 +565,18 @@ class TestFiltrosDelListado:
         ("responsable_id", USER_INACTIVO, 1),
         ("prioridad", "alta", 2),
         ("prioridad", "media", 3),
+        # Los tres de la migración 119. Ninguno devuelve el total (3).
+        ("tipo", "anual", 2),
+        ("tipo", "operativo", 3),       # los dos hijos operativos se promueven
+        ("periodicidad", "mensual", 1),
+        ("periodicidad", "primer trimestre", 1),
+        ("area", "Legales", 2),
+        ("area", "Sistemas Corporativos", 1),
     ])
     def test_cada_filtro_acota(self, filtro: str, valor: str, esperado: int) -> None:
         svc, _ = _svc()
 
-        res = svc.get_all(**{filtro: valor})
+        res = svc.get_all(filtros=ObjetivosFiltros(**{filtro: valor}))
 
         assert res.total == esperado, f"el filtro {filtro}={valor} no acotó"
 
@@ -542,33 +585,46 @@ class TestFiltrosDelListado:
         —o si uno se perdiera— el resultado sería 2, 3 o 4, nunca 1."""
         svc, _ = _svc()
 
-        assert svc.get_all(estado="por_hacer").total == 2
-        assert svc.get_all(responsable_id=USER_ACTIVO).total == 3
-        assert svc.get_all(estado="por_hacer", responsable_id=USER_ACTIVO).total == 2
-        assert svc.get_all(EMPRESA_A, "por_hacer", USER_ACTIVO, "alta").total == 1
+        assert svc.get_all(filtros=ObjetivosFiltros(estado="por_hacer")).total == 2
+        assert svc.get_all(filtros=ObjetivosFiltros(responsable_id=USER_ACTIVO)).total == 3
+        assert svc.get_all(filtros=ObjetivosFiltros(
+            estado="por_hacer", responsable_id=USER_ACTIVO)).total == 2
+        assert svc.get_all(EMPRESA_A, ObjetivosFiltros(
+            estado="por_hacer", responsable_id=USER_ACTIVO, prioridad="alta")).total == 1
 
-    def test_los_cuatro_parametros_llegan_al_repo_en_orden(self) -> None:
-        """El service recibe posicionales y los pasa posicionales: un cruce entre `estado` y
-        `responsable_id` no daría error, daría el conjunto equivocado."""
+    def test_el_objeto_de_filtros_llega_ENTERO_al_repo(self) -> None:
+        """🔴 REEMPLAZA A `test_los_cuatro_parametros_llegan_al_repo_en_orden`, y el cambio ES
+        el punto de la sesión.
+
+        Aquel test verificaba que cuatro posicionales llegaran en el orden correcto — o sea,
+        vigilaba a mano el corrimiento de argumentos, con un espía que registraba por posición.
+        Con los tres filtros de la 119 habrían sido SIETE `Optional[str]` seguidos y el espía
+        habría seguido en verde ante un cruce entre dos de ellos.
+        Ahora no hay orden que vigilar: el service recibe un `ObjetivosFiltros` y pasa ESE MISMO
+        objeto. Lo que se afirma es la identidad, que es lo único que queda por romper.
+        """
         svc, repo = _svc()
+        filtros = ObjetivosFiltros(estado="haciendo", responsable_id=USER_INACTIVO,
+                                   prioridad="media", tipo="operativo",
+                                   periodicidad="primer trimestre", area="Sistemas Corporativos")
 
-        svc.get_all(EMPRESA_A, "haciendo", USER_INACTIVO, "media")
+        svc.get_all(EMPRESA_A, filtros)
 
-        assert repo.llamadas[0] == {"empresa_id": EMPRESA_A, "estado": "haciendo",
-                                    "responsable_id": USER_INACTIVO, "prioridad": "media"}
+        assert repo.llamadas[0] == {"empresa_id": EMPRESA_A, "filtros": filtros}
 
     def test_en_consolidado_la_empresa_viaja_como_None(self) -> None:
         svc, repo = _svc()
 
-        svc.get_all(None, "por_hacer")
+        svc.get_all(None, ObjetivosFiltros(estado="por_hacer"))
 
         assert repo.llamadas[0]["empresa_id"] is None
-        assert svc.get_all(None, "por_hacer").total == 2   # las dos empresas
+        # las dos empresas
+        assert svc.get_all(None, ObjetivosFiltros(estado="por_hacer")).total == 2
 
     def test_un_filtro_sin_resultados_da_lista_vacia_no_error(self) -> None:
         svc, _ = _svc()
 
-        res = svc.get_all(EMPRESA_B, "terminado")
+        res = svc.get_all(EMPRESA_B, ObjetivosFiltros(estado="terminado"))
 
         assert res.total == 0 and res.items == []
 
@@ -599,7 +655,7 @@ class TestLaQueryDelRepo:
         import repositories._objetivos_arbol as arbol_mod
         import repositories.objetivo_repo as mod
 
-        registro = {"eq": [], "order": [], "select": [], "or": [], "tablas": []}
+        registro = {"eq": [], "order": [], "select": [], "or": [], "tablas": [], "cs": []}
 
         class _Q:
             def __init__(self, tabla):
@@ -612,6 +668,12 @@ class TestLaQueryDelRepo:
 
             def eq(self, col, val):
                 registro["eq"].append((col, val))
+                return self
+
+            def contains(self, col, val):
+                # Se registra el valor CRUDO, tal cual se lo pasaría a PostgREST, para poder
+                # afirmar sobre el literal comillado y no sobre una lista ya interpretada.
+                registro["cs"].append((col, val))
                 return self
 
             def or_(self, expr):
@@ -661,7 +723,7 @@ class TestLaQueryDelRepo:
         el orden sería el de la página, no el del conjunto."""
         repo, registro = self._repo_con_espia(monkeypatch)
 
-        repo.find_all(estado="haciendo")
+        repo.find_all(filtros=ObjetivosFiltros(estado="haciendo"))
 
         assert registro["order"], "el .order() desapareció de la query"
 
@@ -669,13 +731,18 @@ class TestLaQueryDelRepo:
         ({"empresa_id": EMPRESA_A}, ("empresa_id", str(EMPRESA_A))),
         ({"estado": "haciendo"}, ("estado", "haciendo")),
         ({"prioridad": "alta"}, ("prioridad", "alta")),
+        # Los dos de la 119 que son `.eq()`. `area` no está acá: es un `.contains()`, y su
+        # contrato se verifica en test_objetivos_filtros_nuevos.py.
+        ({"tipo": "operativo"}, ("tipo", "operativo")),
+        ({"periodicidad": "mensual"}, ("periodicidad", "mensual")),
     ])
     def test_cada_filtro_viaja_como_un_eq_en_la_query(self, monkeypatch, kwargs, esperado) -> None:
         """`responsable_id` NO está acá: dejó de ser un `.eq()` al pasar por la puente. Su
         contrato nuevo se verifica en TestElFiltroPorResponsableUsaLaPuente."""
         repo, registro = self._repo_con_espia(monkeypatch)
 
-        repo.find_all(**kwargs)
+        empresa = kwargs.pop("empresa_id", None)
+        repo.find_all(empresa, ObjetivosFiltros(**kwargs))
 
         assert esperado in registro["eq"]
 
@@ -686,18 +753,28 @@ class TestLaQueryDelRepo:
         repo.find_all()
 
         assert registro["eq"] == []
+        assert registro["cs"] == []
 
-    def test_los_cuatro_filtros_juntos_se_encadenan_en_la_query(self, monkeypatch) -> None:
-        """La composición por AND del lado de la query. Ya no son cuatro `.eq()`: tres columnas
-        planas más el predicado de responsable, que después de la puente es un `.or_()` (o un
-        `.eq()` de dueño si la puente está vacía). El AND lo da el encadenado de PostgREST."""
+    def test_los_seis_filtros_juntos_se_encadenan_en_la_query(self, monkeypatch) -> None:
+        """La composición por AND del lado de la query. No son seis `.eq()`: CINCO columnas
+        planas (empresa, estado, prioridad, tipo, periodicidad), más el predicado de responsable
+        —que después de la puente es un `.or_()`— más el `.contains()` del área. El AND lo da el
+        encadenado de PostgREST.
+
+        🔑 Los tres tipos de predicado se cuentan por separado a propósito: si `area` se
+        convirtiera en un `.eq()` (o `tipo` en un `.contains()`), el total de predicados seguiría
+        dando lo mismo y sólo estas tres aserciones separadas lo pueden ver."""
         repo, registro = self._repo_con_espia(monkeypatch, puente=["obj-1"])
 
-        repo.find_all(EMPRESA_A, "haciendo", USER_ACTIVO, "alta")
+        repo.find_all(EMPRESA_A, ObjetivosFiltros(
+            estado="haciendo", responsable_id=USER_ACTIVO, prioridad="alta",
+            tipo="operativo", periodicidad="mensual", area="Sistemas"))
 
-        planos = [e for e in registro["eq"] if e[0] in ("empresa_id", "estado", "prioridad")]
-        assert len(planos) == 3
+        planos = [e for e in registro["eq"]
+                  if e[0] in ("empresa_id", "estado", "prioridad", "tipo", "periodicidad")]
+        assert len(planos) == 5
         assert len(registro["or"]) == 1
+        assert len(registro["cs"]) == 1
 
     def test_find_by_id_lleva_la_empresa_en_su_propio_WHERE(self, monkeypatch) -> None:
         """🔴 Forma A del patrón de barrera: el filtro va EN LA QUERY, no comparando en Python
@@ -745,10 +822,15 @@ class TestLaQueryDelRepo:
 class TestExport:
 
     def test_usa_los_MISMOS_filtros_que_el_listado(self) -> None:
+        """🔑 Con el objeto de filtros esto pasó de ser una comparación de cuatro posicionales a
+        una de identidad: el listado y el export reciben EL MISMO `ObjetivosFiltros` y lo pasan
+        sin tocar. Es lo que hace estructuralmente imposible que un filtro quede en uno solo."""
         svc, repo = _svc()
+        filtros = ObjetivosFiltros(estado="por_hacer", responsable_id=USER_ACTIVO,
+                                   prioridad="alta", tipo="anual", area="Legales")
 
-        svc.get_all(EMPRESA_A, "por_hacer", USER_ACTIVO, "alta")
-        svc.exportar(EMPRESA_A, "csv", "por_hacer", USER_ACTIVO, "alta")
+        svc.get_all(EMPRESA_A, filtros)
+        svc.exportar(EMPRESA_A, "csv", filtros)
 
         assert repo.llamadas[0] == repo.llamadas[1]
 
@@ -777,8 +859,9 @@ class TestExport:
         desaparezca. La versión anterior de este test miraba el CSV crudo y rojeó por eso."""
         svc, repo = _svc()
 
-        svc.exportar(EMPRESA_A, "csv", "terminado")
-        titulos = [f["Título"] for f in construir_filas_export(repo.find_all(EMPRESA_A, "terminado"))]
+        filtros = ObjetivosFiltros(estado="terminado")
+        svc.exportar(EMPRESA_A, "csv", filtros)
+        titulos = [f["Título"] for f in construir_filas_export(repo.find_all(EMPRESA_A, filtros))]
 
         assert "Auditar licencias" in titulos and "Validar con contable" in titulos
         assert "Migrar nómina" not in titulos and "Relevar proveedores" not in titulos
@@ -938,7 +1021,7 @@ class TestElOrdenDelArbol:
         hijo se descartara por "huérfano" no aparecería en ningún lado."""
         svc, _ = _svc()
 
-        res = svc.get_all(EMPRESA_A, "haciendo")
+        res = svc.get_all(EMPRESA_A, ObjetivosFiltros(estado="haciendo"))
 
         assert [r.titulo for r in res.items] == ["Relevar proveedores"]
         assert res.total == 1
@@ -958,7 +1041,7 @@ class TestElFiltroPorResponsableUsaLaPuente:
                           date(2026, 4, 1), resp_extra=[USER_INACTIVO])
         svc, _ = _svc([acompanado])
 
-        res = svc.get_all(EMPRESA_A, None, USER_INACTIVO)
+        res = svc.get_all(EMPRESA_A, ObjetivosFiltros(responsable_id=USER_INACTIVO))
 
         assert res.total == 1, "el filtro no miró la puente: solo encuentra al dueño"
         assert res.items[0].titulo == "Revisar convenio"
@@ -968,7 +1051,7 @@ class TestElFiltroPorResponsableUsaLaPuente:
         listado en la ventana entre el deploy y la migración 096."""
         svc, _ = _svc()
 
-        assert svc.get_all(EMPRESA_A, None, USER_ACTIVO).total >= 1
+        assert svc.get_all(EMPRESA_A, ObjetivosFiltros(responsable_id=USER_ACTIVO)).total >= 1
 
     def test_en_la_query_el_filtro_es_un_OR_entre_la_puente_y_el_dueño(self, monkeypatch) -> None:
         """El plano de la query: con filas en la puente sale un `.or_()` que combina los ids
@@ -994,7 +1077,7 @@ class TestElFiltroPorResponsableUsaLaPuente:
         for m in (mod, resp_mod):
             monkeypatch.setattr(m, "supabase_admin", cliente)
 
-        mod.ObjetivoRepo().find_all(responsable_id=USER_ACTIVO)
+        mod.ObjetivoRepo().find_all(filtros=ObjetivosFiltros(responsable_id=USER_ACTIVO))
 
         assert registro["or"] == [f"id.in.(obj-9),responsable_id.eq.{USER_ACTIVO}"]
 
@@ -1019,7 +1102,7 @@ class TestElFiltroPorResponsableUsaLaPuente:
         for m in (mod, resp_mod):
             monkeypatch.setattr(m, "supabase_admin", cliente)
 
-        mod.ObjetivoRepo().find_all(responsable_id=USER_ACTIVO)
+        mod.ObjetivoRepo().find_all(filtros=ObjetivosFiltros(responsable_id=USER_ACTIVO))
 
         assert registro["or"] == []
         assert ("responsable_id", USER_ACTIVO) in registro["eq"]

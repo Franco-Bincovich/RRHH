@@ -107,6 +107,21 @@ class ProcesosService:
         subtareas contaría como 4 y el tablero de Procesos pasaría de decir "12 objetivos" a
         decir "12 objetivos y subtareas" sin que nadie lo haya decidido — el número no rompe,
         cambia de significado en silencio, que es peor.
+
+        🔴 Y NO FILTRA POR `tipo`: el número SUMA LAS DOS VISTAS, anuales y operativos juntos.
+        **Es una decisión, no un olvido.** Procesos es el tablero transversal de la operación de
+        RRHH —al lado de onboarding, offboarding, vacantes y capacitaciones— y ahí "objetivos en
+        curso" significa todos, igual que antes de que existieran las dos vistas. Partirlo en dos
+        sería una decisión de producto que nadie tomó, y encima cambiaría un número que ya se
+        mostró.
+
+        🚨 PERO ES EXACTAMENTE EL MISMO MODO DE FALLA QUE EL PÁRRAFO DE ARRIBA, y por eso queda
+        escrito: el día que alguien agregue el filtro por tipo, este contador **no se va a
+        romper** —sigue compilando, sigue devolviendo un número— y va a pasar a significar otra
+        cosa sin que ningún test rojee. Este service consulta `supabase_admin` DIRECTO, sin pasar
+        por `ObjetivoService` (excepción de familia declarada en `tests/test_acceso_a_datos.py`),
+        así que ningún cambio en el service ni en `_objetivo_filtros` lo alcanza. Si se decide
+        partirlo, se toca acá y a propósito.
         """
         q = supabase_admin.table(tabla).select("id", count="exact").eq("estado", estado)
         if tabla == "objetivos":

@@ -16,6 +16,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from schemas.objetivo import TIPO_POR_DEFECTO, TipoObjetivo
+
 
 class FilaObjetivoError(BaseModel):
     """Una fila que NO se va a cargar, con el motivo en texto para quien tiene el Excel abierto."""
@@ -39,6 +41,19 @@ class FilaObjetivoPreview(BaseModel):
     # Tiene el mismo problema de fondo y su conversión (`UUID(u)` en `_a_create`) sigue viva y
     # funcionando. Cambiarlo pide el mismo rastreo completo; queda anotado, no hecho a medias.
     responsables_ids: List[str] = []        # acompañantes ya resueltos (sin el dueño)
+    # ── Las tres de la migración 119 ─────────────────────────────────────────
+    # 🔴 LOS TRES LLEVAN DEFAULT, al revés que en `ObjetivoResponse`, donde `tipo` es OBLIGATORIO.
+    # No es una inconsistencia: son dos preguntas distintas. Una RESPUESTA describe una fila que
+    # ya existe y siempre tiene tipo, así que defaultearlo ahí sería inventar a qué vista
+    # pertenece. Una fila de PREVIEW describe lo que se leyó de un Excel, y **un archivo viejo sin
+    # la columna es un caso legítimo y frecuente**: el default es la respuesta correcta, no una
+    # invención. Con `tipo` requerido acá, resubir una planilla anterior a esta sesión daría 422.
+    # `TipoObjetivo` y no `str`: un valor fuera del enum ya cayó al default en `parsear_fila`, así
+    # que si llega otra cosa es el CLIENTE alterando el body entre preview y confirmar — y eso
+    # tiene que morir en el 422, no entrar.
+    tipo: TipoObjetivo = TIPO_POR_DEFECTO
+    periodicidad: str = ""
+    areas_involucradas: List[str] = []
     # Lo que se cargó de menos y el usuario tiene que saber: hoy solo "fecha" (celda ilegible).
     faltantes: List[str] = []
 

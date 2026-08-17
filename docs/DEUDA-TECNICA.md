@@ -82,7 +82,28 @@
 
 **Services 150/150:** `assessment_service.py` · `_clasificador_prompt.py` · `_vacaciones_write.py`.
 **Repos 100/100:** `area_repo` · `candidato_repo` · `inventario_asignaciones_repo` · `objetivo_repo` · `planes_carrera_repo` · `vacante_repo`.
-**Routers 80/80:** `adjuntos.py` · `candidatos.py`.
+**Routers 80/80:** `adjuntos.py` · `candidatos.py` · **`offboarding_tramite.py` (nuevo, 17/8)**.
+
+> 🔴 **`offboarding_tramite.py` NACIÓ en 80/80, y eso es lo que hay que mirar de este corte.**
+> El 17/8 se partió `offboarding_escrituras.py` (79/80) por el seam del módulo: **ciclo** —
+> endpoints que cambian en qué estado está el proceso — contra **trámite** — endpoints que
+> registran progreso dentro de una instancia ya creada. La división compró margen de un solo
+> lado: `offboarding_escrituras.py` quedó en **46/80** y `offboarding_tramite.py` en **80/80**,
+> porque los dos PUT que se mudaron se llevaron el encabezado que explica el criterio de corte,
+> la nota del rate limit y la del orden de registro.
+>
+> **Consecuencia práctica, que es la que importa para la próxima sesión:** el lado con lugar es
+> el de CICLO (34 líneas libres — ahí entra holgado el endpoint de efectivización de la baja que
+> motivó esta división). El lado sin lugar es el de TRÁMITE: **el próximo endpoint de trámite no
+> entra y exige dividir primero.**
+>
+> ⚠️ **Y cuando eso pase, el corte NO es un tercer archivo con un criterio nuevo.** Tres archivos
+> con tres criterios distintos es cómo un módulo deja de tener un lugar obvio para cada endpoint,
+> que es exactamente lo que este corte vino a resolver. Las dos salidas honestas son: subdividir
+> DENTRO del criterio que se desborde (trámite por entidad: activos / entrevista), o bajar el
+> encabezado compartido a un solo archivo y que los otros lo referencien en vez de repetirlo.
+> **Lo que no se hace es recortar los comentarios para entrar** — la regla del repo, y el motivo
+> por el que este archivo se declara en el techo en vez de haber sido podado.
 
 > ⚠️ **Es una FOTO, no un inventario: medila antes de usarla.** La versión del 2/8 nombraba
 > `evaluacion_repo`, `nomina_repo`, `vacantes.py` y `vacaciones.py`, que desde entonces se
@@ -240,6 +261,69 @@ verdad** (al salir el payload hacia PostgREST) y llamando al **repo real**. Reci
 
 ⚠️ Es el hermano de la pregunta de arriba: allá el fake no era lo que se probaba; acá **el test
 era lo que se probaba**.
+
+### 🟠 `TestElPisoDeTiempo` es intermitente en Windows — medido y reproducido el 17/8/2026
+
+**El test:** `tests/test_identificacion_publica.py::TestElPisoDeTiempo`, 5 casos, todos con la
+misma forma: `t0 = perf_counter()` → `await ...` → **`assert perf_counter() - t0 >= 0.12`**, con
+`_PISO_SEGUNDOS` monkeypatcheado a 0.12. Mide el piso REAL a propósito: testearlo con el piso en 0
+dejaría que borrar la nivelación entera pasara en verde, que es el bug que importa. Eso está bien
+y **no se cambia a la ligera**.
+
+**Reproducido, con nombre completo:**
+`TestElPisoDeTiempo::test_todos_los_rechazos_esperan_el_mismo_piso[99999999]` —
+`assert (478934.8076979 - 478934.692038) >= 0.12`, o sea **0.11566 s: 4,34 ms corto**.
+
+**EL MECANISMO, medido — no es la CPU.** `asyncio` dispara los timers hasta
+`loop._clock_resolution` **ANTES** de su vencimiento, a propósito: `_run_once` saca del heap todo
+handle cuyo `when` caiga dentro de esa ventana. En esta máquina, medido:
+
+```
+time.get_clock_info('monotonic').resolution = 0.015625   (15,625 ms)
+loop._clock_resolution                      = 0.015625
+```
+
+O sea que **`asyncio.sleep(0.12)` puede volver legítimamente a los ~0.1044 s** y seguir siendo
+correcto. La aserción pide `>= 0.12` **sin tolerancia**, así que el test vive a 15,6 ms de un
+rojo que no depende de nada del código. Medido en máquina ociosa, 400 `sleep(0.12)` seguidos:
+**1 volvió por debajo de 0.12** (0,2 %), mínimo 0.11997.
+
+🔴 **CORRECCIÓN DE LO QUE SE AFIRMÓ ANTES EN ESTA MISMA SESIÓN, y es el aprendizaje.** Se dijo que
+"la carga empuja al verde, no al rojo, porque la granularidad del timer redondea el sleep hacia
+arriba" y que por eso "el mecanismo anotado es imposible". **Las dos cosas son falsas**, y la
+medición de arriba las desmiente: asyncio adelanta, no atrasa. La afirmación se construyó
+razonando sobre cómo *debería* comportarse el reloj en vez de medirlo — el mismo error que esta
+sección entera documenta, cometido sobre un test que investiga esta sección.
+
+**El experimento, 12 corridas completas de la suite, todas a archivo:**
+
+| Brazo | Condición | Corridas | Fallos |
+|---|---|---:|---:|
+| A | dos procesos pytest concurrentes, **`__pycache__` compartido** | 6 | **1** |
+| B | dos procesos pytest concurrentes, **`PYTHONPYCACHEPREFIX` separado** | 6 | 0 |
+| — | 12 corridas de solo `TestElPisoDeTiempo` con los 12 cores saturados | 12 | 0 |
+| — | 5 corridas completas **secuenciales** | 5 | 0 |
+
+⚠️ **1 contra 0 con n=6 NO distingue los dos brazos, y no hay que leerlo como que el caché es la
+causa.** No existe mecanismo por el que compartir bytecode acorte un `sleep`: la contención de I/O
+haría el camino más LENTO, o sea empujaría la aserción hacia el verde. Lo que el experimento sí
+muestra es que **la concurrencia de dos event loops mueve el jitter de scheduling lo suficiente
+como para exponer una fragilidad que ya estaba** — la saturación de CPU con busy-loops (12/12
+verdes) no la expone porque no perturba dónde cae el deadline respecto del tick del timer.
+
+**Qué hacer cuando moleste** (no se tocó ahora: el test es correcto y el rojo es del arnés, no del
+código): bajar la aserción a `>= 0.12 - loop._clock_resolution`, o comparar contra el piso menos
+un margen declarado con este porqué escrito al lado. **Lo que NO se hace es pisar
+`_PISO_SEGUNDOS` a 0**, que devolvería el falso verde que el test existe para impedir.
+
+🔑 **Y la regla de arnés que deja, que costó una sesión entera:** un fallo cuyo nombre no se
+registró es un fallo que no se puede investigar. Este apareció con un `tail -2` sobre un pipe, se
+perdió, y recuperarlo costó 12 corridas completas. **Toda corrida de pytest va a archivo, con
+nombre propio, y se lee de ahí.** `.pytest_cache/v/cache/lastfailed` **no sirve de respaldo**: se
+verificó que acumula entradas obsoletas (34, todas de node-ids que ya no resuelven) y que pytest
+solo descarta las de tests que efectivamente corren, así que las de tests renombrados quedan para
+siempre. `cache/nodeids` tampoco: es la unión acumulada de todo lo colectado alguna vez (4531
+contra 3753 tests reales), no la colecta actual.
 
 ---
 

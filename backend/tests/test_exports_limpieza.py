@@ -90,6 +90,7 @@ def test_objetivos_export_sin_uuids_con_nombres():
         responsable_nombre="Sofía RRHH", titulo="Migrar nómina", descripcion="Q2",
         prioridad="alta", estado="haciendo", fecha_entrega=date(2026, 6, 30),
         created_at=datetime(2026, 1, 5, 9, 0, 0), updated_at=datetime(2026, 2, 1, 12, 0, 0),
+        tipo="anual", periodicidad="", areas_involucradas=["Sistemas", "Legales"],
     )
     fila = filas_objetivos([row])[0]
     assert _UUID_KEYS.isdisjoint(fila.keys())
@@ -97,6 +98,9 @@ def test_objetivos_export_sin_uuids_con_nombres():
     assert fila["Título"] == "Migrar nómina" and fila["Prioridad"] == "alta"
     assert fila["Fecha entrega"] == "30/06/2026"
     assert fila["Creada"] == "05/01/2026" and fila["Actualizada"] == "01/02/2026"  # sin hora
+    # Las tres columnas de la migración 119 tampoco pueden filtrar uuids ni estructuras de
+    # Python: el array de áreas sale como texto, no como su `repr`.
+    assert fila["Tipo"] == "anual" and fila["Áreas involucradas"] == "Sistemas; Legales"
 
 
 # ── Proyectos ─────────────────────────────────────────────────────────────────

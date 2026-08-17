@@ -59,6 +59,19 @@ class ObjetivosImportService:
         🔴 EL EVENTO SE EMITE SIEMPRE, también con lote vacío o con todas las filas fallidas: es
         el ÚNICO registro de que alguien importó objetivos (el alta no emite evento propio, sería
         uno por fila). Mismo criterio que los otros dos imports.
+
+        🔴 LA FILA DUPLICADA SE REPORTA CON UN MENSAJE LEGIBLE, Y ESO SALE DE IR POR `create`.
+        Desde la 111 el índice único hace rebotar el segundo INSERT, así que resubir la misma
+        planilla ya no duplicaba — pero el motivo que veía RRHH era el texto crudo de Postgres
+        (`duplicate key value violates unique constraint "ux_objetivo_responsable_titulo"`),
+        porque la `APIError` caía en el `except Exception` de abajo. Ahora `ObjetivoService.create`
+        la traduce con `duplicado_a_409` ANTES de que llegue acá, así que entra por la rama de
+        `AppError` y el `motivo` es el que nombra las tres salidas (título, periodicidad, vista).
+        No hay una línea especial para el duplicado en este archivo, y no la tiene que haber:
+        **es la misma traducción que ve el alta manual**, heredada por pasar por el service.
+        ⚠️ El `except Exception` de abajo sigue ahí y sigue volcando `str(exc)`. Es correcto —un
+        error inesperado tiene que dejar rastro para quien administra el import— pero significa
+        que cualquier OTRO fallo de base sí muestra texto crudo. Sabido y acotado a ese caso.
         """
         creados: List[str] = []
         errores: List[FilaObjetivoError] = []
@@ -98,10 +111,20 @@ class ObjetivosImportService:
         ⚠️ `responsables_ids` sigue siendo `List[str]` en el schema, así que su `UUID(u)` se
         queda. No es inconsistencia por descuido: ese campo no entró en el inventario de esta
         sesión (ver el comentario en el schema).
+
+        🔴 LOS TRES DE LA 119 SE PASAN EXPLÍCITOS, aunque omitirlos daría CASI lo mismo. Casi:
+        `ObjetivoCreate.tipo` tiene el mismo default (`operativo`), así que para un archivo sin la
+        columna el resultado es idéntico — pero para uno CON la columna, omitirlos acá haría que
+        el `Tipo` que el usuario escribió en su planilla se descartara en silencio y todo naciera
+        operativo. El preview lo mostraría bien y la base guardaría otra cosa: el peor modo de
+        falla de un import, porque la pantalla confirma lo que no pasó.
+        `list(...)` en las áreas para no compartir la lista del schema con el payload de alta.
         """
         return ObjetivoCreate(
             empresa_id=empresa_id, responsable_id=f.responsable_id,
             titulo=f.titulo, descripcion=f.descripcion, prioridad=f.prioridad,
             fecha_entrega=f.fecha_entrega,  # type: ignore[arg-type]
             responsables=[UUID(u) for u in f.responsables_ids],
+            tipo=f.tipo, periodicidad=f.periodicidad,
+            areas_involucradas=list(f.areas_involucradas),
         )

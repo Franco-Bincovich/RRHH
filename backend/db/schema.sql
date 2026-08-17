@@ -3,13 +3,16 @@
 -- ============================================================================
 --
 -- ESTE ES EL ARTEFACTO DE RECONSTRUCCION AUTORITATIVO.
--- Refleja el estado REAL de la base de produccion, leido directamente del catalogo
--- de Postgres (information_schema / pg_catalog). Incluye TODO: tablas, columnas,
--- defaults, constraints (PK/FK/UNIQUE/CHECK, incluidas las compuestas del modelo
--- multiempresa), e indices.
+-- Declara el SCHEMA OBJETIVO, leido del catalogo de Postgres (information_schema / pg_catalog).
+-- Incluye TODO: tablas, columnas, defaults, constraints (PK/FK/UNIQUE/CHECK, incluidas las
+-- compuestas del modelo multiempresa), e indices.
+--
+-- ⚠️ "OBJETIVO", NO "ESPEJO": entre que se escribe una migracion y que alguien la corre contra
+-- Supabase, este archivo VA POR DELANTE de produccion. Es lo normal y no se documenta caso por
+-- caso — el porque, y como averiguar si produccion ya lo tiene, estan en el bloque de abajo.
 --
 -- POR QUE EXISTE:
--- Las migraciones incrementales (001..112) NO reconstruyen la base desde cero
+-- Las migraciones incrementales de `backend/migrations/` NO reconstruyen la base desde cero
 -- de forma confiable: tienen dependencias de orden rotas, operaciones no
 -- idempotentes, y parte del modelo multiempresa fue aplicado a mano en produccion
 -- (drift) y versionado retroactivamente de forma incompleta. Las migraciones
@@ -25,107 +28,88 @@
 -- EXACTAMENTE, sin fantasmas ni faltantes en ninguna de las dos direcciones.
 -- O sea: el archivo se regenero despues del 16/7 y solo la fecha de arriba quedo
 -- vieja.
--- 🔄 ESOS NUMEROS SON DEL 7/8 Y YA NO SON LOS DE HOY: las migraciones 108..112
--- bajaron el archivo a 52 tablas, 133 FKs y 141 indices standalone. El estado
--- vigente es el del bloque de abajo, fechado 12/8. Este parrafo queda como
--- registro de la verificacion anterior, no como descripcion del archivo.
+-- 🔄 ESOS NUMEROS SON DEL 7/8 Y YA NO SON LOS DE HOY. Quedan como registro de que la
+-- verificacion se hizo, no como descripcion del archivo: ver el bloque de abajo sobre por que
+-- ningun numero de este encabezado se puede leer como estado vigente.
 --
--- 🔄 ESTE ARCHIVO **VA POR DELANTE DE PRODUCCION** (desde el 2026-08-13).
+-- ═════════════════════════════════════════════════════════════════════════════
+-- 🔴 ESTE ENCABEZADO YA NO LLEVA LISTA DE MIGRACIONES PENDIENTES. NO LA VUELVAS A ESCRIBIR.
+-- ═════════════════════════════════════════════════════════════════════════════
 --
--- 🔄 ESTADO AL 2026-08-14: las migraciones **113, 114, 115 y 116 YA SE CORRIERON**.
+-- Hasta el 2026-08-17 este bloque enumeraba "migraciones corridas" y "pendientes de correr".
+-- **Se desfaso CINCO veces**, en las dos direcciones, y las cinco por la misma causa: es un dato
+-- que cambia cuando alguien corre un script contra Supabase, y este archivo no se entera. Se
+-- mantenia a mano y se leia como autoridad.
 --
--- 🔴 LA 116 ESTUVO DECLARADA ACA COMO PENDIENTE DESPUES DE HABERSE CORRIDO. Este parrafo decia
--- "PENDIENTE DE CORRER, una sola: 116" y listaba sus 11 columnas como lo que produccion
--- "TODAVIA NO tiene". Ya las tenia. **Es el CUARTO desfasaje de este encabezado y sale de la
--- misma causa que los tres anteriores: verificar por CONTEO en vez de por OBJETO.** El conteo
--- de tablas no se movio con la 116 (no crea ni borra ninguna: son columnas, un DROP NOT NULL y
--- un indice), asi que mirar "55 = 55" no podia detectarla.
--- **La regla, otra vez: hay que mirar el objeto que la migracion toca.** Verificado asi el
--- 14/8 contra el catalogo vivo: las 11 columnas existen, `empleado_capacitacion.empleado_id`
--- quedo nullable, y `ux_ec_nombre_libre` existe.
+--   1. Decia "va por delante" cuando ya no era cierto: las migraciones se habian corrido y nadie
+--      volvio a tocar el archivo.
+--   2. Lo mismo con la 112, cuatro dias despues de que corriera.
+--   3. Al arreglar (2) se marco "AL DIA, 108..112 todas corridas" verificando SOLO EL CONTEO DE
+--      TABLAS (52 = 52). La 109 estaba pendiente: no crea ni borra tablas (borra una columna y
+--      tres objetos), asi que era invisible a esa comprobacion.
+--   4. La 116 quedo listada como pendiente DESPUES de haberse corrido, por lo mismo: son 11
+--      columnas, un DROP NOT NULL y un indice, y "55 = 55" no los ve.
+--   5. La 117 y la 118 quedaron listadas como pendientes despues de haberse corrido, y esta vez
+--      ni siquiera hubo un conteo de por medio: **se heredo la afirmacion del texto anterior sin
+--      verificarla**, en la misma sesion en la que si se verifico objeto por objeto lo de la 119.
+--      Es la variante mas facil de repetir — el que edita el bloque toca su parrafo y da por
+--      buenos los de al lado.
 --
--- PENDIENTE DE CORRER, dos:
---   · backend/migrations/117_recategorizacion_categoria.sql  -> ANTES del deploy del modulo de
---     recategorizaciones. UNA linea de DDL: DROP + ADD de
---     `recategorizaciones_algo_cambia_check` para que `categoria_nueva` tambien cuente.
---     AFLOJA el constraint (de dos formas aceptadas a tres), asi que no puede fallar por datos
---     — y ademas la tabla tiene 0 filas. Sin ventana. Idempotente.
---     🔑 Corrige un olvido de la 116, que agrego `categoria_anterior`/`categoria_nueva` y dejo
---     el CHECK con dos campos: una recategorizacion de solo categoria rebotaba con 23514, y es
---     el caso mas frecuente (la categoria es el NIVEL dentro del seniority).
+-- 🔴 POR QUE SE SACO Y NO SE "MANTIENE MEJOR". Este archivo es el ARTEFACTO DE RECONSTRUCCION:
+-- describe UN SCHEMA. "Que migraciones estan aplicadas" describe OTRA COSA — el estado de un
+-- despliegue concreto — que cambia sin que este archivo cambie, y que **no se puede verificar
+-- leyendo el archivo**. Dos hechos con ciclos de vida distintos en un mismo documento: el que no
+-- se puede chequear desde adentro es el que rota. Un dato que no se puede verificar
+-- automaticamente no deberia estar escrito como autoridad, y menos en el archivo del que el dev
+-- de infra levanta RDS: si dice que una migracion esta pendiente, la corre de nuevo.
 --
---   · backend/migrations/118_indices_paginacion.sql  -> ANTES del deploy de la paginacion.
---     SEIS indices compuestos `(empresa_id, <orden>, id)`. Aditiva pura, idempotente, sin
---     ventana: un indice nuevo no cambia ningun resultado, solo el plan.
---     🔑 Es la continuacion declarada de la 115, que probo tres de estos y los difirio por
---     escrito ("sin LIMIT el planner ni los usa... a esos modulos los arregla la PAGINACION").
---     Con el LIMIT puesto, re-medidos el 14/8: los seis pasan de Seq Scan a Index Scan.
---     🔴 De los NUEVE candidatos, tres NO entraron: `objetivos`, `areas` y `proyectos` siguen
---     sin ser elegidos por el planner incluso con el LIMIT (son catalogos/tablero, no crecen
---     con la dotacion). Van comentados al final del archivo con su medicion y su disparador.
+-- ⚠️ SE EVALUO Y SE DESCARTO la otra salida: un test que compare este archivo contra el catalogo.
+-- Es la correcta, pero **necesita una base en CI y hoy no hay** (la suite corre con un fake de
+-- Supabase; ver tests/_postgrest_schema.py, que valida contra ESTE archivo justamente porque no
+-- puede consultar la base). Queda anotado con su disparador: **el dia que el pipeline de AWS
+-- tenga una base efimera, ese chequeo entra ahi** — es el unico lugar donde puede no mentir.
 --
--- Lo que este archivo declara y produccion TODAVIA NO tiene:
---   · (117) `recategorizaciones_algo_cambia_check` con el tercer OR
---     (`categoria_nueva IS NOT NULL`).
---   · (118) los 6 indices `idx_empleados_empresa_apellido`, `idx_candidatos_empresa_created`,
---     `idx_ec_empresa_created`, `idx_inv_asig_empresa_fecha` (PARCIAL),
---     `idx_inv_items_empresa_nombre`, `idx_vacantes_empresa_created`. NINGUNO reemplaza a un
---     indice existente — las coincidencias parciales que hay en el catalogo (los
---     `*_id_empresa_uq`, `empleados_empresa_dni_uq`, `ux_objetivo_responsable_titulo`) estan
---     analizadas una por una en el encabezado de la 118.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- COMO SE CONTESTA HOY "¿ESTE ARCHIVO REFLEJA PRODUCCION O VA POR DELANTE?"
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Se le pregunta al catalogo, que es lo unico que no miente. Tres pasos, en este orden:
 --
--- ── Lo que sigue es el registro de las CUATRO QUE YA SE CORRIERON, no un pendiente ─────────
---   · backend/migrations/113_lote_features_aditivo.sql      -> ✅ corrida
---   · backend/migrations/114_lote_features_post_deploy.sql  -> ✅ corrida
---   · backend/migrations/115_indices_escala.sql             -> ✅ corrida
---   · backend/migrations/116_columnas_finales.sql           -> ✅ corrida (verificada por objeto)
+-- 1. QUE MIGRACIONES HAY. `ls backend/migrations/` — el numero mas alto es el ultimo escrito.
+--    Cuales de esas se corrieron NO esta escrito en ningun lado del repo, a proposito (es lo que
+--    se acaba de sacar de aca). Lo que si hay es el registro DATADO de cuando se escribio cada
+--    una: `docs/BITACORA-CAMBIOS.md`, una entrada por sesion, de la mas reciente a la mas vieja.
+--    🔑 Esa bitacora no rota y este bloque si, y la diferencia es de FORMA, no de disciplina: una
+--    entrada fechada dice "el 17/8 escribi la 119 y quedo pendiente", y eso sigue siendo verdad
+--    para siempre. Un encabezado que dice "pendiente" es falso apenas alguien la corre.
 --
--- Lo que aportaron (ya esta en produccion):
---   · 3 tablas nuevas: perfiles_puesto, recategorizaciones, eventos_agenda (52 -> 55)
---   · 7 columnas nuevas: empleados.fecha_ingreso_prevista, empleados.fecha_baja_prevista,
---     adjuntos.fecha_vencimiento, vacantes.perfil_puesto_id (113) +
---     objetivos.periodicidad, objetivos.areas_involucradas,
---     parametros_empresa.periodo_prueba_dias, parametros_empresa.dias_aviso_evento (114)
---   · 8 indices nuevos + `ux_objetivo_responsable_titulo` REEMPLAZADO por su version de cuatro
---     expresiones (es el UNICO objeto destructivo del lote: DROP + CREATE en la misma
---     transaccion de la 114)
---   · 6 indices compuestos `(empresa_id, <fecha>)` de la 115 — idx_costos_nomina_empresa_periodo,
---     idx_auditoria_empresa_created, idx_sv_empresa_fecha, idx_sa_empresa_fecha,
---     idx_vp_empresa_periodo, idx_hp_proyecto_fecha. NINGUNO reemplaza a un indice existente
---   · 3 triggers updated_at nuevos (35 -> 38, tambien en migracionAWS/.../077)
+-- 2. SI ESA MIGRACION YA CORRIO. **Se mira EL OBJETO QUE TOCA, nunca un conteo.** No hace falta
+--    inventar la query: **cada migracion de este repo termina en un bloque "VERIFICACION
+--    POSTERIOR" con la consulta exacta y el resultado esperado**, escrito por quien la penso y
+--    guardado al lado del DDL que describe. Ese bloque no puede desfasarse del objeto, porque
+--    viven en el mismo archivo. Abrir la migracion y correr su bloque es la respuesta.
+--    🔴 CONTAR NO ALCANZA, y los casos 3 y 4 de arriba son la prueba: la mayoria de las
+--    migraciones no crea ni borra tablas, asi que "N = N" pasa igual con la migracion sin correr.
 --
--- 🚩 AL CORRER LAS DOS, este bloque vuelve a "AL DIA" y este parrafo se borra — en la MISMA
--- sesion, que es la regla de abajo y la razon por la que ya se desfasó tres veces.
+-- 3. 🚨 NO USAR `supabase_migrations.schema_migrations`. Existe, y es una TRAMPA: verificado el
+--    17/8, tiene **UNA sola fila** (`081_add_domicilio_desglosado`), porque es el ledger del CLI
+--    de Supabase y aca las migraciones se corren a mano desde el SQL editor, que no registra
+--    nada. Leerla lleva a concluir que solo corrio la 081 de 119. No es un ledger de este repo.
+--    (Las otras dos `schema_migrations` del catalogo, en `auth` y en `realtime`, son internas de
+--    Supabase y menos que menos.)
 --
--- ── Estado ANTERIOR, verificado objeto por objeto el 2026-08-12 ──────────────
--- CORRIDAS: 080, 089, 102..107 (modulo de carga de horas), 108 y 109 (clientes como
--- catalogo global), 110, 111 y 112. Verificado en el catalogo: `clientes` ya NO
--- tiene `empresa_id`, le quedan 2 indices (`clientes_pkey` y
--- `ux_clientes_nombre_global`) y 0 FKs salientes, con los 4 clientes y su hora
--- imputada intactos. El conteo de tablas daba 52 de los dos lados, y 133 FKs
--- declaradas contra 134 en produccion: la de mas es `users.id -> auth.users(id)`,
--- que este archivo NO declara a proposito (ver el bloque de auth mas abajo).
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 🚩 LA REGLA QUE QUEDA, y es la unica
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Al escribir una migracion nueva se actualiza ESTE ARCHIVO con lo que la migracion declara
+-- —columnas, constraints, indices— en la MISMA sesion, igual que la entrada de la bitacora. Eso
+-- es todo. **No se anota si esta corrida o no**: este archivo declara el schema OBJETIVO, y que
+-- vaya por delante de produccion durante unos dias es lo normal, no una excepcion que haya que
+-- documentar cada vez.
+-- Corolario: si estas leyendo esto y necesitas saber si produccion ya lo tiene, la respuesta no
+-- esta en este archivo — esta en el catalogo, por los tres pasos de arriba.
 --
--- 🔴 ESTE BLOQUE YA QUEDO DESFASADO TRES VECES, EN LAS DOS DIRECCIONES. No es
--- anecdota: es la justificacion de la regla que viene abajo.
---   1. Decia "va por delante" cuando ya no era cierto, porque las migraciones se
---      habian corrido y nadie volvio a tocarlo.
---   2. Lo mismo con la 112: siguio diciendolo cuatro dias despues de que corriera.
---   3. Al arreglar (2) se marco "AL DIA, 108..112 todas corridas" verificando SOLO
---      EL CONTEO DE TABLAS (52 = 52) — y la 109 estaba pendiente. Esa migracion no
---      crea ni borra tablas (borra una columna y tres objetos), asi que era
---      invisible a esa comprobacion. **Contar tablas NO alcanza para afirmar que
---      este archivo refleja produccion: hay que mirar el objeto que la migracion
---      toca.**
--- Un encabezado que miente sobre si el archivo adelanta o refleja es peor que no
--- tenerlo: manda a buscar un drift que no existe, o —al reves— hace confiar en una
--- tabla o una columna que todavia no esta.
---
--- 🚩 LA REGLA, con tres casos que la respaldan: al escribir una migracion nueva,
--- este bloque vuelve a decir "va por delante" y se lista lo pendiente; al
--- correrla, vuelve a "AL DIA" y el parrafo se borra. **Se toca en la MISMA sesion
--- que la migracion, las dos veces**, igual que la entrada de la bitacora. No hay
--- test que lo cubra —es prosa—, y la unica forma de que no mienta es esa.
+-- ⚠️ Y si igual vas a escribir un estado acá: no toques SOLO tu parrafo. El desfasaje 5 fue
+-- exactamente eso.
 --
 -- COMO USARLO EN UN REBUILD:
 --   1. Crear una base vacia.
@@ -135,7 +119,9 @@
 --   5. psql -v ON_ERROR_STOP=1 -f db/seed.sql
 -- Los cuatro tienen que dar exit 0. La secuencia completa, con el porque de cada
 -- paso, esta en docs/handoff-aws/README.md.
--- 🔴 NO correr las migraciones 001..112 encima: son HISTORIAL, no bootstrap.
+-- 🔴 NO correr NINGUNA de las migraciones de `backend/migrations/` encima: son HISTORIAL, no
+-- bootstrap. (El rango se escribia aca como "001..112" y quedo viejo dos veces; no lleva numero
+-- a proposito — son todas.)
 --
 -- NOTA: no incluye datos (solo estructura). Los catalogos base van en db/seed.sql.
 --
@@ -639,9 +625,33 @@ CREATE TABLE public.objetivos (
     -- DEFAULT '' porque entra en `ux_objetivo_responsable_titulo`, y en Postgres los NULL no
     -- colisionan entre si: nullable ahi haria que el indice deje de deduplicar en silencio.
     periodicidad text NOT NULL DEFAULT ''::text,
-    -- Migracion 114. Anotacion de contexto, NO una FK a areas: los objetivos son del equipo de
-    -- RRHH (responsable_id -> users) y ese equipo no tiene area.
-    areas_involucradas text
+    -- Migracion 114, tipo cambiado por la 119. Anotacion de contexto, NO una FK a areas: los
+    -- objetivos son del equipo de RRHH (responsable_id -> users) y ese equipo no tiene area. Lo
+    -- que se anota son las areas de OTRAS empresas con las que el objetivo se comparte.
+    -- 🔄 ARRAY Y NO TEXTO (mig 119) para que el filtro sea honesto: con texto, `ILIKE '%Sistemas%'`
+    -- tambien matchea "Sistemas Corporativos" y el desplegable de valores usados ofrece la CELDA
+    -- ("Sistemas; Legales") en vez del area. Con array el filtro es `@>` (elementos completos) y
+    -- el desplegable sale del aplanado, igual que `empleados.roles`.
+    -- NOT NULL DEFAULT '{}' y no nullable: con nullable, "sin areas" tendria DOS representaciones
+    -- (NULL y '{}') y las dos se producirian solas — el form manda [] y el import manda la
+    -- columna ausente—, asi que `IS NULL` y `= '{}'` serian dos filtros distintos para la misma
+    -- pregunta. NO es el motivo de `periodicidad` (esa es NOT NULL porque entra en el indice
+    -- unico); aca no entra en ningun indice.
+    -- SIN el CHECK de `empleados.roles` (array_length >= 1): un objetivo sin areas compartidas es
+    -- el caso NORMAL, no un dato incompleto.
+    areas_involucradas text[] NOT NULL DEFAULT ARRAY[]::text[],
+    -- Migracion 119. A cual de las dos vistas pertenece el objetivo: la ANUAL es la que Capital
+    -- Humano presenta al directorio, la OPERATIVA acepta cualquier expresion de tiempo. Un
+    -- objetivo pertenece a UNA y no se comparte; se puede cambiar desde la pantalla.
+    -- 🔴 CHECK CERRADO, al reves que `periodicidad`, y la asimetria es a proposito: el vocabulario
+    -- de la periodicidad no se puede cerrar (texto libre), y el de `tipo` ES la lista de vistas de
+    -- la pantalla — un tercer valor no es un dato que RRHH escriba, es una pantalla que hay que
+    -- construir.
+    -- 🔴 DEFAULT 'anual' EN LA BASE, pero el default del ALTA y del IMPORT es 'operativo'. No se
+    -- contradicen: el de la base resuelve el backfill de las filas que ya existian (la unica tenia
+    -- que quedar anual) y vive aca; el de producto resuelve en que vista nace lo nuevo (la
+    -- permisiva) y vive en el codigo. Ver la migracion 119.
+    tipo text NOT NULL DEFAULT 'anual'::text
 );
 CREATE TABLE public.offboarding_activos (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -1256,7 +1266,7 @@ ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_otros_costos_check
 ALTER TABLE public.costos_nomina ADD CONSTRAINT costos_nomina_salario_bruto_check CHECK ((salario_bruto >= (0)::numeric));
 ALTER TABLE public.empleado_capacitacion ADD CONSTRAINT empleado_capacitacion_estado_check CHECK ((estado = ANY (ARRAY['pendiente'::text, 'en_curso'::text, 'completado'::text])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_desempeno_check CHECK (((desempeno)::text = ANY ((ARRAY['alto'::character varying, 'medio'::character varying, 'bajo'::character varying])::text[])));
-ALTER TABLE public.empleados ADD CONSTRAINT empleados_estado_check CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying, 'baja'::character varying, 'licencia'::character varying, 'suspendido'::character varying])::text[])));
+ALTER TABLE public.empleados ADD CONSTRAINT empleados_estado_check CHECK (((estado)::text = ANY ((ARRAY['activo'::character varying, 'baja'::character varying, 'licencia'::character varying, 'suspendido'::character varying, 'preingreso'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_modalidad_trabajo_check CHECK (((modalidad_trabajo)::text = ANY ((ARRAY['presencial'::character varying, 'remoto'::character varying, 'hibrido'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_potencial_check CHECK (((potencial)::text = ANY ((ARRAY['alto'::character varying, 'medio'::character varying, 'bajo'::character varying])::text[])));
 ALTER TABLE public.empleados ADD CONSTRAINT empleados_roles_no_vacio CHECK ((array_length(roles, 1) >= 1));
@@ -1275,6 +1285,9 @@ ALTER TABLE public.inventario_asignaciones ADD CONSTRAINT inventario_asignacione
 ALTER TABLE public.inventario_items ADD CONSTRAINT inventario_items_estado_check CHECK ((estado = ANY (ARRAY['disponible'::text, 'asignado'::text, 'en_reparacion'::text, 'baja'::text])));
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_estado_check CHECK ((estado = ANY (ARRAY['por_hacer'::text, 'haciendo'::text, 'terminado'::text])));
 ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_prioridad_check CHECK ((prioridad = ANY (ARRAY['baja'::text, 'media'::text, 'alta'::text])));
+-- (mig 119) Las dos vistas del modulo. Cerrado a proposito: el valor lo elige la pantalla, no lo
+-- escribe RRHH. Ver el comentario de la columna en el CREATE TABLE.
+ALTER TABLE public.objetivos ADD CONSTRAINT objetivos_tipo_check CHECK ((tipo = ANY (ARRAY['anual'::text, 'operativo'::text])));
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offboarding_activos_estado_check CHECK (((estado)::text = ANY ((ARRAY['pendiente'::character varying, 'devuelto'::character varying, 'no_aplica'::character varying, 'perdido'::character varying])::text[])));
 ALTER TABLE public.offboarding_activos ADD CONSTRAINT offboarding_activos_tipo_activo_check CHECK (((tipo_activo)::text = ANY ((ARRAY['laptop'::character varying, 'celular'::character varying, 'monitor'::character varying, 'tarjeta_acceso'::character varying, 'licencia_software'::character varying, 'llave'::character varying, 'uniforme'::character varying, 'otro'::character varying])::text[])));
 ALTER TABLE public.offboarding_instancias ADD CONSTRAINT offboarding_instancias_estado_check CHECK (((estado)::text = ANY ((ARRAY['iniciado'::character varying, 'en_proceso'::character varying, 'completado'::character varying, 'cancelado'::character varying])::text[])));
@@ -1628,7 +1641,17 @@ CREATE INDEX idx_obj_parent ON public.objetivos USING btree (parent_id);
 -- tres, "Cerrar el trimestre" mensual y anual del mismo responsable colisionaban y el segundo
 -- rebotaba con 23505 — una clave mas angosta que la identidad real rechaza datos buenos. El
 -- `lower()` va por el mismo motivo que el de `titulo`: es texto que RRHH escribe a mano.
-CREATE UNIQUE INDEX ux_objetivo_responsable_titulo ON public.objetivos USING btree (empresa_id, responsable_id, lower(titulo), lower(periodicidad));
+-- 🔄 Migracion 119: `tipo` como QUINTA. Mismo argumento, un eje mas — un anual tiene
+-- `periodicidad = ''` SIEMPRE (un anual ya es del año) y un operativo con el campo vacio tambien,
+-- asi que para ese par la cuarta columna no distingue y "Cerrar el trimestre" anual y operativo
+-- del mismo responsable volvian a colisionar. Son dos objetivos legitimos: viven en dos vistas
+-- distintas y no se comparten.
+-- 🔴 `tipo` va SIN `lower()`, al reves que las otras dos: no lo escribe una persona, sale de un
+-- CHECK cerrado de dos literales en minuscula. Un `lower()` ahi no podria cambiar ningun
+-- resultado y seria una tercera expresion a evaluar en cada escritura.
+-- ⚠️ El NOMBRE se conserva desde la 111: esa migracion y la 114 lo citan literalmente en sus
+-- queries de verificacion posterior, y las dos siguen en el repo como historial.
+CREATE UNIQUE INDEX ux_objetivo_responsable_titulo ON public.objetivos USING btree (empresa_id, responsable_id, lower(titulo), lower(periodicidad), tipo);
 CREATE INDEX idx_obj_resp_user ON public.objetivo_responsables USING btree (user_id);
 CREATE INDEX idx_oauth_states_expires_at ON public.oauth_states USING btree (expires_at);
 CREATE INDEX idx_offboarding_activos_empresa ON public.offboarding_activos USING btree (empresa_id);

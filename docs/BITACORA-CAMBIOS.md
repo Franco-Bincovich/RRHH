@@ -40,6 +40,267 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-17 · Offboarding — iniciar el trámite deja de dar de baja; la baja se efectiviza aparte · commits pendientes
+
+**Qué cambió (el bug):** `POST /api/offboarding` llamaba a `dar_de_baja(...)` con la fecha
+PREVISTA —o, si no venía, con `hoy + 30 días`—, o sea escribía `estado='baja'` y una
+`fecha_egreso` **en el futuro**. Desde ese segundo la persona desaparecía de todo lo que pregunta
+`estado='activo'` aunque le quedaran treinta días trabajando: headcount, organigrama, denominador
+de las dos tasas de ausentismo, saldo de vacaciones, selector de superior y el gate del link
+público de horas. **Producción no llegó a sufrirlo: `offboarding_instancias` tiene 0 filas.**
+
+Ahora iniciar el trámite escribe SOLO `offboarding_instancias`, y la baja la escribe un endpoint
+nuevo, `POST /api/offboarding/{instancia_id}/efectivizar`, que alguien tiene que confirmar. De
+paso se corrigieron los dos contadores de bajas y se borró un endpoint que hacía lo mismo mal.
+
+**Impacto en infraestructura:**
+
+- **Ninguna migración. Cero DDL.** Verificado contra el catálogo antes de empezar:
+  `empleados.fecha_egreso` ya existe y `'completado'` ya está en el CHECK de
+  `offboarding_instancias.estado`.
+- 🔴 **UN ENDPOINT NUEVO**, autenticado y gateado (`Seccion.OFFBOARDING` + WRITE):
+  `POST /api/offboarding/{instancia_id}/efectivizar`, body `{fecha_egreso}`. Da de baja al
+  empleado con su fecha real y cierra la instancia en `completado`.
+- 🔴 **UN ENDPOINT BORRADO: `DELETE /api/empleados/{id}`**, con su cadena entera
+  (`deactivate_empleado` → `desactivar` → `soft_delete` → `baja_logica` → `payload_baja_empleado`).
+  Escribía `estado='baja'` **sin `fecha_egreso`**, y una baja sin fecha no cae en ningún período:
+  la persona desaparecía del headcount sin aparecer en el conteo de bajas de ningún mes.
+  **No tenía caller en el front** (estaba declarado en `test_callers_huerfanos` como
+  "completitud REST"). Si algún cliente externo lo usaba, ahora recibe **405** — el path sigue
+  montado con GET y PUT.
+- 🔴 **CAMBIA EL SIGNIFICADO DE DOS NÚMEROS YA PUBLICADOS**, sin cambiar su nombre:
+  `dashboard.kpis.bajas_mes` y `bajas_periodo` del reporte de headcount pasan de contarse por
+  `updated_at` a contarse por `fecha_egreso`. `updated_at` imputaba la baja al mes del TRÁMITE y
+  la **re-imputaba cada vez que alguien tocaba el legajo**, así que el número de un mes cerrado
+  podía cambiar meses después. Con 0 bajas en producción, hoy los dos valen 0 y nadie ve el
+  cambio; empieza a notarse con la primera baja real.
+- ⚠️ **`repositories/offboarding_repo.py` se partió** (104/100 al sumarle el cierre de la
+  instancia): lo de `offboarding_activos` se fue a `_offboarding_activos_repo.py`. **Un archivo
+  por tabla.** Sin endpoints ni rutas afectadas.
+- ⚠️ **La baja NO se puede efectivizar desde la UI todavía.** El endpoint está declarado en
+  `test_callers_huerfanos` con disparador explícito: sale de esa lista cuando
+  `frontend/services/offboarding.ts` tenga su `efectivizarBaja` y la ficha tenga el botón con su
+  cartel de confirmación. **Mientras tanto los offboardings quedan abiertos y ningún empleado pasa
+  a `baja`** — es un estado a medias que hay que cerrar en la sesión de front que sigue.
+- **Suite backend: 3753 → 3766** (+16 tests nuevos, −3 borrados con el endpoint). Los 15 barridos
+  estructurales en verde.
+- ⚠️ **`repositories/_empleado_write_repo.py` quedó en 99/100** — ver el reporte de la sesión.
+
+---
+## 2026-08-17 · Borrado de `repositories/_empleado_baja_repo.py` (código muerto) · commit pendiente
+
+**Qué cambió:** se borró un archivo de repositorio con **cero importadores**. Duplicaba
+`baja_logica` y `dar_de_baja` de `_empleado_write_repo.py`; la partición se escribió (con su
+docstring explicando el corte) y **nunca se cableó**: `empleado_repo.py` siempre importó las dos
+funciones del `_empleado_write_repo`. **Nada más se tocó** — no es un refactor, no se movió ni se
+renombró nada, y `_empleado_write_repo.py` quedó intacto (mtime 3/8, sin modificar).
+
+Verificado antes de borrar, no de memoria: diff real de las dos funciones. `baja_logica` era
+**idéntica byte por byte**; `dar_de_baja` difería en **2 líneas de docstring y cero de lógica**.
+La copia muerta era además la MÁS VIEJA (mtime 30/7) y su docstring citaba `MODELO_DATOS.md`,
+documento borrado el 2/8 — o sea que no había ningún comentario que migrar al vivo: el vivo
+explica más y no apunta a un documento inexistente.
+
+**Impacto en infraestructura:**
+
+- **Ninguno.** Cero endpoints, cero rutas, cero variables de entorno, cero migraciones. El
+  archivo no se ejecutaba en producción: ningún módulo lo importaba.
+- **Suite backend: 3753 → 3753.** Medido antes y después. **Ningún test desapareció**, porque
+  ningún test importaba el módulo muerto (los `dar_de_baja` que aparecen en `tests/` son métodos
+  de repos falsos, no imports).
+- **Barrido `test_acceso_a_datos`, los dos números:** la guarda de archivos (`>= 250`) **no se
+  mueve** — vale 393 y no incluye `repositories/`. La que sí cuenta hacia abajo es la contracara
+  `len(con_query) >= 60` (repos que consultan la base): **93 → 92, margen 33 → 32**. Lejos del
+  piso: el barrido no aprueba por poco.
+- ⚠️ **Por qué se borró ahora y no después:** el fix de offboarding de la sesión siguiente toca la
+  escritura de la baja del empleado, y **un archivo llamado `_empleado_baja_repo.py` es exactamente
+  donde cualquiera va a ir a buscarla**. Dejarlo era garantizar que alguien editara la copia que no
+  corre y viera que su cambio no tiene efecto.
+
+---
+## 2026-08-17 · Offboarding — división del router de escrituras en ciclo / trámite · commit pendiente
+
+**Qué cambió:** `routers/offboarding_escrituras.py` llegó a **79/80** y se partió en dos por el
+seam del módulo, **moviendo código y nada más**: los dos `PUT` (devolución de activos y
+entrevista de salida) se fueron a `routers/offboarding_tramite.py` y el `POST` del alta quedó
+donde estaba. Es el commit de preparación del fix de offboarding, que necesita lugar para un
+endpoint nuevo. **Cero cambios de comportamiento, cero endpoints nuevos, sin migraciones.**
+
+El criterio de corte quedó escrito en el encabezado de los tres archivos del módulo, para que el
+próximo endpoint sepa dónde va sin preguntar: **ciclo** = cambia en qué estado está el proceso ·
+**trámite** = registra progreso dentro de una instancia ya creada · **lecturas** = listado y export.
+
+**Impacto en infraestructura:**
+
+- **Ninguno.** No hay variables de entorno, migraciones, buckets, dominios ni dependencias nuevas.
+- 🔴 **La API queda byte por byte igual.** El router nuevo se monta en el **mismo prefijo**
+  (`/api/offboarding`), así que **ningún path ni método cambió** — verificado por introspección de
+  `app.routes`, las mismas 5 rutas antes y después. Lo único que cambió es qué módulo Python las
+  sirve. **El front no requiere ningún cambio**, y no se tocó.
+- **Ningún endpoint movido llevaba rate limit.** Importa porque la clave del limiter es
+  `routers.<módulo>.<función>`: mover un endpoint decorado le habría cambiado la clave y con ella
+  su contador. Queda anotado en los dos archivos para el próximo que se mueva.
+- **Suite backend: 3753 → 3753.** Medido antes y después. Ningún test importaba
+  `offboarding_escrituras` por módulo (el único import por módulo del área es
+  `tests/test_offboarding_export.py`, que apunta a `routers.offboarding`, intacto), así que la
+  división no rompió ni obligó a adaptar ningún test.
+- ⚠️ **Deuda que deja, anotada en `DEUDA-TECNICA.md` §3:** `offboarding_tramite.py` **nace en
+  80/80**. El corte compró margen de un solo lado (`offboarding_escrituras.py` quedó en 46/80). El
+  próximo endpoint de TRÁMITE exige dividir primero; el de ciclo entra holgado.
+
+---
+## 2026-08-17 · Objetivos — import por Excel y desplegable de áreas (sesión 2 de 3) · commit pendiente
+
+**Qué cambió:** el import de objetivos acepta las tres columnas de la migración 119 (`Tipo`,
+`Periodicidad`, `Areas involucradas`), las tres opcionales, y el vocabulario del pool de áreas
+ya usadas se sirve por un endpoint nuevo para el desplegable del filtro. **Sin cambios de front**
+(es la sesión 3) y **sin migraciones**.
+
+**Impacto en infraestructura:**
+
+- **Ninguna migración nueva.** Todo corre sobre la **119**, ya corrida.
+- **Un endpoint nuevo, autenticado y gateado**: `GET /api/objetivos/areas-conocidas`
+  (`Seccion.OBJETIVOS + READ`). Devuelve una lista plana de strings y **respeta `X-Empresa-Id`**
+  (es una vista: el desplegable ofrece lo que esa vista puede encontrar). **Sin caller de front
+  todavía** — declarado en `test_callers_huerfanos.py` con el mismo disparador que `/campos`.
+- **Un repositorio nuevo**: `repositories/objetivo_areas_repo.py`. `repositories/` pasa de 71 a
+  **72 archivos** para el porteo a asyncpg. Hace un solo `select` de una columna `text[]` y
+  aplana en Python. 🔑 **Con asyncpg ese aplanado se reemplaza por un `SELECT DISTINCT
+  unnest(areas_involucradas)`** — hoy no se puede porque `unnest` no es expresable vía PostgREST,
+  que es lo mismo que ya documenta `EmpleadoRolesRepo.get_roles_conocidos`.
+- **Ningún cambio de variables de entorno, dependencias, buckets, auth ni procesos de fondo.**
+- **La respuesta del preview del import cambió de forma** (`FilaObjetivoPreview` suma `tipo`,
+  `periodicidad` y `areas_involucradas`). Los tres llevan default, así que un cliente viejo que
+  no los mande sigue funcionando; el front actual no los muestra todavía.
+- 🚩 **Hallazgo, NO arreglado, que le toca a quien retome el import:** el export escribe los
+  encabezados **con acento** ("Título", "Descripción", "Áreas involucradas") y
+  `_import_csv.normalizar_header` **no saca acentos**. Para las columnas de objetivos lo resolví
+  con un reintento local en `_get`, pero **`Titulo` es columna REQUERIDA y su chequeo lo hace
+  `_import_excel.faltantes`, que corre antes**: por eso **resubir una planilla exportada rebota
+  entera con COLUMNAS_FALTANTES**. Es anterior a esta sesión y arreglarlo toca el chequeo de
+  columnas requeridas que comparten los **tres** imports del repo, así que quedó declarado con un
+  test que lo fija (`test_TITULO_sigue_rebotando_el_archivo_entero`) en vez de tocado de refilón.
+
+---
+## 2026-08-17 · Objetivos — backend de lectura de las dos vistas (sesión 1 de 3) · commit pendiente
+
+**Qué cambió:** se cableó lo que la migración 119 dejó en la base. `tipo`, `periodicidad` y
+`areas_involucradas` viajan ahora en los schemas, el repo, el service y el router, y los tres son
+filtros del listado **y** del export. El vocabulario cerrado de `tipo` se sirve por endpoint nuevo
+(`GET /api/objetivos/campos`) para que el front no lo hardcodee. Y se agregó la traducción del
+23505 a un **409 `OBJETIVO_DUPLICADO`** con mensaje legible: hasta hoy el alta duplicada devolvía
+**500 INTERNAL_ERROR** y el import mostraba el texto crudo de Postgres, aunque las migraciones 111
+y 114 afirmaran las dos que "el service lo traduce". **Sin cambios de front** (es la sesión 3).
+
+**Impacto en infraestructura:**
+
+- **Ninguna migración nueva.** Todo corre sobre la **119**, que quedó corrida en la sesión
+  anterior. `db/schema.sql` no se tocó en esta.
+- **Un endpoint nuevo, autenticado y gateado**: `GET /api/objetivos/campos`
+  (`Seccion.OBJETIVOS + READ`). Sirve `{"tipos": [{value, label}]}`. **Sin caller de front
+  todavía** — declarado en `test_callers_huerfanos.py` con su disparador (sale de la lista cuando
+  `services/objetivos.ts` tenga su `fetchCamposObjetivo`).
+  🔴 **Se monta ANTES** que el router de lecturas y el de escrituras. Hoy no hay `GET
+  /api/objetivos/{id}` con el que colisionar, pero `ObjetivoService.get_by_id` ya está escrito
+  esperando uno: el día que aparezca, `/campos` entraría como `id="campos"` y moriría en un 422.
+  Es lo que le pasó a `asignaciones_capacitacion` sin que nadie lo notara por meses.
+- **Tres query params nuevos en dos endpoints ya publicados** (`GET /api/objetivos` y
+  `/api/objetivos/exportar`): `tipo`, `periodicidad`, `area`. Los tres opcionales — un cliente
+  viejo que no los manda sigue funcionando igual. ⚠️ `tipo` está tipado como `Literal`, así que
+  un valor fuera de `anual|operativo` devuelve **422** en vez de una lista vacía.
+- **Ningún cambio de variables de entorno, dependencias, buckets, auth ni procesos de fondo.**
+- **Sin índice nuevo.** El filtro por área usa `@>` sobre `text[]`; el GIN que haría falta si la
+  tabla creciera está anotado en la 119 con su disparador. Hoy `objetivos` tiene 1 fila.
+- 🔴 **Para el porteo a asyncpg: DOS repos-satélite nuevos** (`_objetivo_area.py`,
+  `_objetivo_payload.py`), o sea que `repositories/` pasa de 69 a **71 archivos**. Ninguno de los
+  dos toca la base: `_objetivo_payload` construye dicts y `_objetivo_area` recibe la query ya
+  armada. **El que sí hay que mirar en el porteo es `utils/postgrest_array.py`**: traduce un valor
+  de Python a la sintaxis de array de PostgREST, y **con asyncpg ese archivo desaparece** — se
+  pasa la lista como parámetro y el driver la serializa. Está declarado en su encabezado.
+- ⚠️ **`procesos_service.py` y `_reporte_anual_metricas.py` NO filtran por `tipo`**: sus contadores
+  siguen sumando las dos vistas juntas, y es una decisión (son números que el directorio ya vio).
+  Quedó escrito al lado de cada query, porque los dos van a `supabase_admin` **directo** —excepción
+  de familia en `test_acceso_a_datos.py`— así que ningún cambio en el service los alcanza y el día
+  que alguien les agregue el filtro **no van a romperse: van a cambiar de significado en silencio.**
+
+---
+## 2026-08-17 · Migración 119 (`objetivos.tipo` + áreas como array) y el encabezado de `schema.sql` deja de declarar pendientes · commit pendiente
+
+**Qué cambió:** dos cosas. **(1)** Se escribió
+`backend/migrations/119_objetivo_tipo_y_areas_array.sql` y se actualizó `db/schema.sql` para
+reflejarla — **la última del lote antes del handoff**, tres objetos todos sobre `objetivos`:
+columna `tipo` (`anual` | `operativo`) con CHECK cerrado, que decide a cuál de las dos vistas del
+módulo pertenece cada objetivo; **tercera recreación** de `ux_objetivo_responsable_titulo`
+(111 → 114 → 119) con `tipo` como quinta columna; y `areas_involucradas` de `text` a
+`text[] NOT NULL DEFAULT '{}'`, para que el filtro compare elementos completos (`@>`) en vez de
+subcadenas. **(2)** Se le sacó al encabezado de `schema.sql` la lista de migraciones corridas y
+pendientes, que se había desfasado por quinta vez — detalle abajo.
+**Solo DDL y documentación: no se tocó una línea de código de aplicación**, y la migración **no se
+corrió** (la corre Franco).
+
+**Impacto en infraestructura:**
+
+- **Migración nueva: 119. Al 2026-08-17 es la ÚNICA pendiente de correr.** Va **ANTES** del
+  deploy del módulo de objetivos. Sin dependencia de orden con ninguna otra.
+- 🔴 **Corrección: la 117 y la 118 SÍ están corridas.** El encabezado de `schema.sql` las
+  declaraba pendientes y **era falso** — verificado en el catálogo el 17/8:
+  `recategorizaciones_algo_cambia_check` ya tiene el tercer OR (`categoria_nueva IS NOT NULL`), y
+  los siete índices de la 115/118 existen (`idx_empleados_empresa_apellido`,
+  `idx_candidatos_empresa_created`, `idx_ec_empresa_created`, `idx_inv_asig_empresa_fecha`
+  parcial, `idx_inv_items_empresa_nombre`, `idx_vacantes_empresa_created`,
+  `idx_costos_nomina_empresa_periodo`). **Nadie tiene que correr la 117 ni la 118.**
+- 🔴 **NO es aditiva pura, y es la única de las tres que no lo es.** Lleva un `DROP INDEX` y un
+  `ALTER COLUMN ... TYPE`. **Todo va en UNA transacción**: entre el `DROP` y el `CREATE` del
+  índice la tabla queda sin defensa contra el duplicado. Mismo criterio que la 114.
+- 🟢 **No puede perder datos y el cambio de tipo es INERTE**, medido y no supuesto: `objetivos`
+  tiene **1 fila** y su `areas_involucradas` es **NULL** — cero caracteres de texto que convertir.
+  La fila queda `tipo='anual'` por el DEFAULT (sin `UPDATE` de backfill) y `areas_involucradas`
+  en `{}`. El índice nuevo es estrictamente **más ancho** que el viejo: nada que deduplicar antes.
+- ⚠️ **Es la única migración del repo con un bloque `DO $$`.** Postgres no tiene
+  `ALTER COLUMN ... TYPE IF ...`, y re-correr el `ALTER` con la columna ya en `text[]` **no es un
+  no-op**: `btrim(text[])` es un error de tipo duro que aborta la transacción. La guarda mira
+  `information_schema.columns.data_type` (`'text'` vs `'ARRAY'`), verificado contra el catálogo.
+  Con esa guarda, la migración es idempotente como todas las demás.
+- ⚠️ **El nombre `ux_objetivo_responsable_titulo` se conserva a propósito**: la 111 y la 114 lo
+  citan literalmente en sus queries de verificación posterior y las dos siguen en el repo.
+- **Sin variables de entorno, sin dependencias, sin buckets, sin endpoints, sin cambios de auth.**
+- **`schema.sql` actualizado en la misma sesión** (la regla de su encabezado): las dos columnas en
+  el `CREATE TABLE`, el `objetivos_tipo_check` y el índice de cinco expresiones. **Verificado por
+  OBJETO, no por conteo** — los tres cambios son invisibles a un conteo de tablas.
+- 🔴 **Y se le sacó al encabezado de `schema.sql` la LISTA DE MIGRACIONES PENDIENTES, para
+  siempre.** Es el arreglo de fondo del desfasaje de arriba, que fue el **quinto** del mismo
+  bloque. Los cuatro anteriores fueron por verificar con un conteo de tablas en vez de mirar el
+  objeto; **el quinto ni siquiera tuvo un conteo de por medio: se heredó la afirmación del texto
+  anterior sin verificarla.** La causa de fondo es estructural, no de disciplina: "qué
+  migraciones están aplicadas" describe el estado de un DESPLIEGUE, cambia sin que el archivo
+  cambie, y **no se puede verificar leyendo el archivo** — mientras que todo lo demás que
+  `schema.sql` dice sí. Un dato que no se puede chequear desde adentro no va escrito como
+  autoridad, y menos en el archivo del que vos levantás RDS: si dice "pendiente", la corrés de
+  nuevo.
+  - **Lo que hay en su lugar:** el procedimiento de tres pasos para preguntárselo al catálogo.
+    (1) `ls backend/migrations/` para saber qué existe, y esta bitácora para saber cuándo se
+    escribió cada una; (2) **cada migración del repo termina en un bloque "VERIFICACIÓN
+    POSTERIOR" con la consulta exacta y el resultado esperado** — ese bloque vive al lado de su
+    DDL y no se puede desfasar de él; (3) la advertencia de la trampa, abajo.
+  - 🚨 **`supabase_migrations.schema_migrations` NO es el ledger de este repo.** Existe y tiene
+    **una sola fila** (`081_add_domicilio_desglosado`, verificado el 17/8): es el registro del
+    CLI de Supabase, y acá las migraciones se corren a mano desde el SQL editor, que no anota
+    nada. Leerla lleva a concluir que de 119 migraciones corrió una. Las otras dos
+    `schema_migrations` del catálogo (`auth`, `realtime`) son internas de Supabase.
+  - **Se evaluó y se descartó** la alternativa —un test que compare `schema.sql` contra el
+    catálogo—: necesita una base en CI y hoy no hay (la suite corre con un fake; por eso
+    `tests/_postgrest_schema.py` valida contra el archivo y no contra la base). 🔑 **Queda
+    anotado con su disparador, y es tuyo: el día que el pipeline de AWS tenga una base efímera,
+    ese chequeo entra ahí** — es el único lugar donde puede no mentir.
+  - Efecto colateral: el encabezado tampoco declara ya rangos de migraciones (`001..112` estaba
+    escrito dos veces y había quedado viejo las dos).
+- 📌 **Para el rebuild:** `objetivos` pasa de 13 a **14 columnas** y de 2 a **3 CHECKs propios**
+  (verificado parseando `schema.sql` con `tests/_postgrest_schema.py`).
+  `areas_involucradas` es el **segundo `text[]` del modelo** (el primero es `empleados.roles`), y
+  el primero con `DEFAULT '{}'`. **No se creó índice GIN** — hoy no hay ni uno en toda la base; el
+  disparador y el DDL exacto quedan anotados en la migración.
+
+---
 ## 2026-08-15 · Agenda de eventos — CRUD (sesión 1 de 2) · commit pendiente
 
 **Qué cambió:** se cableó `eventos_agenda`, la tabla que la migración 113 creó en mayo y que
