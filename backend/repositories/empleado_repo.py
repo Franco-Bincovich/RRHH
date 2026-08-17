@@ -1,6 +1,6 @@
 """
 Repositorio de empleados — lecturas. Interfaz pública: find_all · find_by_id · find_by_legajo ·
-find_by_dni, más las escrituras delegadas (save · update · soft_delete · dar_de_baja).
+find_by_dni, más las escrituras delegadas (save · update · dar_de_baja).
 Todas las operaciones reciben empresa_id para filtrado multiempresa.
 
 Estaba en 174 líneas contra un límite de 100. Se partió en cuatro: las primitivas compartidas
@@ -15,7 +15,7 @@ from uuid import UUID
 from integrations.supabase_client import supabase_admin
 from repositories._empleado_lookup_repo import por_dni, por_id, por_legajo
 from repositories._empleado_row import SELECT, TABLE, ordenado as _ordenado, row, with_empresa
-from repositories._empleado_write_repo import actualizar, baja_logica, dar_de_baja, guardar
+from repositories._empleado_write_repo import actualizar, dar_de_baja, guardar
 from schemas.empleado import EmpleadoCreate, EmpleadoResponse, EmpleadoUpdate
 
 
@@ -86,10 +86,6 @@ class EmpleadoRepo:
     def update(self, id: str, data: EmpleadoUpdate, empresa_id: Optional[UUID] = None) -> Optional[EmpleadoResponse]:
         """Actualización parcial. Delegado a _empleado_write_repo.actualizar."""
         return actualizar(id, data, empresa_id, self.find_by_id)
-
-    def soft_delete(self, id: str, empresa_id: Optional[UUID] = None) -> bool:
-        """Baja lógica (solo estado). Delegado a _empleado_write_repo.baja_logica."""
-        return baja_logica(id, empresa_id)
 
     def dar_de_baja(self, empleado_id: str, fecha_egreso: date, empresa_id: Optional[UUID] = None) -> bool:
         """Baja con fecha de egreso. Delegado a _empleado_write_repo.dar_de_baja."""

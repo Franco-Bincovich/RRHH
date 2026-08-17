@@ -5,9 +5,29 @@ Extraído de `offboarding_service.py`, que estaba en 149/150 y no admitía el en
 Molde: `_onboarding_iniciar.py` —el hermano simétrico del módulo de entrada— y
 `_offboarding_entrevista.py`, que ya se había separado de este mismo service.
 
-POR QUÉ SALIÓ ESTE MÉTODO: es el único que toca DOS agregados (la instancia de offboarding y la
-baja del empleado) y el único con una guarda de estado propia. Los otros son operaciones sobre
-una instancia ya creada.
+POR QUÉ SALIÓ ESTE MÉTODO: era el único que tocaba DOS agregados (la instancia de offboarding y
+la baja del empleado) y el único con una guarda de estado propia. Los otros son operaciones sobre
+una instancia ya creada. **Hoy ya no toca dos agregados** —ver abajo— pero se queda separado: la
+guarda de estado y el orden de los gates siguen siendo suyos, y volver a fusionarlo pasaría el
+service de su límite.
+
+🔴 ACÁ VIVÍA EL BUG: INICIAR EL TRÁMITE DABA DE BAJA AL EMPLEADO EN EL ACTO.
+Esta función llamaba a `empleado_repo.dar_de_baja(...)` con `fecha_ultimo_dia` —o, si no venía,
+con `hoy + 30 días`—, o sea escribía `estado='baja'` y una `fecha_egreso` EN EL FUTURO. Desde ese
+mismo segundo la persona desaparecía de todo lo que pregunta `estado = 'activo'`, aunque le
+quedaran treinta días trabajando: **headcount, organigrama, denominador de las dos tasas de
+ausentismo, saldo de vacaciones, selector de superior y el gate del link público de horas.**
+
+**La fecha prevista NO cambia el estado.** Un colaborador que sigue trabajando tiene que seguir
+contando en todas esas superficies hasta el día que efectivamente se va. La previsión vive donde
+siempre vivió —`offboarding_instancias.fecha_ultimo_dia`, que esta función sigue escribiendo a
+través del repo— y el HECHO lo escribe `_offboarding_efectivizar.py`, en un endpoint aparte que
+alguien tiene que apretar. Son dos datos distintos y ahora se guardan en dos momentos distintos.
+
+⚠️ Al sacar la llamada se fue con ella un cálculo duplicado: el `fecha_ultimo_dia or hoy+30` que
+había acá era una SEGUNDA copia del que hace `OffboardingRepo.create_offboarding`. La que manda
+es la del repo, que es la que termina en la columna; la de acá solo alimentaba la baja. No queda
+ningún default de fecha en este archivo, y eso es correcto.
 
 🔴 EL ORDEN DE LOS GATES ES LOAD-BEARING, y por eso viaja completo: la barrera de EMPRESA va
 ANTES del chequeo de "ya tiene un offboarding activo". Al revés, un empleado de otra empresa con
@@ -18,7 +38,6 @@ viene a esconder. Es el mismo caso real que ya se corrigió en `_onboarding_inic
 ⚠️ Vive en `services/`, así que su límite es 150 líneas, como cualquier service. No hereda un
 límite más alto por ser un satélite.
 """
-from datetime import date, timedelta
 from typing import Optional
 from uuid import UUID
 
@@ -38,9 +57,9 @@ def iniciar(repo, empleado_repo, audit, data: OffboardingCreate,
     contexto de sesión). `empresa_id` del header se usa solo como barrera de a qué empleado se
     puede apuntar; validado eso, ambas coinciden por construcción.
 
-    Crea la instancia y los activos corporativos por defecto a devolver, audita el alta y da de
-    baja al empleado. Si la baja falla, el proceso YA quedó creado: se loguea a WARNING y no se
-    revierte — dejar el offboarding a medias sería peor que un empleado sin fecha de egreso.
+    Crea la instancia y los activos corporativos por defecto a devolver, y audita el alta.
+    🔴 NO toca al empleado: sigue `activo` y sin `fecha_egreso` hasta que alguien efectivice la
+    baja por `POST /api/offboarding/{id}/efectivizar`. El porqué está en el encabezado.
 
     Args:
         repo: OffboardingRepo (o doble de test).
@@ -70,17 +89,6 @@ def iniciar(repo, empleado_repo, audit, data: OffboardingCreate,
     empresa_id_str = empleado.empresa_id or ""
     offboarding = repo.create_offboarding(data, empresa_id_str)
     audit.registrar(**payload_inicio_offboarding(offboarding, usuario_id, empresa_id_str or None))
-
-    fecha_egreso = data.fecha_ultimo_dia or (date.today() + timedelta(days=30))
-    empresa_uuid = UUID(empresa_id_str) if empresa_id_str else None
-    if not empleado_repo.dar_de_baja(str(data.empleado_id), fecha_egreso, empresa_uuid):
-        logger.warning(
-            "Offboarding iniciado pero no se pudo actualizar estado del empleado",
-            extra={
-                "empleado_id": str(data.empleado_id),
-                "instancia_id": str(offboarding.id),
-            },
-        )
 
     logger.info(
         "Offboarding iniciado",

@@ -62,13 +62,3 @@ async def update_empleado(
 ) -> EmpleadoResponse:
     empresa_id = get_empresa_id(request)
     return service.update_empleado(id, body, empresa_id, request.state.user.get("id", "system"))
-
-
-@router.delete("/{id}", status_code=204, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
-async def delete_empleado(
-    id: UUID,
-    request: Request,
-    service: EmpleadoService = Depends(_service),
-) -> None:
-    empresa_id = get_empresa_id(request)
-    service.deactivate_empleado(id, empresa_id, request.state.user.get("id", "system"))

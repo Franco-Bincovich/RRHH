@@ -126,16 +126,11 @@ class TestEmpleadoAudit:
         assert c["datos_anteriores"]["cargo"] == "Dev"
         assert c["datos_nuevos"]["cargo"] == "Lead"
 
-    def test_deactivate_lee_prior_y_registra_baja(self) -> None:
-        audit = _FakeAudit()
-        repo = _FakeEmpRepo()
-        svc = EmpleadoService(repo=repo, audit=audit)
-        svc.deactivate_empleado(uuid4(), empresa_id=None, usuario_id="u1")
-        assert repo.find_by_id_calls == 1  # read-before antes del soft_delete
-        c = audit.calls[0]
-        assert c["evento"] == "baja_empleado" and c["accion"] == "DELETE"
-        assert c["datos_nuevos"] is None
-        assert c["datos_anteriores"]["estado"] == "activo"
+    # `test_deactivate_lee_prior_y_registra_baja` se BORRÓ el 17/8/2026 junto con
+    # `deactivate_empleado` y el evento `baja_empleado` que afirmaba. La baja de un empleado ya no
+    # pasa por `EmpleadoService`: la escribe `_offboarding_efectivizar`, con el evento
+    # `efectivizacion_baja` y siempre con `fecha_egreso`. Su auditoría se prueba en
+    # `tests/test_offboarding_baja_efectiva.py`.
 
 
 class TestCostoAudit:

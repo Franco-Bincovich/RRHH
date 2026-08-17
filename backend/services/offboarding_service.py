@@ -2,6 +2,7 @@
 Servicio de offboarding. Lógica de negocio del módulo de Offboarding.
 Flujo: router → service → repository → DB
 """
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -10,6 +11,7 @@ from repositories.offboarding_repo import OffboardingRepo
 from schemas.offboarding import OffboardingCreate, OffboardingResponse
 from services._audit_payloads_offboarding import payload_devolucion_activo
 from services._limite_export import verificar_limite_export
+from services._offboarding_efectivizar import efectivizar as _efectivizar
 from services._offboarding_entrevista import registrar as _registrar_entrevista
 from services._offboarding_export import construir_filas_export
 from services._offboarding_iniciar import iniciar as _iniciar
@@ -53,9 +55,16 @@ class OffboardingService:
         return build_export(nombre="Offboardings", datos=datos, filename_base="offboardings", formato=formato)
 
     def iniciar_offboarding(self, data: OffboardingCreate, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> OffboardingResponse:
-        """Inicia el offboarding de un empleado y lo da de baja.
+        """Inicia el offboarding de un empleado. 🔴 NO lo da de baja: eso lo hace `efectivizar`.
         Ver services/_offboarding_iniciar.iniciar (el ORDEN de los gates es load-bearing)."""
         return _iniciar(self._repo, self._empleado_repo, self._audit, data, empresa_id, usuario_id)
+
+    def efectivizar(self, instancia_id: UUID, fecha_egreso: date,
+                    empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> None:
+        """Da de baja al empleado con su fecha real de egreso y cierra la instancia.
+        Ver services/_offboarding_efectivizar.efectivizar (el ORDEN de los gates es load-bearing)."""
+        _efectivizar(self._repo, self._empleado_repo, self._audit, instancia_id, fecha_egreso,
+                     empresa_id, usuario_id)
 
     def registrar_entrevista(
         self, instancia_id: UUID, entrevista_salida: bool, notas: Optional[str] = None,

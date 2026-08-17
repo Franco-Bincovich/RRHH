@@ -20,6 +20,21 @@ class OffboardingCreate(BaseModel):
     descripcion_motivo: Optional[str] = None
 
 
+class EfectivizarBaja(BaseModel):
+    """Body de `POST /api/offboarding/{instancia_id}/efectivizar`: la baja EFECTIVA del empleado.
+
+    Un solo campo, y es a propósito. `fecha_egreso` es el HECHO —el día que la persona
+    efectivamente dejó de trabajar— y no tiene por qué coincidir con la previsión que se cargó al
+    abrir el trámite (`offboarding_instancias.fecha_ultimo_dia`). **Que difieran NO es un error y
+    el service no las sincroniza**: la previsión queda como quedó, que es lo que permite después
+    comparar lo previsto con lo ocurrido.
+
+    El motivo NO va acá: ya se eligió al abrir el proceso y vive en `motivo_egreso`. Pedirlo de
+    nuevo abriría la puerta a dos motivos distintos para la misma salida.
+    """
+    fecha_egreso: date
+
+
 class ActivoUpdate(BaseModel):
     devuelto: bool
 

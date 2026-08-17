@@ -100,11 +100,29 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     # sacaran: `test_las_excepciones_siguen_sin_caller` da rojo cuando algo declarado empieza a
     # tener caller. Es el ciclo que esta lista pretende, funcionando.
 
+    # 🔴 EFECTIVIZACIÓN DE LA BAJA — NO es completitud REST: es la mitad backend de un fix que
+    # todavía no tiene botón. Por eso lleva DISPARADOR explícito y no una razón permanente.
+    # Hasta este cambio, `POST /api/offboarding` daba de baja al empleado en el acto, con la fecha
+    # prevista en el futuro: la persona desaparecía del headcount con treinta días por delante.
+    # Ahora la baja la escribe este endpoint, y alguien la tiene que confirmar.
+    # SALE DE ESTA LISTA cuando `frontend/services/offboarding.ts` tenga su `efectivizarBaja` y la
+    # ficha del proceso tenga el botón con su cartel de confirmación (molde: EliminarVacanteButton).
+    # 🚩 MIENTRAS SIGA ACÁ, LA BAJA NO SE PUEDE EFECTIVIZAR DESDE LA UI, y eso es un estado a
+    # medias que hay que cerrar en la sesión de front: los offboardings quedan abiertos para
+    # siempre y ningún empleado pasa nunca a `baja`. El propio barrido lo va a pedir:
+    # `test_las_excepciones_siguen_sin_caller` da rojo cuando algo declarado empieza a tener caller.
+    ("POST", "/api/offboarding/{instancia_id}/efectivizar"):
+        "la baja EFECTIVA del empleado + cierre de la instancia. Backend del fix de offboarding; "
+        "el botón de la ficha se construye en la sesión de front que sigue.",
+
     # Completitud REST: quedan publicados a propósito. El front resuelve lo mismo por otra vía
     # (el listado ya filtra, la baja va por offboarding), pero el endpoint es correcto y barato.
-    ("DELETE", "/api/empleados/{id}"):
-        "completitud REST: es baja LÓGICA (deactivate_empleado). El front da de baja por "
-        "offboarding; el endpoint queda publicado.",
+    # ✅ `DELETE /api/empleados/{id}` YA NO ESTÁ ACÁ: se BORRÓ junto con su cadena entera
+    # (deactivate_empleado → desactivar → soft_delete → baja_logica → payload_baja_empleado).
+    # Estaba declarado como "completitud REST", y esa razón no se sostenía: escribía
+    # `estado='baja'` SIN `fecha_egreso`, así que la persona desaparecía del headcount y no
+    # aparecía en el conteo de bajas de ningún mes. La baja real va por
+    # `POST /api/offboarding/{id}/efectivizar`, que siempre escribe la fecha.
     ("GET", "/api/vacaciones-pendientes/empleado/{empleado_id}"):
         "completitud REST: el listado ya acepta `empleado_id` como Query y es el que usa el front.",
     ("GET", "/api/ausencias/{id}"): "completitud REST: el front nunca pide una ausencia sola.",
@@ -128,6 +146,23 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     # inalcanzable — exactamente el caso `POST /api/plantillas/enviar`.
     # El propio barrido lo va a pedir: `test_las_excepciones_siguen_sin_caller` da rojo cuando
     # algo declarado empieza a tener caller.
+    # 🔴 OBJETIVOS / catálogos — mismo caso y mismo disparador que perfiles y recategorizaciones:
+    # el backend de la feature 2.4 se construyó primero (sesión 1 de 3) y el front es la sesión 3.
+    # NO es completitud REST: este endpoint tiene un consumidor concreto y planificado —el
+    # selector de vista (anual / operativos) del formulario y de la barra de filtros—, que hoy
+    # todavía no existe.
+    # SALE DE ESTA LISTA cuando `frontend/services/objetivos.ts` tenga su `fetchCamposObjetivo`.
+    # Si para entonces sigue acá, el vocabulario quedó publicado y el front lo hardcodeó igual,
+    # que es exactamente lo que el endpoint existe para evitar.
+    ("GET", "/api/objetivos/campos"):
+        "el vocabulario cerrado de `tipo` (anual/operativo) servido para que el front no lo "
+        "escriba por su cuenta. Backend de la sesión 1 de 3; lo consume el selector de vista "
+        "que se construye en la sesión 3 del front.",
+    ("GET", "/api/objetivos/areas-conocidas"):
+        "el pool de áreas ya usadas, para el desplegable del filtro por área. Backend de la "
+        "sesión 2 de 3; lo consume la barra de filtros que se construye en la sesión 3 del "
+        "front. SALE DE ESTA LISTA junto con /campos, con el mismo disparador.",
+
     # 🔴 RECATEGORIZACIONES — mismo caso y mismo disparador que perfiles: el backend se
     # construyó primero. Las 6 rutas, incluida la anidada bajo el empleado que alimenta la
     # octava sección de la ficha.

@@ -67,18 +67,20 @@ def actualizar(
     return row(result.data[0])
 
 
-def baja_logica(id: str, empresa_id: Optional[UUID] = None) -> bool:
-    """Marca el empleado como baja sin eliminar el registro. Si empresa_id se provee, restringe el WHERE."""
-    stmt = with_empresa(supabase_admin.table(TABLE).update({"estado": "baja"}).eq("id", id), empresa_id)
-    return bool(stmt.execute().data)
-
-
 def dar_de_baja(empleado_id: str, fecha_egreso: date, empresa_id: Optional[UUID] = None) -> bool:
     """Da de baja a un empleado: setea estado='baja' y fecha_egreso en un solo UPDATE.
 
-    Usado al iniciar un offboarding. A diferencia de baja_logica, registra también
-    la fecha de egreso: la baja es lógica (estado + fecha_egreso), nunca física — así el histórico
-    de costos sigue incluyendo a los que ya no están.
+    🔴 ES LA ÚNICA ESCRITURA DE `estado='baja'` QUE QUEDA EN EL REPO, y por eso siempre lleva la
+    fecha. Acá vivía además `baja_logica`, que ponía el estado SIN fecha; se borró junto con
+    `DELETE /api/empleados/{id}`, su único caller a través de la cadena. Que no exista más es la
+    parte importante: una baja sin `fecha_egreso` no cae en ningún período, así que la persona
+    desaparecía del headcount y no aparecía en el conteo de bajas de ningún mes — se evaporaba de
+    los dos lados del reporte a la vez.
+
+    Sus DOS callers son el momento en que la salida efectivamente ocurrió:
+    `_offboarding_efectivizar` (alguien la confirma desde la ficha) y `nomina_empleados_service`
+    (el import de nómina trae una columna `Fecha Baja`). La baja es lógica (estado + fecha_egreso),
+    nunca física — así el histórico de costos sigue incluyendo a los que ya no están.
 
     Args:
         empleado_id: UUID (str) del empleado a dar de baja.

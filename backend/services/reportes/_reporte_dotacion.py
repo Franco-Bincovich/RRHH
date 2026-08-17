@@ -35,8 +35,14 @@ def generate_headcount(mes: int, anio: int, empresa_id: Optional[UUID] = None,
         ingresos_q = ingresos_q.eq("area_id", aid)
     ingresos = ingresos_q.execute().count or 0
 
+    # 🔴 POR `fecha_egreso`, NO POR `updated_at` — ver el mismo cambio en `dashboard_service`.
+    # `updated_at` imputaba la baja al mes del trámite y la RE-IMPUTABA cada vez que alguien
+    # tocaba el legajo, así que el número de un mes cerrado podía cambiar meses después.
+    # `fecha_egreso` es nullable, y el rango `gte/lte` ya excluye los NULL (un NULL no matchea
+    # `>= ini`), así que no hace falta un filtro extra: un empleado de baja sin fecha cargada
+    # simplemente no cae en ningún período, que es la respuesta honesta.
     bajas_q = (db.table("empleados").select("id", count="exact").eq("estado", "baja")
-               .gte("updated_at", f"{ini}T00:00:00").lte("updated_at", f"{fin}T23:59:59"))
+               .gte("fecha_egreso", ini).lte("fecha_egreso", fin))
     if eid:
         bajas_q = bajas_q.eq("empresa_id", eid)
     if aid:

@@ -67,15 +67,6 @@ def payload_update_empleado(prior, nuevo, usuario_id: Optional[str], empresa_id:
     }
 
 
-def payload_baja_empleado(prior, usuario_id: Optional[str], empresa_id: Optional[str]) -> dict:
-    """Evento DELETE (baja lógica) de empleado: datos_anteriores = subset de estado."""
-    return {
-        "usuario_id": usuario_id, "entidad": "empleado", "registro_id": prior.id,
-        "accion": "DELETE", "evento": "baja_empleado", "empresa_id": empresa_id,
-        "datos_anteriores": _subset(prior, _CAMPOS_EMPLEADO), "datos_nuevos": None,
-    }
-
-
 def payload_alta_empresa(row, usuario_id: Optional[str]) -> dict:
     """Evento INSERT de alta de empresa. empresa_id del audit = registro_id = id de la empresa."""
     return {

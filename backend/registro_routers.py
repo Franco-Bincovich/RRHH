@@ -35,6 +35,7 @@ from routers.empleados_catalogos import router as empleados_catalogos_router
 from routers.empresa import router as empresa_router
 from routers.offboarding import router as offboarding_router
 from routers.offboarding_escrituras import router as offboarding_escrituras_router
+from routers.offboarding_tramite import router as offboarding_tramite_router
 from routers.onboarding import router as onboarding_router
 from routers.onboarding_templates import router as onboarding_templates_router
 from routers.onboarding_templates_escrituras import router as onboarding_templates_escrituras_router
@@ -76,6 +77,7 @@ from routers.inventario_items import router as inventario_items_router
 from routers.inventario_items_escrituras import router as inventario_items_escrituras_router
 from routers.inventario_asignaciones import router as inventario_asignaciones_router
 from routers.objetivos import router as objetivos_router
+from routers.objetivos_catalogos import router as objetivos_catalogos_router
 from routers.objetivos_escrituras import router as objetivos_escrituras_router
 from routers.usuarios import router as usuarios_router
 from routers.usuarios_escrituras import router as usuarios_escrituras_router
@@ -132,6 +134,7 @@ def registrar(app: FastAPI) -> None:
     app.include_router(onboarding_router, prefix="/api/onboarding", tags=["onboarding"])
     app.include_router(offboarding_router, prefix="/api/offboarding", tags=["offboarding"])
     app.include_router(offboarding_escrituras_router, prefix="/api/offboarding", tags=["offboarding"])  # mismo prefijo: las rutas no cambian
+    app.include_router(offboarding_tramite_router, prefix="/api/offboarding", tags=["offboarding"])  # mismo prefijo: las rutas no cambian
     app.include_router(costos_router, prefix="/api/costos", tags=["costos"])
     app.include_router(costos_escrituras_router, prefix="/api/costos", tags=["costos"])
     app.include_router(sucesion_router, prefix="/api/sucesion", tags=["sucesion"])
@@ -172,6 +175,11 @@ def registrar(app: FastAPI) -> None:
     app.include_router(inventario_items_router, prefix="/api/inventario/items", tags=["inventario"])
     app.include_router(inventario_items_escrituras_router, prefix="/api/inventario/items", tags=["inventario"])  # mismo prefijo: las rutas no cambian
     app.include_router(inventario_asignaciones_router, prefix="/api/inventario/asignaciones", tags=["inventario"])
+    # catalogos ANTES del resto, igual que en perfiles-puesto. Acá el orden todavía no es
+    # load-bearing —el módulo no tiene ningún GET /{id} que se coma /campos— pero
+    # `ObjetivoService.get_by_id` ya está escrito esperando uno. El porqué, en el docstring de
+    # objetivos_catalogos.py.
+    app.include_router(objetivos_catalogos_router, prefix="/api/objetivos", tags=["objetivos"])
     app.include_router(objetivos_router, prefix="/api/objetivos", tags=["objetivos"])
     app.include_router(objetivos_escrituras_router, prefix="/api/objetivos", tags=["objetivos"])  # mismo prefijo: las rutas no cambian
     app.include_router(usuarios_router, prefix="/api/usuarios", tags=["usuarios"])

@@ -11,7 +11,7 @@ from repositories.empleado_repo import EmpleadoRepo
 from schemas.empleado import EmpleadoCreate, EmpleadoListResponse, EmpleadoResponse, EmpleadoUpdate
 from services._empleados_export import construir_filas_export
 from services._empleados_utils import empleado_or_404
-from services._empleados_write import actualizar, crear, desactivar
+from services._empleados_write import actualizar, crear
 from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
 from services._paginacion import cantidad_paginas
 from services.audit_service import AuditService
@@ -41,11 +41,6 @@ class EmpleadoService:
         Raises: EMPLEADO_NOT_FOUND (404), AREA_NOT_FOUND (404), MANAGER_NOT_FOUND (404), MANAGER_CICLO (400)."""
         return actualizar(self._repo, self._audit, self._areas, id, data, empresa_id, usuario_id,
                           areas_validadas=areas_validadas, prior=prior)
-
-    def deactivate_empleado(self, id: UUID, empresa_id: Optional[UUID] = None, usuario_id: Optional[str] = None) -> bool:
-        """Baja lógica (soft delete) + audit. Delegado a _empleados_write.desactivar.
-        Raises: EMPLEADO_NOT_FOUND (404)."""
-        return desactivar(self._repo, self._audit, id, empresa_id, usuario_id)
 
     def get_empleados(
         self,

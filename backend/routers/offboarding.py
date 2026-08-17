@@ -3,9 +3,14 @@ Router de offboarding — LECTURAS (listado de activos y export).
 Rutas protegidas por AuthMiddleware.
 empresa_id para lecturas: header X-Empresa-Id (filtro de vista, None = todas).
 
-Las escrituras (alta del proceso, devolución de activos y entrevista de salida) viven en
-routers/offboarding_escrituras.py, montado en el MISMO prefijo: las rutas no cambiaron. El
-porqué del corte está en el docstring de ese archivo.
+🔑 CRITERIO DE CORTE — DÓNDE VA UN ENDPOINT NUEVO DEL MÓDULO, sin tener que preguntar:
+  · LECTURAS (este archivo): listado y export.
+  · CICLO (`offboarding_escrituras.py`): endpoints que cambian EN QUÉ ESTADO ESTÁ EL PROCESO.
+  · TRÁMITE (`offboarding_tramite.py`): endpoints que registran PROGRESO DENTRO DE UNA INSTANCIA
+    YA CREADA. No cambian el estado del proceso ni tocan nada fuera de la instancia.
+
+Los tres se montan en el MISMO prefijo, así que las rutas no cambiaron en ninguno de los dos
+cortes. El porqué de cada uno está en el docstring del archivo correspondiente.
 """
 from typing import Literal
 

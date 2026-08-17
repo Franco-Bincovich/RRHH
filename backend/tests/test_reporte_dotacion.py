@@ -61,10 +61,15 @@ class _FakeSupa:
 
 
 def test_headcount_total_y_por_area(monkeypatch):
+    # 🔑 EL RESOLVER DESPACHA POR LA COLUMNA DEL `gte`, y eso es lo que le permite desmentir algo:
+    # las bajas se piden por `fecha_egreso` y NO por `updated_at`. Cuando el 17/8 se cambió esa
+    # columna, esta rama dejó de matchear, el conteo cayó en el `if` genérico y el test rojeó con
+    # `bajas_periodo == 3` en vez de 0. Un fake que ignorara el nombre de la columna habría dejado
+    # pasar el cambio —y también su reversión— sin decir nada.
     def resolver(table, gte):
         if table == "empleados" and gte == "fecha_ingreso":
             return [{"id": 1}]                                   # 1 ingreso
-        if table == "empleados" and gte == "updated_at":
+        if table == "empleados" and gte == "fecha_egreso":
             return []                                            # 0 bajas
         if table == "empleados":
             return [{"area_id": "a1"}, {"area_id": "a1"}, {"area_id": "a2"}]  # 3 activos

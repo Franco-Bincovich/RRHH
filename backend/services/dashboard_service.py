@@ -72,10 +72,16 @@ class DashboardService:
             ingresos_q = ingresos_q.eq("empresa_id", eid)
         ingresos_mes = ingresos_q.execute().count or 0
 
+        # 🔴 POR `fecha_egreso`, NO POR `updated_at`. Con `updated_at` la baja se imputaba al mes
+        # del TRÁMITE, no al del egreso — y peor: `updated_at` lo mueve CUALQUIER edición del
+        # legajo, así que corregirle el teléfono a alguien en noviembre lo sacaba del conteo de
+        # marzo y lo metía en el de noviembre. Un contador que se mueve solo.
+        # Es el mismo criterio que ya usaba `_reporte_movimientos` (bajas por `fecha_egreso`), y
+        # que los dos coincidan para el mismo mes es el objetivo explícito del cambio.
         bajas_q = (
             db.table("empleados").select("id", count="exact")
             .eq("estado", "baja")
-            .gte("updated_at", f"{ini}T00:00:00").lte("updated_at", f"{fin}T23:59:59")
+            .gte("fecha_egreso", ini).lte("fecha_egreso", fin)
         )
         if eid:
             bajas_q = bajas_q.eq("empresa_id", eid)

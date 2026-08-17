@@ -10,9 +10,7 @@ from uuid import UUID
 
 from repositories.empleado_repo import EmpleadoRepo
 from schemas.empleado import EmpleadoCreate, EmpleadoResponse, EmpleadoUpdate
-from services._audit_payloads_rrhh import (
-    payload_alta_empleado, payload_baja_empleado, payload_update_empleado,
-)
+from services._audit_payloads_rrhh import payload_alta_empleado, payload_update_empleado
 from services._empleados_manager import ensure_manager_valido, ensure_no_ciclo_manager
 from services._empleados_utils import (
     empleado_or_404, ensure_area_valida, ensure_legajo_unico,
@@ -108,31 +106,3 @@ def actualizar(repo: EmpleadoRepo, audit, areas, id: UUID, data: EmpleadoUpdate,
     audit.registrar(**payload_update_empleado(prior, empleado, usuario_id, empleado.empresa_id))
     logger.info("Empleado actualizado", extra={"empleado_id": str(id)})
     return empleado
-
-
-def desactivar(repo: EmpleadoRepo, audit, id: UUID, empresa_id: Optional[UUID] = None,
-               usuario_id: Optional[str] = None) -> bool:
-    """
-    Da de baja lógica al empleado (soft delete). No elimina el registro.
-    Lee el estado anterior antes del soft-delete para registrar el evento de auditoría.
-
-    Args:
-        repo: EmpleadoRepo (o doble de test).
-        audit: AuditService (o doble de test).
-        id: UUID del empleado a desactivar.
-        empresa_id: Si se provee, el soft-delete solo afecta empleados de esa empresa.
-        usuario_id: ID del operador (trazabilidad de audit).
-
-    Returns:
-        True si la operación fue exitosa.
-
-    Raises:
-        AppError: EMPLEADO_NOT_FOUND (404) si el ID no existe o no pertenece a la empresa.
-    """
-    prior = repo.find_by_id(str(id), empresa_id)
-    if not repo.soft_delete(str(id), empresa_id):
-        raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
-    if prior:
-        audit.registrar(**payload_baja_empleado(prior, usuario_id, prior.empresa_id))
-    logger.info("Empleado dado de baja", extra={"empleado_id": str(id)})
-    return True

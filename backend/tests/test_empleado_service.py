@@ -237,21 +237,13 @@ def test_update_ciclo_indirecto_A_B_C_A_rechazado_400():
     assert repo.updated is None
 
 
-# ─── Baja (soft delete) ───────────────────────────────────────────────────────────
-
-def test_deactivate_marca_baja_y_audita():
-    repo, audit = _FakeRepo(), _FakeAudit()
-    repo.by_id = _resp()
-    assert _svc(repo, audit).deactivate_empleado(_ID, _EMPRESA, "u1") is True
-    assert repo.soft_deleted == str(_ID)
-    assert [c["evento"] for c in audit.calls] == ["baja_empleado"]
-
-
-def test_deactivate_inexistente_404():
-    repo = _FakeRepo(); repo.soft_delete_returns = False
-    with pytest.raises(AppError) as e:
-        _svc(repo).deactivate_empleado(_ID, _EMPRESA, "u1")
-    assert e.value.code == "EMPLEADO_NOT_FOUND" and e.value.status_code == 404
+# ─── Baja (soft delete) — BORRADOS el 17/8/2026 ───────────────────────────────────
+# Acá vivían `test_deactivate_marca_baja_y_audita` y `test_deactivate_inexistente_404`. Se
+# borraron con la cadena que probaban (`deactivate_empleado` → `desactivar` → `soft_delete` →
+# `baja_logica`), que salió junto con `DELETE /api/empleados/{id}`: escribía `estado='baja'` SIN
+# `fecha_egreso`, y una baja sin fecha no cae en ningún período — la persona desaparecía del
+# headcount sin aparecer en el conteo de bajas de ningún mes.
+# La baja ahora se prueba donde ocurre: `tests/test_offboarding_baja_efectiva.py`.
 
 
 # ─── Listado paginado ─────────────────────────────────────────────────────────────

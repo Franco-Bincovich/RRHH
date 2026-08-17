@@ -5,8 +5,13 @@ Primer test del módulo: OffboardingService no tenía ninguno.
 `POST /api/offboarding` recibe el empleado_id por BODY. La empresa en la que se escribe se
 deriva del empleado (decisión de diseño documentada, no se toca); lo que se valida acá es a
 QUÉ empleado se puede apuntar. Sin la barrera, un empleado_id de otra empresa arrancaba su
-offboarding y —peor— le disparaba la baja (dar_de_baja, que se acota con la empresa DERIVADA
-del propio empleado ajeno, así que no lo frenaba).
+offboarding.
+
+⚠️ Este encabezado decía además "y —peor— le disparaba la baja (dar_de_baja, que se acota con la
+empresa DERIVADA del propio empleado ajeno, así que no lo frenaba)". **Eso dejó de ser cierto**:
+iniciar un offboarding ya no da de baja a nadie — la baja se efectiviza aparte. Los asserts sobre
+`bajas` se conservan igual de vivos, pero ahora afirman lo contrario: que sigue en `[]` también en
+el camino feliz. Ver `test_empleado_propio_camino_feliz`.
 
 ⚠️ El fake de acá SÍ honra empresa_id en find_by_id: modela dos empresas y devuelve None
 cuando no coincide, como el _with_empresa real. NO calcar los fakes de vacaciones
@@ -135,7 +140,11 @@ def test_empleado_propio_camino_feliz():
     assert str(out.empleado_id) == str(EMP_PROPIO)
     # la empresa en la que se escribe sigue derivándose del empleado, no del header
     assert off.creados == [(str(EMP_PROPIO), str(EMPRESA_A))]
-    assert emp.bajas == [str(EMP_PROPIO)]
+    # 🔴 CAMBIÓ DE SENTIDO: antes esto afirmaba `== [str(EMP_PROPIO)]`, o sea que iniciar el
+    # trámite daba de baja al empleado en el acto. Ese era EL BUG. Ahora el camino feliz NO toca
+    # al empleado: la baja la escribe `POST /{id}/efectivizar`, y esta línea es lo que impide que
+    # alguien la reponga sin darse cuenta.
+    assert emp.bajas == []
 
 
 def test_empresa_none_es_consolidado_y_no_restringe():
