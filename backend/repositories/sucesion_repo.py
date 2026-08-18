@@ -9,6 +9,7 @@ from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from schemas.sucesion import EmpleadoAnalisisResponse, EmpleadoMapaResponse
+from utils.estados_empleado import ESTADOS_EN_PLANTILLA
 
 _EMP = "empleados"
 _ASSESS = "assessment_resultados"
@@ -83,9 +84,11 @@ class SucesionRepo:
         return [_mapa_row(r) for r in (_with_empresa(q, empresa_id).execute().data or [])]
 
     def get_analisis_posicion(self, area_id: str, empresa_id: Optional[UUID] = None) -> list[EmpleadoAnalisisResponse]:
+        # `in_(ESTADOS_EN_PLANTILLA)` y no `!= 'baja'`: un preingreso no sucede a nadie todavía.
+        # El conjunto y su porqué (licencia sí, suspendido sí), en utils/estados_empleado.py.
         q = supabase_admin.table(_EMP).select(
             "id, nombre, apellido, roles, potencial, desempeno"
-        ).eq("area_id", area_id).neq("estado", "baja")
+        ).eq("area_id", area_id).in_("estado", ESTADOS_EN_PLANTILLA)
         emps = _with_empresa(q, empresa_id).execute().data or []
         scores = _scores_por_empleado([r["id"] for r in emps])
         rows = [EmpleadoAnalisisResponse(

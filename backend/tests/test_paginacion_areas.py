@@ -78,6 +78,14 @@ class _Tabla:
         self._filas = [r for r in self._filas if str(r.get(col)) != str(val)]
         return self
 
+    def in_(self, col, vals):
+        # FILTRA DE VERDAD. Lo pide `_area_row.counts_by_area`, que desde la migración 120 pasó
+        # de `.neq("estado","baja")` a `.in_("estado", ESTADOS_EN_PLANTILLA)`. Un no-op acá
+        # dejaría el conteo por área sin poder desmentir a un preingreso.
+        permitidos = {str(v) for v in vals}
+        self._filas = [r for r in self._filas if str(r.get(col)) in permitidos]
+        return self
+
     def ilike(self, col, patron):
         # `%texto%` → contiene, sin distinguir mayúsculas. Es lo que hace PostgREST.
         aguja = patron.strip("%").lower()

@@ -13,6 +13,7 @@ from schemas.dashboard import AlertaResponse, DashboardResponse, KPIResponse
 from services._dashboard_alertas import generar_alertas
 from services._dashboard_headcount import calcular_headcount
 from services._dashboard_kpis import calcular_extras
+from utils.estados_empleado import ESTADO_PREINGRESO
 from utils.logger import logger
 
 _KPIS_VACIOS = KPIResponse(empleados_activos=0, ingresos_mes=0, bajas_mes=0,
@@ -64,8 +65,19 @@ class DashboardService:
 
         empleados_activos = _count("empleados", estado="activo")
 
+        # 🔴 EXCLUYE PREINGRESOS. Este contador cuenta por FECHA y no miraba `estado` en absoluto,
+        # así que ningún valor del CHECK lo protegía: un preingreso de este mes se contaba como un
+        # alta de este mes SIN HABER ENTRADO, y se volvía a contar en el mes nuevo si alguien le
+        # corregía la fecha prevista de ingreso.
+        # Va por COMPLEMENTO (`neq` al preingreso) y NO enumerando los estados en plantilla:
+        # alguien que entró en marzo y renunció en julio sigue siendo un alta de marzo, así que
+        # `baja` TIENE que quedar del lado que cuenta. El razonamiento largo está en
+        # `utils/estados_empleado.py`; enumerar acá reintroduciría el bug de los números de un mes
+        # cerrado que cambian meses después, que es el mismo que ya se corrigió al dejar de contar
+        # por `updated_at`.
         ingresos_q = (
             db.table("empleados").select("id", count="exact")
+            .neq("estado", ESTADO_PREINGRESO)
             .gte("fecha_ingreso", ini).lte("fecha_ingreso", fin)
         )
         if eid:

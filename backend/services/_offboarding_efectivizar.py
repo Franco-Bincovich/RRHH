@@ -24,8 +24,8 @@ que es justamente la pregunta que el módulo permite responder.
    cualquier chequeo de estado: al revés, un 409 sobre una instancia de otra empresa confirmaría
    que existe, que es el oráculo de enumeración que el 404 único viene a cerrar. Es el mismo caso
    real que ya se corrigió en `_onboarding_iniciar.py`.
-2. Estado de la instancia (409), después identidad del empleado (404), después su estado (409), y
-   recién al final la forma de la fecha (400).
+2. Estado de la instancia (409), después identidad del empleado (404), después su estado —los DOS
+   chequeos, ya de baja y todavía sin ingresar (409)— y recién al final la forma de la fecha (400).
 3. **Ninguna escritura ocurre hasta que pasaron TODAS las guardas.** Primero se valida entero,
    después se escribe: un rechazo no puede dejar al empleado de baja con la instancia abierta.
 
@@ -41,6 +41,7 @@ from uuid import UUID
 
 from services._audit_payloads_offboarding import payload_efectivizacion_baja
 from utils.errors import AppError
+from utils.estados_empleado import ESTADO_PREINGRESO
 from utils.logger import logger
 
 _CERRADOS = ("completado", "cancelado")
@@ -67,6 +68,7 @@ def efectivizar(repo, empleado_repo, audit, instancia_id: UUID, fecha_egreso: da
             y también si su empleado no aparece — el mismo 404, para no delatar la diferencia.
         AppError: OFFBOARDING_YA_CERRADO (409) si la instancia ya está completada o cancelada.
         AppError: EMPLEADO_YA_DE_BAJA (409) si el empleado ya fue dado de baja.
+        AppError: EMPLEADO_PREINGRESO (409) si todavía no ingresó (ver la guarda, abajo).
         AppError: FECHA_EGRESO_INVALIDA (400) si la fecha es anterior al ingreso.
         AppError: FECHA_EGRESO_FUTURA (400) si la fecha todavía no ocurrió.
     """
@@ -87,6 +89,23 @@ def efectivizar(repo, empleado_repo, audit, instancia_id: UUID, fecha_egreso: da
         raise AppError(*_NO_ENCONTRADO)
     if empleado.estado == "baja":
         raise AppError("El empleado ya está dado de baja", "EMPLEADO_YA_DE_BAJA", 409)
+
+    # 🔴 GUARDA EXPLÍCITA PARA EL PREINGRESO, Y VA ANTES DE `_validar_fecha` A PROPÓSITO.
+    # Hasta el 18/8/2026 este caso lo cortaba `_validar_fecha` POR ACCIDENTE: un preingreso tiene
+    # `fecha_ingreso` futura, así que cualquier `fecha_egreso` real caía en
+    # `fecha_egreso < fecha_ingreso` y salía **FECHA_EGRESO_INVALIDA**, que MIENTE sobre el
+    # motivo — le dice a RRHH que corrija la fecha cuando el problema es que esa persona nunca
+    # entró. Y no siempre cortaba: con una fecha de egreso posterior a la de ingreso prevista, el
+    # offboarding se completaba y dejaba a alguien que no trabajó nunca contando como una BAJA
+    # del mes, o sea como rotación inventada.
+    # Va antes de la fecha porque el estado es la pregunta anterior: si la persona no entró, qué
+    # día se fue no tiene sentido. Mismo criterio de orden que la barrera de empresa.
+    if empleado.estado == ESTADO_PREINGRESO:
+        raise AppError(
+            "Este empleado todavía no ingresó, así que no puede tener una baja. Si el ingreso "
+            "no se concretó, corregí su ficha en vez de darlo de baja.",
+            "EMPLEADO_PREINGRESO", 409,
+        )
 
     _validar_fecha(fecha_egreso, empleado.fecha_ingreso)
 

@@ -115,6 +115,22 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
         "la baja EFECTIVA del empleado + cierre de la instancia. Backend del fix de offboarding; "
         "el botón de la ficha se construye en la sesión de front que sigue.",
 
+    # 🔴 ACTIVACIÓN DEL PREINGRESO — mismo caso que el de arriba y en el extremo contrario del
+    # ciclo: es la mitad backend de una feature cuya pantalla es una tanda aparte (el bloque B,
+    # "próximos ingresos"). Lleva DISPARADOR, no razón permanente.
+    # A3.2 alcanzó hasta acá a propósito: el front de esta sesión se limitó a los dos archivos
+    # que BLOQUEABAN el type-check (`types/empleado.ts` y `_camposEmpleados.ts`), porque sin
+    # ellos un preingreso que llegue por la API rompe `next build`.
+    # SALE DE ESTA LISTA cuando `frontend/services/empleados.ts` tenga su `activarEmpleado` y la
+    # ficha tenga el botón con su confirmación (molde: EliminarVacanteButton).
+    # 🚩 MIENTRAS SIGA ACÁ, UN PREINGRESO NO SE PUEDE ACTIVAR DESDE LA UI. Es un estado a medias
+    # con una consecuencia concreta: se pueden CREAR preingresos por el alta, y quedan sin forma
+    # de pasar a `activo` salvo por el PUT del legajo —que no valida que la fecha de ingreso haya
+    # ocurrido, que es justamente la guarda que este endpoint existe para aplicar—.
+    ("POST", "/api/empleados/{id}/activar"):
+        "el pase de preingreso a activo. Backend de la feature de preingresos; la pantalla de "
+        "próximos ingresos y su botón son el bloque B.",
+
     # Completitud REST: quedan publicados a propósito. El front resuelve lo mismo por otra vía
     # (el listado ya filtra, la baja va por offboarding), pero el endpoint es correcto y barato.
     # ✅ `DELETE /api/empleados/{id}` YA NO ESTÁ ACÁ: se BORRÓ junto con su cadena entera

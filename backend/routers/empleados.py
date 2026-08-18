@@ -53,6 +53,22 @@ async def create_empleado(
     return service.create_empleado(body, created_by, body.empresa_id)
 
 
+# Segundo tramo LITERAL (`/activar`). Bajo este prefijo hay otras dos rutas de dos tramos
+# —`/{empleado_id}/cesiones` y `/{empleado_id}/recategorizaciones`, montadas después— pero las
+# tres tienen el segundo tramo literal y distinto, así que ninguna puede capturar a otra y el
+# orden de registro NO es load-bearing (verificado contra `app.routes` el 18/8/2026).
+# ⚠️ Lo que sí lo volvería load-bearing es una ruta con PARÁMETRO en el segundo tramo
+# (`/{id}/{algo}`): capturaría "activar" como valor y habría que registrar ésta ANTES.
+# Es un ACTO, no una edición de campo: por eso endpoint propio y sin body. Ver _empleado_activar.
+@router.post("/{id}/activar", response_model=EmpleadoResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
+async def activar_empleado(
+    id: UUID,
+    request: Request,
+    service: EmpleadoService = Depends(_service),
+) -> EmpleadoResponse:
+    return service.activar_empleado(id, get_empresa_id(request), request.state.user.get("id", "system"))
+
+
 @router.put("/{id}", response_model=EmpleadoResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def update_empleado(
     id: UUID,

@@ -14,7 +14,9 @@ from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from repositories._empleado_lookup_repo import por_dni, por_id, por_legajo
-from repositories._empleado_row import SELECT, TABLE, ordenado as _ordenado, row, with_empresa
+from repositories._empleado_row import (
+    SELECT, TABLE, filtro_estado, ordenado as _ordenado, row, with_empresa,
+)
 from repositories._empleado_write_repo import actualizar, dar_de_baja, guardar
 from schemas.empleado import EmpleadoCreate, EmpleadoResponse, EmpleadoUpdate
 
@@ -45,8 +47,10 @@ class EmpleadoRepo:
             query = query.in_("id", proyecto_ids)
         if area_id:
             query = query.eq("area_id", area_id)
-        if estado:
-            query = query.eq("estado", estado)
+        # 🔑 El EXPORT pasa por acá (`empleado_service.exportar` llama a `get_empleados`), así que
+        # el default de estado lo comparten archivo y pantalla por construcción, no por dos copias
+        # iguales. Qué hace exactamente y por qué, en `_empleado_row.filtro_estado`.
+        query = filtro_estado(query, estado)
         if es_lider is not None:
             query = query.eq("es_lider", es_lider)
         if sin_manager is not None:

@@ -67,6 +67,30 @@ def payload_update_empleado(prior, nuevo, usuario_id: Optional[str], empresa_id:
     }
 
 
+def payload_activacion_empleado(row, usuario_id: Optional[str], empresa_id: Optional[str]) -> dict:
+    """Evento UPDATE del pase de `preingreso` a `activo` (la persona entró).
+
+    🔴 `empresa_id` SALE DEL EMPLEADO, no del header. Mismo criterio que
+    `payload_efectivizacion_baja`: con `None` el evento quedaría fuera del filtro por empresa de
+    `/auditoria`, o sea invisible para quien audita esa sociedad.
+
+    No es un diff: es una FOTO de la transición, y por eso el `datos_anteriores` lleva el estado
+    de origen escrito como literal en vez de leerse del `prior`. A esta altura ya está probado
+    que era `preingreso` —la guarda de `_empleado_activar` lo exige— así que el literal no puede
+    mentir, y el evento se lee solo sin tener que cruzarlo con otra fila.
+
+    `fecha_ingreso` VA, y no es relleno: es el dato que hace auditable la guarda de fecha. Quien
+    revise el log puede comparar la fecha de ingreso contra el `created_at` del evento y ver que
+    la activación no ocurrió antes de tiempo. El pase no la toca (ver `_empleado_activar`).
+    """
+    return {
+        "usuario_id": usuario_id, "entidad": "empleado", "registro_id": row.id,
+        "accion": "UPDATE", "evento": "activacion_empleado", "empresa_id": empresa_id,
+        "datos_anteriores": {"estado": "preingreso"},
+        "datos_nuevos": {"estado": "activo", "fecha_ingreso": str(row.fecha_ingreso)},
+    }
+
+
 def payload_alta_empresa(row, usuario_id: Optional[str]) -> dict:
     """Evento INSERT de alta de empresa. empresa_id del audit = registro_id = id de la empresa."""
     return {

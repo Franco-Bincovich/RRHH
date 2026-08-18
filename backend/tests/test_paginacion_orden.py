@@ -88,6 +88,12 @@ class _FakeTabla:
         self._filas = [r for r in self._filas if str(r.get(col)) in {str(v) for v in vals}]
         return self
 
+    def neq(self, col, val):
+        # FILTRA DE VERDAD, como sus hermanos. Lo pide el default de estado del listado
+        # (`.neq("estado","preingreso")` cuando no viene `estado`).
+        self._filas = [r for r in self._filas if str(r.get(col)) != str(val)]
+        return self
+
     def order(self, col, desc=False):
         self._ordenes.append((col, desc))
         return self
@@ -201,6 +207,11 @@ class TestElDesempateViajaEnLaQuery:
                 return self
 
             def eq(self, *a, **k):
+                return self
+
+            # No-op encadenable: este espía captura SOLO los `.order()`, y el default de estado
+            # del listado (`.neq("estado","preingreso")`) es un predicado, no un orden.
+            def neq(self, *a, **k):
                 return self
 
             def order(self, col, desc=False):

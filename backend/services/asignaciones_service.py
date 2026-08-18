@@ -23,6 +23,7 @@ from schemas.proyectos import (
     AsignacionCreate, AsignacionListResponse, AsignacionResponse, AsignacionUpdate,
 )
 from utils.errors import AppError
+from utils.estados_empleado import ESTADO_PREINGRESO, ESTADOS_EN_PLANTILLA
 from utils.logger import logger
 
 
@@ -83,7 +84,20 @@ class AsignacionesService:
             empleado_empresa_id, estado = precargado.empleado_empresa_id, precargado.empleado_estado
         if not empleado_empresa_id:
             raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
-        if estado == "baja":
+        # 🔴 LA PREGUNTA PASÓ DE "¿es baja?" A "¿está en plantilla?" (18/8/2026). Con el `== "baja"`
+        # anterior, un PREINGRESO se podía asignar a un proyecto y, por lo tanto, imputarle horas
+        # ANTES de haber entrado: eso no es una ficha rara en una pantalla, es **dato falso en el
+        # reporte de horas por cliente**, que es lo que se factura. Preguntar por el conjunto y no
+        # por un valor es además lo que deja la guarda correcta ante el próximo estado que se
+        # agregue al CHECK, en vez de tener que acordarse de sumarlo acá.
+        if estado not in ESTADOS_EN_PLANTILLA:
+            if estado == ESTADO_PREINGRESO:
+                # Código PROPIO y no el genérico de baja: los dos rechazos se arreglan distinto
+                # —a un preingreso se lo activa, a una baja no— y la pantalla necesita poder
+                # decir cuál de los dos es sin adivinar por el texto del mensaje.
+                raise AppError(
+                    "Este empleado todavía no ingresó: activalo desde su legajo antes de "
+                    "asignarlo a un proyecto.", "EMPLEADO_PREINGRESO", 422)
             raise AppError("No se puede asignar un empleado dado de baja", "EMPLEADO_INACTIVO", 422)
         try:
             row = self._repo.save(str(proyecto_id), str(empleado_id), empleado_empresa_id, rol, valor_hora, fecha_desde, fecha_hasta)

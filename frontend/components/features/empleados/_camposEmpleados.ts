@@ -19,8 +19,17 @@ export const LIDER_OPCIONES = [
   { value: "no", label: "Solo no líderes" },
 ]
 
+// ⚠️ NO es el espejo del CHECK — es la lista de lo que se OFRECE FILTRAR, y son dos cosas
+// distintas. `preingreso` entra porque desde la migración 120 hay fichas en ese estado y el
+// listado, por default, NO las trae (`_empleado_row.filtro_estado`): sin esta opción no habría
+// forma de verlas desde la UI.
+// `suspendido` NO entra, aunque el CHECK lo acepte: ningún camino del backend lo escribe (está
+// declarado como valor muerto en `utils/estados_empleado.py`), y ofrecer en un select un filtro
+// que siempre devuelve cero es peor que no ofrecerlo — el usuario no puede distinguir "no hay
+// nadie suspendido" de "el filtro está roto". Entra el día que algo lo escriba.
 export const ESTADO_OPCIONES = [
   { value: "activo", label: "Activo" },
+  { value: "preingreso", label: "Preingreso" },
   { value: "baja", label: "Baja" },
   { value: "licencia", label: "Licencia" },
 ]

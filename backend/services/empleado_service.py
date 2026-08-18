@@ -9,6 +9,7 @@ from repositories._scope_filtros import empleados_de_proyecto
 from repositories.area_repo import AreaRepo
 from repositories.empleado_repo import EmpleadoRepo
 from schemas.empleado import EmpleadoCreate, EmpleadoListResponse, EmpleadoResponse, EmpleadoUpdate
+from services._empleado_activar import activar
 from services._empleados_export import construir_filas_export
 from services._empleados_utils import empleado_or_404
 from services._empleados_write import actualizar, crear
@@ -41,6 +42,13 @@ class EmpleadoService:
         Raises: EMPLEADO_NOT_FOUND (404), AREA_NOT_FOUND (404), MANAGER_NOT_FOUND (404), MANAGER_CICLO (400)."""
         return actualizar(self._repo, self._audit, self._areas, id, data, empresa_id, usuario_id,
                           areas_validadas=areas_validadas, prior=prior)
+
+    def activar_empleado(self, id: UUID, empresa_id: Optional[UUID] = None,
+                         usuario_id: Optional[str] = None) -> EmpleadoResponse:
+        """Pase de `preingreso` a `activo`. Delegado a `_empleado_activar.activar`.
+        Raises: EMPLEADO_NOT_FOUND (404), EMPLEADO_NO_ES_PREINGRESO (409),
+        INGRESO_AUN_NO_OCURRIO (400)."""
+        return activar(self._repo, self._audit, id, empresa_id, usuario_id)
 
     def get_empleados(
         self,

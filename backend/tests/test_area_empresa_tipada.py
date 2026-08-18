@@ -140,6 +140,10 @@ class _SupabaseEspia:
     def select(self, *a, **k): return self
     def eq(self, *a, **k): return self
     def neq(self, *a, **k): return self
+    # `in_` lo pide `_area_row.counts_by_area` desde la migración 120 (antes era un `neq`). Es
+    # no-op encadenable como sus hermanos: este doble audita LA SERIALIZACIÓN del payload de
+    # escritura, no los predicados de lectura. Que filtre o no es indiferente acá.
+    def in_(self, *a, **k): return self
     def order(self, *a, **k): return self
     def maybe_single(self): return self
 

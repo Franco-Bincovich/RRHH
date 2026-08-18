@@ -40,6 +40,101 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-18 · Capa de ESCRITURAS de preingresos: tipado del estado, alta en preingreso, endpoint de activación y tres guardas · commits pendientes
+
+**Qué cambió.** A3.1 arregló las LECTURAS; esta sesión cierra las escrituras. Hasta hoy el único
+camino que podía producir un preingreso era `PUT /api/empleados/{id}` con `estado` libre.
+
+- **`EmpleadoUpdate.estado` pasó de `Optional[str]` sin validar a un `Literal` de los cinco
+  valores del CHECK.** Antes, un valor inválido viajaba hasta Postgres, chocaba contra
+  `empleados_estado_check` y volvía como un error **23514 que ningún `except` mapea, o sea un
+  500**. Ahora sale **422** en la frontera, con el contrato `{error, message, code}`.
+- **`EmpleadoCreate.estado`** (nuevo): `Literal["activo","preingreso"]`, default `"activo"`. El
+  alta puede nacer en preingreso. 🔴 **El default se mudó del repo al schema**: se borró el
+  `payload["estado"] = "activo"` hardcodeado de `_empleado_write_repo.guardar`, que pisaba
+  cualquier valor que viniera del schema.
+- **Los dos tipos viven en `utils/estados_empleado.py`**, no en el schema, para que el espejo del
+  CHECK exista una sola vez. `schemas/empleado.py` daba 202/200 con ellos adentro; el corte se
+  eligió por ese criterio, no por tamaño. Molde: `schemas/usuario.py` importando `ROLES_VALIDOS`.
+- **`POST /api/empleados/{id}/activar`** (endpoint NUEVO, autenticado, `Seccion.EMPLEADOS +
+  WRITE`, sin body). Tres guardas: existe/es de la empresa (404) · es preingreso (409) · **su
+  `fecha_ingreso` ya ocurrió (400)**. La última es la que importa: activar a alguien que todavía
+  no entró reinstala el bug de la efectivización de bajas por el eje contrario. El pase **no
+  toca `fecha_ingreso`** y audita con la empresa del empleado.
+- **Tres guardas pasaron de "¿es baja?" a "¿está en plantilla?"**: asignar a un proyecto (código
+  propio `EMPLEADO_PREINGRESO`, 422 — un preingreso asignado puede recibir horas imputadas antes
+  de entrar, que es dato falso en el reporte por cliente) y efectivizar un offboarding (409,
+  **antes** de la validación de fecha, que hasta hoy lo cortaba por accidente con
+  `FECHA_EGRESO_INVALIDA` y que en un caso ni siquiera lo cortaba).
+- **Frontend, solo lo que bloqueaba el type-check:** `types/empleado.ts` suma `preingreso` y
+  `suspendido` a la unión (ya mentía respecto del CHECK), y `ESTADO_OPCIONES` suma Preingreso al
+  filtro. `tsc --noEmit` limpio; 740 tests de vitest en verde.
+
+**Lo que NO se hizo, y por qué:**
+- 🔴 **El link público NO distingue al preingreso en el forense.** Un preingreso es rechazado
+  (correcto), pero se loguea como `inactivo`. Darle motivo propio exige **ensanchar el CHECK de
+  `intentos_identificacion.resultado`** (hoy: ok · sin_coincidencia · inactivo · sin_clientes ·
+  ambiguo · bloqueado) — o sea una **migración 121**, que quedó fuera del alcance. ⚠️ Escribir el
+  valor nuevo SIN la migración no falla visiblemente: `registrar_intento` se traga todo error a
+  propósito, así que **la fila del log desaparecería en silencio**, que es peor que la etiqueta
+  imprecisa. Hay un test que fija el comportamiento actual y que va a rojear cuando se corrija.
+- **El import de nómina sigue pudiendo bajar a un preingreso sin ninguna guarda** (ver
+  DEUDA-TECNICA). Es una decisión de producto sobre un import que RRHH corre todos los meses.
+- **La pantalla de próximos ingresos y el botón de activar son el bloque B.** El endpoint queda
+  declarado en `test_callers_huerfanos` con su disparador de salida.
+
+**Impacto en infraestructura:**
+- **Endpoint nuevo:** `POST /api/empleados/{id}/activar` — **autenticado**, no público.
+- **Migración pendiente (NO incluida): la 121**, para ensanchar el CHECK de
+  `intentos_identificacion.resultado`. Sin ella el forense del link público no distingue
+  preingreso de baja. No bloquea nada más.
+- Sin variables de entorno, dependencias, buckets, procesos fuera de serverless, cambios de auth
+  ni de CORS.
+
+**Para el porteo a asyncpg:** los `Literal` son validación de Pydantic, no tocan la base. El
+endpoint nuevo usa el `update` parcial que ya existía. Nada específico de PostgREST se agregó.
+
+---
+## 2026-08-18 · Capa de LECTURAS de preingresos: constante compartida, 2 filtros corregidos, 5 contadores por fecha y el barrido que ancla el censo · commits pendientes
+
+**Qué cambió.** La migración 120 agregó `'preingreso'` al CHECK de `empleados.estado`, pero
+**ninguna lectura lo contemplaba**. Con los 31 empleados de producción en `activo`, `= 'activo'`,
+`!= 'baja'` y "sin filtro" seleccionaban el MISMO conjunto, así que el problema era invisible y
+ningún test podía verlo. El diagnóstico previo censó **23 comparaciones** sobre esa columna. Esta
+sesión tocó **8 sitios** y dejó los otros 15 intactos a propósito:
+
+- **Constante compartida** — `backend/utils/estados_empleado.py` (nuevo): `ESTADO_PREINGRESO` y
+  `ESTADOS_EN_PLANTILLA = ("activo", "licencia", "suspendido")`. El docstring explica por qué
+  `licencia` está adentro (decisión de producto vieja, no filtro olvidado), por qué `suspendido`
+  también (angostar el conjunto es una decisión propia, no un efecto colateral de ésta) y por qué
+  los 15 sitios que preguntan `= 'activo'` **no reciben constante**.
+- **Los 2 sitios de `!= 'baja'`** pasaron a `in_(ESTADOS_EN_PLANTILLA)`: el contador de empleados
+  por área (`_area_row.counts_by_area`, visible en `/areas`) y el ranking de candidatos de
+  sucesión (`sucesion_repo.get_analisis_posicion`). Sin esto un preingreso contaba como dotación.
+- **Los 4 contadores de ALTAS por fecha** (KPI `ingresos_mes`, los dos `ingresos_periodo` de
+  dotación/rotación y el listado NOMINAL de altas) suman `.neq("estado", ESTADO_PREINGRESO)`.
+  Contaban por fecha **sin mirar `estado`**, así que un preingreso figuraba como alta del mes sin
+  haber entrado — y en el listado nominal salía con nombre y apellido en un PDF.
+- **El listado NOMINAL de BAJAS suma `.eq("estado", "baja")`, un filtro que FALTABA** y que no
+  depende de la migración 120: sus dos hermanos ya lo tenían, así que las bajas se contaban con
+  dos criterios distintos según el reporte. Bastaba tener `fecha_egreso` cargada para figurar.
+- **El default del listado de empleados** (`_empleado_row.filtro_estado`, nuevo): sin `estado`
+  explícito el listado y el export ya no traen preingresos; con `?estado=preingreso` sí.
+
+**Lo que NO se hizo, a propósito:** no se habilitó ninguna forma de CREAR un preingreso (eso es
+A3.2). Hoy el único camino sigue siendo `PUT /api/empleados/{id}` con `estado` en el body, que
+es `Optional[str]` sin validar. **Producción tiene cero preingresos**, así que ningún número
+cambia hasta que alguien cargue el primero.
+
+**Impacto en infraestructura: Ninguno.** Sin migraciones, sin env vars, sin dependencias, sin
+buckets, sin endpoints nuevos (ni públicos), sin procesos fuera de serverless, sin cambios de
+auth ni de CORS. Es código de lectura y tests.
+
+**Para el porteo a asyncpg:** los `.in_()` y `.neq()` nuevos son PostgREST estándar y se traducen
+a `WHERE estado = ANY($1)` / `WHERE estado <> $1` sin nada especial. `utils/estados_empleado.py`
+es un módulo de constantes puras, sin IO: se porta tal cual.
+
+---
 ## 2026-08-17 · Offboarding — iniciar el trámite deja de dar de baja; la baja se efectiviza aparte · commits pendientes
 
 **Qué cambió (el bug):** `POST /api/offboarding` llamaba a `dar_de_baja(...)` con la fecha

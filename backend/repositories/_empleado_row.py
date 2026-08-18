@@ -1,15 +1,16 @@
 """
 Primitivas compartidas del repositorio de empleados: la tabla, el SELECT con joins, el filtro de
-empresa, el ORDEN del listado y el mapper de fila. Aisladas para que el repo de lectura y el de
-escritura las compartan sin que ninguno de los dos pase su límite de líneas.
+empresa, el filtro de ESTADO, el ORDEN del listado y el mapper de fila. Aisladas para que el repo
+de lectura y el de escritura las compartan sin que ninguno de los dos pase su límite de líneas.
 
-`with_empresa` y `ordenado` tienen la MISMA forma —toman una query y devuelven una query— y por
-eso viven juntas: son las dos piezas que `find_all` compone sobre el SELECT.
+`with_empresa`, `filtro_estado` y `ordenado` tienen la MISMA forma —toman una query y devuelven
+una query— y por eso viven juntas: son las tres piezas que `find_all` compone sobre el SELECT.
 """
 from typing import Optional
 from uuid import UUID
 
 from schemas.empleado import EmpleadoResponse
+from utils.estados_empleado import ESTADO_PREINGRESO
 
 TABLE = "empleados"
 
@@ -27,6 +28,31 @@ SELECT = (
 def with_empresa(query, empresa_id: Optional[UUID]):
     """Aplica filtro de empresa a una query de Supabase si empresa_id no es None."""
     return query.eq("empresa_id", str(empresa_id)) if empresa_id else query
+
+
+def filtro_estado(q, estado: Optional[str]):
+    """Aplica el filtro de estado del listado, con su DEFAULT: sin `estado` no hay preingresos.
+
+    🔴 EL DEFAULT NO ES "SIN FILTRO", Y ESA ES TODA LA FUNCIÓN. Hasta el 18/8/2026 esto era
+    `if estado: q = q.eq("estado", estado)`, o sea que sin parámetro la query no llevaba ningún
+    predicado de estado y traía la tabla entera. Con los 31 empleados de producción en `activo`
+    eso era invisible; desde la migración 120 significa que **la pantalla de colaboradores
+    mezcla gente que todavía no entró**, y el archivo del export también.
+
+    El `else` excluye SOLO `preingreso`, no cualquier cosa que no sea plantilla: `baja` y
+    `licencia` siguen apareciendo sin filtro, como siempre. La pantalla de colaboradores no es la
+    de próximos ingresos; sí es, y sigue siendo, el lugar donde se ve a quien ya no está.
+
+    ⚠️ Un `estado` explícito manda SIEMPRE, `"preingreso"` incluido: el filtro puede apuntar a
+    cualquier valor del CHECK. Esto cambia el default, no esconde ninguna fila.
+
+    Vive acá y no en `empleado_repo` por la misma razón que `with_empresa` y `ordenado`: toma una
+    query y devuelve una query. No importa `supabase_admin` —recibe la query ya construida—, así
+    que no se escapa del parcheo por módulo que usan los tests del repo.
+    """
+    if estado:
+        return q.eq("estado", estado)
+    return q.neq("estado", ESTADO_PREINGRESO)
 
 
 def ordenado(q):

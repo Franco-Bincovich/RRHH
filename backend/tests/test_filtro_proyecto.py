@@ -268,6 +268,10 @@ class _QueryEmp:
     def eq(self, *_a, **_k): return self
     def or_(self, *_a, **_k): return self
     def range(self, *_a, **_k): return self
+    # No-op encadenable por el mismo motivo que `order`: lo pide el default de estado del
+    # listado (`.neq("estado","preingreso")`), y este fake audita el filtro por PROYECTO. El
+    # default de estado tiene su propio archivo, tests/test_estado_preingreso_lecturas.py.
+    def neq(self, *_a, **_k): return self
     # No-op encadenable a proposito: este fake audita el filtro por proyecto, no el
     # orden. El orden se prueba en tests/test_paginacion_orden.py, con un fake que ordena.
     def order(self, *_a, **_k): return self

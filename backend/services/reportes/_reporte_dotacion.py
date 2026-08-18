@@ -7,6 +7,7 @@ from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from services.reportes._common import _eid, periodo_str, rango_mes
+from utils.estados_empleado import ESTADO_PREINGRESO
 
 
 def generate_headcount(mes: int, anio: int, empresa_id: Optional[UUID] = None,
@@ -28,7 +29,13 @@ def generate_headcount(mes: int, anio: int, empresa_id: Optional[UUID] = None,
     activos_res = activos_q.execute()
     total = activos_res.count or 0
 
-    ingresos_q = db.table("empleados").select("id", count="exact").gte("fecha_ingreso", ini).lte("fecha_ingreso", fin)
+    # 🔴 EXCLUYE PREINGRESOS, por COMPLEMENTO y no enumerando los estados en plantilla: alguien
+    # que entró en marzo y se fue en julio sigue siendo un alta de marzo, así que `baja` tiene que
+    # quedar del lado que cuenta. Contaba por FECHA sin mirar `estado`, o sea que un preingreso de
+    # este mes figuraba como alta sin haber entrado. Ver `utils/estados_empleado.py`.
+    ingresos_q = (db.table("empleados").select("id", count="exact")
+                  .neq("estado", ESTADO_PREINGRESO)
+                  .gte("fecha_ingreso", ini).lte("fecha_ingreso", fin))
     if eid:
         ingresos_q = ingresos_q.eq("empresa_id", eid)
     if aid:
@@ -92,7 +99,12 @@ def generate_rotacion(mes: int, anio: int, empresa_id: Optional[UUID] = None,
         activos_q = activos_q.eq("area_id", aid)
     empleados_activos = activos_q.execute().count or 0
 
-    ingresos_q = db.table("empleados").select("id", count="exact").gte("fecha_ingreso", ini).lte("fecha_ingreso", fin)
+    # Mismo `neq` de preingresos que en `generate_headcount`, y por el mismo motivo (ver allá).
+    # Acá `ingresos` NO entra en `tasa_rotacion_pct` —la tasa sale de bajas/(activos+bajas)—, así
+    # que el filtro corrige el número que se muestra, no el que se divide.
+    ingresos_q = (db.table("empleados").select("id", count="exact")
+                  .neq("estado", ESTADO_PREINGRESO)
+                  .gte("fecha_ingreso", ini).lte("fecha_ingreso", fin))
     if eid:
         ingresos_q = ingresos_q.eq("empresa_id", eid)
     if aid:

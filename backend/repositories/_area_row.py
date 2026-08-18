@@ -12,13 +12,22 @@ sobre la que se cuenta: el conteo de un área tiene que ser el de toda su gente,
 gente que entró en la página. Por eso el conteo se hace una vez y se pasa al mapper, en vez de
 resolverse por fila.
 
-⚠️ Excluye `estado = 'baja'` y NO excluye `licencia`: alguien de licencia sigue siendo headcount
-del área. Es una decisión de producto, no un filtro olvidado.
+⚠️ Cuenta SOLO los estados de `ESTADOS_EN_PLANTILLA` (`utils/estados_empleado.py`): deja afuera
+a quien ya se fue (`baja`) y a quien todavía no entró (`preingreso`), y **sigue contando a quien
+está de `licencia`** — alguien de licencia sigue siendo headcount del área. Eso último es una
+decisión de producto, no un filtro olvidado, y NO cambió con la migración 120.
+
+🔴 Lo que sí cambió: el conjunto se declara por ENUMERACIÓN, no por omisión. Hasta el 18/8/2026
+esta query decía `.neq("estado", "baja")`, o sea "todo lo que no sea baja" — y escrito así, cada
+valor nuevo del CHECK entra al contador sin que nadie lo decida. Es exactamente lo que pasó
+cuando la 120 agregó `preingreso`: el contador de un área habría subido por alguien que todavía
+no trabaja ahí, sin ningún error, en la pantalla corta que RRHH mira contra la realidad.
 """
 from typing import Optional
 
 from integrations.supabase_client import supabase_admin
 from schemas.area import AreaResponse
+from utils.estados_empleado import ESTADOS_EN_PLANTILLA
 
 TABLE = "areas"
 SELECT = "*, empleados!fk_areas_responsable(nombre, apellido)"
@@ -48,9 +57,11 @@ def base(empresa_id: Optional[str], search: Optional[str], contar: bool):
 
 
 def counts_by_area() -> dict[str, int]:
-    """Cuántos empleados NO dados de baja tiene cada área. {} si no hay ninguno."""
-    # Excluye 'baja': licencia sigue siendo headcount del área
-    rows = supabase_admin.table(_EMPLEADOS_TABLE).select("area_id").neq("estado", "baja").execute().data or []
+    """Cuántos empleados EN PLANTILLA tiene cada área. {} si no hay ninguno."""
+    # Enumeración y no omisión (ver el encabezado): licencia sigue siendo headcount del área,
+    # `preingreso` no — todavía no entró — y `baja` tampoco, porque ya se fue.
+    rows = (supabase_admin.table(_EMPLEADOS_TABLE).select("area_id")
+            .in_("estado", ESTADOS_EN_PLANTILLA).execute().data or [])
     counts: dict[str, int] = {}
     for row in rows:
         if aid := row.get("area_id"):

@@ -41,6 +41,67 @@
 
 ---
 
+## 1-bis. Preingresos — lo que A3.2 dejó abierto a propósito
+
+### 🔴 El import de nómina puede dar de baja a un preingreso sin ninguna guarda
+
+`services/nomina_empleados_service.py:136-137` llama a `dar_de_baja(...)` con solo mirar si la
+fila del CSV trae `Fecha Baja`:
+
+```python
+if f["fecha_baja"]:
+    self._emp_repo.dar_de_baja(empleado_id, f["fecha_baja"], UUID(empresa_id))
+```
+
+**No mira el estado en absoluto.** Un preingreso que aparezca en el archivo con esa columna
+cargada pasa a `baja` **salteándose las cuatro guardas de `_offboarding_efectivizar`** — incluida
+la que A3.2 agregó justamente para impedir que alguien que nunca entró figure como una baja del
+mes, o sea como rotación inventada.
+
+**No se arregló en A3.2 a propósito**, y el motivo no es alcance: cambiarlo altera el
+comportamiento de un import que RRHH corre todos los meses, y **hay más de una respuesta
+razonable** — saltear la fila y reportarla entre las que necesitan revisión, tratarla como
+"preingreso cancelado" (que hoy no es un estado), o dejarla pasar porque el CSV es la fuente de
+verdad de la nómina. Eso es una decisión de producto.
+
+**Está anclado**, no solo escrito acá: `tests/test_estado_preingreso_escrituras.py` lo declara
+como uno de los cinco caminos de escritura, con la razón en el encabezado. Si alguien le agrega
+una guarda, el barrido lo va a mostrar.
+
+### 🟡 El link público no distingue "todavía no entró" de "se fue" en el forense
+
+`_identificacion_resolver.py:59` rechaza al preingreso —correcto— pero lo etiqueta `inactivo` en
+`intentos_identificacion.resultado`, igual que a una baja. RRHH mira esa tabla para ver si
+alguien está probando DNIs, y ahí los dos casos se ven iguales.
+
+🔴 **Darle motivo propio EXIGE UNA MIGRACIÓN (la 121)**: el CHECK
+`intentos_identificacion_resultado_check` acepta exactamente seis valores (`ok`,
+`sin_coincidencia`, `inactivo`, `sin_clientes`, `ambiguo`, `bloqueado`) y `preingreso` no está.
+
+⚠️ **Y no alcanza con escribir el valor nuevo y correr la migración después.** `registrar_intento`
+**se traga todo error a propósito** (para no reintroducir por la ventana el oráculo de timing que
+el service cierra por la puerta), así que un valor fuera del CHECK **no rompe el request: hace
+desaparecer la fila del log en silencio**. Perder el registro entero es peor que la etiqueta
+imprecisa. Es la misma mecánica que ya se documentó con `AuditService` y la FK de `empresa_id`.
+
+**Orden obligatorio: primero la migración, después el valor.** Hay un test que fija el
+comportamiento de hoy (`test_el_motivo_que_se_loguea_HOY_es_inactivo_y_no_uno_propio`) y que va a
+rojear cuando se cambie, que es lo que va a recordar que la migración tiene que estar corrida.
+
+### 🟡 El PUT del legajo puede saltearse la guarda de fecha del pase a activo
+
+`EmpleadoUpdate.estado` acepta los cinco valores del CHECK y **no valida nada más**: puede llevar
+un `preingreso` a `activo` sin verificar que la fecha de ingreso haya ocurrido, que es
+exactamente la guarda que `POST /api/empleados/{id}/activar` existe para aplicar.
+
+Es deliberado —el PUT es la corrección manual de un dato mal cargado, y acotarlo lo volvería un
+endpoint que a veces valida y a veces no— pero **no es gratis mientras el botón de activar no
+esté en la UI**: hasta que el bloque B lo construya, el PUT es el ÚNICO camino disponible, que es
+justo lo que no queremos que se vuelva costumbre. Está escrito en el encabezado de
+`tests/test_estado_preingreso_escrituras.py`.
+
+---
+
 ## 2. Fugas y oráculos pendientes
 
 | # | Qué | Dónde | Gravedad | Esf. |
@@ -78,10 +139,41 @@
 > `_*.py` dentro de `repositories/` **es un repositorio y su límite es 100**. Partir un archivo
 > para respetar un límite es correcto; **redefinir el límite del archivo nuevo, no**.
 
+### 🟡 `utils/estados_empleado.py` — 155/200 el 18/8, y está diseñado para crecer
+
+Nació el 18/8 con 102 líneas (dos constantes de lectura) y el mismo día llegó a **155** al
+recibir los dos tipos de escritura (`EstadoEmpleado`, `EstadoAlta`), que se mudaron ahí desde
+`schemas/empleado.py` — ese archivo daba **202/200** con los tipos adentro, y el criterio del
+corte fue que **el espejo del CHECK exista una sola vez**, no el tamaño.
+
+**Quedan 45 líneas.** No es deuda hoy, pero se anota porque este módulo es, por diseño, donde
+aterriza todo vocabulario nuevo de `empleados.estado`: una constante más o un tipo más entran
+con su explicación, y la explicación es el 80% del archivo. **El próximo agregado hay que
+medirlo antes de escribirlo.** Si hace falta cortar, el seam natural ya está marcado por los
+encabezados de sección: lectura (constantes) contra escritura (tipos) — pero cortar por ahí
+reintroduce el problema que el corte del 18/8 vino a resolver, así que la primera opción es
+mover prosa a `docs/`, no partir el módulo.
+
 ### En el techo exacto — el próximo cambio EXIGE dividir primero (remedido **12/8**)
 
 **Services 150/150:** `assessment_service.py` · `_clasificador_prompt.py` · `_vacaciones_write.py`.
-**Repos 100/100:** `area_repo` · `candidato_repo` · `inventario_asignaciones_repo` · `objetivo_repo` · `planes_carrera_repo` · `vacante_repo`.
+**Repos 100/100:** `area_repo` · `candidato_repo` · `inventario_asignaciones_repo` · `objetivo_repo` · `planes_carrera_repo` · `vacante_repo` · **`sucesion_repo.py` (nuevo, 18/8)**.
+
+> 🔴 **`sucesion_repo.py` llegó a 100/100 el 18/8 y el próximo cambio EXIGE dividir primero.**
+> Entró un import y un comentario de dos líneas para cambiar `.neq("estado","baja")` por
+> `.in_("estado", ESTADOS_EN_PLANTILLA)`; el archivo estaba en 97. **No se comprimió ningún
+> comentario para que entrara** — es la regla del repo y era justamente la tentación acá.
+>
+> ⚠️ **El corte natural ya está identificado y NO es "partir la clase":** las cinco funciones
+> libres de arriba (`_mapa_row`, `_parse_json_field`, `_score_de`, `_recencia`,
+> `_scores_por_empleado`, ~50 líneas) son el mapper + el resolvedor de scores del assessment, y
+> salen a un `_sucesion_row.py` con el molde de `_empleado_row.py` / `_area_row.py`, que es el
+> mismo corte que ya se le hizo a los otros repos grandes. Queda `SucesionRepo` con sus dos
+> métodos en ~45 líneas.
+>
+> 🔑 **Y antes de tocarlo, leer la entrada de la sección 4 sobre los dos predicados divergentes
+> de este mismo archivo:** si esa decisión de producto se toma, el diff cae en estas mismas
+> líneas y conviene hacer las dos cosas juntas en vez de pasar dos veces por un archivo lleno.
 **Routers 80/80:** `adjuntos.py` · `candidatos.py` · **`offboarding_tramite.py` (nuevo, 17/8)**.
 
 > 🔴 **`offboarding_tramite.py` NACIÓ en 80/80, y eso es lo que hay que mirar de este corte.**
@@ -133,6 +225,7 @@
 | **`MANDOS_MEDIOS_SECCIONES` duplicado** | ✅ **CUBIERTO por el mismo test**: sigue habiendo dos declaraciones, pero ya no pueden separarse en silencio | ✅ | — |
 | **`_subset` duplicado** en los 6 `_audit_payloads*` | Es deliberado y está documentado (a diferencia de `sin_derivados`, que se importa) | ⬜ | — |
 | **Filtro `empresa` duplicado 8× entre repos** | `_with_empresa` existe pero no todos lo usan | 🟡 | M |
+| **`sucesion_repo` responde la MISMA pregunta con DOS predicados** | 🟡 **NUEVO 18/8.** `get_mapa_talento` (:81) pregunta `.eq("estado","activo")` y `get_analisis_posicion` (:89) `.in_("estado", ESTADOS_EN_PLANTILLA)` — dos métodos del mismo repo, sobre la misma tabla, para "¿quién está en juego?". **Hasta el 18/8 la divergencia era `activo` vs `!= baja` y daba igual** (los 31 empleados están en `activo`); ahora alguien en `licencia` aparece en el análisis por posición y no en el mapa de talento, y un preingreso en ninguno de los dos. **No se unificó en esta sesión a propósito:** cuál de los dos es el correcto es una decisión de producto sobre sucesión, y el módulo está **apagado en el front por dos flags**, así que hoy no lo ve nadie. Decidirlo antes de reactivarlo. Las dos comparaciones están declaradas en `tests/test_estado_preingreso_lecturas.py` | 🟡 | S |
 | **Presupuesto de tiempo duplicado** | `_nomina_lote.py:65-105` y `_lote_mails.py:55-85`. Fue decisión consciente con 2 casos; con un 3º entrando (import de novedades) deja de serlo | 🟡 | M |
 
 > 🔑 Con esto son **cinco** los barridos estructurales del repo (paridad list↔export, límite de

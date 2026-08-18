@@ -19,7 +19,13 @@ export interface Empleado {
   legajo: string | null
   manager_id: string | null // superior inmediato (id)
   manager_nombre: string | null // "Apellido, Nombre" resuelto por el backend
-  estado: "activo" | "baja" | "licencia"
+  // Espejo del CHECK `empleados_estado_check` (migración 120) y del `EstadoEmpleado` del
+  // backend (`utils/estados_empleado.py`). Hasta el 18/8/2026 esta unión declaraba TRES valores
+  // y el CHECK aceptaba cinco: le faltaba `suspendido` —que existe en la base desde siempre— y
+  // `preingreso`. No era una omisión inofensiva: un preingreso que llegue por la API no
+  // type-checkea contra esta unión, y eso rompe `next build` (no `next dev`, que transpila sin
+  // chequear tipos — por eso se nota tarde y en el deploy).
+  estado: "activo" | "baja" | "licencia" | "suspendido" | "preingreso"
   dias_vacaciones_asignados: number
   // Legajo ampliado (A1)
   email_personal: string | null

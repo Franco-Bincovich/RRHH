@@ -13,6 +13,9 @@ from uuid import UUID
 from pydantic import BaseModel, field_validator
 
 from schemas._provincias import Provincia
+# El vocabulario de estados (tipos y constantes) vive en un solo módulo, para que el espejo del
+# CHECK exista una vez. Molde: `schemas/usuario.py`, que importa ROLES_VALIDOS de utils.permisos.
+from utils.estados_empleado import EstadoAlta, EstadoEmpleado
 from schemas.empleado_out import (
     EmpleadoListResponse,
     EmpleadoResponse,
@@ -102,6 +105,9 @@ class EmpleadoCreate(EmpleadoBase):
     legajo: Optional[str] = None
     manager_id: Optional[UUID] = None  # superior inmediato (self-FK a empleados)
     dias_vacaciones_asignados: Optional[int] = None  # default 14 en DB si no se provee
+    # Solo `activo` o `preingreso`, y el default del alta vive ACÁ (antes estaba hardcodeado en
+    # `_empleado_write_repo.guardar`). El porqué de la lista corta, en `utils/estados_empleado`.
+    estado: EstadoAlta = "activo"
 
 
 class EmpleadoUpdate(BaseModel):
@@ -119,7 +125,9 @@ class EmpleadoUpdate(BaseModel):
     cuil: Optional[str] = None
     legajo: Optional[str] = None
     manager_id: Optional[UUID] = None  # superior inmediato (self-FK a empleados)
-    estado: Optional[str] = None
+    # Espejo del CHECK: los cinco valores. Tipado y no `str` para que un valor inválido salga
+    # 422 en la frontera y no 500 desde Postgres. El porqué, en `utils/estados_empleado`.
+    estado: Optional[EstadoEmpleado] = None
     roles: Optional[List[str]] = None  # si se provee, reemplaza la lista completa
     rol: Optional[str] = None          # DEPRECADO (se dropea en S6)
     dias_vacaciones_asignados: Optional[int] = None

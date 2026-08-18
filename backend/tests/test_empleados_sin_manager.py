@@ -66,6 +66,7 @@ class _Query:
     def __init__(self, filas: list, capturado: dict) -> None:
         self._filas, self._cap = filas, capturado
         self._eq: dict = {}
+        self._neq: list = []            # (columna, valor excluido)
         self._nulos: list = []          # (columna, negado)
 
     @property
@@ -89,6 +90,15 @@ class _Query:
         self._cap.setdefault("eq", {})[col] = str(val)
         return self
 
+    def neq(self, col: str, val) -> "_Query":
+        # FILTRA DE VERDAD, igual que `eq`. Lo pide el default de estado del listado
+        # (`_empleado_row.filtro_estado`): sin `estado` explícito la query lleva
+        # `.neq("estado", "preingreso")`. Un no-op acá dejaría pasar un padrón con preingresos
+        # sin que nada lo note, que es el caso #1 de la regla de fakes del repo.
+        self._neq.append((col, str(val)))
+        self._cap.setdefault("neq", []).append((col, str(val)))
+        return self
+
     def or_(self, *_a, **_k) -> "_Query":
         return self
 
@@ -106,6 +116,8 @@ class _Query:
 
     def _match(self, fila: dict) -> bool:
         if any(str(fila.get(c)) != v for c, v in self._eq.items()):
+            return False
+        if any(str(fila.get(c)) == v for c, v in self._neq):
             return False
         for col, negado in self._nulos:
             es_nulo = fila.get(col) is None

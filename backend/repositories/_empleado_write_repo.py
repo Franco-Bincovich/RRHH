@@ -33,7 +33,7 @@ def guardar(data: EmpleadoCreate, empresa_id: UUID) -> EmpleadoResponse:
         payload["fecha_nacimiento"] = str(data.fecha_nacimiento)
     if data.manager_id:
         payload["manager_id"] = str(data.manager_id)
-    payload["estado"] = "activo"
+    # `estado` ya viene en el payload desde el schema; acá se pisaba (ver EmpleadoCreate.estado).
 
     result = supabase_admin.table(TABLE).insert(payload).execute()
     if not result.data:
