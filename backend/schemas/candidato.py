@@ -10,16 +10,71 @@ tamaño: un candidato no es una vacante. Estaban juntos porque el módulo nació
 (`vacante_service`, `candidato_service`, los routers, `_candidato_row`): la mudanza cambia el
 módulo de origen, no los nombres.
 """
-from datetime import datetime
-from typing import Optional
+from datetime import date, datetime
+from typing import List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from schemas.empleado import _normalizar_roles
+
+# 🔴 EL ESPEJO DEL CHECK `candidatos_estado_check`. Los cuatro valores, tipados y no `str`, por
+# el mismo motivo que `EstadoEmpleado` (`utils/estados_empleado.py`): un valor inválido choca
+# contra el CHECK en Postgres y vuelve como un error 23514 que NINGÚN `except` de la cadena
+# mapea, o sea un 500 con mensaje de driver para lo que es un error del que manda el request.
+# Con el Literal, Pydantic lo corta en la frontera y sale un 422 por el camino normal, con el
+# contrato {error, message, code} que el front ya entiende.
+#
+# ⚠️ VIVE ACÁ Y NO EN UN `utils/estados_candidato.py`, al revés que el de empleados — y la
+# diferencia no es inconsistencia. Aquel módulo existe porque el vocabulario de estados de
+# `empleados` se lee ADEMÁS desde el lado de las LECTURAS (`ESTADOS_EN_PLANTILLA`,
+# `ESTADO_PREINGRESO`, quince `.eq("estado", "activo")`), así que el espejo del CHECK y las
+# constantes que dependen de él tenían que quedar en un solo lugar. Acá no hay ninguna lectura
+# que filtre por estado: el espejo existe UNA vez, y es esta línea. Si algún día aparece una
+# constante de lectura, el módulo propio se justifica; hoy sería una indirección vacía.
+#
+# 🔴 LOS CUATRO ENTRAN, INCLUIDO `contratado`, QUE HOY NO LO ESCRIBE NADIE. Esta lista ES el
+# CHECK: sacarlo angostaría lo aceptado, y eso es una decisión sobre si el estado existe, no un
+# efecto colateral de tipar el campo. `contratado` es además el que va a escribir el puente
+# candidato→empleado (A4.2) — esta tanda revive la LECTURA y no agrega ninguna escritura.
+EstadoCandidato = Literal["activo", "descartado", "contratado", "en_espera"]
 
 
 class AsignarVacanteRequest(BaseModel):
     """A qué búsqueda va un candidato que estaba huérfano."""
     vacante_id: UUID
+
+
+class ContratarRequest(BaseModel):
+    """Los TRES datos que la contratación no puede sacar de ningún lado (A4.2).
+
+    El puente candidato→empleado deriva todo lo que puede del candidato y de su vacante. Estos
+    tres no existen en ninguna de las dos tablas y no se pueden inventar:
+
+      · `email_corporativo` — no existe hasta que alguien abre la casilla. **NO es
+        `candidato.email`**, que es personal: `empleados.email_corporativo` es UNIQUE GLOBAL y
+        meterle el mail personal de alguien lo quema para siempre en todo el sistema.
+      · `roles` — `vacantes.titulo` es el texto del aviso ("Analista SSR para el equipo de..."),
+        no el rol del legajo. Derivarlo sería adivinar.
+      · `fecha_ingreso` — es el acuerdo al que se llegó, no un dato de la búsqueda.
+
+    🔴 NADA MÁS ENTRA ACÁ. Cada campo que se agregue es uno que el puente deja de derivar, y la
+    derivación es el punto: si el formulario los pide todos, esto es un alta de empleado con
+    pasos extra y no un puente.
+    """
+
+    email_corporativo: str
+    roles: List[str]
+    fecha_ingreso: date
+
+    @field_validator("roles")
+    @classmethod
+    def _validar_roles(cls, v: object) -> object:
+        # 🔑 SE IMPORTA el normalizador de `schemas/empleado.py` en vez de repetirlo: el alta que
+        # este body alimenta es la MISMA (`EmpleadoService.create_empleado`), así que dos
+        # criterios de "qué es una lista de roles válida" podrían separarse y dejar pasar acá
+        # algo que el alta rechaza — un 422 en el medio del puente en vez de en la frontera.
+        return _normalizar_roles(v)
 
 
 class CandidatoCreate(BaseModel):
@@ -45,6 +100,16 @@ class CandidatoResponse(BaseModel):
     cargo_anterior: Optional[str] = None
     empresa_anterior: Optional[str] = None
     etapa_pipeline: str
+    # 🔴 DOS EJES DISTINTOS, y por eso conviven con `etapa_pipeline` en vez de reemplazarla.
+    # `etapa` dice DÓNDE está en el proceso (postulado → … → oferta) y `estado` dice SI la
+    # postulación sigue viva (activo | descartado | contratado | en_espera). Alguien descartado
+    # en entrevista técnica conserva la etapa en la que se cayó: aplanarlos perdería el dato de
+    # en qué punto se cae la gente, que es la métrica del embudo.
+    # Estuvo doce meses en la tabla sin llegar acá: el `select("*")` la traía y el mapper la
+    # descartaba EN SILENCIO — el mismo bug que el comentario de `screening_warning` de
+    # `_candidato_row.py` documenta tres líneas más abajo del lugar donde estaba pasando.
+    # `tests/test_columnas_candidatos.py` impide que vuelva a pasar con cualquier columna.
+    estado: EstadoCandidato = "activo"
     score_ia: Optional[float] = None
     busqueda_congelada: Optional[str] = None  # "Título — Área" congelado al borrar la vacante
     cv_storage_path: Optional[str] = None  # ruta en bucket privado 'cvs'; NULL si no adjuntó CV

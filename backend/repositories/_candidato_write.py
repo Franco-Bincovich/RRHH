@@ -1,6 +1,12 @@
 """
-Write path del repositorio de candidatos (extraído: el repo estaba en 100/100 exacto y la fase 6
+Write path del repositorio de candidatos: los DATOS del candidato — el INSERT, el CV, el borrado
+y el congelado del nombre de la búsqueda (extraído: el repo estaba en 100/100 exacto y la fase 6
 suma dos métodos más).
+
+⚠️ LAS TRANSICIONES DEL PIPELINE NO ESTÁN ACÁ: `asignar_vacante`, `update_etapa` y `update_estado`
+viven en `_candidato_pipeline.py`. Se fueron cuando este archivo llegó a 106/100 al sumarle
+`update_estado`, y el corte responde dónde va lo próximo: acá se escriben los datos del candidato,
+allá se lo mueve por el embudo.
 
 Funciones libres que reciben lo que necesitan — mismo molde que `_empleado_write_repo.py`.
 `CandidatoRepo` las delega en una línea, así que ningún call site cambia. La lógica se movió
@@ -42,34 +48,6 @@ def guardar(vacante_id: str, data: CandidatoCreate, empresa_id: str,
 def set_cv(candidato_id: str, cv_storage_path: str) -> None:
     """Guarda el storage_path del CV en la fila del candidato (bucket privado 'cvs')."""
     supabase_admin.table(_C).update({"cv_storage_path": cv_storage_path}).eq("id", candidato_id).execute()
-
-
-def asignar_vacante(candidato_id: str, vacante_id: str,
-                    empresa_id: Optional[UUID] = None) -> Optional[CandidatoResponse]:
-    """Le asigna una vacante a un candidato huérfano. None si no existe o es de otra empresa.
-
-    🔴 El `empresa_id` viaja al WHERE (Forma A de la barrera): la validación de que la VACANTE
-    sea de la misma empresa que el candidato la hace el service, porque necesita leer las dos
-    filas. Acá se cierra la otra mitad — que el candidato al que se apunta sea alcanzable.
-
-    ⚠️ NO limpia `busqueda_congelada`: ese texto es el título de la búsqueda que se borró y es
-    parte del historial del candidato. Sobrescribirlo al reasignarlo perdería de dónde venía.
-    """
-    q = supabase_admin.table(_C).update({"vacante_id": vacante_id}).eq("id", candidato_id)
-    if empresa_id:
-        q = q.eq("empresa_id", str(empresa_id))
-    res = q.execute()
-    return _crow(res.data[0]) if res.data else None
-
-
-def update_etapa(candidato_id: str, etapa: str,
-                 empresa_id: Optional[UUID] = None) -> Optional[CandidatoResponse]:
-    """Actualiza la etapa del pipeline de un candidato."""
-    q = supabase_admin.table(_C).update({"etapa": etapa}).eq("id", candidato_id)
-    if empresa_id:
-        q = q.eq("empresa_id", str(empresa_id))
-    res = q.execute()
-    return _crow(res.data[0]) if res.data else None
 
 
 def borrar(candidato_id: str, empresa_id: Optional[UUID] = None) -> None:

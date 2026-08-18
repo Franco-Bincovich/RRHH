@@ -1,13 +1,14 @@
 """
 Repositorio de candidatos. Acceso a Supabase con supabase_admin.
 Interfaz pública: find_candidatos · find_pagina · claves_de_grupo · find_by_id · save_candidato ·
-asignar_vacante · update_etapa_candidato · delete · congelar_busqueda
+asignar_vacante · update_etapa_candidato · update_estado · delete · congelar_busqueda
 Todas las operaciones reciben empresa_id opcional para filtrado multiempresa.
 
-El mapper de fila vive en `_candidato_row.py`, el write path en `_candidato_write.py`, las dos
-lecturas de la ingesta por mail en `_candidato_gmail.py` y EL LISTADO —con su paginación y su
-conteo por grupo— en `_candidato_listado_repo.py`. El repo llegó a 100/100 exacto dos veces; el
-listado salió la segunda porque es lo único que crece con cada filtro nuevo. Molde: `empleado_repo`.
+El mapper de fila vive en `_candidato_row.py`, los datos en `_candidato_write.py`, las tres
+transiciones del pipeline en `_candidato_pipeline.py`, las dos lecturas de la ingesta por mail en
+`_candidato_gmail.py` y EL LISTADO —con su paginación y su conteo por grupo— en
+`_candidato_listado_repo.py`. El repo llegó a 100/100 exacto dos veces; el listado salió la
+segunda porque es lo único que crece con cada filtro nuevo. Molde: `empleado_repo`.
 """
 from typing import List, Optional, Tuple
 from uuid import UUID
@@ -15,6 +16,7 @@ from uuid import UUID
 from integrations.supabase_client import supabase_admin
 from repositories import _candidato_gmail as _g
 from repositories import _candidato_listado_repo as _l
+from repositories import _candidato_pipeline as _p
 from repositories import _candidato_write as _w
 from repositories._candidato_row import _crow
 from schemas.candidato import CandidatoCreate, CandidatoResponse
@@ -62,7 +64,7 @@ class CandidatoRepo:
         """Delegado a _candidato_gmail.message_ids_procesados (idempotencia por mensaje)."""
         return _g.message_ids_procesados(message_ids)
 
-    # ── Escrituras (delegadas a _candidato_write) ─────────────────────────────
+    # ── Escrituras (datos en _candidato_write, transiciones en _candidato_pipeline) ──
 
     def save_candidato(self, vacante_id: str, data: CandidatoCreate, empresa_id: str,
                        origen: Optional[dict] = None) -> CandidatoResponse:
@@ -75,13 +77,18 @@ class CandidatoRepo:
 
     def asignar_vacante(self, candidato_id: str, vacante_id: str,
                         empresa_id: Optional[UUID] = None) -> Optional[CandidatoResponse]:
-        """Asigna una vacante a un candidato huérfano. Delegado a _candidato_write."""
-        return _w.asignar_vacante(candidato_id, vacante_id, empresa_id)
+        """Asigna una vacante a un candidato huérfano. Delegado a _candidato_pipeline."""
+        return _p.asignar_vacante(candidato_id, vacante_id, empresa_id)
 
     def update_etapa_candidato(self, candidato_id: str, etapa: str,
                                empresa_id: Optional[UUID] = None) -> Optional[CandidatoResponse]:
-        """Delegado a _candidato_write.update_etapa."""
-        return _w.update_etapa(candidato_id, etapa, empresa_id)
+        """Delegado a _candidato_pipeline.update_etapa."""
+        return _p.update_etapa(candidato_id, etapa, empresa_id)
+
+    def update_estado(self, candidato_id: str, estado: str,
+                      empresa_id: Optional[UUID] = None) -> Optional[CandidatoResponse]:
+        """Delegado a _candidato_pipeline.update_estado (estado de la POSTULACIÓN, no la etapa)."""
+        return _p.update_estado(candidato_id, estado, empresa_id)
 
     def delete(self, candidato_id: str, empresa_id: Optional[UUID] = None) -> None:
         """Delegado a _candidato_write.borrar."""
