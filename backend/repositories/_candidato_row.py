@@ -33,7 +33,17 @@ def _crow(r: dict) -> CandidatoResponse:
         nombre=r["nombre"], apellido=r["apellido"], email=r["email"],
         telefono=r.get("telefono"),
         cargo_anterior=r.get("cargo_anterior"), empresa_anterior=r.get("empresa_anterior"),
-        etapa_pipeline=r.get("etapa", "postulado"), score_ia=r.get("score_ia"),
+        etapa_pipeline=r.get("etapa", "postulado"),
+        # El estado de la POSTULACIÓN (activo | descartado | contratado | en_espera), que es
+        # otro eje que la etapa: ver el comentario de `CandidatoResponse.estado`. Faltaba esta
+        # línea y era exactamente el bug del comentario de abajo, ocurriendo dos campos más
+        # arriba: la columna es NOT NULL, el `select("*")` la traía en TODAS las filas, y se
+        # perdía sin que nada fallara.
+        # El default del `.get` espeja el DEFAULT de la base y sigue el idioma de `etapa`. No
+        # cubre ninguna fila real —la columna es NOT NULL, así que siempre viene—: existe para
+        # los dicts armados a mano en los tests, que son anteriores a esta columna.
+        estado=r.get("estado", "activo"),
+        score_ia=r.get("score_ia"),
         busqueda_congelada=r.get("busqueda_congelada"),
         cv_storage_path=r.get("cv_storage_path"),
         # Si esta línea faltara, el `select("*")` traería la columna y el schema la descartaría

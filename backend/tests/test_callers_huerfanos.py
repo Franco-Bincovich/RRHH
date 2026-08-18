@@ -131,6 +131,21 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
         "el pase de preingreso a activo. Backend de la feature de preingresos; la pantalla de "
         "próximos ingresos y su botón son el bloque B.",
 
+    # 🔴 EL PUENTE CANDIDATO→EMPLEADO — tercer caso del mismo patrón, y el que cierra el ciclo.
+    # Con `/efectivizar` (la salida) y `/activar` (el ingreso), este es la ENTRADA: los tres son
+    # la mitad backend de un acto cuyo botón vive en una tanda de front aparte.
+    # Lleva DISPARADOR, no razón permanente.
+    # SALE DE ESTA LISTA cuando `frontend/services/candidatos.ts` tenga su `contratarCandidato` y
+    # la ficha del candidato tenga el botón con su formulario de tres campos (email corporativo,
+    # roles, fecha de ingreso) y su confirmación. Molde: `EliminarVacanteButton`.
+    # 🚩 MIENTRAS SIGA ACÁ, UN CANDIDATO EN OFERTA NO SE PUEDE CONTRATAR DESDE LA UI. La
+    # consecuencia concreta: `candidatos.estado` sigue sin tener un solo escritor alcanzable, así
+    # que en producción ningún candidato va a llegar nunca a `contratado` y la columna que A4.1
+    # revivió se queda otra vez sin datos — con la diferencia de que ahora el camino existe.
+    ("POST", "/api/candidatos/{id}/contratar"):
+        "el puente candidato→empleado: crea el legajo en `preingreso` y marca la postulación "
+        "como contratada. Backend de A4.2; el botón y su formulario son la tanda de front.",
+
     # Completitud REST: quedan publicados a propósito. El front resuelve lo mismo por otra vía
     # (el listado ya filtra, la baja va por offboarding), pero el endpoint es correcto y barato.
     # ✅ `DELETE /api/empleados/{id}` YA NO ESTÁ ACÁ: se BORRÓ junto con su cadena entera

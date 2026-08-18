@@ -121,9 +121,50 @@ por la IA y difícil de revisar para un humano.
 | Componente React | 150 líneas |
 | Custom Hook | 80 líneas |
 | Cualquier otro archivo | 200 líneas |
+| **Archivo de test** | **exento del conteo — ver abajo** |
 
 Si un archivo supera su límite, se divide en módulos más pequeños.
 No hay excepciones — si algo parece imposible de dividir, es señal de que tiene demasiadas responsabilidades.
+
+### 🔴 Los archivos de test están EXENTOS del límite de 200, y se declara en vez de fingir
+
+**El dato que fuerza la declaración (medido el 18/8/2026): de los 204 archivos de `backend/tests/`,
+117 están sobre 200 líneas. La mediana es 233. El más grande, `test_objetivos.py`, tiene 1169.**
+
+O sea que la regla **nunca rigió** para tests. Mantenerla escrita como si rigiera tenía el peor de
+los efectos posibles: cada sesión que tocaba un test se encontraba con un archivo "over-limit",
+tenía que decidir sobre la marcha si lo dividía —arrastrando una deuda de 117 archivos que nadie
+había declarado— o si lo ignoraba, y en la práctica lo ignoraba. **Una regla que se saltea
+sistemáticamente no protege nada y le quita autoridad a las que sí se cumplen** (el backend está
+en CERO archivos de producción sobre su límite, y eso vale precisamente porque se sostiene).
+
+#### El criterio que SÍ aplica: un archivo de test cubre UN módulo
+
+> **Cuando un archivo de test cubre tres módulos, se parte por módulo — no por líneas.**
+
+El eje correcto para un test no es el tamaño sino **de qué habla**. Un archivo de 600 líneas que
+cubre exhaustivamente un solo módulo está bien: es la contracara de un módulo con muchos casos, y
+partirlo por la mitad dejaría dos archivos que hay que leer juntos. Un archivo de 180 líneas que
+toca tres módulos está mal aunque entre en el límite: cuando uno de los tres cambie, nadie va a
+saber cuáles de esos tests le corresponden.
+
+Las señales de que hay que partir, todas independientes del conteo:
+
+- **Cubre módulos distintos** → un archivo por módulo, con el nombre del módulo.
+- **Mezcla ejes**: lo que el código HACE, lo que RECHAZA, y cómo se lo INVOCA → un archivo por eje.
+  Molde: los cuatro archivos del puente candidato→empleado (`test_candidato_contratar` ·
+  `_guardas` · `_superficie` · `_sin_transaccion`), que espejan los tres módulos del service más
+  el límite conocido de atomicidad.
+- **El padrón y los fakes crecen más que las aserciones** → salen a helpers `_*.py` dentro de
+  `tests/`, que pytest no recoge como suite. Molde: `_contratar_padron` (qué filas existen) ·
+  `_contratar_fakes` (qué responde cada colaborador) · `_contratar_arnes` (cómo se le pega al
+  endpoint). **Esos helpers SÍ tienen el límite de 200**: son código de apoyo, no aserciones.
+
+#### Lo que la exención NO habilita
+
+No habilita **agregar** al montón. Un archivo de test nuevo que ya nace mezclando módulos nace
+mal, mida 120 líneas o 600. La exención reconoce que el conteo era el eje equivocado; **no dice
+que no haya un eje**.
 
 ---
 

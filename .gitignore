@@ -23,3 +23,13 @@ frontend/node_modules/
 backend/venv/
 
 AUDITORIA_FUNCIONAL.md
+
+# Mensajes de commit redactados aparte para pasarlos con `git commit -F`. Son insumo de UNA
+# sesión: se escriben, se commitea con ellos y se borran. El patrón es genérico a propósito —
+# con tres líneas fijas, la próxima sesión que escriba `_commit4.txt` lo commitea sin querer.
+_commit*.txt
+# ⚠️ Y los `_cN.txt`, que es como se nombraron los de A4.2. El patrón de arriba NO los cubría:
+# una regla atada a UN nombre falla en cuanto el nombre cambia, y eso pasó a la sesión siguiente
+# de escribirla. Los dos patrones son deliberadamente angostos —no `_c*.txt`, que se llevaría
+# puesto cualquier `_config.txt`— y por eso son dos y no uno.
+_c[0-9]*.txt

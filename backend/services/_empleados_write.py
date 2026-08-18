@@ -11,6 +11,7 @@ from uuid import UUID
 from repositories.empleado_repo import EmpleadoRepo
 from schemas.empleado import EmpleadoCreate, EmpleadoResponse, EmpleadoUpdate
 from services._audit_payloads_rrhh import payload_alta_empleado, payload_update_empleado
+from services._empleado_duplicado import duplicado_a_409
 from services._empleados_manager import ensure_manager_valido, ensure_no_ciclo_manager
 from services._empleados_utils import (
     empleado_or_404, ensure_area_valida, ensure_legajo_unico,
@@ -45,6 +46,10 @@ def crear(repo: EmpleadoRepo, audit, areas, data: EmpleadoCreate, created_by: st
     Raises:
         AppError: MANAGER_NOT_FOUND (404) si el superior no existe (puede ser de otra empresa).
         AppError: AREA_NOT_FOUND (404) si el área no es de la misma empresa.
+        AppError: EMAIL_CORPORATIVO_DUPLICADO · DNI_DUPLICADO · LEGAJO_DUPLICADO (409) si el
+            INSERT choca una unicidad de la tabla. Ver `services/_empleado_duplicado.py`: el
+            pre-chequeo de legajo de abajo es un atajo de mensaje, no la garantía — entre su
+            SELECT y este INSERT hay una ventana que sólo el constraint cierra.
     """
     ensure_legajo_unico(repo, data.legajo, empresa_id)
     ensure_area_valida(areas, data.area_id, empresa_id, areas_validadas)
@@ -52,7 +57,8 @@ def crear(repo: EmpleadoRepo, audit, areas, data: EmpleadoCreate, created_by: st
     # también para el import de nómina: los superiores NO se escriben en el alta, sino en una
     # segunda pasada por `update_empleado` (ver `_nomina_superiores`), que sí los chequea.
     ensure_manager_valido(repo, data.manager_id)
-    empleado = repo.save(data, empresa_id)
+    with duplicado_a_409():
+        empleado = repo.save(data, empresa_id)
     if auditar:
         audit.registrar(**payload_alta_empleado(empleado, created_by, empleado.empresa_id))
     logger.info("Empleado creado", extra={"empleado_id": empleado.id, "created_by": created_by, "empresa_id": str(empresa_id)})
@@ -91,6 +97,9 @@ def actualizar(repo: EmpleadoRepo, audit, areas, id: UUID, data: EmpleadoUpdate,
         AppError: EMPLEADO_NOT_FOUND (404) si el ID no existe o no pertenece a la empresa.
         AppError: MANAGER_NOT_FOUND (404) si el superior no existe (puede ser de otra empresa).
         AppError: AREA_NOT_FOUND (404) si el área no es de la misma empresa.
+        AppError: EMAIL_CORPORATIVO_DUPLICADO · DNI_DUPLICADO · LEGAJO_DUPLICADO (409) — la
+            edición choca las MISMAS unicidades que el alta: cambiarle el email o el DNI a un
+            empleado puede colisionar con otro. Por eso los dos caminos comparten la traducción.
     """
     ensure_legajo_unico(repo, data.legajo, empresa_id, str(id))
     # Las tres cortan solas si su campo es None (un update parcial no toca lo que no manda).
@@ -102,7 +111,8 @@ def actualizar(repo: EmpleadoRepo, audit, areas, id: UUID, data: EmpleadoUpdate,
     ensure_no_ciclo_manager(repo, id, data.manager_id)
     if prior is None:
         prior = repo.find_by_id(str(id), empresa_id)
-    empleado = empleado_or_404(repo.update(str(id), data, empresa_id))
+    with duplicado_a_409():
+        empleado = empleado_or_404(repo.update(str(id), data, empresa_id))
     audit.registrar(**payload_update_empleado(prior, empleado, usuario_id, empleado.empresa_id))
     logger.info("Empleado actualizado", extra={"empleado_id": str(id)})
     return empleado

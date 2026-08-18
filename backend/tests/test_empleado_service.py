@@ -9,6 +9,12 @@ Nota sobre "DNI duplicado": la unicidad de DNI es una constraint de DB (no un ch
 service), así que no es alcanzable con un fake sin simular el error de Postgres. El
 duplicado que el service SÍ valida app-level es el legajo (LEGAJO_DUPLICADO) — es el que
 se testea acá.
+✅ **Ese pendiente SE CERRÓ el 18/8/2026, y esta nota no se borra: apunta a donde se cerró.**
+`tests/test_empleado_duplicado.py` hace exactamente lo que acá se declaraba inalcanzable —
+simula el error de Postgres con un doble de `APIError` (23505 + el nombre de la constraint) y
+verifica que el DNI y el email corporativo salgan como **409 con code propio y no como 500**.
+Lo que sigue siendo cierto de este archivo es la segunda mitad: acá se cubre el pre-chequeo
+app-level del legajo, y nada más.
 
 ⚠️ _FakeRepo.find_by_id acepta empresa_id y NO lo aplica: es a propósito — este archivo cubre
 el CRUD y la auditoría, no el eje de empresa (ese vive en test_empleado_manager_empresa.py y

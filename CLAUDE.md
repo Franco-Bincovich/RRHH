@@ -312,6 +312,20 @@ backend/
 - Logs: solo eventos de negocio importantes. Sin `print()` / `console.log()` — logger centralizado.
 - Config: solo vía `settings`, nunca `os.environ` directo.
 - **Límites de líneas (estrictos)**: router 80 · service 150 · repository 100 · componente React 150 · hook 80 · otros 200. Medir SIEMPRE con `.Count` y **`-LiteralPath`** (no `Measure-Object -Line`, subestima; sin `-LiteralPath` los paths con `[id]` no se leen).
+- 🔴 **LOS ARCHIVOS `tests/test_*.py` ESTÁN EXENTOS DEL LÍMITE DE 200 — declarado el 18/8/2026.**
+  **El dato: de los 204 archivos de `backend/tests/`, 117 están sobre 200. Mediana 233, máximo
+  1169 (`test_objetivos.py`).** La regla nunca rigió ahí, y escribirla como si rigiera obligaba a
+  cada sesión a decidir sola si arrastraba una deuda de 117 archivos que nadie había declarado —
+  y en la práctica la ignoraba. Una regla que se saltea sistemáticamente le quita autoridad a las
+  que sí se cumplen (el backend está en CERO archivos de producción over-limit, y eso vale porque
+  se sostiene).
+  **El criterio que SÍ aplica: un archivo de test cubre UN módulo. Cuando cubre tres, se parte
+  por módulo — no por líneas.** Un archivo de 600 líneas sobre un solo módulo está bien; uno de
+  180 que toca tres está mal aunque entre. Señales de partir, todas independientes del conteo:
+  cubre módulos distintos · mezcla ejes (lo que el código HACE, lo que RECHAZA, cómo se lo
+  INVOCA) · el padrón y los fakes crecen más que las aserciones. Molde: los cuatro archivos del
+  puente candidato→empleado. ⚠️ **Los helpers `tests/_*.py` NO están exentos**: son código de
+  apoyo, no aserciones, y mantienen sus 200. Detalle completo en `docs/ORDEN-Y-LEGIBILIDAD.md` §2.
 - Next.js 16: `params` en rutas dinámicas se await (es Promise).
 - NO usar `from __future__ import annotations` en routers FastAPI (rompe resolución de anotaciones Pydantic).
 - Helpers Supabase en políticas RLS necesitan `SECURITY DEFINER` (evita dependencia circular en login).

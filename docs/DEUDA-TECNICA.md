@@ -518,6 +518,189 @@ exactamente lo que dispara la trampa de arriba.
 
 ---
 
+## 8-quater. Lo que A4.2 dejó abierto y medido (18/8/2026)
+
+### 🟠 El puente hace DOS escrituras sin transacción — qué queda si falla la segunda
+
+`POST /api/candidatos/{id}/contratar` crea el empleado y después marca al candidato. PostgREST no
+da transacciones, así que si el paso 2 falla queda **el empleado creado y el candidato en
+`activo`**. Está **medido en `tests/test_candidato_contratar_sin_transaccion.py`**, no supuesto:
+
+| Reintento | Qué pasa | Por qué |
+|---|---|---|
+| Con el MISMO `email_corporativo` | **409 `EMAIL_CORPORATIVO_DUPLICADO`, no duplica** | choca `empleados_email_corporativo_key`, que es UNIQUE GLOBAL, y A4.1 lo traduce |
+| Con OTRO `email_corporativo` | 🔴 **crea un SEGUNDO legajo para la misma persona** | las cinco guardas siguen pasando (el candidato quedó en `activo`) y nada más colisiona |
+
+🔑 **Por qué nada más lo frena:** el puente **no setea `legajo`** —y `ensure_legajo_unico` corta
+temprano cuando es `None`— ni **`dni`**, que es la otra unicidad de la tabla. O sea que la única
+red es el email, y sólo si el operador repite el valor.
+
+**No se implementó compensación, y es deliberado:** borrar el empleado recién creado sería una
+segunda escritura que también puede fallar, y dejaría el caso peor — un alta auditada y después
+borrada, sin rastro del porqué. **La salida correcta cuando esto importe es un endpoint de
+reconciliación** que, dado un candidato en `activo` cuyo email corporativo ya existe como
+empleado, cierre el estado sin crear nada. 🚩 Disparador: la primera vez que pase en producción.
+
+### 🔴 `tipo_contrato` lo INVENTA el puente, y nadie lo decidió
+
+`EmpleadoCreate.tipo_contrato` es **requerido** y el puente no tiene de dónde sacarlo:
+`candidatos` no lo tiene, y el de la vacante es **otro vocabulario** (`efectivo | plazo_fijo |
+contratado | pasantia` contra el TEXT libre de `empleados`, cuyo padrón real dice "Relación de
+dependencia"). Sin un valor, `EmpleadoCreate(**campos)` levanta un ValidationError que el handler
+global convierte en 500 — el puente entero inutilizable.
+
+Se puso `TIPO_CONTRATO_POR_DEFECTO = "Relación de dependencia"`
+(`services/_candidato_contratar_mapeo.py`), **el mismo default que ya aplica el formulario de alta
+manual**, para que las altas por el puente y las manuales no queden en dos grupos distintos de
+todo reporte que agrupe por ese campo. **Es un default de producto que nadie declaró.** 🚩
+Disparador: que RRHH contrate por este camino a alguien con otro tipo de contrato. La salida NO es
+copiar el de la vacante —son vocabularios distintos— sino **sumarlo al body**, que es una decisión
+de producto de una línea.
+
+### 🟡 Dos fixtures de candidato usan etapas que el CHECK rechazaría
+
+`test_exports_limpieza.py:203` usa `etapa_pipeline="entrevista"` y `:219` /
+`test_paginacion_candidatos_evaluados.py:146` usan `"nuevo"`. **Ninguno de los dos está en
+`candidatos_etapa_check`** (`postulado | assessment | entrevista_rrhh | entrevista_tecnica |
+oferta`). Pasan porque `CandidatoResponse.etapa_pipeline` es `str` sin validar, así que Pydantic
+los acepta y la base nunca los ve.
+
+No rompen nada hoy —esos tests no escriben— pero **son el molde del que copia el próximo**, y ahí
+el valor sí llegaría a un INSERT. El padrón de A4.2 (`tests/_contratar_padron.py`) los evitó a
+propósito y lo dice en su encabezado. **Arreglo real:** tipar `etapa_pipeline` como `Literal` de
+los cinco, igual que se hizo con `estado` en A4.1 — cuesta lo mismo y cierra la clase entera.
+
+### 🟠 `candidato_repo.py` quedó en 100/100 — el corte ya está identificado
+
+Llegó al techo exacto con el delegador de `update_estado`. **El archivo hoy es legal y no se
+toca**; lo que se anota es que **el próximo método exige dividir antes**. El corte identificado:
+los dos delegadores de la ingesta por mail —`existe_cv_de_gmail` y `message_ids_procesados`— se
+van con `_candidato_gmail`, que es el módulo cuyas funciones ya envuelven. Mismo criterio con el
+que se anotaron `sucesion_repo` y `routers/empleados.py`.
+
+---
+
+## 8-ter. Lo que A4.1 midió y decidió NO arreglar (18/8/2026)
+
+### 🔴 Las 5 unicidades sin protección — inventario de las 62, ordenado por probabilidad de que alguien las pise
+
+A4.1 tradujo el 23505 de `empleados` a 409 (`services/_empleado_duplicado.py`). **El grep global
+de la regla D encontró que no era el único caso**, y el alcance se acotó a propósito: se arregló
+sólo `empleados`, que es el que bloqueaba el puente candidato→empleado.
+
+De las **62 unicidades del catálogo**, la mayoría no puede chocar o ya está cubierta:
+
+- **No pueden chocar:** las 20 del patrón `(id, empresa_id)` —existen para respaldar FKs
+  compuestas y el `id` es un uuid generado—, `vacantes.codigo` (DEFAULT con `nextval`, atómico),
+  `sesiones_horas.token_hash` y `oauth_states.state_hash` (256 bits de entropía).
+- **Ya protegidas por pre-chequeo:** `users` (`email_existe`/`username_existe`),
+  `clientes` (`existe_nombre`), `perfiles_puesto`, `tipos_ausencia`, `proyecto_asignaciones`
+  (`ASIGNACION_DUPLICADA`, tratado como idempotencia), `horas_proyecto` (`LICENCIA_DUPLICADA`).
+- **Ya protegidas por `on_conflict` (upsert):** `costos_nomina`, `presupuesto_areas`,
+  `parametros_empresa`, `parametros_screening`, `plantillas_mail`, `usuario_integraciones`,
+  `evaluacion_equivalencias`, `empleado_superior_pendiente`.
+- **Ya protegida por traducción del 23505:** `objetivos` (`_objetivos_duplicado`) y ahora
+  `empleados` (`_empleado_duplicado`).
+
+**Quedan estas cinco, sin pre-chequeo, sin `on_conflict` y sin traducción — o sea que hoy un
+choque sale como 500 `INTERNAL_ERROR`:**
+
+| # | Tabla | Unicidad | Por qué está en este orden |
+|---|---|---|---|
+| 1 | `empleado_capacitacion` | `(capacitacion_id, empleado_id)` + `ux_ec_nombre_libre` | **El más probable, y con fecha.** Ver la nota de A5 abajo. |
+| 2 | `areas` | `codigo` — **GLOBAL, sin empresa** | Dos empresas que quieran un área con el mismo código chocan. Con 2 empresas y 12 áreas cargadas ya es alcanzable a mano, y el operador no tiene forma de saber que el código lo tomó otra sociedad. |
+| 3 | `empresas` | `cuit`, `nombre` | Alta manual, campos que se tipean. `_validate_cuit` valida **formato**, no unicidad — es fácil leerlo como si cubriera las dos cosas. Baja frecuencia: se cargan 2–5 empresas en la vida del sistema. |
+| 4 | `vacaciones_pendientes` | `(empleado_id, periodo)` | `insert` crudo. Hoy la tabla está en 0; se vuelve alcanzable cuando RRHH cargue los saldos por período. |
+| 5 | `evaluacion_evaluados` / `evaluacion_resultados` | claves del lote | El import ya verifica por CONTEO y el `confirmar` crea el lote con período temporal, así que un choque acá es raro **y además no pierde datos**. Es el menos urgente de los cinco. |
+
+> 🚩 **`empleado_capacitacion` se arregla dentro de A5, cuando el import del Excel inserte sus 53
+> filas.** Hoy el choque es hipotético porque las asignaciones se cargan de a una desde la UI y
+> repetir la misma a mano es difícil. **Con un import de 53 filas deja de serlo**: una corrida
+> repetida —que es el caso normal, no el excepcional: alguien reintenta porque no está seguro de
+> si la primera terminó— choca en la primera fila ya cargada y el import entero muere con un 500
+> sin decir por qué. Es el mismo perfil de bug que ya pagó el import de objetivos, y ahí la salida
+> fue exactamente ésta (`_objetivos_duplicado`). **No adelantarlo: el arreglo correcto depende de
+> si el import va a ser idempotente por `on_conflict` o va a reportar la fila duplicada, y eso se
+> decide con el archivo real de RRHH en la mano.**
+
+### 🔴 Los 32 repos con `select("*")` — una pregunta que el repo no sabe hacer
+
+`candidatos.estado` vivió meses con el `select("*")` trayéndola y el mapper descartándola, con
+**tres barridos estructurales mirando ese módulo y los tres en verde**. La causa no es que
+fallaran: es que los tres viajan en la dirección **código → base**, y este bug vive en la
+contraria.
+
+🔑 **Lo importante, y por eso está redactado así: `test_selects_repos` no está roto. Su aserción
+es vacua POR CONSTRUCCIÓN.** Pregunta *"¿existe en la tabla todo lo que el `select` PIDE?"*, y
+`_postgrest_schema._validar_columna` corta con un `return` en cuanto ve el asterisco. Un select
+que pide todo no puede pedir de más. **Es la diferencia entre "hay que arreglar un test" y "hay
+una pregunta que el repo no sabe hacer"**, y esa distinción es la que decide qué se construye:
+lo primero se parchea, lo segundo necesita un barrido nuevo.
+
+Los otros dos tampoco podían: `test_mappers_ejercitados` persigue mappers con
+`if not rows: return []` —`_crow` recibe un dict, no tiene ese early-return y `descubrir()` ni lo
+lista, y aunque lo listara, ejercitar un mapper prueba que su cuerpo CORRE, no que mapee todas las
+columnas—, y `test_contrato_repos` compara métodos entre capas, que no sabe qué es una columna.
+
+**Estado:** `tests/test_columnas_candidatos.py` cubre **1 de los 32 repos** que leen con
+`select("*")`. Los otros 31 no se midieron.
+**Qué haría falta:** por cada repo, la tabla + el modelo de salida + la tabla de renombres y de
+columnas no expuestas CON su razón (el inventario de candidatos son 11 entradas). El barrido en sí
+ya está escrito y es genérico salvo por esas declaraciones.
+**Por qué no se generalizó ahora:** parametrizar la maquinaria contra un solo caso fija una forma
+que no se probó contra ningún segundo. Se generaliza con el dato del segundo repo, no antes.
+**Gravedad:** 🟠 — cada repo sin cubrir es una columna que se puede estar descartando en silencio,
+que es un bug sin síntoma.
+
+### 🟡 Por qué el barrido de listas de estado NO generaliza — medido, no supuesto
+
+`procesos_service._ESTADOS` declaraba `en_revision` para `vacantes`, un estado que no está en
+ningún CHECK. La pregunta natural es si `_barrido_estado.py` se puede extender a "toda lista de
+literales de estado contrastada contra el CHECK de su tabla". **Se midió: no.**
+
+- El barrido actual busca **comparaciones** (`.eq/.neq/.in_("estado", X)`, `==`/`!=`, kwargs), y
+  acá no hay ninguna: el valor llega a la query como una VARIABLE dentro de un `for`. Además cubre
+  `empleados.estado` y nada más — su línea 176 nombra el `== "cerrada"` de vacantes como ejemplo
+  de lo que **descarta**, no de lo que vigila. (Es fácil leerla al revés; quedó escrito.)
+- Contrastar contra la **unión de los 11 CHECK** da **5 falsos positivos sobre 6 estructuras**,
+  porque **el valor y su etiqueta humana conviven en la misma estructura**: `_ESTADO_LABEL` mapea
+  `"cerrada" → "Cerrada"`, y `"Cerrada"` no está en ningún CHECK ni tiene por qué estar.
+- **Lo indecidible es a qué TABLA pertenece cada lista.** Distinguir el valor de la etiqueta exige
+  conocer la forma de cada estructura, y esa forma difiere por módulo — o sea, escribir un test por
+  módulo, que es lo que ya se hizo.
+
+🔑 **En `procesos_service` se pudo por un motivo que no se generaliza: `_ESTADOS` está indexado
+POR NOMBRE DE TABLA**, así que la tabla es la clave del dict y no hay que adivinarla. Eso convirtió
+un problema indecidible en una comparación directa, y por eso `tests/test_procesos_estados.py`
+cubre las **5 tablas del panel** y no sólo la que estaba rota. **Si alguien aplana esa estructura,
+se pierde el test** — está anotado también en `services/_procesos_catalogo.py`.
+
+### 🟡 El loader de `schema.sql` cargaba una columna fantasma en 11 de 55 tablas — ARREGLADO
+
+`tests/_postgrest_schema.cargar_schema` parsea las columnas con `linea.split()[0]` y salteaba las
+líneas de constraint por palabra clave, **pero no las de comentario**. `schema.sql` documenta
+columnas con comentarios `--` DENTRO del `CREATE TABLE` (los de la mig 081 en `empleados`, los de
+la 098–101 en `candidatos`, los de la 113 en `vacantes`…), así que **11 de las 55 tablas cargaban
+una columna llamada `--`**.
+
+🔑 **Qué lo hacía invisible, que es la parte reutilizable:** el único consumidor era
+`validar_select`, y una columna de más sólo **ensancha el conjunto de nombres ACEPTADOS**. Nadie
+escribe `select("--")`, así que el fantasma no podía producir ni un rojo ni un falso verde — el
+defecto era real y estrictamente inobservable desde el uso que se le daba.
+
+**Qué barrido futuro habría roto:** cualquiera que **recorra `columnas[tabla]`** en vez de
+preguntarle por un nombre concreto. El primero fue `test_columnas_candidatos`, que compara el set
+de columnas contra los campos del schema: con el fantasma adentro habría exigido declarar `--` en
+la tabla de no expuestas — una entrada absurda que quien la viera habría "resuelto" agregándola,
+dejando el defecto tapado en el único lugar donde por fin era visible. Arreglado en la misma tanda
+(A4.1), antes de escribir el barrido que dependía de él.
+
+> **La regla que deja:** un lector de schema que se usa sólo para VALIDAR contra nombres dados
+> puede tener defectos que ensanchan, y ninguno se nota. Antes de usarlo para ENUMERAR, verificar
+> que lo que devuelve sean columnas y nada más.
+
+---
+
 ## 8-bis. 🟠 `procesos_service` no degrada: una tabla que falla se lleva el panel entero
 
 > **11/8/2026, bloque J5a.** Es lo que convirtió un DROP de tablas en un 500 de una pantalla que

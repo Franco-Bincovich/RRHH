@@ -40,6 +40,97 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-18 · A4.2 — el puente candidato→empleado · commits pendientes
+
+**Qué cambió.** `POST /api/candidatos/{id}/contratar`: convierte un candidato en oferta en un
+legajo en `preingreso`. Cierra el ciclo de vida junto con `/activar` (el ingreso) y
+`/efectivizar` (la salida) — los tres son actos con guardas, no ediciones de campo.
+
+**Cinco guardas, todas antes de cualquier escritura:** candidato de la empresa (404, mismo
+literal que "no existe") · con vacante (409) · en etapa `oferta` (409) · postulación en `activo`
+(409) · fecha de ingreso no pasada (400). El alta NO se reimplementa: llama a
+`EmpleadoService.create_empleado`, así que hereda legajo duplicado, área y manager de otra
+empresa, la traducción del 23505 de A4.1 y el evento `alta_empleado`.
+
+**Impacto en infraestructura:** **Ninguno.**
+- **Migraciones:** ninguna. `candidatos.estado` y su CHECK ya existen; A4.1 los revivió del lado
+  de la app. **No se tocó DDL, y no se agregó ninguna referencia candidato→empleado** (la
+  trazabilidad es DDL y quedó fuera de alcance por decisión tomada).
+- **Variables de entorno / dependencias / buckets:** ninguna.
+- **Endpoint NUEVO:** `POST /api/candidatos/{id}/contratar`, gateado `CANDIDATOS + WRITE`, bajo
+  el baseline de rate limit (300/min) como el resto del módulo. **No es público.**
+- **Escritura nueva sobre `candidatos.estado`:** es el PRIMER camino que la escribe. Hasta hoy la
+  columna existía y nadie la tocaba.
+- **Auth / dominios / procesos fuera de serverless:** sin cambios.
+
+🔴 **LO QUE INFRAESTRUCTURA TIENE QUE SABER: el puente hace DOS escrituras y no hay transacción.**
+PostgREST no la da. Si falla la segunda (marcar el candidato) después de la primera (crear el
+empleado), queda el empleado creado y el candidato en `activo`. **Medido, no supuesto**
+(`tests/test_candidato_contratar_sin_transaccion.py`): el reintento con el mismo email corporativo
+NO duplica el legajo — choca contra `empleados_email_corporativo_key` y sale 409. Con un email
+distinto SÍ crearía un segundo legajo. Ver `docs/DEUDA-TECNICA.md`.
+
+⚠️ **El endpoint queda sin caller de front**, declarado en `test_callers_huerfanos` con disparador
+(sale cuando exista `contratarCandidato`). Mientras tanto **ningún candidato va a llegar a
+`contratado` en producción**: el camino existe pero no es alcanzable desde la UI.
+
+**Suite:** 3888 → **3914** (+26), cero regresiones. Los barridos estructurales en verde.
+
+---
+## 2026-08-18 · A4.1 — tres arreglos previos al puente candidato→empleado · commits pendientes
+
+**Qué cambió.** Tres bugs independientes, uno por commit, todos anteriores al puente de A4.2.
+
+**1. `candidatos.estado` volvió a existir para la aplicación.** La columna está en la tabla desde
+siempre (CHECK `activo | descartado | contratado | en_espera`, DEFAULT `activo`) y el repo la
+traía en cada fila —`candidato_repo` lee con `select("*")`— pero `_crow` no la mapeaba y
+`CandidatoResponse` no la declaraba: **se descartaba en silencio**. Ningún camino de la app podía
+saber que un candidato estaba descartado o contratado. Se mapea, se declara tipada como `Literal`
+de los cuatro valores, y **no se agregó ninguna escritura**: el único que va a escribirla es el
+puente de A4.2.
+
+**2. El 23505 de `empleados` dejó de ser un 500.** La tabla tiene tres unicidades
+(`email_corporativo` **GLOBAL**, `(empresa_id, dni)`, `(legajo, empresa_id)`) y sólo legajo tenía
+pre-chequeo. Un alta con email o DNI repetido llegaba al INSERT, PostgREST devolvía 23505 y la
+`APIError` subía sin mapear hasta `global_error_handler`, que la mandaba por su rama de error
+inesperado. Ahora sale **409 con code propio** (`EMAIL_CORPORATIVO_DUPLICADO`, `DNI_DUPLICADO`,
+`LEGAJO_DUPLICADO`, o `EMPLEADO_DUPLICADO` para una constraint futura). Molde:
+`services/_objetivos_duplicado.py`.
+
+**3. El Panel de Procesos contaba estados que no existen — en TRES tablas, no en una.** El
+prompt de la sesión señalaba `vacantes` (declaraba `en_revision`, que no está en el CHECK); el
+grep global mostró que además le faltaban `en_proceso` y `con_candidatos`, que a
+`onboarding_instancias` le faltaba `pendiente` y a `offboarding_instancias` `en_proceso`. **No es
+cosmético: `_build_proceso` calcula `total = sum(...)` sobre los estados DECLARADOS**, así que un
+estado faltante no deja una categoría vacía — se cae del total del proceso. El panel venía
+diciendo que había menos vacantes, menos onboardings y menos offboardings de los que hay.
+
+**Impacto en infraestructura:** **Ninguno.**
+- **Migraciones:** ninguna. Los tres bugs eran de código contra un schema que ya estaba bien;
+  `candidatos.estado`, los tres CHECK de estado y las tres unicidades de `empleados` ya existen
+  en producción. **No se tocó DDL.**
+- **Variables de entorno:** ninguna nueva.
+- **Dependencias:** ninguna.
+- **Buckets de Storage:** sin cambios.
+- **Endpoints:** ninguno nuevo, ninguno borrado, ninguna ruta cambiada. **Sí cambia el CONTRATO
+  de respuesta de dos endpoints ya publicados**, y en los dos el cambio es de 500 a 409:
+  `POST /api/empleados` y `PUT /api/empleados/{id}`. El body sigue siendo `{error, message, code}`;
+  lo que cambia son el status y el `code`. Un cliente que tratara el 500 como "reintentar" ahora
+  recibe un 409, que es lo correcto: reintentar no lo va a arreglar.
+- **Respuesta de `GET /api/candidatos*`:** suma el campo `estado`. Es aditivo — el front no lo
+  lee todavía y ningún consumidor se rompe por un campo de más.
+- **Procesos que no corren en serverless / auth / dominios:** sin cambios.
+
+**Suite:** 3834 → **3888** (+54), cero regresiones. Los 15 barridos estructurales del backend en
+verde (581 tests). El front no se tocó.
+
+⚠️ **Un fallo intermitente durante la verificación, ya conocido y NO nuevo:**
+`test_identificacion_publica.py::TestElPisoDeTiempo::test_el_bloqueo_tambien_espera` falló una vez
+(midió 0.1125 s contra un piso de 0.12) y pasó en las cuatro corridas siguientes. Está documentado
+desde el 17/8 en `DEUDA-TECNICA.md` §5 como intermitente en Windows. No tiene relación con esta
+sesión.
+
+---
 ## 2026-08-18 · Capa de ESCRITURAS de preingresos: tipado del estado, alta en preingreso, endpoint de activación y tres guardas · commits pendientes
 
 **Qué cambió.** A3.1 arregló las LECTURAS; esta sesión cierra las escrituras. Hasta hoy el único

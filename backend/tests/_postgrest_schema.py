@@ -36,6 +36,19 @@ _RE_FK = re.compile(
 # Una línea de columna arranca con el nombre; las de constraint arrancan con una palabra clave.
 _NO_ES_COLUMNA = ("CONSTRAINT", "PRIMARY", "FOREIGN", "UNIQUE", "CHECK", "EXCLUDE")
 
+# 🔴 LOS COMENTARIOS SQL SE SALTEAN APARTE DE LAS CONSTRAINTS, Y NO EN LA MISMA TUPLA.
+# `schema.sql` documenta columnas con comentarios `--` DENTRO del CREATE TABLE (los de la
+# migración 081 en `empleados`, los de la 098/099/100/101 en `candidatos`, los de la 113 en
+# `vacantes`…). Sin este descarte, `linea.split()[0]` toma el `--` como nombre de columna y
+# **11 de las 55 tablas cargaban una columna fantasma llamada `--`** (medido el 18/8/2026).
+# `validar_select` nunca lo notó porque nadie pide esa columna en un `select`: el fantasma sólo
+# ensancha el conjunto de nombres ACEPTADOS, y ahí un nombre de más es invisible. Se vuelve
+# visible en cuanto alguien recorre `columnas[tabla]` para preguntar qué hay en la tabla, que es
+# lo que hace `test_columnas_candidatos`.
+# Va en su propia comprobación y no como un séptimo elemento de `_NO_ES_COLUMNA` porque un
+# comentario no es una constraint: meterlo ahí diría que `--` es una palabra clave de DDL.
+_COMENTARIO_SQL = "--"
+
 
 class SelectInvalidoError(Exception):
     """El spec no sobreviviría a PostgREST. El mensaje dice qué y por qué."""
@@ -168,7 +181,9 @@ def cargar_schema(path: Path = _SCHEMA) -> Schema:
         cols: Set[str] = set()
         for linea in cuerpo.splitlines():
             linea = linea.strip().rstrip(",")
-            if not linea or linea.upper().startswith(_NO_ES_COLUMNA):
+            if not linea or linea.startswith(_COMENTARIO_SQL):
+                continue
+            if linea.upper().startswith(_NO_ES_COLUMNA):
                 continue
             cols.add(linea.split()[0].strip('"'))
         columnas[tabla] = cols
