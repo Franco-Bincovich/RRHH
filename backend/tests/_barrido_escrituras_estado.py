@@ -21,6 +21,16 @@ formas distintas y en tres de ellas **el string `"estado"` no aparece en ningún
                   aunque no toque la base: el default entra al `model_dump()` y de ahí al INSERT.
                   Es el camino del ALTA, y es invisible para cualquier grep de `"estado"`.
   · `kwarg`     — `EmpleadoUpdate(estado="activo")`. El camino del pase a activo.
+  · `splat`     — `campos = {..., "estado": "preingreso"}` seguido de `EmpleadoCreate(**campos)`.
+                  🔴 **LA QUINTA FORMA, agregada el 18/8/2026 con el puente candidato→empleado, y
+                  el barrido NO LA VEÍA.** `**campos` llega al AST con `kw.arg is None`, así que
+                  la rama `kwarg` no matchea; y el dict no es argumento de un `.insert()/.update()`,
+                  así que la rama `dict` tampoco. El camino nuevo salía en CERO hallazgos y el
+                  conteo se quedaba en 14 sin que nada rojeara. Se detecta siguiendo el `**` hasta
+                  la variable y buscando su dict literal EN LA MISMA función: preciso, sin
+                  dataflow. La alternativa —marcar todo dict literal con clave `estado`— se midió
+                  y da **21 hallazgos para 1 real** (payloads de auditoría y otras tablas), o sea
+                  la lista larga que nadie mira.
   · `dar_de_baja` — una LLAMADA. La escritura física está en otro archivo; lo que importa acá es
                   **quién la dispara**, porque cada caller es un camino con sus propias guardas
                   (o sin ninguna: ver el de nómina).
@@ -84,6 +94,43 @@ def _campos(arbol: ast.Module, rel: str) -> list:
     return out
 
 
+def _dict_de(nombre: str, ambito: ast.AST):
+    """El dict literal asignado a `nombre` dentro de `ambito`, o None.
+
+    Busca en la MISMA función, que es donde vive el idioma que persigue (`campos = {...}` y dos
+    líneas después `Modelo(**campos)`). No hace dataflow: si alguien arma el dict en otro lado y
+    lo pasa, esto no lo ve — y esa limitación es preferible a un análisis que adivine.
+    """
+    for nodo in ast.walk(ambito):
+        if isinstance(nodo, ast.Assign) and isinstance(nodo.value, ast.Dict)                 and any(isinstance(t, ast.Name) and t.id == nombre for t in nodo.targets):
+            return nodo.value
+    return None
+
+
+def _splats(arbol: ast.Module, rel: str) -> list:
+    """Forma `splat`: un modelo de escritura construido desde un dict literal con `estado`."""
+    out = []
+    for fn in ast.walk(arbol):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for nodo in ast.walk(fn):
+            if not (isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Name)
+                    and nodo.func.id in _MODELOS_ESCRITURA):
+                continue
+            for kw in nodo.keywords:
+                if kw.arg is not None or not isinstance(kw.value, ast.Name):
+                    continue
+                d = _dict_de(kw.value.id, fn)
+                if d is None:
+                    continue
+                for k, v in zip(d.keys, d.values):
+                    if isinstance(k, ast.Constant) and k.value == "estado":
+                        out.append(Escritura(rel, nodo.lineno, "splat",
+                                             f"{nodo.func.id}(**{kw.value.id}) "
+                                             f"con estado={ast.unparse(v)}"))
+    return out
+
+
 def _llamadas(arbol: ast.Module, rel: str, consts: dict) -> list:
     """Las otras tres formas: dict de insert/update, kwarg de modelo, y llamada a dar_de_baja."""
     out = []
@@ -109,12 +156,13 @@ def _llamadas(arbol: ast.Module, rel: str, consts: dict) -> list:
 
 
 def escrituras(raiz: Optional[Path] = None) -> list[Escritura]:
-    """Todos los sitios que pueden escribir `empleados.estado`, en las cuatro formas."""
+    """Todos los sitios que pueden escribir `empleados.estado`, en las CINCO formas."""
     base = raiz or RAIZ
     salida: list[Escritura] = []
     for p in archivos(base) + sorted((base / "schemas").rglob("*.py")):
         arbol = ast.parse(p.read_text(encoding="utf-8"))
         rel = _rel(p, base)
         salida.extend(_campos(arbol, rel))
+        salida.extend(_splats(arbol, rel))
         salida.extend(_llamadas(arbol, rel, _constantes_str(arbol)))
     return salida

@@ -18,7 +18,7 @@ en el gate del link público de horas. **Cada camino que lo escribe es un lugar 
 nacer un estado sin las guardas que le corresponden**, y el modo de falla no es una excepción:
 es un número que sale distinto y que nadie puede verificar a ojo.
 
-## Los CINCO caminos, y las dos piezas de infraestructura que los sostienen
+## Los SEIS caminos, y las dos piezas de infraestructura que los sostienen
 
 | camino | forma | guardas |
 |---|---|---|
@@ -27,6 +27,15 @@ es un número que sale distinto y que nadie puede verificar a ojo.
 | **activar** | `EmpleadoUpdate(estado="activo")` | es preingreso · la fecha de ingreso ya ocurrió |
 | **efectivizar** | `dar_de_baja(...)` | instancia abierta · no es baja · no es preingreso · fecha |
 | **nómina** | `dar_de_baja(...)` | 🔴 **NINGUNA** — ver la nota abajo |
+| **contratar** | `EmpleadoCreate(**campos)` con `estado='preingreso'` | candidato de la empresa · con vacante · en `oferta` · postulación `activa` · fecha de ingreso NO pasada |
+
+🔴 **`contratar` ES EL PRIMER CAMINO DE LA FORMA `splat`, Y EL BARRIDO NO LO VEÍA.** Se agregó el
+18/8/2026 con el puente candidato→empleado (A4.2). `EmpleadoCreate(**campos)` llega al AST con
+`kw.arg is None`, así que no matcheaba la rama `kwarg`; y el dict no es argumento de un
+`.insert()/.update()`, así que tampoco la rama `dict`. **El camino nuevo daba cero hallazgos y el
+conteo se quedaba en 14 sin que nada rojeara** — el mismo modo de falla que ya había pasado
+cuando `asignaciones_service` empezó a usar `ESTADOS_EN_PLANTILLA`. La quinta forma se agregó a
+`_barrido_escrituras_estado.py` con su medición: detecta este caso y **cero falsos positivos**.
 
 🔴 **EL PUT NO TIENE MÁS GUARDA QUE EL TIPO, Y ESO ES DELIBERADO PERO NO GRATIS.** Puede llevar
 a cualquiera a cualquier estado del CHECK sin verificar nada: puede volver un `activo` a
@@ -46,7 +55,7 @@ esa es una decisión de producto, no un bug de tipos. Ver `docs/DEUDA-TECNICA.md
 
 from tests._barrido_escrituras_estado import escrituras
 
-# ── Los CINCO caminos ───────────────────────────────────────────────────────────────────────
+# ── Los SEIS caminos ────────────────────────────────────────────────────────────────────────
 _CAMINOS: dict = {
     ("schemas/empleado.py", "campo", "EmpleadoCreate.estado = 'activo'"):
         "ALTA — POST /api/empleados. El Literal acota a activo|preingreso.",
@@ -58,6 +67,13 @@ _CAMINOS: dict = {
         "EFECTIVIZAR — POST /api/offboarding/{id}/efectivizar. Cuatro guardas.",
     ("services/nomina_empleados_service.py", "dar_de_baja", "self._emp_repo.dar_de_baja"):
         "NÓMINA — import mensual. 🔴 SIN guarda de estado (ver el encabezado).",
+    ("services/_candidato_contratar_mapeo.py", "splat",
+     "EmpleadoCreate(**campos) con estado='preingreso'"):
+        "CONTRATAR — POST /api/candidatos/{id}/contratar. CINCO guardas, todas antes de "
+        "cualquier escritura: candidato de la empresa (404) · con vacante · en etapa 'oferta' · "
+        "postulación en 'activo' (409) · fecha de ingreso no pasada (400). Nace en `preingreso` "
+        "a propósito: el acuerdo todavía no ocurrió, así que no cuenta en ningún KPI hasta que "
+        "`POST /api/empleados/{id}/activar` confirme que la persona entró.",
 }
 
 # ── Las dos piezas de infraestructura que los caminos atraviesan ────────────────────────────
@@ -118,8 +134,13 @@ class TestSonExactamenteCincoCaminos:
 
     def test_hay_cinco_y_son_los_declarados(self) -> None:
         """El número es el ancla. Un sexto camino —un endpoint nuevo, otro import, un script—
-        entra por acá y obliga a decidir qué guardas le tocan ANTES de estar en producción."""
-        assert len(_CAMINOS) == 5
+        entra por acá y obliga a decidir qué guardas le tocan ANTES de estar en producción.
+
+        Pasó de 5 a 6 el 18/8/2026 con el puente candidato→empleado. ⚠️ Ese sexto **no habría
+        entrado solo**: su forma (`splat`) no la detectaba el barrido, así que el número se
+        quedaba en 5 y este test seguía en verde. El ancla es el número, pero el número solo
+        vale si el barrido ve todas las formas — por eso `test_encuentra_las_cinco_formas`."""
+        assert len(_CAMINOS) == 6
 
     def test_cada_camino_existe_en_el_codigo(self) -> None:
         presentes = {(e.archivo, e.forma, e.detalle) for e in escrituras()}
@@ -144,10 +165,16 @@ class TestLasGuardasDeMinimo:
     def test_el_barrido_encuentra_escrituras(self) -> None:
         assert len(escrituras()) >= 12
 
-    def test_encuentra_las_cuatro_formas(self) -> None:
+    def test_encuentra_las_cinco_formas(self) -> None:
         """Si una forma dejara de detectarse, su camino desaparecería en silencio — y el de
-        `campo` es el que más fácil se pierde: no contiene el string "estado" como valor."""
-        assert {e.forma for e in escrituras()} == {"dict", "campo", "kwarg", "dar_de_baja"}
+        `campo` es el que más fácil se pierde: no contiene el string "estado" como valor.
+
+        🔴 `splat` está acá porque su ausencia YA COSTÓ: el camino de contratar existió sin que
+        el barrido lo viera, y lo único que lo delató fue leer el inventario a mano. Un conjunto
+        de formas que no crece cuando aparece una forma nueva es un barrido que se angosta solo.
+        """
+        assert {e.forma for e in escrituras()} == {
+            "dict", "campo", "kwarg", "dar_de_baja", "splat"}
 
     def test_hay_ruido_de_otras_tablas_y_se_declara(self) -> None:
         """Contracara: si dejaran de aparecer, el filtro por tabla estaría descartando de más."""
