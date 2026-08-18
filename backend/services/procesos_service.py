@@ -3,58 +3,14 @@ Servicio del Panel de Procesos. Agrega conteos de estado por proceso operativo.
 Solo lectura — no modifica datos.
 Flujo: router → service → DB
 """
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from schemas.procesos import EstadoConteo, ProcesoResumen, ProcesosResponse
+from services._procesos_catalogo import _ESTADOS, _META
 from utils.errors import AppError
 from utils.logger import logger
-
-
-# (tabla, proceso_id, label)
-#
-# 🔴 EVALUACIONES NO ESTÁ ACÁ, Y NO ES UN OLVIDO. Hasta el 2026-08-11 el panel contaba
-# `ev_ciclos` y `ev_instancias`; se sacaron con el módulo `ev_*` (bloque J5a). NO se
-# reapuntaron al módulo de evaluaciones VIVO (`evaluacion_lotes`) porque un lote importado
-# no tiene el eje que este panel muestra: no hay `abierto`/`cerrado` ni `iniciada`/`finalizada`
-# que contar — un lote existe o no existe. Meterlo con estados inventados daría un tablero
-# que se lee igual que los otros seis y significa otra cosa.
-_META: List[tuple[str, str, str]] = [
-    ("onboarding_instancias", "onboarding", "Onboarding"),
-    ("offboarding_instancias", "offboarding", "Offboarding"),
-    ("vacantes", "vacantes", "Vacantes"),
-    ("empleado_capacitacion", "capacitaciones", "Capacitaciones"),
-    ("objetivos", "objetivos", "Objetivos"),
-]
-
-_ESTADOS: dict[str, List[tuple[str, str]]] = {
-    "onboarding_instancias": [
-        ("en_progreso", "En progreso"),
-        ("completado", "Completado"),
-        ("cancelado", "Cancelado"),
-    ],
-    "offboarding_instancias": [
-        ("iniciado", "Iniciado"),
-        ("completado", "Completado"),
-        ("cancelado", "Cancelado"),
-    ],
-    "vacantes": [
-        ("nueva", "Nueva"),
-        ("en_revision", "En revisión"),
-        ("cerrada", "Cerrada"),
-    ],
-    "empleado_capacitacion": [
-        ("pendiente", "Pendiente"),
-        ("en_curso", "En curso"),
-        ("completado", "Completado"),
-    ],
-    "objetivos": [
-        ("por_hacer", "Por hacer"),
-        ("haciendo", "En curso"),
-        ("terminado", "Terminado"),
-    ],
-}
 
 
 class ProcesosService:
