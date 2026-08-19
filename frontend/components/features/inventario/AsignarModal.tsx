@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { asignarItem, fetchItems } from "@/services/inventario"
 import { fetchEmpresas } from "@/services/empresas"
@@ -17,8 +18,6 @@ type FormData = { empresa_id: string; item_id: string; empleado_id: string }
 type FormErrors = Partial<Record<keyof FormData, string>>
 
 const EMPTY: FormData = { empresa_id: "", item_id: "", empleado_id: "" }
-const SEL = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-
 function validate(form: FormData): FormErrors {
   const e: FormErrors = {}
   if (!form.empresa_id) e.empresa_id = "Requerido"
@@ -83,24 +82,24 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>Asignar ítem</DialogTitle></DialogHeader>
         <form id="asig-inv-form" onSubmit={handleSubmit} noValidate>
           <div className="flex flex-col gap-4 py-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="asig_empresa">Empresa <span className="text-destructive" aria-hidden>*</span></Label>
-              <select id="asig_empresa" className={SEL} value={form.empresa_id} onChange={handleEmpresaChange} aria-required aria-invalid={Boolean(errors.empresa_id)}>
+              <Select id="asig_empresa" value={form.empresa_id} onChange={handleEmpresaChange} aria-required aria-invalid={Boolean(errors.empresa_id)}>
                 <option value="">Seleccionar empresa</option>
                 {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-              </select>
+              </Select>
               {errors.empresa_id && <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="asig_item">Ítem disponible <span className="text-destructive" aria-hidden>*</span></Label>
-              <select id="asig_item" className={SEL} value={form.item_id} onChange={field("item_id")} disabled={!form.empresa_id || loadingItems} aria-required aria-invalid={Boolean(errors.item_id)}>
+              <Select id="asig_item" value={form.item_id} onChange={field("item_id")} disabled={!form.empresa_id || loadingItems} aria-required aria-invalid={Boolean(errors.item_id)}>
                 <option value="">{!form.empresa_id ? "Seleccioná una empresa primero" : loadingItems ? "Cargando..." : items.length === 0 ? "Sin ítems disponibles" : "Seleccionar ítem"}</option>
                 {items.map((i) => <option key={i.id} value={i.id}>{i.nombre}{i.numero_serie ? ` — ${i.numero_serie}` : ""}</option>)}
-              </select>
+              </Select>
               {errors.item_id && <p className="text-xs text-destructive" role="alert">{errors.item_id}</p>}
             </div>
             <div className="flex flex-col gap-1.5">

@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { ClipboardList } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { updateVacante } from "@/services/vacantes"
@@ -59,7 +60,7 @@ export function InformacionPuestoSection({ vacante, canWrite, onSaved }: Informa
   }
 
   return (
-    <section className="mb-8 rounded-xl border bg-card p-4 md:p-6">
+    <Card as="section" className="mb-8">
       <div className="mb-4 flex items-center gap-2">
         <ClipboardList className="size-4 text-muted-foreground" />
         <h2 className="text-base font-semibold text-foreground">Información del puesto</h2>
@@ -88,6 +89,6 @@ export function InformacionPuestoSection({ vacante, canWrite, onSaved }: Informa
           </div>
         )}
       </div>
-    </section>
+    </Card>
   )
 }

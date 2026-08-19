@@ -4,10 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select } from "@/components/ui/select"
 import type { TipoAusencia } from "@/types/ausencias"
-import {
-  NUEVO_TIPO, SELECT_CLASS, type AusenciaFormData, type AusenciaFormErrors,
-} from "./ausenciasForm"
+import { NUEVO_TIPO, type AusenciaFormData, type AusenciaFormErrors } from "./ausenciasForm"
 
 type FieldHandler = (
   e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
@@ -42,7 +41,7 @@ export function CamposAusencia({
             a medio llenar; con un solo select agrupado, es una opción más.
             Consecuencia asumida: el total de un padre NO es la suma de sus hijos — incluye sus
             propias filas directas. Es el dato real; esconderlo con un subtipo falso sería peor. */}
-        <select id="tipo_id" className={SELECT_CLASS} value={form.tipo_id} onChange={field("tipo_id")} aria-required aria-invalid={Boolean(errors.tipo_id)}>
+        <Select id="tipo_id" value={form.tipo_id} onChange={field("tipo_id")} aria-required aria-invalid={Boolean(errors.tipo_id)}>
           <option value="">Seleccionar tipo</option>
           {tipos.filter((t) => !t.padre_id).map((padre) => {
             const hijos = tipos.filter((t) => t.padre_id === padre.id)
@@ -60,7 +59,7 @@ export function CamposAusencia({
           {tipos.filter((t) => t.padre_id && !tipos.some((p) => p.id === t.padre_id))
                 .map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
           <option value={NUEVO_TIPO}>+ Crear tipo nuevo...</option>
-        </select>
+        </Select>
         {errors.tipo_id && <p className="text-xs text-destructive" role="alert">{errors.tipo_id}</p>}
       </div>
 

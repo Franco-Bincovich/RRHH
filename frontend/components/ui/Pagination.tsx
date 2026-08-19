@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ELIPSIS, paginasVisibles, rangoVisible } from "@/components/ui/paginasVisibles"
+import { Select } from "@/components/ui/select"
 
 const NUM = new Intl.NumberFormat("es-AR")
 
@@ -50,8 +51,8 @@ export function Pagination({ page, total, pageSize, onPageChange, onPageSizeChan
         {onPageSizeChange && (
           <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <span className="sr-only sm:not-sr-only">Filas por página</span>
-            <select
-              className="min-h-9 rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground"
+            <Select
+              size="sm" className="w-auto"
               value={pageSize}
               aria-label="Filas por página"
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
@@ -59,7 +60,7 @@ export function Pagination({ page, total, pageSize, onPageChange, onPageSizeChan
               {OPCIONES_TAMANO.map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
-            </select>
+            </Select>
           </label>
         )}
       </div>

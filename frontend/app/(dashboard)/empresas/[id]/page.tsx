@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Building2, Pencil, Upload } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
+import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,6 @@ import { EmpresaModal } from "@/components/features/empresas/EmpresaModal"
 import { EmpresaAreasTab } from "@/components/features/empresas/EmpresaAreasTab"
 import { fetchEmpresa, uploadLogo } from "@/services/empresas"
 import { useCanWrite } from "@/hooks/useCanWrite"
-import { cn } from "@/lib/utils"
 import type { Empresa } from "@/types/empresa"
 
 type Tab = "info" | "areas" | "proyectos"
@@ -122,33 +122,21 @@ export default function EmpresaDetailPage() {
         }
       />
 
-      {/* Tabs */}
-      <div className="border-b mb-6">
-        <div className="flex gap-0">
-          {(["info", "areas", "proyectos"] as Tab[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => tab !== "proyectos" && setActiveTab(tab)}
-              disabled={tab === "proyectos"}
-              className={cn(
-                "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-                activeTab === tab
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-                tab === "proyectos" && "cursor-not-allowed opacity-50",
-              )}
-            >
-              {TAB_LABELS[tab]}
-              {tab === "proyectos" && (
-                <span className="ml-1.5 text-xs">(Próximamente)</span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabList className="mb-6">
+          <Tab value="info">{TAB_LABELS.info}</Tab>
+          <Tab value="areas">{TAB_LABELS.areas}</Tab>
+          {/* Deshabilitada, no oculta: la solapa comunica que la sección existe y todavía no.
+              `disabled` la saca además de la navegación con flechas, que es lo que un `<button>`
+              con `cursor-not-allowed` pintado a mano no hacía. */}
+          <Tab value="proyectos" disabled>
+            {TAB_LABELS.proyectos}
+            <span className="ml-1.5 text-xs">(Próximamente)</span>
+          </Tab>
+        </TabList>
 
       {/* Tab: Información */}
-      {activeTab === "info" && (
+      <TabPanel value="info">
         <div className="max-w-2xl space-y-6">
           {/* Logo */}
           <div className="flex items-center gap-4">
@@ -200,10 +188,11 @@ export default function EmpresaDetailPage() {
             <Field label="Dirección" value={empresa.direccion} />
           )}
         </div>
-      )}
+      </TabPanel>
 
       {/* Tab: Áreas */}
-      {activeTab === "areas" && <EmpresaAreasTab empresaId={empresa.id} canWrite={canWrite} />}
+      <TabPanel value="areas"><EmpresaAreasTab empresaId={empresa.id} canWrite={canWrite} /></TabPanel>
+      </Tabs>
 
       <EmpresaModal
         open={editModalOpen}

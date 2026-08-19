@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
 import { CapacitacionModal } from "@/components/features/capacitaciones/CapacitacionModal"
 import { CatalogoTabla } from "@/components/features/capacitaciones/CatalogoTabla"
 import { ImportarFormacionBoton } from "@/components/features/capacitaciones/ImportarFormacionBoton"
@@ -14,10 +15,6 @@ import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Capacitacion } from "@/types/capacitacion"
 import type { Empresa } from "@/types/empresa"
-
-const SELECT_CLASS =
-  "min-h-[2rem] rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
 /**
  * Catálogo de cursos: filtros, acciones y carga. Los cuatro estados de render viven en
@@ -74,10 +71,10 @@ export function CatalogoTab({ canWrite }: { canWrite: boolean }) {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           {mostrarFiltroEmpresa && (
-            <select aria-label="Filtrar por empresa" className={SELECT_CLASS} value={empresaFiltro} onChange={(e) => setEmpresaFiltro(e.target.value)}>
+            <Select size="sm" className="w-auto" aria-label="Filtrar por empresa" value={empresaFiltro} onChange={(e) => setEmpresaFiltro(e.target.value)}>
               <option value="">Todas las empresas</option>
               {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-            </select>
+            </Select>
           )}
           <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
             <input type="checkbox" checked={soloActivos} onChange={(e) => setSoloActivos(e.target.checked)} className="h-4 w-4 rounded border border-input accent-primary" />

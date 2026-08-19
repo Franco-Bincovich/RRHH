@@ -79,7 +79,7 @@ export function ImportarFormacionModal(
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) cerrar() }}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>
             {paso === "subir" && "Importar formación desde Excel"}

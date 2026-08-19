@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SELECT_CLASS } from "@/components/features/vacantes/vacanteForm"
+import { Select } from "@/components/ui/select"
 import type { VacanteFormData, VacanteFormErrors } from "@/components/features/vacantes/vacanteForm"
 import type { Area } from "@/types/area"
 import type { Empresa } from "@/types/empresa"
@@ -53,9 +53,8 @@ export function VacanteCamposBase({
           Empresa
           <span className="ml-0.5 text-destructive" aria-hidden>*</span>
         </Label>
-        <select
+        <Select
           id="empresa_id"
-          className={SELECT_CLASS}
           value={form.empresa_id}
           onChange={onEmpresaChange}
           aria-invalid={Boolean(errors.empresa_id)}
@@ -65,7 +64,7 @@ export function VacanteCamposBase({
           {empresas.map((e) => (
             <option key={e.id} value={e.id}>{e.nombre}</option>
           ))}
-        </select>
+        </Select>
         {errors.empresa_id && (
           <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>
         )}
@@ -95,9 +94,8 @@ export function VacanteCamposBase({
           Área
           <span className="ml-0.5 text-destructive" aria-hidden>*</span>
         </Label>
-        <select
+        <Select
           id="area_id"
-          className={SELECT_CLASS}
           value={form.area_id}
           onChange={field("area_id")}
           disabled={!form.empresa_id || areasLoading}
@@ -110,7 +108,7 @@ export function VacanteCamposBase({
           {areas.map((a) => (
             <option key={a.id} value={a.id}>{a.nombre}</option>
           ))}
-        </select>
+        </Select>
         {errors.area_id && (
           <p className="text-xs text-destructive" role="alert">{errors.area_id}</p>
         )}
@@ -122,9 +120,8 @@ export function VacanteCamposBase({
           Tipo de contrato
           <span className="ml-0.5 text-destructive" aria-hidden>*</span>
         </Label>
-        <select
+        <Select
           id="tipo_contrato"
-          className={SELECT_CLASS}
           value={form.tipo_contrato}
           onChange={field("tipo_contrato")}
         >
@@ -132,7 +129,7 @@ export function VacanteCamposBase({
           <option value="plazo_fijo">Plazo fijo</option>
           <option value="contratado">Contratado</option>
           <option value="pasantia">Pasantía</option>
-        </select>
+        </Select>
       </div>
     </div>
   )

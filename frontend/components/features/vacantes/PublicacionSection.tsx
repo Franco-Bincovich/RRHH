@@ -5,14 +5,13 @@ import { toast } from "sonner"
 import { Megaphone } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select } from "@/components/ui/select"
 import { updateVacante } from "@/services/vacantes"
 import type { Vacante } from "@/types/vacantes"
-
-const SELECT_CLASS =
-  "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
 interface PublicacionSectionProps {
   vacante: Vacante
@@ -51,7 +50,7 @@ export function PublicacionSection({ vacante, canWrite, onSaved }: PublicacionSe
   }
 
   return (
-    <section className="mb-8 rounded-xl border bg-card p-4 md:p-6">
+    <Card as="section" className="mb-8">
       <div className="mb-4 flex items-center gap-2">
         <Megaphone className="size-4 text-muted-foreground" />
         <h2 className="text-base font-semibold text-foreground">Publicación</h2>
@@ -105,9 +104,8 @@ export function PublicacionSection({ vacante, canWrite, onSaved }: PublicacionSe
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="modalidad">Modalidad</Label>
-            <select
+            <Select
               id="modalidad"
-              className={SELECT_CLASS}
               value={modalidad}
               disabled={!canWrite}
               onChange={(e) => setModalidad(e.target.value)}
@@ -116,7 +114,7 @@ export function PublicacionSection({ vacante, canWrite, onSaved }: PublicacionSe
               <option value="presencial">Presencial</option>
               <option value="remoto">Remoto</option>
               <option value="hibrido">Híbrido</option>
-            </select>
+            </Select>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="jornada">Jornada</Label>
@@ -138,6 +136,6 @@ export function PublicacionSection({ vacante, canWrite, onSaved }: PublicacionSe
           </div>
         )}
       </div>
-    </section>
+    </Card>
   )
 }

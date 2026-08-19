@@ -1,5 +1,7 @@
 "use client"
 
+import { Select } from "@/components/ui/select"
+
 // Selectores de período/año de las tarjetas de reporte. Presentacionales (controlados).
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -27,29 +29,27 @@ export function PeriodoSelector({
     <div className="flex gap-2">
       <div className="flex-1">
         <label htmlFor={`mes-${id}`} className="sr-only">Mes</label>
-        <select
+        <Select
           id={`mes-${id}`}
           value={mes}
           onChange={(e) => onMesChange(Number(e.target.value))}
-          className="flex min-h-[2.75rem] w-full rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           {MESES.map((m, i) => (
             <option key={i + 1} value={i + 1}>{m}</option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="w-24">
         <label htmlFor={`anio-${id}`} className="sr-only">Año</label>
-        <select
+        <Select
           id={`anio-${id}`}
           value={anio}
           onChange={(e) => onAnioChange(Number(e.target.value))}
-          className="flex min-h-[2.75rem] w-full rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           {ANOS.map((a) => (
             <option key={a} value={a}>{a}</option>
           ))}
-        </select>
+        </Select>
       </div>
     </div>
   )
@@ -75,16 +75,15 @@ export function VistaSelector({
       <label htmlFor={`vista-${id}`} className="mb-1 block text-xs font-medium text-foreground">
         Vista
       </label>
-      <select
+      <Select
         id={`vista-${id}`}
         value={vista}
         onChange={(e) => onVistaChange(e.target.value)}
-        className="flex min-h-[2.75rem] w-full rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         {VISTAS.map((x) => (
           <option key={x.v} value={x.v}>{x.label}</option>
         ))}
-      </select>
+      </Select>
     </div>
   )
 }
@@ -103,16 +102,15 @@ export function AnioSelector({
       <label htmlFor={`anio-solo-${id}`} className="mb-1 block text-xs font-medium text-foreground">
         Año
       </label>
-      <select
+      <Select
         id={`anio-solo-${id}`}
         value={anio}
         onChange={(e) => onAnioChange(Number(e.target.value))}
-        className="flex min-h-[2.75rem] w-full rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         {ANOS.map((a) => (
           <option key={a} value={a}>{a}</option>
         ))}
-      </select>
+      </Select>
     </div>
   )
 }

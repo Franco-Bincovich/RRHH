@@ -4,6 +4,7 @@ import { PlantillaVariables } from "@/components/features/comunicacion/Plantilla
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select } from "@/components/ui/select"
 
 export type CampoPlantilla = "clave" | "contexto" | "asunto" | "cuerpo"
 
@@ -43,11 +44,10 @@ export function PlantillaCampos({ valores, onCambio, contextos, bloqueada }: Pro
         </div>
         <div>
           <Label htmlFor="pl-ctx">Tipo de mail</Label>
-          <select id="pl-ctx" value={valores.contexto} onChange={(e) => onCambio("contexto", e.target.value)}
-                  disabled={bloqueada}
-                  className="h-9 w-full rounded-md border bg-background px-3 text-sm">
+          <Select id="pl-ctx" value={valores.contexto} onChange={(e) => onCambio("contexto", e.target.value)}
+                  disabled={bloqueada}>
             {Object.keys(contextos).map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
 

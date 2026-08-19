@@ -3,6 +3,7 @@
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Select } from "@/components/ui/select"
 import type { FormData } from "@/components/features/objetivos/ObjetivoFormFields"
 import type { Objetivo, UserItem } from "@/types/objetivo"
 
@@ -33,8 +34,6 @@ import type { Objetivo, UserItem } from "@/types/objetivo"
  * no es una arista en runtime.
  */
 
-export const SEL = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-
 interface Props {
   form: FormData
   usuarios: UserItem[]
@@ -55,10 +54,10 @@ export function ObjetivoCamposOpcionales({ form, usuarios, padres, field, onTogg
         <Label htmlFor="obj_padre">Objetivo padre <span className="text-xs text-muted-foreground font-normal">(opcional)</span></Label>
         {/* Solo raíces: la jerarquía admite dos niveles, así que colgar de un subobjetivo daría
             un 422 del backend. El selector no ofrece lo que el backend va a rechazar. */}
-        <select id="obj_padre" className={SEL} value={form.parent_id} onChange={field("parent_id")}>
+        <Select id="obj_padre" value={form.parent_id} onChange={field("parent_id")}>
           <option value="">Sin padre — es un objetivo principal</option>
           {padres.map((p) => <option key={p.id} value={p.id}>{p.titulo}</option>)}
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label>Otros responsables <span className="text-xs text-muted-foreground font-normal">(opcional)</span></Label>

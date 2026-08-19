@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select } from "@/components/ui/select"
 import { createCapacitacion, updateCapacitacion } from "@/services/capacitaciones"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
@@ -35,10 +36,6 @@ type FormErrors = Partial<Record<keyof FormData, string>>
 const EMPTY: FormData = {
   empresa_id: "", nombre: "", descripcion: "", categoria: "", duracion_horas: "", obligatoria: false,
 }
-
-const SEL =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
 
 function validate(form: FormData): FormErrors {
   const e: FormErrors = {}
@@ -123,7 +120,7 @@ export function CapacitacionModal({ open, onClose, onSuccess, editing }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar formación" : "Nueva formación"}</DialogTitle>
         </DialogHeader>
@@ -134,10 +131,10 @@ export function CapacitacionModal({ open, onClose, onSuccess, editing }: Props) 
             {!isEditing && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="cap_empresa_id">Empresa <span className="text-destructive" aria-hidden>*</span></Label>
-                <select id="cap_empresa_id" className={SEL} value={form.empresa_id} onChange={field("empresa_id")} aria-required aria-invalid={Boolean(errors.empresa_id)}>
+                <Select id="cap_empresa_id" value={form.empresa_id} onChange={field("empresa_id")} aria-required aria-invalid={Boolean(errors.empresa_id)}>
                   <option value="">Seleccionar empresa</option>
                   {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-                </select>
+                </Select>
                 {errors.empresa_id && <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>}
               </div>
             )}

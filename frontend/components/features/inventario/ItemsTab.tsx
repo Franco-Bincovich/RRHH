@@ -9,6 +9,7 @@ import { ItemsInvTable } from "@/components/features/inventario/ItemsInvTable"
 import { HistorialModal } from "@/components/features/inventario/HistorialModal"
 import { useFiltrosItemsInv } from "@/components/features/inventario/useFiltrosItemsInv"
 import { Pagination } from "@/components/ui/Pagination"
+import { Select } from "@/components/ui/select"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { deleteItem, exportarInventarioItems } from "@/services/inventario"
 import type { InventarioItem } from "@/types/inventario"
@@ -17,8 +18,6 @@ import type { InventarioItem } from "@/types/inventario"
 // que se PIDE la página es el mismo con el que se DIBUJA la barra. Dos constantes en archivos
 // distintos se despegan sin que nada falle — la barra diría "de 7 páginas" sobre 5 reales.
 const PAGE_SIZE = 20
-
-const SEL = "min-h-[2rem] rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
 export function ItemsTab({ canWrite }: { canWrite: boolean }) {
   const [page, setPage] = useState(1)
@@ -48,24 +47,24 @@ export function ItemsTab({ canWrite }: { canWrite: boolean }) {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           {mostrarEmpresa && empresas.length > 0 && (
-            <select className={SEL} value={empresaFiltro} onChange={(e) => filtrar(cambiarEmpresa)(e.target.value)} aria-label="Filtrar por empresa">
+            <Select size="sm" className="w-auto" value={empresaFiltro} onChange={(e) => filtrar(cambiarEmpresa)(e.target.value)} aria-label="Filtrar por empresa">
               <option value="">Todas las empresas</option>
               {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-            </select>
+            </Select>
           )}
           {opcionesArea.length > 0 && (
-            <select className={SEL} value={areaFiltro} onChange={(e) => filtrar(setAreaFiltro)(e.target.value)} aria-label="Filtrar por área">
+            <Select size="sm" className="w-auto" value={areaFiltro} onChange={(e) => filtrar(setAreaFiltro)(e.target.value)} aria-label="Filtrar por área">
               <option value="">Todas las áreas</option>
               {opcionesArea.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
-            </select>
+            </Select>
           )}
-          <select className={SEL} value={estadoFiltro} onChange={(e) => filtrar(setEstadoFiltro)(e.target.value)} aria-label="Filtrar por estado">
+          <Select size="sm" className="w-auto" value={estadoFiltro} onChange={(e) => filtrar(setEstadoFiltro)(e.target.value)} aria-label="Filtrar por estado">
             <option value="">Todos los estados</option>
             <option value="disponible">Disponible</option>
             <option value="asignado">Asignado</option>
             <option value="en_reparacion">En reparación</option>
             <option value="baja">Baja</option>
-          </select>
+          </Select>
         </div>
         <div className="flex gap-2">
           <ExportMenu onExport={(f) => exportarInventarioItems(f, filtros)} />

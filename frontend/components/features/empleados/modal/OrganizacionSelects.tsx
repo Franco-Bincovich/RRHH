@@ -1,7 +1,8 @@
 import type { ChangeEvent } from "react"
 
 import { Label } from "@/components/ui/label"
-import { SELECT_CLASS, type FieldFactory, type FormData, type FormErrors } from "./_constants"
+import { Select } from "@/components/ui/select"
+import { type FieldFactory, type FormData, type FormErrors } from "./_constants"
 import type { Area } from "@/types/area"
 import type { EmpleadoSeleccionable } from "@/types/empleado"
 import type { Empresa } from "@/types/empresa"
@@ -39,9 +40,9 @@ export function OrganizacionSelects({
             Empresa
             <span className="ml-0.5 text-destructive" aria-hidden>*</span>
           </Label>
-          <select
+          <Select
+            className="w-auto"
             id="empresa_id"
-            className={SELECT_CLASS}
             value={form.empresa_id}
             onChange={onEmpresaChange}
             disabled={empresasLoading}
@@ -54,7 +55,7 @@ export function OrganizacionSelects({
             {empresas.map((emp) => (
               <option key={emp.id} value={emp.id}>{emp.nombre}</option>
             ))}
-          </select>
+          </Select>
           {errors.empresa_id && (
             <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>
           )}
@@ -66,9 +67,9 @@ export function OrganizacionSelects({
           Área
           <span className="ml-0.5 text-destructive" aria-hidden>*</span>
         </Label>
-        <select
+        <Select
+          className="w-auto"
           id="area_id"
-          className={SELECT_CLASS}
           value={form.area_id}
           onChange={field("area_id")}
           disabled={areasLoading || (!isEdit && !form.empresa_id)}
@@ -85,7 +86,7 @@ export function OrganizacionSelects({
           {areas.map((a) => (
             <option key={a.id} value={a.id}>{a.nombre}</option>
           ))}
-        </select>
+        </Select>
         {errors.area_id && (
           <p className="text-xs text-destructive" role="alert">{errors.area_id}</p>
         )}
@@ -93,9 +94,9 @@ export function OrganizacionSelects({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="manager_id">Superior inmediato</Label>
-        <select
+        <Select
+          className="w-auto"
           id="manager_id"
-          className={SELECT_CLASS}
           value={form.manager_id}
           onChange={field("manager_id")}
         >
@@ -103,7 +104,7 @@ export function OrganizacionSelects({
           {superiores.map((e) => (
             <option key={e.id} value={e.id}>{e.apellido}, {e.nombre}</option>
           ))}
-        </select>
+        </Select>
       </div>
     </>
   )

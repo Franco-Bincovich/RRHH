@@ -27,7 +27,7 @@ export function FichaEvaluadoModal({ loteId, evaluadoId, onClose }: Props) {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-auto">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{f ? `${f.apellido} ${f.nombre}` : "Ficha del evaluado"}</DialogTitle>
         </DialogHeader>

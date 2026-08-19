@@ -82,7 +82,7 @@ export function VacanteModal({ open, onClose, onSuccess }: VacanteModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Nueva vacante</DialogTitle>
         </DialogHeader>

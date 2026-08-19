@@ -1,12 +1,9 @@
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { TextFields } from "./TextFields"
 import { AutocompleteFields } from "./AutocompleteFields"
 import { DomicilioFields } from "./DomicilioFields"
-import {
-  PERSONAL_AUTOCOMPLETE, PERSONAL_CONTACT_FIELDS, PERSONAL_DOC_FIELDS,
-  PERSONAL_IDENTITY_FIELDS, SELECT_CLASS,
-  type AutocompleteKey, type FieldFactory, type FormData, type FormErrors,
-} from "./_constants"
+import { PERSONAL_AUTOCOMPLETE, PERSONAL_CONTACT_FIELDS, PERSONAL_DOC_FIELDS, PERSONAL_IDENTITY_FIELDS, type AutocompleteKey, type FieldFactory, type FormData, type FormErrors } from "./_constants"
 
 /**
  * Sección "Información personal" (controlada). Orden: identidad → documento
@@ -34,11 +31,11 @@ export function DatosPersonalesFields({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="sexo">Sexo</Label>
-        <select id="sexo" className={SELECT_CLASS} value={form.sexo} onChange={field("sexo")}>
+        <Select className="w-auto" id="sexo" value={form.sexo} onChange={field("sexo")}>
           <option value="">Sin especificar</option>
           <option value="F">Femenino</option>
           <option value="M">Masculino</option>
-        </select>
+        </Select>
       </div>
 
       <TextFields fields={PERSONAL_CONTACT_FIELDS} form={form} errors={errors} field={field} />

@@ -40,6 +40,101 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-19 · Cierre de B2.1 + los primitivos que faltaban (tabs, card, global-error) · commits pendientes
+
+**Qué cambió.** Frontend puro, **cero backend, cero endpoints, cero migraciones**. Dos primitivos
+nuevos, dos arreglos de la tanda anterior y un boundary sincronizado con la paleta.
+
+**Cierre de B2.1 (tres ítems).**
+1. **La barra de filtros dejó de tener dos alturas.** Al migrar los `<select>` los selectores
+   bajaron a 30px y los `<input type="date">`/`type="search"` se habían quedado en 44px, así que
+   `FiltersBar` y `AuditFilters` mostraban controles de dos tamaños en la misma fila. `FIELD_CLASS`
+   pasó a `h-11 md:h-[30px]`, la MISMA fórmula que el `size="sm"` del select, con el porqué escrito
+   en los dos archivos.
+2. **`SELECT_CLASS` de `empleados/modal/_constants.ts` se llama `INPUT_DATALIST_CLASS`.** Vestía un
+   `<input list=...>` y ningún select desde la migración; el nombre ya mentía.
+3. **`CLAUDE.md` declara que la verificación del front son TRES comandos** —`tsc`, `npm test` y
+   `npm run build`— con el motivo medido: el import arriba del `"use client"` que rompió el build y
+   que `tsc` no vio.
+
+**B2.2 — los primitivos.**
+4. **`components/ui/tabs.tsx`** (139 líneas), sobre la `Tabs` de `@base-ui/react` igual que
+   `input.tsx` y `button.tsx`. 🔴 **Había DIEZ barras de solapas, no tres**, en dos familias:
+   subrayado (7) y píldora (3). Las siete del subrayado ni siquiera coincidían entre sí. **Las dos
+   familias se conservan como variante** porque `docs/SISTEMA-DE-DISENO.md` no define solapas y
+   elegir una sería diseñar desde el código. Las 10 migradas; `TAB_CLASS` (declarada dos veces,
+   byte-idéntica) borrada.
+5. **`components/ui/card.tsx`** (82 líneas) con el tratamiento del §2: opaca, sin blur, elevación
+   por borde. El hover de 3px es una prop (`interactive`) y **no el default**: una card informativa
+   que se mueve promete un click que no existe. Migrados los 18 usos del literal exacto
+   `rounded-xl border bg-card p-4 md:p-6`.
+6. **`app/global-error.tsx`** sincronizado con la paleta nueva, **con la nota de que sus cinco
+   colores son copia manual de `paleta.css`** y que cambiar la paleta obliga a tocarlo. No puede
+   leer los tokens: reemplaza al root layout, así que no monta `globals.css` ni el `ThemeProvider`.
+
+🔴 **Y lo más importante de la tanda, que no estaba en el pedido: 20 modales estaban pisando el
+techo de altura del diálogo con una versión peor.** `DialogContent` ya trae
+`max-h-[calc(100dvh-2rem)]` —con `dvh` porque en mobile `vh` cuenta la barra de direcciones— y un
+cuerpo que scrollea solo. Veinte modales le pasaban `max-h-[90vh] overflow-y-auto` por className,
+que con `tailwind-merge` **gana**, y además scrollea el popup entero (título y botones incluidos)
+en vez del medio. Se sacó de los 20. **Había un test que verificaba que el override ganara**: se
+dio vuelta y hoy es el barrido que impide que vuelva.
+
+**Impacto en infraestructura: Ninguno.** Sin migraciones, variables, dependencias, buckets,
+endpoints, auth ni CORS. Sale por `sofia-front`.
+
+⚠️ **Un hallazgo PREEXISTENTE que NO se tocó y hay que decidir** (detalle en el reporte de la
+sesión): `CLASES_POPUP` termina en `sm:max-w-sm`, y como esa clase vive dentro de
+`@media (min-width:40rem)` y se emite DESPUÉS en la hoja, **le gana a cualquier `max-w-*` sin
+prefijo que pase un modal**. O sea que de 640px para arriba los modales que piden `max-w-4xl`
+miden 24rem. Cinco modales ya usan el workaround (`sm:max-w-lg`, `sm:max-w-md`); los otros ~30 no.
+Arreglarlo son ~30 líneas mecánicas, pero ensancha 30 modales de golpe y pide su propia
+verificación visual.
+
+## 2026-08-19 · `components/ui/select.tsx` + los 81 `<select>` nativos migrados · commits pendientes
+
+**Qué cambió.** Frontend puro, cinco commits, **cero backend, cero endpoints, cero migraciones,
+cero cambios de contrato HTTP**. Nace el primitivo `<Select>` y desaparecen los `<select>` nativos
+de las pantallas.
+
+🔴 **El conteo real era 81 en 53 archivos, no 87 en 56.** Los 6 de diferencia son `<select>`
+escritos **en prosa dentro de comentarios** que explican por qué ahí NO se usó uno (los checkboxes
+de `FiltersBar`, los botones de `EnvioModo`, el combobox de empleados, el `<select multiple>` de
+objetivos, el selector que la migración 108 borró de `ClienteModal` y el select encadenado de
+`CamposAusencia`). Ningún comentario se tocó, y el barrido los enmascara antes de buscar
+justamente para no empujar a nadie a borrarlos.
+
+1. **El componente** (131 líneas) envuelve el `<select>` NATIVO — no lo reemplaza por un dropdown
+   propio. Dos tamaños del sistema de diseño (`sm` 30px para la barra de filtros, `md` 34px para
+   formularios, default `md`), label opcional por `htmlFor`, mensaje de error con `role="alert"` y
+   `aria-describedby`, y foco visible. **Sin label ni error devuelve el `<select>` pelado**, sin
+   `<div>` alrededor: es lo que lo hace un reemplazo directo dentro de los layouts que ya existen.
+2. **Las 29 constantes de estilo se redujeron a 3.** `SELECT_CLASS` estaba declarada en 14 archivos
+   con **10 valores distintos**, `SEL` en 9 con 3, `SELECT_CLS` en 3 con 3. Ninguna diferencia era
+   una decisión: eran copias que driftearon (`ring-2` contra `ring-3`, `rounded-md` contra
+   `rounded-lg`, cinco alturas distintas). Sobreviven `FIELD_CLASS`, `INPUT_CLS` y el
+   `SELECT_CLASS` de `empleados/modal/_constants.ts`, las tres porque siguen vistiendo `<input>` o
+   `<textarea>`.
+3. **El barrido** (`components/ui/barridoSelect.test.ts`) falla si aparece un `<select>` nativo
+   fuera del primitivo, verifica que la única excepción declarada siga teniendo uno, y comprueba
+   que todo archivo que pinta `<Select>` lo importe de `@/components/ui/select`.
+
+**Impacto en infraestructura: Ninguno.** Sin migraciones, variables de entorno, dependencias,
+buckets, endpoints ni cambios de auth o CORS. Sale por `sofia-front`; no hay nada que esperar de
+`sofia-backend`.
+
+⚠️ **Dos cosas para el que mire esto después.**
+🔴 **`tsc` NO alcanzó: el `npm run build` cazó un error que el type-check no ve.** Al agregar el
+import en un archivo que no tenía ninguno, quedó **arriba del `"use client"`**, y eso rompe el
+build de Turbopack (`PeriodoSelectors.tsx`) sin que `tsc` diga una palabra. Corregido y
+rebuildeado; la regla que deja es que una tanda que toca imports se verifica con build, no solo
+con `tsc`.
+🟠 **La barra de filtros quedó con dos alturas conviviendo.** Los selects de `FiltersBar` y
+`AuditFilters` pasaron a 30px (lo que pide el sistema de diseño) pero sus `<input type="date">` y
+`<input type="search">` siguen en 44px, porque son inputs y esta tanda era de selects. Está
+anotado en el reporte de la sesión con el arreglo de una línea; **no se hizo acá para no meter
+inputs en una tanda de selects**.
+
 ## 2026-08-19 · Paleta de Capital Humano aplicada + el test de contraste pasa a medir los DOS temas · commits pendientes
 
 **Qué cambió.** Frontend puro, tres commits, **cero backend, cero endpoints, cero migraciones**.

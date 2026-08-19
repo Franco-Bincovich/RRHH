@@ -4,15 +4,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select } from "@/components/ui/select"
 import {
   MAX_HORAS_DIA, puedeEnviar, ventanaFechas,
   type FormHoras, type FormLicencia, type Modo,
 } from "@/components/features/horasPublico/logica"
 import type { ClientePublico } from "@/types/horasPublico"
-
-const SELECT =
-  "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
 interface Props {
   modo: Modo
@@ -78,21 +75,21 @@ export function CargaForm(p: Props) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="modalidad">Modalidad</Label>
-              <select id="modalidad" className={SELECT} value={p.horas.modalidad}
+              <Select id="modalidad" value={p.horas.modalidad}
                       onChange={(e) => p.onHoras({ ...p.horas, modalidad: e.target.value })}>
                 <option value="">Elegí una</option>
                 <option value="home_office">Home Office</option>
                 <option value="on_site">On site</option>
-              </select>
+              </Select>
               {err("modalidad")}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="cliente">Cliente</Label>
-              <select id="cliente" className={SELECT} value={p.horas.cliente_id}
+              <Select id="cliente" value={p.horas.cliente_id}
                       onChange={(e) => p.onHoras({ ...p.horas, cliente_id: e.target.value })}>
                 <option value="">Elegí uno</option>
                 {p.clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
+              </Select>
               {err("cliente_id")}
             </div>
           </div>

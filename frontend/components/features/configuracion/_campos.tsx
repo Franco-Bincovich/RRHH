@@ -2,6 +2,7 @@
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 
 export const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -61,17 +62,16 @@ export function CampoMes({
   return (
     <div>
       <Label htmlFor={id} className="mb-1.5 block text-sm">{etiqueta}</Label>
-      <select
+      <Select
         id={id}
         disabled={!editable}
         value={valor}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm disabled:opacity-50"
       >
         {MESES.map((m, i) => (
           <option key={m} value={i + 1}>{m}</option>
         ))}
-      </select>
+      </Select>
       {ayuda && <p className="mt-1 text-xs text-muted-foreground">{ayuda}</p>}
     </div>
   )

@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync } from "node:fs"
+import { join, resolve, sep } from "node:path"
+
 import { twMerge } from "tailwind-merge"
 import { describe, expect, it } from "vitest"
 
@@ -117,25 +120,79 @@ describe("las clases que sostienen el scroll", () => {
   })
 })
 
-describe("los 15 modales que YA traían max-h y overflow siguen andando", () => {
-  /**
-   * ImportarNominaCSVModal, VacanteModal, EmpleadoModal, ObjetivoModal y 11 más pasan
-   * `max-h-[90vh] overflow-y-auto` en el className. Lo que hay que garantizar es que su clase
-   * siga ganando: `cn()` usa tailwind-merge, y dos `max-h` en el mismo elemento sin merge es un
-   * empate que se resuelve por orden en el string — frágil de leer y fácil de romper.
-   */
-  const CONSUMIDOR = "max-h-[90vh] overflow-y-auto"
-  const resultado = twMerge(CLASES_POPUP, CONSUMIDOR)
+/**
+ * 🔴 BARRIDO — **ningún modal vuelve a declarar su propio `max-h` ni su propio `overflow`.**
+ *
+ * Acá vivía el test contrario, y hay que contar por qué se dio vuelta en vez de borrarse. Decía
+ * *"los 15 modales que YA traían `max-h-[90vh] overflow-y-auto` siguen andando"* y verificaba que
+ * **el className del consumidor le GANARA** al del primitivo. Era cierto —`cn()` usa
+ * tailwind-merge y el último `max-h` gana— y era exactamente el problema: **19 modales estaban
+ * pisando el techo de altura del primitivo con una versión PEOR de sí mismo.**
+ *
+ * `CLASES_POPUP` usa `max-h-[calc(100dvh-2rem)]`, y el `dvh` **no es un detalle**: en mobile `vh`
+ * cuenta la barra de direcciones aunque esté desplegada, así que `90vh` deja el modal más alto
+ * que lo que se ve. Encima, `overflow-y-auto` sobre el POPUP —y no sobre el cuerpo— hace
+ * scrollear el diálogo entero, que es justo lo que el reparto header/cuerpo/footer viene a
+ * evitar: el título y los botones se van con el scroll.
+ *
+ * O sea que el test anterior no estaba mal escrito: **protegía la regresión**. Se lo reemplaza
+ * por su inverso, que es la regla que de verdad se quiere sostener — el primitivo decide la
+ * altura y el scroll, y el modal solo elige su ancho.
+ *
+ * ⚠️ ¿QUÉ TENDRÍA QUE SER DISTINTO PARA QUE PUEDA FALLAR? Lee los archivos REALES, no una
+ * constante copiada acá: un modal nuevo entra al barrido solo. Y la guarda de mínimo corre antes
+ * de comparar, porque si el recorrido se rompiera encontraría 0 modales y "ninguno declara
+ * max-h" pasaría en el vacío.
+ */
+describe("Barrido: la altura y el scroll del modal los decide el primitivo", () => {
+  const RAIZ = resolve(__dirname, "..", "..")
 
-  it("el max-h del consumidor PISA al del primitivo", () => {
-    expect(resultado).toContain("max-h-[90vh]")
-    expect(resultado).not.toContain("max-h-[calc(100dvh-2rem)]")
+  function tsxDe(carpeta: string): string[] {
+    const salida: string[] = []
+    const recorrer = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        if (e.name === "node_modules" || e.name.startsWith(".")) continue
+        const p = join(dir, e.name)
+        if (e.isDirectory()) recorrer(p)
+        else if (e.name.endsWith(".tsx") && !e.name.includes(".test.")) salida.push(p)
+      }
+    }
+    recorrer(join(RAIZ, carpeta))
+    return salida
+  }
+
+  const usos = ["app", "components"]
+    .flatMap(tsxDe)
+    .flatMap((f) => {
+      const texto = readFileSync(f, "utf-8")
+      return [...texto.matchAll(/<DialogContent className="([^"]*)"/g)].map((m) => ({
+        archivo: f.slice(RAIZ.length + 1).split(sep).join("/"),
+        clases: m[1],
+      }))
+    })
+
+  it("hay modales que mirar", () => {
+    expect(usos.length).toBeGreaterThanOrEqual(15)
   })
 
-  it("y el resto del layout del primitivo sobrevive", () => {
-    // El consumidor solo pisa `max-h` y agrega `overflow-y-auto`: flex, columna y los shrink-0
-    // de los extremos tienen que seguir ahí, o el modal vuelve a scrollear entero.
+  it("ninguno declara max-h ni overflow: eso lo pone CLASES_POPUP y CLASES_CUERPO", () => {
+    const infractores = usos
+      .filter((u) => /\bmax-h-|\boverflow-/.test(u.clases))
+      .map((u) => `${u.archivo} → ${u.clases}`)
+    expect(
+      infractores,
+      "Sacá `max-h-*` y `overflow-*` del className: el popup ya trae " +
+        "`max-h-[calc(100dvh-2rem)]` (con dvh, no vh) y el cuerpo ya scrollea. Lo único que un " +
+        "modal elige es su ancho (`max-w-*`).",
+    ).toEqual([])
+  })
+
+  it("y el layout del primitivo sigue entero cuando el modal pasa su ancho", () => {
+    // El único override legítimo es `max-w-*`: no toca ni la altura ni el scroll ni el reparto.
+    const resultado = twMerge(CLASES_POPUP, "max-w-lg")
+    expect(resultado).toContain("max-h-[calc(100dvh-2rem)]")
     expect(resultado).toContain("flex-col")
     expect(resultado).toContain("[&>[data-slot=dialog-footer]]:shrink-0")
+    expect(resultado).toContain("max-w-lg")
   })
 })

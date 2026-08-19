@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Tabs } from "@base-ui/react/tabs"
+import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { AnalisisAreaModal } from "@/components/features/sucesion/AnalisisAreaModal"
@@ -10,7 +10,6 @@ import { MapaTalentoTab } from "@/components/features/sucesion/MapaTalentoTab"
 import { NuevoPlanModal } from "@/components/features/sucesion/NuevoPlanModal"
 import { PlanDetallePanel } from "@/components/features/sucesion/PlanDetallePanel"
 import { PlanesTab } from "@/components/features/sucesion/PlanesTab"
-import { TAB_CLASS } from "@/components/features/sucesion/_sucesion_ui"
 import { usePlanDetalle } from "@/components/features/sucesion/usePlanDetalle"
 import { useSucesionData } from "@/components/features/sucesion/useSucesionData"
 import { getEmpresaActivaId } from "@/services/empresaStore"
@@ -53,14 +52,14 @@ function SucesionContenido() {
         description="Mapa de talento y trayectorias de desarrollo"
       />
 
-      <Tabs.Root defaultValue="mapa" className="space-y-6">
-        <Tabs.List className="inline-flex gap-0.5 rounded-xl bg-muted p-1">
-          <Tabs.Tab value="mapa" className={TAB_CLASS}>Mapa de Talento</Tabs.Tab>
-          <Tabs.Tab value="planes" className={TAB_CLASS}>Planes de Carrera</Tabs.Tab>
-        </Tabs.List>
+      <Tabs variant="pill" defaultValue="mapa" className="space-y-6">
+        <TabList>
+          <Tab value="mapa">Mapa de Talento</Tab>
+          <Tab value="planes">Planes de Carrera</Tab>
+        </TabList>
 
         {/* ── Tab 1: 9-Box ──────────────────────────────────────────────── */}
-        <Tabs.Panel value="mapa" className="space-y-4">
+        <TabPanel value="mapa" className="space-y-4">
           <MapaTalentoTab
             empleados={datos.rawEmpleados}
             areas={datos.areas}
@@ -70,10 +69,10 @@ function SucesionContenido() {
             error={datos.errorMapa}
             onAnalizar={() => setAnalisisOpen(true)}
           />
-        </Tabs.Panel>
+        </TabPanel>
 
         {/* ── Tab 2: Planes de carrera ───────────────────────────────────── */}
-        <Tabs.Panel value="planes">
+        <TabPanel value="planes">
           <PlanesTab
             planes={datos.planes}
             loading={datos.loadingPlanes}
@@ -83,8 +82,8 @@ function SucesionContenido() {
             onNuevoPlan={() => setPlanOpen(true)}
             onVerDetalle={detalle.abrir}
           />
-        </Tabs.Panel>
-      </Tabs.Root>
+        </TabPanel>
+      </Tabs>
 
       {detalle.selectedPlan && (
         <PlanDetallePanel plan={detalle.selectedPlan} detalle={detalle} canWrite={canWrite} />

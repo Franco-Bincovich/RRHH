@@ -7,6 +7,7 @@ import { ChevronRight, Plus, Settings2, UserCheck, X } from "lucide-react"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/ui/EmptyState"
+import { Select } from "@/components/ui/select"
 import { OnboardingChecklist } from "@/components/features/onboarding/OnboardingChecklist"
 import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
@@ -144,18 +145,17 @@ function IniciarModal({ activos, onClose, onSuccess }: IniciarModalProps) {
                 Template
               </label>
               {filteredTemplates.length > 0 ? (
-                <select
+                <Select
                   id="tmpl-select"
                   value={selectedTemplateId}
                   onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   {filteredTemplates.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.nombre}
                     </option>
                   ))}
-                </select>
+                </Select>
               ) : (
                 <p className="text-xs text-muted-foreground">
                   No hay templates configurados para la empresa de este empleado.

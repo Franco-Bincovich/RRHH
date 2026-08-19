@@ -5,6 +5,7 @@ import { Inbox, Paperclip } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Select } from "@/components/ui/select"
 import { asignarMail, fetchMailsPendientes, fetchVacantes } from "@/services/vacantes"
 import type { Vacante } from "@/types/vacantes"
 import type { MailPendiente } from "@/types/vacantesIngesta"
@@ -109,9 +110,9 @@ export function MailsPendientes() {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <select
+                  <Select
+                    className="w-auto"
                     aria-label={`Asignar ${m.asunto || m.message_id} a una búsqueda`}
-                    className="min-h-10 rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                     value={elegida[m.message_id] ?? ""}
                     onChange={(e) => setElegida((p) => ({ ...p, [m.message_id]: e.target.value }))}
                   >
@@ -119,7 +120,7 @@ export function MailsPendientes() {
                     {vacantes.map((v) => (
                       <option key={v.id} value={v.id}>{v.codigo} · {v.titulo}</option>
                     ))}
-                  </select>
+                  </Select>
                   <Button
                     size="sm"
                     className="min-h-10"

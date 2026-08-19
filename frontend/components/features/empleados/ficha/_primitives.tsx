@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton"
+import { Card } from "@/components/ui/card"
 
 /** Etiqueta + valor de un dato del legajo. Muestra "—" cuando el valor es nulo/vacío. */
 export function Field({ label, value }: { label: string; value: string | null | undefined }) {
@@ -15,10 +16,10 @@ export function Field({ label, value }: { label: string; value: string | null | 
 /** Tarjeta con título y grilla de campos. Contenedor de cada bloque de la ficha. */
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border bg-card p-4 md:p-6">
+    <Card as="section">
       <h2 className="mb-4 text-base font-semibold text-foreground">{title}</h2>
       <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</dl>
-    </section>
+    </Card>
   )
 }
 

@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select } from "@/components/ui/select"
 import { devolverItem } from "@/services/inventario"
 import type { Asignacion, DevolucionRequest, EstadoDevolucion } from "@/types/inventario"
 
@@ -13,8 +14,6 @@ interface Props {
   onClose: () => void
   onSuccess: () => void
 }
-
-const SEL = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
 export function DevolverModal({ asignacion, onClose, onSuccess }: Props) {
   const [estado, setEstado] = useState<EstadoDevolucion>("ok")
@@ -47,10 +46,10 @@ export function DevolverModal({ asignacion, onClose, onSuccess }: Props) {
             </p>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="dev_estado">Estado de devolución</Label>
-              <select id="dev_estado" className={SEL} value={estado} onChange={(e) => setEstado(e.target.value as EstadoDevolucion)}>
+              <Select id="dev_estado" value={estado} onChange={(e) => setEstado(e.target.value as EstadoDevolucion)}>
                 <option value="ok">OK — sin daños</option>
                 <option value="con_daño">Con daño → pasa a reparación</option>
-              </select>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="dev_notas">Notas <span className="text-xs text-muted-foreground font-normal">(opcional)</span></Label>

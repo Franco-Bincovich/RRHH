@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
 import { iniciarOffboarding } from "@/services/offboarding"
 import type { MotivoEgreso } from "@/types/offboarding"
 
@@ -64,18 +65,17 @@ export function OffboardingModal({ open, empleadoId, onClose, onSuccess }: Offbo
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="motivo-egreso">Motivo de egreso</Label>
-            <select
+            <Select
               id="motivo-egreso"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value as MotivoEgreso)}
-              className="flex min-h-[2.75rem] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               {MOTIVOS_OFFBOARDING.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {error && (

@@ -54,7 +54,7 @@ export function AuditDetailModal({ log, onClose }: AuditDetailModalProps) {
 
   return (
     <Dialog open={log !== null} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{titulo}</DialogTitle>
         </DialogHeader>

@@ -853,8 +853,37 @@ Carpeta **aislada** para migración de Supabase a **AWS (asyncpg/RDS + S3)**. C�
 ### El repo NO está formateado con ruff, pese a su config
 `ruff.toml` declara `line-length=100` + `[format]`, pero el código está en **estilo compacto de línea larga**. Los límites documentados se midieron sobre ese estilo. **Correr `ruff format` reflowea archivos enteros** (en una prueba: `ausencias_service.py` 149→253). **NO correr `ruff format` dentro de una sesión de feature/bugfix.** Adoptar ruff repo-wide es tarea propia con re-medición de límites. ⚠️ Confirmar si `pre-commit` está instalado — mina para la migración AWS.
 
-### `tsc` en 0 y `next build` verde
-`next dev` con Turbopack transpila sin type-check → errores de tipo pasan desapercibidos pero **`next build` falla**. `vitest` cubre hoy 214 tests en 16 archivos, pero **la mayor parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Regla: `node_modules/.bin/tsc --noEmit` tiene que dar 0. Si aparece un error, es tuyo.**
+### 🔴 LA VERIFICACIÓN DEL FRONT SON TRES COMANDOS, NO DOS
+
+```
+node_modules/.bin/tsc --noEmit     # 0 errores
+npm test                           # vitest, todo verde
+npm run build                      # "Compiled successfully"
+```
+
+**Los tres, siempre, y `npm run build` NO es opcional ni redundante con `tsc`.** El motivo está
+medido, no supuesto: en la tanda de selects del 19/8/2026 se agregó un `import` en un archivo que
+no tenía ninguno y quedó **arriba del `"use client"`**. Eso rompe el build de Turbopack
+(*"The `use client` directive must be placed before other expressions"*, `PeriodoSelectors.tsx`) y
+**`tsc` no dice una palabra**: es una regla de Next, no del sistema de tipos. Con dos de tres, el
+rojo aparecía en el deploy de Vercel y no en la sesión que lo causó. Los tres miran cosas
+distintas: `tsc` los tipos, `vitest` el comportamiento, `build` **las reglas de Next y la
+compilación real de Tailwind/Turbopack** — directivas mal ubicadas, imports de servidor en
+cliente, CSS que no resuelve.
+
+`next dev` con Turbopack transpila sin type-check → un error de tipo pasa desapercibido en
+desarrollo pero **`next build` falla**. `vitest` cubre 746 tests en 63 archivos, pero **la mayor
+parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Si aparece un error en
+cualquiera de los tres, es tuyo.**
+
+> ⚠️ **`npm run build` deja basura que rompe el `tsc` siguiente, en esta Mac.** Después de cada
+> build aparecen duplicados de `.next/types/routes.d.ts`, `cache-life.d.ts` y `validator.ts` (los
+> crea el sync de la carpeta, no Next), y como `tsconfig.json` incluye `.next/types/**/*.ts`, el
+> `tsc` siguiente da **3 errores TS6200/TS2428/TS2300 que no son del código**.
+> 🔴 **El sufijo NO es siempre `" 2"`: va subiendo** — apareció como `routes.d 2.ts` y en el build
+> siguiente como `routes.d 3.ts`. Limpiar con el número fijo deja el problema vivo. El comando es
+> `find .next -name "* [0-9].*" -delete`. Por eso conviene **correr el build ÚLTIMO**, o limpiar
+> antes de creer un rojo de `tsc` que apunte a `.next/`.
 > ⚠️ vitest corre con `environment: "node"` y **sin jsdom**: los tests de componentes usan `renderToStaticMarkup` y verifican el **markup**, no la interacción — y **no ejecutan `useEffect`**. Ver el caso #4 de "Un test solo prueba lo que el fake puede desmentir".
 
 ### 🚨 Módulos desactivados (assessment, sucesión y el link público de horas)
@@ -1008,9 +1037,9 @@ contra el catálogo el 12/8/2026).
 ### Tests
 - **Backend: 4004 passed** en **192 archivos `test_*.py`** (+ **19 helpers** `tests/_*.py`, que no son tests — 211 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 19/8/2026, al cerrar A3.3 / el bloque A.)*
   > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → **4004** (A3.3). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
-- **Front: `npm test` (= `vitest run`) — 740 tests en 62 archivos, verdes.** *(Windows verificado el 19/8/2026; la Mac quedó verificada por última vez el 12/8 con 647. Sin sesión de frontend desde A6, este número no se movió.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Front: `npm test` (= `vitest run`) — 746 tests en 63 archivos, verdes.** *(Windows verificado el 19/8/2026; la Mac quedó verificada por última vez el 12/8 con 647. Sin sesión de frontend desde A6, este número no se movió.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
   > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
-- **Son 19 barridos estructurales conocidos** (16 backend + 3 front), renumerados el 19/8/2026 —
+- **Son 21 barridos estructurales conocidos** (16 backend + 5 front), renumerados el 19/8/2026 —
   la lista anterior tenía dos numeraciones distintas conviviendo (1–11 y 12–15 fuera de orden) y
   le faltaban 3 barridos que ya existían. **Cada uno cubre automáticamente lo que se agregue
   después, y todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una
@@ -1030,6 +1059,8 @@ contra el catálogo el 12/8/2026).
   17. **`frontend/components/layout/nav-config.test.ts`** — `NAV_GROUPS` contra `seccionDeRuta`.
   18. **`frontend/services/barridoFront.test.ts`** — exports de `services/` que ningún componente importa, en dos buckets (huérfano / solo-tests), con excepciones declaradas con razón y verificadas en las dos direcciones.
   19. **`frontend/app/contrasteTokens.test.ts`** — ratio WCAG de los **10 pares** fondo/texto de la paleta, **en LOS DOS TEMAS** (`:root` y `.dark`), parseando hex y oklch del archivo real. 🔴 **Desde el 19/8/2026 lee `app/paleta.css`, no `globals.css`**: los dos bloques de tokens se mudaron a un archivo propio cuando la paleta de `docs/SISTEMA-DE-DISENO.md` pasó a `globals.css` del límite de 200 líneas, y `globals.css` quedó con el cableado (`@theme inline`, capa base, print) importándolo. Vigila que la paleta siga siendo legible: la regla de `option` de `globals.css` no elige colores, los toma prestados de `--popover`/`--popover-foreground`, así que un ajuste de paleta puede volver el popup ilegible **sin tocar la regla**. Ancla la fórmula con valores literales antes de medir nada (blanco/negro = 21:1 por hex y por oklch) y **rechaza** los colores con canal alfa en vez de medirlos ignorándolo. ⚠️ **Hasta el 19/8 parseaba SOLO el bloque `.dark`**, y ese medio barrido escondía que `--muted/--muted-foreground` daba 4.34:1 en claro. `BRECHAS_DECLARADAS` quedó **vacío**: la paleta nueva cerró las tres brechas que había (`--primary` y `--sidebar-primary` en oscuro, 3.68:1 → 7.97:1; `--muted` en claro, 4.34:1 → 5.24:1). El mecanismo sigue, para la próxima.
+  20. **`frontend/components/ui/barridoSelect.test.ts`** — **ningún `<select>` nativo fuera de `components/ui/select.tsx`**. Nació el 19/8/2026 junto con el primitivo, al migrar los **81 `<select>` de 53 archivos** que vivían vestidos con **29 constantes de estilo copiadas entre archivos** (`SELECT_CLASS` declarada en 14 archivos con **10 valores distintos**, `SEL` en 9 con 3, `SELECT_CLS` en 3 con 3, más 17 con la clase inline). Migrar sin barrido no cierra nada: el próximo `<select>` nativo entra en el próximo PR. Tres aserciones: no hay nativos fuera del primitivo · la única excepción declarada sigue teniendo uno (excepción muerta = rojo) · todo archivo que pinta `<Select>` lo importa de `@/components/ui/select` (un `Select` local esquivaría la primera). Guardas de mínimo ≥300 archivos barridos y ≥40 consumidores. 🔑 **Enmascara los comentarios antes de buscar**: hay 6 lugares que mencionan `<select>` en prosa para explicar por qué ahí NO se usó uno, y un barrido por texto plano empujaría a borrar justo esas explicaciones. Excluye los `.test.*` — sin eso se marca a sí mismo.
+  21. **`frontend/components/ui/dialog.test.tsx`** (bloque *"Barrido: la altura y el scroll del modal los decide el primitivo"*) — **ningún `<DialogContent>` declara `max-h-*` ni `overflow-*`**. 🔴 Nació el 19/8/2026 **dando vuelta el test que estaba en su lugar**, que verificaba lo contrario: *"los 15 modales que ya traían `max-h-[90vh] overflow-y-auto` siguen andando"*, o sea que el className del consumidor le GANARA al del primitivo. Era cierto y era el bug: **20 modales pisaban el `max-h-[calc(100dvh-2rem)]` del popup con `90vh`** —y `vh` en mobile cuenta la barra de direcciones, que es exactamente lo que el `dvh` del primitivo evita—, y ponían `overflow-y-auto` sobre el POPUP en vez del cuerpo, con lo que el título y los botones se iban con el scroll. Un test que protege una regresión es peor que no tenerlo. Lee los archivos reales (un modal nuevo entra solo), con guarda de mínimo ≥15. **Lo encontró él y no un grep**: el 20º usaba `max-h-[80vh]`.
   > ⚠️ **Esta lista es una FOTO, compilada por grep del marcador "BARRIDO ESTRUCTURAL" + memoria
   > de sesión, no una re-auditoría exhaustiva de cada archivo.** Puede faltar alguno con un
   > docstring que no use ese marcador literal. La forma de reconstruirla de cero, si hace falta:

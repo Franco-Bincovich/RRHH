@@ -27,16 +27,6 @@ export function toEmpleadoCelda(e: EmpleadoMapa): EmpleadoCelda {
 
 // ─── Clases ───────────────────────────────────────────────────────────────────
 
-export const TAB_CLASS =
-  "rounded-lg px-5 py-2 text-sm font-medium text-muted-foreground outline-none " +
-  "transition-colors hover:text-foreground " +
-  "data-active:bg-background data-active:text-foreground data-active:shadow-sm " +
-  "focus-visible:ring-2 focus-visible:ring-ring/50"
-
-export const SELECT_CLASS =
-  "h-9 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none " +
-  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-
 // Clase del badge de nivel (potencial/desempeño). El <span> que la usa vive en
 // AnalisisAreaModal, su único consumidor: acá no entra JSX.
 export const NIVEL_BADGE_CLASS: Record<string, string> = {

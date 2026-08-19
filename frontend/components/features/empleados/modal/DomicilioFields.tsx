@@ -3,12 +3,10 @@
 import { useEffect, useState } from "react"
 
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { TextFields } from "./TextFields"
 import { fetchProvincias } from "@/services/provincias"
-import {
-  DOMICILIO_FIELDS, SELECT_CLASS,
-  type FieldFactory, type FormData, type FormErrors,
-} from "./_constants"
+import { DOMICILIO_FIELDS, type FieldFactory, type FormData, type FormErrors } from "./_constants"
 
 /**
  * Bloque "Domicilio" del modal de empleado: los cinco campos de texto más el select de
@@ -52,9 +50,9 @@ export function DomicilioFields({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="domicilio_provincia">Provincia</Label>
-        <select
+        <Select
+          className="w-auto"
           id="domicilio_provincia"
-          className={SELECT_CLASS}
           value={form.domicilio_provincia}
           onChange={field("domicilio_provincia")}
         >
@@ -62,7 +60,7 @@ export function DomicilioFields({
           {provincias.map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
-        </select>
+        </Select>
       </div>
     </>
   )

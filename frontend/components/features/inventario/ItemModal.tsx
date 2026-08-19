@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select } from "@/components/ui/select"
 import { createItem, updateItem } from "@/services/inventario"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
@@ -23,8 +24,6 @@ type FormData = { empresa_id: string; nombre: string; tipo: string; descripcion:
 type FormErrors = Partial<Record<keyof FormData, string>>
 
 const EMPTY: FormData = { empresa_id: "", nombre: "", tipo: "", descripcion: "", numero_serie: "", costo: "", notas: "" }
-const SEL = "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-
 function validate(form: FormData, isEdit: boolean): FormErrors {
   const e: FormErrors = {}
   if (!isEdit && !form.empresa_id) e.empresa_id = "Requerido"
@@ -101,17 +100,17 @@ export function ItemModal({ open, onClose, onSuccess, editing }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>{isEdit ? "Editar ítem" : "Nuevo ítem"}</DialogTitle></DialogHeader>
         <form id="item-form" onSubmit={handleSubmit} noValidate>
           <div className="flex flex-col gap-4 py-2">
             {!isEdit && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="item_empresa">Empresa <span className="text-destructive" aria-hidden>*</span></Label>
-                <select id="item_empresa" className={SEL} value={form.empresa_id} onChange={field("empresa_id")} aria-required aria-invalid={Boolean(errors.empresa_id)}>
+                <Select id="item_empresa" value={form.empresa_id} onChange={field("empresa_id")} aria-required aria-invalid={Boolean(errors.empresa_id)}>
                   <option value="">Seleccionar empresa</option>
                   {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-                </select>
+                </Select>
                 {errors.empresa_id && <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>}
               </div>
             )}

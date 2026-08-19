@@ -36,10 +36,6 @@ export const TIPOS_VACACION: { value: TipoVacacion; label: string }[] = [
   { value: "permiso_especial",label: "Permiso especial" },
 ]
 
-export const SELECT_CLASS =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-
 /** Días inclusivos entre dos fechas ISO; 0 si el rango es inválido o incompleto. */
 export function calcDias(desde: string, hasta: string): number {
   if (!desde || !hasta || hasta < desde) return 0

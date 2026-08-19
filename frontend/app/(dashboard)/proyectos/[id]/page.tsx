@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { Badge } from "@/components/ui/badge"
+import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { EquipoTab } from "@/components/features/proyectos/EquipoTab"
@@ -117,22 +118,19 @@ export default function ProyectoDetailPage() {
 
       <CosteoPanel proyecto={proyecto} />
 
-      <div className="flex gap-1 border-b border-border">
-        {(["equipo", "horas"] as Tab[]).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={cn("px-4 py-2 text-sm font-medium capitalize transition-colors",
-              tab === t ? "border-b-2 border-primary text-foreground" : "text-muted-foreground hover:text-foreground")}>
-            {t === "equipo" ? "Equipo" : "Horas"}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabList>
+          <Tab value="equipo">Equipo</Tab>
+          <Tab value="horas">Horas</Tab>
+        </TabList>
 
-      {tab === "equipo" && (
-        <EquipoTab proyectoId={id} proyectoEmpresaId={proyecto.empresa_id} canWrite={canWrite} />
-      )}
-      {tab === "horas" && (
-        <HorasTab proyectoId={id} onRefresh={loadProyecto} canWrite={canWrite} />
-      )}
+        <TabPanel value="equipo">
+          <EquipoTab proyectoId={id} proyectoEmpresaId={proyecto.empresa_id} canWrite={canWrite} />
+        </TabPanel>
+        <TabPanel value="horas">
+          <HorasTab proyectoId={id} onRefresh={loadProyecto} canWrite={canWrite} />
+        </TabPanel>
+      </Tabs>
 
       <ProyectoModal open={editOpen} proyecto={proyecto}
         onClose={() => setEditOpen(false)} onSave={handleSaveEdit} />

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Check, Copy, Hash, TriangleAlert } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fetchAvisoPostulacion } from "@/services/vacantes"
 import type { AvisoPostulacion } from "@/types/vacantes"
@@ -58,7 +59,7 @@ export function CodigoPostulacion({ vacanteId }: CodigoPostulacionProps) {
   if (!aviso) return null
 
   return (
-    <div className="mb-8 rounded-xl border bg-card p-4 md:p-6">
+    <Card className="mb-8">
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <Hash className="size-4 text-muted-foreground" />
         <h2 className="text-base font-semibold text-foreground">Código de la búsqueda</h2>
@@ -110,6 +111,6 @@ export function CodigoPostulacion({ vacanteId }: CodigoPostulacionProps) {
           </p>
         </div>
       )}
-    </div>
+    </Card>
   )
 }

@@ -19,10 +19,6 @@ export type FormErrors = Partial<Record<keyof FormData, string>>
 
 export const EMPTY: FormData = { empresa_id: "", nombre: "", descripcion: "", responsable_id: "" }
 
-export const SELECT_CLASS =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-
 /**
  * Errores del formulario. Objeto vacío = se puede mandar.
  *

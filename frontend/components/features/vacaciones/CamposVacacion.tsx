@@ -3,9 +3,8 @@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  SELECT_CLASS, TIPOS_VACACION, type VacacionFormData, type VacacionFormErrors,
-} from "./vacacionesForm"
+import { Select } from "@/components/ui/select"
+import { TIPOS_VACACION, type VacacionFormData, type VacacionFormErrors } from "./vacacionesForm"
 
 type FieldHandler = (
   e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
@@ -39,9 +38,9 @@ export function CamposVacacion({ form, errors, field, toggle }: CamposVacacionPr
       {!form.pendiente && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="tipo">Tipo</Label>
-          <select id="tipo" className={SELECT_CLASS} value={form.tipo} onChange={field("tipo")}>
+          <Select id="tipo" value={form.tipo} onChange={field("tipo")}>
             {TIPOS_VACACION.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
-          </select>
+          </Select>
         </div>
       )}
 

@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { ImageIcon } from "lucide-react"
 
 import { Skeleton } from "@/components/ui/skeleton"
+import { Card } from "@/components/ui/card"
 import { FileUpload } from "@/components/features/adjuntos/FileUpload"
 import { ImagenCard } from "@/components/features/vacantes/ImagenCard"
 import { useCanWrite } from "@/hooks/useCanWrite"
@@ -86,7 +87,7 @@ export function VacanteImagenes({ vacanteId }: { vacanteId: string }) {
   }
 
   return (
-    <section className="mb-8 rounded-xl border bg-card p-4 md:p-6">
+    <Card as="section" className="mb-8">
       <div className="mb-1 flex items-center gap-2">
         <ImageIcon className="size-4 text-muted-foreground" />
         <h2 className="text-base font-semibold text-foreground">Imágenes</h2>
@@ -123,6 +124,6 @@ export function VacanteImagenes({ vacanteId }: { vacanteId: string }) {
           </div>
         )}
       </div>
-    </section>
+    </Card>
   )
 }

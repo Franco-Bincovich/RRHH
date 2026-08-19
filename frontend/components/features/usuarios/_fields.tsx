@@ -5,6 +5,7 @@ import { Eye, EyeOff } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 
 interface TextFieldProps {
   id: string
@@ -100,18 +101,17 @@ export function SelectField({ id, label, value, onChange, options, error }: Sele
       <Label htmlFor={id}>
         {label} <span className="ml-0.5 text-destructive" aria-hidden>*</span>
       </Label>
-      <select
+      <Select
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={Boolean(error)}
         aria-required
-        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
-      </select>
+      </Select>
       {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
     </div>
   )

@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { NIVEL_BADGE_CLASS, SELECT_CLASS } from "./_sucesion_ui"
+import { Select } from "@/components/ui/select"
+import { NIVEL_BADGE_CLASS } from "./_sucesion_ui"
 import { fetchAnalisisPosicion } from "@/services/sucesion"
 import type { Area } from "@/types/area"
 import type { EmpleadoAnalisis } from "@/types/sucesion"
@@ -70,17 +71,16 @@ export function AnalisisAreaModal({
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <Label htmlFor="analisis-area">Área</Label>
-            <select
+            <Select
               id="analisis-area"
               value={area}
               onChange={(e) => { setArea(e.target.value); setError(null) }}
-              className={`h-9 w-full ${SELECT_CLASS}`}
             >
               <option value="">Seleccioná un área</option>
               {areas.map((a) => (
                 <option key={a.id} value={a.id}>{a.nombre}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {error && <p className="text-xs text-destructive">{error}</p>}

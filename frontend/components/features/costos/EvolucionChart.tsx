@@ -1,6 +1,7 @@
 "use client"
 
 import { Skeleton } from "@/components/ui/skeleton"
+import { Card } from "@/components/ui/card"
 import { MESES_CORTOS } from "@/components/features/costos/formatos"
 import type { EvolucionMes } from "@/types/costo"
 
@@ -19,10 +20,7 @@ export function EvolucionChart({ data }: { data: EvolucionMes[] }) {
   const BAR_MAX_PX = 128
 
   return (
-    <section
-      className="rounded-xl border bg-card p-4 md:p-6"
-      aria-label="Evolución mensual del costo de nómina"
-    >
+    <Card as="section" aria-label="Evolución mensual del costo de nómina">
       <h2 className="mb-5 text-base font-semibold text-foreground">Evolución mensual</h2>
       <div className="flex h-32 gap-3">
         {data.map((d) => {
@@ -61,7 +59,7 @@ export function EvolucionChart({ data }: { data: EvolucionMes[] }) {
           </div>
         ))}
       </div>
-    </section>
+    </Card>
   )
 }
 

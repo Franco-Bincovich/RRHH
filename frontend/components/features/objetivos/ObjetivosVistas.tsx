@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { KanbanView } from "@/components/features/objetivos/KanbanView"
 import { ListView } from "@/components/features/objetivos/ListView"
 import type { EstadoObjetivo, Objetivo } from "@/types/objetivo"
@@ -75,26 +76,30 @@ export function ObjetivosVistas({
 }: Props) {
   return (
     <>
-      <div className="mb-4 flex gap-1 border-b border-border">
-        {(["tablero", "lista"] as Vista[]).map((v) => (
-          <button key={v} onClick={() => onVista(v)}
-            className={cn("px-4 pb-3 pt-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              vista === v ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground")}>
-            {v === "tablero" ? "Tablero" : "Lista"}
-          </button>
-        ))}
-      </div>
+      <Tabs value={vista} onValueChange={onVista}>
+        <TabList className="mb-4">
+          <Tab value="tablero">Tablero</Tab>
+          <Tab value="lista">Lista</Tab>
+        </TabList>
 
-      {loading && <TableSkeleton />}
-      {!loading && error && <div className="py-12 text-center text-sm text-destructive">Error al cargar. <button onClick={onReintentar} className="underline">Reintentar</button></div>}
-      {!loading && !error && vista === "tablero" && (
-        <KanbanView objetivos={objetivos} total={total} onMover={onMover} moviendo={moviendo}
-          canWrite={canWrite} onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
-      )}
-      {!loading && !error && vista === "lista" && (
-        <ListView objetivos={objetivos} total={total} showEmpresa={mostrarEmpresa}
-          canWrite={canWrite} onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
-      )}
+        {/* Carga y error viven FUERA de los paneles a propósito: son estado de la pantalla, no
+            de una solapa, y duplicarlos adentro de cada panel los haría divergir. */}
+        {loading && <TableSkeleton />}
+        {!loading && error && <div className="py-12 text-center text-sm text-destructive">Error al cargar. <button onClick={onReintentar} className="underline">Reintentar</button></div>}
+
+        <TabPanel value="tablero">
+          {!loading && !error && (
+            <KanbanView objetivos={objetivos} total={total} onMover={onMover} moviendo={moviendo}
+              canWrite={canWrite} onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
+          )}
+        </TabPanel>
+        <TabPanel value="lista">
+          {!loading && !error && (
+            <ListView objetivos={objetivos} total={total} showEmpresa={mostrarEmpresa}
+              canWrite={canWrite} onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
+          )}
+        </TabPanel>
+      </Tabs>
     </>
   )
 }

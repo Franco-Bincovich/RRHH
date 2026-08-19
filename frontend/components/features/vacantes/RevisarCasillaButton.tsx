@@ -63,7 +63,7 @@ export function RevisarCasillaButton() {
       </Button>
 
       <Dialog open={abierto} onOpenChange={(v) => { if (!v) { setResultado(null); setError(null) } }}>
-        <DialogContent className="max-h-[80vh] overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Revisión de la casilla</DialogTitle>
             <DialogDescription>

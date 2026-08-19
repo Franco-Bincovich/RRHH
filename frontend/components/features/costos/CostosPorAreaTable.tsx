@@ -1,6 +1,7 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
 import {
   Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -37,7 +38,7 @@ export function CostosPorAreaTable({
   }))
 
   return (
-    <section className="rounded-xl border bg-card p-4 md:p-6" aria-label="Costos por área">
+    <Card as="section" aria-label="Costos por área">
       <h2 className="mb-4 text-base font-semibold text-foreground">Costos por área</h2>
       <Table>
         <TableHeader>
@@ -107,6 +108,6 @@ export function CostosPorAreaTable({
           </TableRow>
         </TableFooter>
       </Table>
-    </section>
+    </Card>
   )
 }

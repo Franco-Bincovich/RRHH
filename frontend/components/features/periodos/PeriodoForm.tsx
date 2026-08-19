@@ -5,14 +5,14 @@ import { toast } from "sonner"
 import { Lock } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { cerrarPeriodo, MODULO_LABEL } from "@/services/periodos"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Empresa } from "@/types/empresa"
-
-const SELECT_CLS = "h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
 
 /** Formulario para cerrar un período nuevo. Al confirmar refresca la lista (onCreated). */
 export function PeriodoForm({ onCreated }: { onCreated: () => void }) {
@@ -53,7 +53,7 @@ export function PeriodoForm({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border bg-card p-4 md:p-6">
+    <Card as="form" onSubmit={handleSubmit}>
       <h2 className="mb-1 text-base font-semibold text-foreground">Cerrar un período</h2>
       <p className="mb-4 text-sm text-muted-foreground">
         Cerrar un período impide cargar, editar o borrar registros con fecha dentro de ese rango.
@@ -61,17 +61,17 @@ export function PeriodoForm({ onCreated }: { onCreated: () => void }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Label htmlFor="periodo-empresa">Empresa</Label>
-          <select id="periodo-empresa" className={SELECT_CLS} value={empresaId} onChange={(e) => setEmpresaId(e.target.value)}>
+          <Select id="periodo-empresa" value={empresaId} onChange={(e) => setEmpresaId(e.target.value)}>
             <option value="">Elegí una empresa</option>
             {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <Label htmlFor="periodo-modulo">Módulo</Label>
-          <select id="periodo-modulo" className={SELECT_CLS} value={modulo} onChange={(e) => setModulo(e.target.value)}>
+          <Select id="periodo-modulo" value={modulo} onChange={(e) => setModulo(e.target.value)}>
             <option value="">Todos los módulos</option>
             {Object.entries(MODULO_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <Label htmlFor="periodo-desde">Desde</Label>
@@ -87,6 +87,6 @@ export function PeriodoForm({ onCreated }: { onCreated: () => void }) {
         <Lock className="size-4" />
         {saving ? "Cerrando..." : "Cerrar período"}
       </Button>
-    </form>
+    </Card>
   )
 }

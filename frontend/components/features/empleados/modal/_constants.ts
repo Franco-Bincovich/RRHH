@@ -168,5 +168,17 @@ export const LABORAL_AUTOCOMPLETE: ReadonlyArray<{ field: AutocompleteKey; label
   { field: "categoria", label: "Categoría" },
 ]
 
-export const SELECT_CLASS =
+/*
+ * La clase del `<input list="tipo_contrato_opciones">` de `DatosLaboralesFields`, y de nada más.
+ *
+ * 🔴 SE LLAMABA `SELECT_CLASS` Y EL NOMBRE PASÓ A MENTIR. Vestía los 8 `<select>` del modal de
+ * empleado además de este input; el 19/8/2026 esos selects pasaron a `components/ui/select.tsx` y
+ * quedó un solo consumidor, que no es un select. Un nombre que describe lo que la constante YA NO
+ * hace es peor que no tener nombre: el próximo que la lea va a buscar el select que la usa.
+ *
+ * ⚠️ Candidato a desaparecer: el valor es casi el de `components/ui/input.tsx`, así que el campo
+ * podría ser `<Input list="tipo_contrato_opciones" />` y esta constante irse con él. No se hizo
+ * en la tanda de selects para no meter inputs en el medio.
+ */
+export const INPUT_DATALIST_CLASS =
   "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"

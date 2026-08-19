@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Download } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
+import { Card } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Badge } from "@/components/ui/badge"
@@ -147,7 +148,7 @@ export default function AssessmentDetailPage() {
 
       {/* ── Radar ──────────────────────────────────────────────────────── */}
       {radarValues.length >= 3 && (
-        <section className="rounded-xl border bg-card p-4 md:p-6">
+        <Card as="section">
           <h2 className="mb-6 text-base font-semibold text-foreground">Perfil AREAS</h2>
           <div className="mx-auto max-w-sm">
             <RadarChart values={radarValues} labels={radarLabels} />
@@ -160,7 +161,7 @@ export default function AssessmentDetailPage() {
               </div>
             ))}
           </div>
-        </section>
+        </Card>
       )}
 
       {/* ── Scores por dimensión ───────────────────────────────────────── */}
@@ -176,7 +177,7 @@ export default function AssessmentDetailPage() {
       )}
 
       {/* ── Descargar reportes ─────────────────────────────────────────── */}
-      <section className="rounded-xl border bg-card p-4 md:p-6">
+      <Card as="section">
         <h2 className="mb-4 text-base font-semibold text-foreground">Descargar reportes</h2>
         <div className="flex flex-wrap gap-3">
           {(["Ejecutivo", "Comercial", "Competencias"] as const).map((tipo) => (
@@ -186,7 +187,7 @@ export default function AssessmentDetailPage() {
             </Button>
           ))}
         </div>
-      </section>
+      </Card>
     </div>
   )
 }

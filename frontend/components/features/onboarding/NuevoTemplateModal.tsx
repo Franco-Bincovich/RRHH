@@ -6,6 +6,7 @@ import { X } from "lucide-react"
 import { createTemplate } from "@/services/onboarding"
 import type { OnboardingTemplate } from "@/types/onboarding"
 import type { Empresa } from "@/types/empresa"
+import { Select } from "@/components/ui/select"
 
 interface NuevoTemplateModalProps {
   empresas: Empresa[]
@@ -76,16 +77,15 @@ export function NuevoTemplateModal({ empresas, empresaActivaId, onClose, onSucce
               <label htmlFor="tmpl-empresa" className="mb-1.5 block text-sm font-medium text-foreground">
                 Empresa
               </label>
-              <select
+              <Select
                 id="tmpl-empresa"
                 value={empresaId}
                 onChange={(e) => setEmpresaId(e.target.value)}
-                className="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 {empresas.map((e) => (
                   <option key={e.id} value={e.id}>{e.nombre}</option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
 

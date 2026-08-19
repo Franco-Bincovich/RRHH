@@ -1,6 +1,7 @@
 "use client"
 
 import { Skeleton } from "@/components/ui/skeleton"
+import { Select } from "@/components/ui/select"
 import type { EstadoVacante } from "@/types/vacantes"
 import type { Empresa } from "@/types/empresa"
 
@@ -14,10 +15,6 @@ import type { Empresa } from "@/types/empresa"
  * ⚠️ Los dos `onChange` llaman a setters que además VUELVEN A LA PÁGINA 1. Eso vive en la página,
  * no acá: este componente no sabe que hay paginación, y no tiene por qué.
  */
-const SELECT_CLASS =
-  "min-h-[2rem] rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-
 interface Props {
   mostrarEmpresa: boolean
   empresas: Empresa[]
@@ -33,9 +30,9 @@ export function VacantesFiltros({
   return (
     <div className="mb-4 flex flex-col gap-3 sm:flex-row">
       {mostrarEmpresa && (
-        <select
+        <Select
+          size="sm" className="w-auto"
           aria-label="Filtrar por empresa"
-          className={SELECT_CLASS}
           value={empresaFiltro}
           onChange={(e) => onEmpresa(e.target.value)}
         >
@@ -43,11 +40,11 @@ export function VacantesFiltros({
           {empresas.map((e) => (
             <option key={e.id} value={e.id}>{e.nombre}</option>
           ))}
-        </select>
+        </Select>
       )}
-      <select
+      <Select
+        size="sm" className="w-auto"
         aria-label="Filtrar por estado"
-        className={SELECT_CLASS}
         value={estadoFiltro}
         onChange={(e) => onEstado(e.target.value as EstadoVacante | "")}
       >
@@ -56,7 +53,7 @@ export function VacantesFiltros({
         <option value="en_proceso">En proceso</option>
         <option value="con_candidatos">Con candidatos</option>
         <option value="cerrada">Cerrada</option>
-      </select>
+      </Select>
     </div>
   )
 }

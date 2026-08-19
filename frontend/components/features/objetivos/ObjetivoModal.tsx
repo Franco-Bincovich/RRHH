@@ -115,7 +115,7 @@ export function ObjetivoModal({ open, onClose, onSuccess, editing }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>{isEdit ? "Editar objetivo" : "Nuevo objetivo"}</DialogTitle></DialogHeader>
         <form id="obj-form" onSubmit={handleSubmit} noValidate>
           <ObjetivoFormFields

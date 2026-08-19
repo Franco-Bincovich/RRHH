@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { FileDown } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
+import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
 import { ArbolEmpresa } from "@/components/features/organigrama/ArbolEmpresa"
 import { ArbolProyecto, type ArbolProyectoRef } from "@/components/features/organigrama/ArbolProyecto"
 import { CardsProyecto } from "@/components/features/organigrama/CardsProyecto"
@@ -84,43 +84,35 @@ export default function OrganigramaPage() {
         </Button>
       </div>
 
-      {/* Tabs — se ocultan si hay una sola vista visible (evita un botón solitario). */}
-      {TABS_VISIBLES.length > 1 && (
-        <div className="inline-flex rounded-xl bg-muted p-1 print:hidden">
-          {TABS_VISIBLES.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setVista(tab.id)}
-              className={cn(
-                "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-                vista === tab.id
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <Tabs value={vista} onValueChange={setVista} variant="pill">
+        {/* La barra se oculta si hay una sola vista visible (evita un botón solitario). El
+            `<Tabs>` de afuera se monta igual: es lo que ata cada panel con su solapa, y hoy
+            dos de las tres vistas están apagadas por `visible: false`. */}
+        {TABS_VISIBLES.length > 1 && (
+          <TabList className="print:hidden">
+            {TABS_VISIBLES.map((tab) => (
+              <Tab key={tab.id} value={tab.id}>{tab.label}</Tab>
+            ))}
+          </TabList>
+        )}
 
-      {/* Tab content — las 3 vistas quedan en el código; hoy solo renderiza cards. */}
-      {vista === "empresa" && <ArbolEmpresa />}
+        {/* Tab content — las 3 vistas quedan en el código; hoy solo renderiza cards. */}
+        <TabPanel value="empresa"><ArbolEmpresa /></TabPanel>
 
-      {mostrarProyectos && (
-        <>
-          {loading && <OrgSkeleton />}
-          {!loading && error && (
-            <p className="py-10 text-center text-sm text-destructive">{error}</p>
-          )}
-          {!loading && orgData && vista === "proyecto-arbol" && (
-            <ArbolProyecto ref={arbolRef} data={orgData} />
-          )}
-          {!loading && orgData && vista === "proyecto-cards" && (
-            <CardsProyecto data={orgData} />
-          )}
-        </>
-      )}
+        {/* Carga y error quedan FUERA de los paneles: son de la consulta de proyectos, que las
+            dos vistas comparten. Duplicarlos adentro de cada panel los haría divergir. */}
+        {mostrarProyectos && loading && <OrgSkeleton />}
+        {mostrarProyectos && !loading && error && (
+          <p className="py-10 text-center text-sm text-destructive">{error}</p>
+        )}
+
+        <TabPanel value="proyecto-arbol">
+          {!loading && orgData && <ArbolProyecto ref={arbolRef} data={orgData} />}
+        </TabPanel>
+        <TabPanel value="proyecto-cards">
+          {!loading && orgData && <CardsProyecto data={orgData} />}
+        </TabPanel>
+      </Tabs>
     </div>
   )
 }

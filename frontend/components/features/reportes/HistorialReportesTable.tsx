@@ -1,6 +1,7 @@
 import { FileDown, FileSpreadsheet } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -42,7 +43,7 @@ export function HistorialReportesTable({
   onExportar: (id: string, nombre: string, formato: "pdf" | "excel") => void
 }) {
   return (
-    <section className="rounded-xl border bg-card p-4 md:p-6" aria-label="Historial de reportes">
+    <Card as="section" aria-label="Historial de reportes">
       <h2 className="mb-4 text-base font-semibold text-foreground">Historial</h2>
 
       {loading ? (
@@ -104,6 +105,6 @@ export function HistorialReportesTable({
           </TableBody>
         </Table>
       )}
-    </section>
+    </Card>
   )
 }

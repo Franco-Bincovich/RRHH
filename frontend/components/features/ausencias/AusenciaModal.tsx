@@ -54,7 +54,7 @@ export function AusenciaModal({ open, onClose, onSuccess, editing }: AusenciaMod
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar ausencia" : "Registrar ausencia"}</DialogTitle>
         </DialogHeader>

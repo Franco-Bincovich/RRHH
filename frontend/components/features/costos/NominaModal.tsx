@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Select } from "@/components/ui/select"
 import { cargarNomina } from "@/services/costos"
 import { fetchEmpleados } from "@/services/empleados"
 import { getEmpresaActivaId } from "@/services/empresaStore"
@@ -23,10 +24,6 @@ const MESES_LARGOS = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
 ]
 const ANIOS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
-
-const SELECT_CLS =
-  "rounded-md border bg-background px-3 py-1.5 text-sm text-foreground " +
-  "focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
 
 interface NominaRow {
   bruto: string
@@ -148,32 +145,32 @@ export function NominaModal({ open, onClose, onSuccess }: NominaModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Cargar nómina</DialogTitle>
           <div className="flex items-center gap-2 pt-1">
-            <select
+            <Select
+              className="w-auto"
               value={mes}
               onChange={(e) => setMes(Number(e.target.value))}
-              className={SELECT_CLS}
               disabled={saving}
               aria-label="Mes"
             >
               {MESES_LARGOS.map((label, i) => (
                 <option key={i + 1} value={i + 1}>{label}</option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
+              className="w-auto"
               value={anio}
               onChange={(e) => setAnio(Number(e.target.value))}
-              className={SELECT_CLS}
               disabled={saving}
               aria-label="Año"
             >
               {ANIOS.map((y) => (
                 <option key={y} value={y}>{y}</option>
               ))}
-            </select>
+            </Select>
           </div>
         </DialogHeader>
 

@@ -4,6 +4,7 @@ import { Accordion } from "@base-ui/react/accordion"
 import { Cake, PartyPopper } from "lucide-react"
 
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
+import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import type { DistribItem, KpisExtra, PersonaFecha } from "@/services/dashboard"
 
@@ -71,13 +72,13 @@ export function DashboardExtras({ data }: { data: KpisExtra }) {
     // es plegable. Una plegable al lado de una fija tiene exactamente el mismo problema que dos
     // plegables — el stretch de grid no distingue.
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
-      <section className="rounded-xl border bg-card p-4 md:p-6" aria-label="Distribución de plantilla">
+      <Card as="section" aria-label="Distribución de plantilla">
         <h2 className="mb-5 text-base font-semibold text-foreground">Distribución de plantilla</h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <DistribLista titulo="Por seniority" items={data.distribucion_seniority} />
           <DistribLista titulo="Por modalidad" items={data.distribucion_modalidad} />
         </div>
-      </section>
+      </Card>
 
       {/* Plegada al entrar (sin `defaultValue`): son efemérides, no algo pendiente de hacer, y
           plegada queda solo el título con el contador. El contador suma las dos columnas — es

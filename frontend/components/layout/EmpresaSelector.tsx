@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Building2, ChevronsUpDown } from "lucide-react"
 
+import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId, setEmpresaActivaId } from "@/services/empresaStore"
@@ -37,23 +38,37 @@ export function EmpresaSelector() {
         <div className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center">
           <Building2 className="size-3.5 text-sidebar-foreground/60" />
         </div>
-        <select
+        <Select
+          size="sm"
           value={current}
           onChange={handleChange}
           aria-label="Empresa activa"
+          /*
+           * El ÚNICO select del producto que no usa la paleta de formulario: vive dentro del
+           * sidebar, que tiene su propia superficie (`--sidebar-accent`) y su propio texto
+           * (`--sidebar-foreground`) en los dos temas. Lo que queda acá es exactamente eso —
+           * el resto (alto, radio, foco, estado deshabilitado) lo pone el componente.
+           *
+           * 🔴 `dark:bg-sidebar-accent` no es redundante con el `bg-sidebar-accent` de al lado.
+           * La base del componente trae `dark:bg-input/30` para igualar a `<Input>`, y en modo
+           * oscuro esa variante le gana a un `bg-*` sin prefijo: sin esta línea el selector de
+           * empresa se pintaría con el fondo de los inputs y se despegaría del sidebar.
+           *
+           * `appearance-none` + `pl-7 pr-7` sostienen los dos íconos absolutos que lo rodean
+           * (el edificio a la izquierda, el chevron a la derecha): sin esconder la flecha nativa
+           * habría dos flechas.
+           */
           className={cn(
-            "w-full appearance-none rounded-lg border border-sidebar-border",
-            "bg-sidebar-accent py-1.5 pl-7 pr-7 text-xs font-medium",
-            "text-sidebar-foreground transition-colors",
-            "hover:bg-sidebar-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            "cursor-pointer",
+            "appearance-none border-sidebar-border pl-7 pr-7 text-xs font-medium",
+            "bg-sidebar-accent text-sidebar-foreground dark:bg-sidebar-accent",
+            "cursor-pointer transition-colors hover:bg-sidebar-accent/80",
           )}
         >
           <option value="todas">Todas las empresas</option>
           {empresas.map((e) => (
             <option key={e.id} value={e.id}>{e.nombre}</option>
           ))}
-        </select>
+        </Select>
         <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
           <ChevronsUpDown className="size-3 text-sidebar-foreground/60" />
         </div>

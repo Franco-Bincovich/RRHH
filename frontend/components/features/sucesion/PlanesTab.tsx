@@ -3,6 +3,7 @@
 import { ArrowRight, CheckSquare, ChevronRight, Plus, TrendingUp } from "lucide-react"
 
 import { EmptyState } from "@/components/ui/EmptyState"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { readinessBarColor } from "./_sucesion_ui"
 import type { PlanCarrera } from "@/types/sucesion"
@@ -33,7 +34,7 @@ export function PlanesTab({
   onVerDetalle: (plan: PlanCarrera) => void
 }) {
   return (
-    <section className="rounded-xl border bg-card p-4 md:p-6" aria-label="Planes de carrera activos">
+    <Card as="section" aria-label="Planes de carrera activos">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-foreground">Planes activos</h2>
         <div className="flex items-center gap-3">
@@ -119,6 +120,6 @@ export function PlanesTab({
           ))}
         </ul>
       )}
-    </section>
+    </Card>
   )
 }

@@ -10,6 +10,7 @@ import { useTiposAusencia } from "@/components/features/configuracion/useTiposAu
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Select } from "@/components/ui/select"
 
 /**
  * Catálogo de tipos de ausencia: alta, renombre, baja lógica y la política de ausentismo.
@@ -66,17 +67,17 @@ export function TiposAusenciaSection({ editable }: { editable: boolean }) {
               </div>
               {/* El selector ofrece SOLO tipos de primer nivel (`candidatosAPadre`): así la
                   profundidad 2 se respeta por construcción y el 422 del backend no se ve nunca. */}
-              <select
+              <Select
+                size="sm" className="w-auto"
                 aria-label="Colgar de un tipo (opcional)"
                 value={padre}
                 onChange={(e) => setPadre(e.target.value)}
-                className="h-9 rounded-md border bg-background px-2 text-sm"
               >
                 <option value="">Tipo general</option>
                 {candidatosAPadre(tipos).map((t) => (
                   <option key={t.id} value={t.id}>Subtipo de {t.nombre}</option>
                 ))}
-              </select>
+              </Select>
               <Button onClick={agregar} disabled={Boolean(ocupado.nuevo) || !nuevo.trim()}>
                 <Plus className="mr-2 size-4" />
                 {ocupado.nuevo ? "Agregando…" : "Agregar"}

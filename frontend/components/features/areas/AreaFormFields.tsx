@@ -4,7 +4,8 @@ import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { SELECT_CLASS, type FormData, type FormErrors } from "@/components/features/areas/areaForm"
+import { Select } from "@/components/ui/select"
+import { type FormData, type FormErrors } from "@/components/features/areas/areaForm"
 import type { Empresa } from "@/types/empresa"
 
 interface Props {
@@ -38,17 +39,16 @@ export function AreaFormFields({
             Empresa
             <span className="ml-0.5 text-destructive" aria-hidden>*</span>
           </Label>
-          <select
+          <Select
             id="area_empresa"
             value={form.empresa_id}
             onChange={onField("empresa_id")}
-            className={SELECT_CLASS}
             aria-required
             aria-invalid={Boolean(errors.empresa_id)}
           >
             <option value="">Seleccionar empresa</option>
             {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-          </select>
+          </Select>
           {errors.empresa_id && (
             <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>
           )}

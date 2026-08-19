@@ -4,6 +4,7 @@ import { useState } from "react"
 import { PencilLine } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
 import { corregirClasificacion } from "@/services/screening"
 import type { ClasificacionIA } from "@/types/candidato"
 
@@ -67,14 +68,13 @@ export function CorregirClasificacion({ candidatoId, actual, motivoActual, onCor
 
   return (
     <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-      <select
+      <Select
         aria-label="Clasificación"
-        className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
         value={valor}
         onChange={(e) => setValor(e.target.value as ClasificacionIA)}
       >
         {OPCIONES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+      </Select>
 
       <textarea
         aria-label="Motivo"

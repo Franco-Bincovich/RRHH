@@ -39,9 +39,6 @@ export const EMPTY_VACANTE: VacanteFormData = {
  * El `<select>` de área SÍ se deshabilita mientras no haya empresa elegida, así que agregarlo
  * sería un cambio visible. Se movió tal cual estaba.
  */
-export const SELECT_CLASS =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-
 export function validateVacante(form: VacanteFormData): VacanteFormErrors {
   const errors: VacanteFormErrors = {}
   if (!form.empresa_id) errors.empresa_id = "La empresa es requerida"

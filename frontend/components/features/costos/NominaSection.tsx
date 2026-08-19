@@ -3,6 +3,7 @@
 import { Pencil, Users } from "lucide-react"
 
 import { EmptyState } from "@/components/ui/EmptyState"
+import { Card } from "@/components/ui/card"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -47,7 +48,7 @@ export function NominaSection({ mes, anio, canWrite, mostrarEmpresa, onGuardado 
   const ed = useEdicionNomina(mes, anio, async () => { await n.load(); onGuardado() })
 
   return (
-    <section className="rounded-xl border bg-card p-4 md:p-6" aria-label="Detalle de nómina">
+    <Card as="section" aria-label="Detalle de nómina">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-foreground">
           Detalle de nómina
@@ -143,6 +144,6 @@ export function NominaSection({ mes, anio, canWrite, mostrarEmpresa, onGuardado 
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </Card>
   )
 }

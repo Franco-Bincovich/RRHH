@@ -20,10 +20,6 @@ export const EMPTY_AUSENCIA: AusenciaFormData = {
 
 export const NUEVO_TIPO = "__nuevo__"
 
-export const SELECT_CLASS =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-
 // mandos_medios no elige empresa (la deriva el backend del empleado); no se exige empresa_id.
 export function validateAusencia(form: AusenciaFormData, requireEmpresa: boolean): AusenciaFormErrors {
   const e: AusenciaFormErrors = {}

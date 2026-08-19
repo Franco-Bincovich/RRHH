@@ -83,7 +83,7 @@ export function ContratarCandidatoButton(
       </Button>
 
       <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) cerrar() }}>
-        <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Contratar a {candidato.nombre} {candidato.apellido}</DialogTitle>
           </DialogHeader>

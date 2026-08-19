@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Select } from "@/components/ui/select"
 import { fetchEmpresas } from "@/services/empresas"
 import type { Empresa } from "@/types/empresa"
 import type { Proyecto, ProyectoCreate, ProyectoEstado, ProyectoUpdate } from "@/types/proyecto"
@@ -74,10 +75,10 @@ export function ProyectoModal({ open, proyecto, onClose, onSave }: Props) {
           {!isEdit && (
             <div>
               <label className={LABEL_CLS}>Empresa dueña</label>
-              <select value={empresa_id} onChange={(e) => setEmpresaId(e.target.value)} className={INPUT_CLS}>
+              <Select value={empresa_id} onChange={(e) => setEmpresaId(e.target.value)}>
                 <option value="">Seleccioná una empresa</option>
                 {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-              </select>
+              </Select>
             </div>
           )}
           <div>
@@ -91,9 +92,9 @@ export function ProyectoModal({ open, proyecto, onClose, onSave }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL_CLS}>Estado</label>
-              <select value={estado} onChange={(e) => setEstado(e.target.value as ProyectoEstado)} className={INPUT_CLS}>
+              <Select value={estado} onChange={(e) => setEstado(e.target.value as ProyectoEstado)}>
                 {ESTADOS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-              </select>
+              </Select>
             </div>
             <div>
               <label className={LABEL_CLS}>Presupuesto (ARS)</label>

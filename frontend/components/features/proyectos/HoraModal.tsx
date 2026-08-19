@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Select } from "@/components/ui/select"
 import type { Asignacion, HoraCreate } from "@/types/proyecto"
 
 interface Props {
@@ -57,7 +58,7 @@ export function HoraModal({ open, asignaciones, onClose, onSave }: Props) {
         <div className="space-y-4 pt-2">
           <div>
             <label className={LABEL_CLS}>Empleado / Asignación</label>
-            <select value={asignacionId} onChange={(e) => setAsignacionId(e.target.value)} className={INPUT_CLS}>
+            <Select value={asignacionId} onChange={(e) => setAsignacionId(e.target.value)}>
               <option value="">Seleccioná un empleado</option>
               {asignaciones.filter((a) => a.activo).map((a) => (
                 <option key={a.id} value={a.id}>
@@ -65,7 +66,7 @@ export function HoraModal({ open, asignaciones, onClose, onSave }: Props) {
                   {a.empleado_empresa_nombre ? ` (${a.empleado_empresa_nombre})` : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {asigSeleccionada && (

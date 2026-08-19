@@ -58,7 +58,7 @@ export function ImportarNominaModal({ open, onClose, onSuccess }: ImportarNomina
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetAndClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{result ? "Resultado de la importación" : "Importar nómina de empleados"}</DialogTitle>
         </DialogHeader>

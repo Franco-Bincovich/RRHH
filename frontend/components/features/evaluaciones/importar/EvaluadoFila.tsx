@@ -1,12 +1,10 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import { Select } from "@/components/ui/select"
 import type { Resolucion } from "@/services/evaluacionImport"
 import type { EmpleadoSeleccionable } from "@/types/empleado"
 import type { EstadoResolucion, EvaluadoPreview } from "@/types/evaluacionImport"
-
-const SELECT_CLASS =
-  "min-w-64 rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
 // Lenguaje sin jerga (UX-UI): nada de "sin_candidato".
 const ESTADO: Record<EstadoResolucion, { texto: string; variant: "secondary" | "outline" | "destructive" }> = {
@@ -44,8 +42,8 @@ export function EvaluadoFila({ ev, empleados, valor, onChange }: Props) {
         <Badge variant={info.variant}>{info.texto}</Badge>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <select
-          className={SELECT_CLASS}
+        <Select
+          className="w-auto min-w-64"
           value={valor.empleadoId}
           onChange={(e) => {
             const empleadoId = e.target.value
@@ -55,7 +53,7 @@ export function EvaluadoFila({ ev, empleados, valor, onChange }: Props) {
         >
           <option value="">Sin asignar</option>
           {opciones.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>
+        </Select>
         {esManual && valor.empleadoId && (
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input

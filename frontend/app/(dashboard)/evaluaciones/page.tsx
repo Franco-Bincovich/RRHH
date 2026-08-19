@@ -2,8 +2,9 @@
 
 import { useState } from "react"
 
-import { cn } from "@/lib/utils"
 import { EmptyState } from "@/components/ui/EmptyState"
+import { Select } from "@/components/ui/select"
+import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { HistorialImportaciones } from "@/components/features/evaluaciones/HistorialImportaciones"
 import { ImportarEvaluacionesPanel } from "@/components/features/evaluaciones/importar/ImportarEvaluacionesPanel"
@@ -14,9 +15,6 @@ import { useLotesEvaluaciones } from "@/hooks/useLotesEvaluaciones"
 import { ClipboardList } from "lucide-react"
 
 type Tab = "metricas" | "evaluados" | "importar" | "importaciones"
-
-const SELECT_CLASS =
-  "min-h-9 rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
 export default function EvaluacionesPage() {
   const canWrite = useCanWrite() // write en evaluaciones = admin_rrhh
@@ -32,6 +30,13 @@ export default function EvaluacionesPage() {
     ] : []),
   ]
   const sinCiclos = !cargando && !loteId
+  const vacio = (
+    <EmptyState
+      icon={<ClipboardList />}
+      title="Todavía no hay resultados importados"
+      description={canWrite ? "Importá los archivos de un ciclo desde la pestaña “Importar resultados”." : "Cuando RRHH cargue un ciclo, vas a ver acá las métricas."}
+    />
+  )
 
   return (
     <div>
@@ -40,38 +45,33 @@ export default function EvaluacionesPage() {
       {lotes.length > 1 && (tab === "metricas" || tab === "evaluados") && (
         <label className="mb-4 flex flex-col gap-1 text-xs text-muted-foreground">
           Ciclo
-          <select className={SELECT_CLASS} value={loteId ?? ""} onChange={(e) => setLoteId(e.target.value)}>
+          <Select size="sm" className="w-auto" value={loteId ?? ""} onChange={(e) => setLoteId(e.target.value)}>
             {lotes.map((l) => <option key={l.id} value={l.id}>{l.periodo}</option>)}
-          </select>
+          </Select>
         </label>
       )}
 
-      <div className="mb-6 flex gap-1 border-b border-border">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "px-4 pb-3 pt-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              tab === t.id ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabList className="mb-6">
+          {tabs.map((t) => (
+            <Tab key={t.id} value={t.id}>{t.label}</Tab>
+          ))}
+        </TabList>
 
-      {tab === "importar" && canWrite && <ImportarEvaluacionesPanel />}
-      {tab === "importaciones" && canWrite && <HistorialImportaciones />}
-      {(tab === "metricas" || tab === "evaluados") && sinCiclos && (
-        <EmptyState
-          icon={<ClipboardList />}
-          title="Todavía no hay resultados importados"
-          description={canWrite ? "Importá los archivos de un ciclo desde la pestaña “Importar resultados”." : "Cuando RRHH cargue un ciclo, vas a ver acá las métricas."}
-        />
-      )}
-      {tab === "metricas" && loteId && <MetricasPanel loteId={loteId} />}
-      {tab === "evaluados" && loteId && <EvaluadosResultadosPanel loteId={loteId} />}
+        {/* Las dos solapas de escritura siguen gateadas por `canWrite`: la solapa ni aparece en
+            `tabs`, y el panel tampoco renderiza. Las dos comprobaciones se conservan tal cual. */}
+        <TabPanel value="importar">{canWrite && <ImportarEvaluacionesPanel />}</TabPanel>
+        <TabPanel value="importaciones">{canWrite && <HistorialImportaciones />}</TabPanel>
+
+        {/* `vacio` se comparte entre las dos solapas de lectura, como antes lo compartía una
+            sola condición: duplicar el EmptyState acá lo dejaría divergir. */}
+        <TabPanel value="metricas">
+          {sinCiclos ? vacio : loteId && <MetricasPanel loteId={loteId} />}
+        </TabPanel>
+        <TabPanel value="evaluados">
+          {sinCiclos ? vacio : loteId && <EvaluadosResultadosPanel loteId={loteId} />}
+        </TabPanel>
+      </Tabs>
     </div>
   )
 }

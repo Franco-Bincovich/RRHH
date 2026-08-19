@@ -2,7 +2,8 @@
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ObjetivoCamposOpcionales, SEL } from "@/components/features/objetivos/ObjetivoCamposOpcionales"
+import { Select } from "@/components/ui/select"
+import { ObjetivoCamposOpcionales } from "@/components/features/objetivos/ObjetivoCamposOpcionales"
 import type { Objetivo, PrioridadObjetivo, UserItem } from "@/types/objetivo"
 import type { Empresa } from "@/types/empresa"
 
@@ -63,10 +64,10 @@ export function ObjetivoFormFields({
       {!isEdit && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="obj_empresa">Empresa <span className="text-destructive" aria-hidden>*</span></Label>
-          <select id="obj_empresa" className={SEL} value={form.empresa_id} onChange={field("empresa_id")} aria-required aria-invalid={Boolean(errors.empresa_id)}>
+          <Select id="obj_empresa" value={form.empresa_id} onChange={field("empresa_id")} aria-required aria-invalid={Boolean(errors.empresa_id)}>
             <option value="">Seleccionar empresa</option>
             {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-          </select>
+          </Select>
           {errors.empresa_id && <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>}
         </div>
       )}
@@ -78,19 +79,19 @@ export function ObjetivoFormFields({
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="obj_responsable">Responsable <span className="text-destructive" aria-hidden>*</span></Label>
-          <select id="obj_responsable" className={SEL} value={form.responsable_id} onChange={field("responsable_id")} aria-required aria-invalid={Boolean(errors.responsable_id)}>
+          <Select id="obj_responsable" value={form.responsable_id} onChange={field("responsable_id")} aria-required aria-invalid={Boolean(errors.responsable_id)}>
             <option value="">{usuarios.length === 0 ? "Cargando..." : "Seleccionar usuario"}</option>
             {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nombre} {u.apellido}</option>)}
-          </select>
+          </Select>
           {errors.responsable_id && <p className="text-xs text-destructive" role="alert">{errors.responsable_id}</p>}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="obj_prioridad">Prioridad</Label>
-          <select id="obj_prioridad" className={SEL} value={form.prioridad} onChange={field("prioridad")}>
+          <Select id="obj_prioridad" value={form.prioridad} onChange={field("prioridad")}>
             <option value="alta">Alta</option>
             <option value="media">Media</option>
             <option value="baja">Baja</option>
-          </select>
+          </Select>
         </div>
       </div>
       <ObjetivoCamposOpcionales

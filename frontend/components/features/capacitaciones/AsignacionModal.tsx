@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { createAsignacion } from "@/services/capacitaciones"
 import { fetchCapacitaciones } from "@/services/capacitaciones"
@@ -34,10 +35,6 @@ type FormErrors = Partial<Record<keyof FormData, string>>
 const EMPTY: FormData = {
   empresa_id: "", capacitacion_id: "", empleado_id: "", fecha_asignacion: "", fecha_limite: "",
 }
-
-const SEL =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
 
 function validate(form: FormData): FormErrors {
   const e: FormErrors = {}
@@ -115,7 +112,7 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Asignar formación</DialogTitle>
         </DialogHeader>
@@ -125,16 +122,16 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="asig_empresa">Empresa <span className="text-destructive" aria-hidden>*</span></Label>
-              <select id="asig_empresa" className={SEL} value={form.empresa_id} onChange={handleEmpresaChange} aria-required aria-invalid={Boolean(errors.empresa_id)}>
+              <Select id="asig_empresa" value={form.empresa_id} onChange={handleEmpresaChange} aria-required aria-invalid={Boolean(errors.empresa_id)}>
                 <option value="">Seleccionar empresa</option>
                 {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-              </select>
+              </Select>
               {errors.empresa_id && <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>}
             </div>
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="asig_cap">Formación <span className="text-destructive" aria-hidden>*</span></Label>
-              <select id="asig_cap" className={SEL} value={form.capacitacion_id} onChange={field("capacitacion_id")} disabled={!form.empresa_id || loadingCap} aria-required aria-invalid={Boolean(errors.capacitacion_id)}>
+              <Select id="asig_cap" value={form.capacitacion_id} onChange={field("capacitacion_id")} disabled={!form.empresa_id || loadingCap} aria-required aria-invalid={Boolean(errors.capacitacion_id)}>
                 <option value="">
                   {!form.empresa_id ? "Seleccioná primero una empresa" : loadingCap ? "Cargando..." : "Seleccionar formación"}
                 </option>
@@ -143,7 +140,7 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
                     {c.nombre}{c.categoria ? ` — ${c.categoria}` : ""}
                   </option>
                 ))}
-              </select>
+              </Select>
               {errors.capacitacion_id && <p className="text-xs text-destructive" role="alert">{errors.capacitacion_id}</p>}
             </div>
 

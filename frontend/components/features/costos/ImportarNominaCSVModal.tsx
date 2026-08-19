@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
 import { confirmarImportacionNomina, previewImportacionNominaCSV } from "@/services/importacion"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
@@ -148,7 +149,7 @@ export function ImportarNominaCSVModal({ open, onClose, onSuccess }: ImportarNom
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetAndClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>
             {step === "upload" && "Importar nómina desde CSV"}
@@ -168,16 +169,15 @@ export function ImportarNominaCSVModal({ open, onClose, onSuccess }: ImportarNom
               {empresaLoading ? (
                 <div className="h-9 animate-pulse rounded-lg bg-muted" />
               ) : (
-                <select
+                <Select
                   value={empresaId}
                   onChange={(e) => setEmpresaId(e.target.value)}
-                  className="min-h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Seleccioná una empresa...</option>
                   {empresas.map((e) => (
                     <option key={e.id} value={e.id}>{e.nombre}</option>
                   ))}
-                </select>
+                </Select>
               )}
               <p className="text-xs text-muted-foreground">
                 El DNI de cada fila se busca entre los empleados de esta empresa. El empresa_id en nómina se hereda del empleado encontrado.

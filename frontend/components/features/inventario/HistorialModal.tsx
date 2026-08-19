@@ -31,7 +31,7 @@ export function HistorialModal({ item, onClose }: Props) {
 
   return (
     <Dialog open onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Historial — {item.nombre}</DialogTitle>
         </DialogHeader>

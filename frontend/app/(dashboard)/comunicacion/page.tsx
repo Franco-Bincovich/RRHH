@@ -6,8 +6,8 @@ import { Accordion } from "@base-ui/react/accordion"
 import { HistorialMails } from "@/components/features/comunicacion/HistorialMails"
 import { PlantillasSection } from "@/components/features/comunicacion/PlantillasSection"
 import { PageHeader } from "@/components/layout/PageHeader"
+import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { useCanWrite } from "@/hooks/useCanWrite"
-import { cn } from "@/lib/utils"
 
 type Tab = "plantillas" | "historial"
 
@@ -48,32 +48,25 @@ export default function ComunicacionPage() {
         description="Las plantillas de mail y el registro de lo que se envió"
       />
 
-      <div className="mb-6 flex gap-1 border-b border-border">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "px-4 pb-3 pt-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              tab === t.id ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabList className="mb-6">
+          {TABS.map((t) => (
+            <Tab key={t.id} value={t.id}>{t.label}</Tab>
+          ))}
+        </TabList>
 
       {/* `PlantillasSection` se mudó TAL CUAL y sigue siendo un `Accordion.Item`, así que
           necesita su Root. `defaultValue` lo deja ABIERTO: acá el plegado no aporta nada — es
           el único bloque de la pestaña. Que el acordeón sobre en este contexto es real y quedó
           anotado en el componente; sacarlo era rediseñar en el mismo diff que la mudanza. */}
-      {tab === "plantillas" && (
+      <TabPanel value="plantillas">
         <Accordion.Root defaultValue={["plantillas"]} multiple className="flex flex-col gap-4">
           <PlantillasSection editable={editable} />
         </Accordion.Root>
-      )}
+      </TabPanel>
 
-      {tab === "historial" && <HistorialMails />}
+      <TabPanel value="historial"><HistorialMails /></TabPanel>
+      </Tabs>
     </div>
   )
 }

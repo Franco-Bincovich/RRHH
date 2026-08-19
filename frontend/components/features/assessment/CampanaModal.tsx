@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { fetchAreas } from "@/services/areas"
 import { createCampana } from "@/services/assessment"
 import { fetchEmpresas } from "@/services/empresas"
@@ -31,10 +32,6 @@ const TIPOS: { value: TipoEval; label: string }[] = [
   { value: "conductual", label: "Conductual (AREAS)" },
   { value: "cognitivo",  label: "Cognitivo" },
 ]
-
-const SELECT_CLASS =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none " +
-  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 
 export function CampanaModal({ open, onClose, onCreated }: CampanaModalProps) {
   const empresaActivaId = getEmpresaActivaId()
@@ -123,17 +120,16 @@ export function CampanaModal({ open, onClose, onCreated }: CampanaModalProps) {
           {!empresaActivaId && (
             <div className="space-y-1.5">
               <Label htmlFor="campana-empresa">Empresa</Label>
-              <select
+              <Select
                 id="campana-empresa"
                 value={empresaId}
                 onChange={(e) => setEmpresaId(e.target.value)}
-                className={SELECT_CLASS}
               >
                 <option value="">Seleccioná una empresa…</option>
                 {empresas.map((e) => (
                   <option key={e.id} value={e.id}>{e.nombre}</option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
 
@@ -150,31 +146,29 @@ export function CampanaModal({ open, onClose, onCreated }: CampanaModalProps) {
 
           <div className="space-y-1.5">
             <Label htmlFor="campana-tipo">Tipo de evaluación</Label>
-            <select
+            <Select
               id="campana-tipo"
               value={tipo}
               onChange={(e) => setTipo(e.target.value as TipoEval)}
-              className={SELECT_CLASS}
             >
               {TIPOS.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="campana-area">Área <span className="text-muted-foreground">(opcional)</span></Label>
-            <select
+            <Select
               id="campana-area"
               value={areaId}
               onChange={(e) => setAreaId(e.target.value)}
-              className={SELECT_CLASS}
             >
               <option value="">Sin área específica</option>
               {areas.map((a) => (
                 <option key={a.id} value={a.id}>{a.nombre}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="space-y-1.5">

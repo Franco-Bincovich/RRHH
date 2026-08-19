@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ErrorCarga } from "@/components/ui/ErrorCarga"
+import { Select } from "@/components/ui/select"
 
 export const ERROR_CANDIDATOS = "No se pudieron cargar los empleados."
 
@@ -50,10 +51,10 @@ export function AsignarEmpleadosModal({ open, proyectoId, yaAsignadosIds, onClos
         <DialogHeader><DialogTitle className="text-base">Asignar empleados</DialogTitle></DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="grid grid-cols-2 gap-3">
-            <select className={INPUT_CLS} value={areaFiltro} onChange={(e) => setAreaFiltro(e.target.value)} aria-label="Filtrar por área">
+            <Select value={areaFiltro} onChange={(e) => setAreaFiltro(e.target.value)} aria-label="Filtrar por área">
               <option value="">Todas las áreas</option>
               {areas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-            </select>
+            </Select>
             <input className={INPUT_CLS} type="search" value={search} placeholder="Buscar por nombre…" onChange={(e) => setSearch(e.target.value)} />
           </div>
 

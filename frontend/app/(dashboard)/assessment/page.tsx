@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
-import { Tabs } from "@base-ui/react/tabs"
+import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { CampanaModal } from "@/components/features/assessment/CampanaModal"
@@ -42,12 +42,6 @@ const ESTADO_VARIANT: Record<string, "default" | "secondary"> = {
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
 }
-
-const TAB_CLASS =
-  "rounded-lg px-5 py-2 text-sm font-medium text-muted-foreground outline-none " +
-  "transition-colors hover:text-foreground " +
-  "data-active:bg-background data-active:text-foreground data-active:shadow-sm " +
-  "focus-visible:ring-2 focus-visible:ring-ring/50"
 
 // ─── Skeleton rows ────────────────────────────────────────────────────────────
 
@@ -117,14 +111,14 @@ export default function AssessmentPage() {
         onCreated={(c) => setCampanas((prev) => [c, ...prev])}
       />
 
-      <Tabs.Root defaultValue="campanias" className="space-y-6">
-        <Tabs.List className="inline-flex gap-0.5 rounded-xl bg-muted p-1">
-          <Tabs.Tab value="campanias" className={TAB_CLASS}>Campañas</Tabs.Tab>
-          <Tabs.Tab value="resultados" className={TAB_CLASS}>Resultados</Tabs.Tab>
-        </Tabs.List>
+      <Tabs variant="pill" defaultValue="campanias" className="space-y-6">
+        <TabList>
+          <Tab value="campanias">Campañas</Tab>
+          <Tab value="resultados">Resultados</Tab>
+        </TabList>
 
         {/* ── Tab 1: Campañas ───────────────────────────────────────────── */}
-        <Tabs.Panel value="campanias">
+        <TabPanel value="campanias">
           {errorC ? (
             <ErrorState action={() => { setErrorC(false); setLoadingC(true); fetchCampanas().then(setCampanas).catch(() => setErrorC(true)).finally(() => setLoadingC(false)) }} />
           ) : (
@@ -174,10 +168,10 @@ export default function AssessmentPage() {
               </TableBody>
             </Table>
           )}
-        </Tabs.Panel>
+        </TabPanel>
 
         {/* ── Tab 2: Resultados ─────────────────────────────────────────── */}
-        <Tabs.Panel value="resultados">
+        <TabPanel value="resultados">
           {errorR ? (
             <ErrorState action={() => { setErrorR(false); setLoadingR(true); fetchResultados().then(setResultados).catch(() => setErrorR(true)).finally(() => setLoadingR(false)) }} />
           ) : (
@@ -226,8 +220,8 @@ export default function AssessmentPage() {
               </TableBody>
             </Table>
           )}
-        </Tabs.Panel>
-      </Tabs.Root>
+        </TabPanel>
+      </Tabs>
     </div>
   )
 }

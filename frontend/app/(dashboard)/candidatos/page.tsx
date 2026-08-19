@@ -13,6 +13,7 @@ import { CandidatoGrupo } from "@/components/features/candidatos/CandidatoGrupo"
 import { CandidatoDetailPanel } from "@/components/features/candidatos/CandidatoDetailPanel"
 import { agruparCandidatos } from "@/components/features/candidatos/agruparCandidatos"
 import { Pagination } from "@/components/ui/Pagination"
+import { Select } from "@/components/ui/select"
 import { useCandidatos } from "@/hooks/useCandidatos"
 import { LeyendaDescarte } from "@/components/features/candidatos/ClasificacionBadge"
 import type { CandidatoConGrupo, FiltroClasificacion } from "@/types/candidato"
@@ -64,9 +65,9 @@ export default function CandidatosPage() {
           Solo los que no tienen búsqueda asignada
         </label>
 
-        <select
+        <Select
+          size="sm" className="w-auto"
           aria-label="Clasificación"
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
           value={clasificacion}
           /* Volver a 1 al cambiar un filtro (invariante 4 del Bloque B): con menos resultados,
              la página en la que estabas puede quedar fuera del nuevo total y la pantalla se ve
@@ -77,7 +78,7 @@ export default function CandidatosPage() {
           }}
         >
           {OPCIONES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        </Select>
       </div>
 
       {/* Visible y arriba de la lista, no en un tooltip: quien filtra por clasificación tiene

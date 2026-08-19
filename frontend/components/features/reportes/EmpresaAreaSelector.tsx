@@ -4,9 +4,7 @@ import { useMemo } from "react"
 
 import type { Area } from "@/types/area"
 import type { Empresa } from "@/types/empresa"
-
-const SELECT_CLS =
-  "flex min-h-[2.75rem] w-full rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+import { Select } from "@/components/ui/select"
 
 // Selector de empresa (+ área opcional) del ARMADO MANUAL. La empresa elegida acá es la que se
 // manda al backend — NO se lee del selector del sidebar. Las áreas se filtran por la empresa elegida
@@ -41,17 +39,16 @@ export function EmpresaAreaSelector({
         <label htmlFor={`empresa-${id}`} className="mb-1 block text-xs font-medium text-foreground">
           Empresa
         </label>
-        <select
+        <Select
           id={`empresa-${id}`}
           value={empresaId}
           onChange={(e) => onEmpresaChange(e.target.value)}
-          className={SELECT_CLS}
         >
           <option value="">Todas las empresas</option>
           {empresas.map((e) => (
             <option key={e.id} value={e.id}>{e.nombre}</option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {usaArea && (
@@ -59,18 +56,17 @@ export function EmpresaAreaSelector({
           <label htmlFor={`area-${id}`} className="mb-1 block text-xs font-medium text-foreground">
             Área
           </label>
-          <select
+          <Select
             id={`area-${id}`}
             value={areaId}
             onChange={(e) => onAreaChange(e.target.value)}
             disabled={!empresaId}
-            className={SELECT_CLS}
           >
             <option value="">{empresaId ? "Todas las áreas" : "Elegí una empresa primero"}</option>
             {areasEmpresa.map((a) => (
               <option key={a.id} value={a.id}>{a.nombre}</option>
             ))}
-          </select>
+          </Select>
         </div>
       )}
     </div>

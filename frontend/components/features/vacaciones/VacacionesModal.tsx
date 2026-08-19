@@ -96,7 +96,7 @@ export function VacacionesModal({ open, onClose, onSuccess }: VacacionesModalPro
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{form.pendiente ? "Registrar días pendientes" : "Registrar vacaciones"}</DialogTitle>
         </DialogHeader>

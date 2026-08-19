@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
 import { CandidatoRow } from "@/components/features/candidatos/CandidatoRow"
 import type { CandidatoConGrupo, GrupoCandidatos } from "@/types/candidato"
 
@@ -10,7 +11,7 @@ interface Props {
 /** Card de un grupo (búsqueda): título + badge de estado + sus candidatos. */
 export function CandidatoGrupo({ grupo, onSelect }: Props) {
   return (
-    <section className="mb-6 rounded-xl border bg-card p-4 md:p-6">
+    <Card as="section" className="mb-6">
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <h2 className="text-base font-semibold text-foreground">{grupo.nombre}</h2>
         {grupo.activa ? (
@@ -32,6 +33,6 @@ export function CandidatoGrupo({ grupo, onSelect }: Props) {
           <CandidatoRow key={c.id} candidato={c} onSelect={() => onSelect(c)} />
         ))}
       </div>
-    </section>
+    </Card>
   )
 }

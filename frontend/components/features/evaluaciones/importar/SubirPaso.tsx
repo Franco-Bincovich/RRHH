@@ -5,12 +5,10 @@ import { Loader2, Upload } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Empresa } from "@/types/empresa"
-
-const SELECT_CLASS =
-  "min-h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
 interface Props {
   empresaId: string
@@ -60,10 +58,10 @@ export function SubirPaso({ empresaId, periodo, cargando, error, onEmpresa, onPe
     <div className="max-w-2xl space-y-5">
       <div className="space-y-1.5">
         <label className="text-sm font-medium">Empresa</label>
-        <select className={SELECT_CLASS} value={empresaId} onChange={(e) => onEmpresa(e.target.value)}>
+        <Select value={empresaId} onChange={(e) => onEmpresa(e.target.value)}>
           <option value="">Elegí una empresa</option>
           {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-        </select>
+        </Select>
       </div>
       <div className="space-y-1.5">
         <label className="text-sm font-medium">Período</label>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
 import { asignarVacanteACandidato } from "@/services/candidatos"
 import { fetchVacantes } from "@/services/vacantes"
 import type { Vacante } from "@/types/vacantes"
@@ -52,9 +53,8 @@ export function AsignarVacanteCandidato({ candidatoId, onAsignada }: Props) {
 
   return (
     <div className="space-y-2">
-      <select
+      <Select
         aria-label="Asignar a una búsqueda"
-        className="min-h-10 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         value={elegida}
         onChange={(e) => setElegida(e.target.value)}
       >
@@ -62,7 +62,7 @@ export function AsignarVacanteCandidato({ candidatoId, onAsignada }: Props) {
         {vacantes.map((v) => (
           <option key={v.id} value={v.id}>{v.codigo} · {v.titulo}</option>
         ))}
-      </select>
+      </Select>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button className="min-h-10 w-full" disabled={!elegida || guardando} onClick={asignar}>
         {guardando ? "Asignando…" : "Asignar a esta búsqueda"}

@@ -7,6 +7,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { updateAsignacion } from "@/services/capacitaciones"
 import type { Asignacion, AsignacionUpdate } from "@/types/capacitacion"
 
@@ -16,10 +17,6 @@ interface Props {
   onClose: () => void
   onSuccess: () => void
 }
-
-const SEL =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
 export function EstadoModal({ open, asignacion, onClose, onSuccess }: Props) {
   const [estado, setEstado] = useState<string>(asignacion.estado)
@@ -62,11 +59,11 @@ export function EstadoModal({ open, asignacion, onClose, onSuccess }: Props) {
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="estado_sel">Estado</Label>
-              <select id="estado_sel" className={SEL} value={estado} onChange={(e) => setEstado(e.target.value)}>
+              <Select id="estado_sel" value={estado} onChange={(e) => setEstado(e.target.value)}>
                 <option value="pendiente">Pendiente</option>
                 <option value="en_curso">En curso</option>
                 <option value="completado">Completado</option>
-              </select>
+              </Select>
             </div>
 
             <div className="flex flex-col gap-1.5">

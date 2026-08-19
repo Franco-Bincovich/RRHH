@@ -3,10 +3,12 @@
 import { Filter, Layers, Search } from "lucide-react"
 
 import { EmptyState } from "@/components/ui/EmptyState"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
 import { NineBox } from "./NineBox"
 import type { EmpleadoCelda } from "./NineBox"
-import { SELECT_CLASS, toEmpleadoCelda } from "./_sucesion_ui"
+import { toEmpleadoCelda } from "./_sucesion_ui"
 import type { Area } from "@/types/area"
 import type { EmpleadoMapa } from "@/types/sucesion"
 
@@ -42,23 +44,23 @@ export function MapaTalentoTab({
 
   return (
     <>
-      <section className="rounded-xl border bg-card p-4 md:p-6" aria-label="Mapa 9-box de talento">
+      <Card as="section" aria-label="Mapa 9-box de talento">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-foreground">Mapa 9-Box</h2>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
               <Filter className="size-3.5 text-muted-foreground" />
-              <select
+              <Select
+                size="sm" className="w-auto"
                 value={selectedArea}
                 onChange={(e) => onSelectArea(e.target.value)}
-                className={SELECT_CLASS}
                 aria-label="Filtrar por área"
               >
                 <option value="">Todas las áreas</option>
                 {areas.map((a) => (
                   <option key={a.id} value={a.id}>{a.nombre}</option>
                 ))}
-              </select>
+              </Select>
             </div>
             <p className="hidden text-xs text-muted-foreground md:block">
               Clic en un empleado para ver detalle
@@ -82,9 +84,9 @@ export function MapaTalentoTab({
         {!loading && !error && empleadosFiltrados.length > 0 && (
           <NineBox empleados={empleadosFiltrados} />
         )}
-      </section>
+      </Card>
 
-      <section className="rounded-xl border bg-card p-4 md:p-6">
+      <Card as="section">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-foreground">Análisis por área</h2>
@@ -97,7 +99,7 @@ export function MapaTalentoTab({
             Analizar área
           </Button>
         </div>
-      </section>
+      </Card>
     </>
   )
 }

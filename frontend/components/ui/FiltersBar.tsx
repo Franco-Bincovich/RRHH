@@ -1,3 +1,4 @@
+import { Select } from "@/components/ui/select"
 /**
  * Barra de filtros genérica, presentacional y controlada. Cada campo trae su propio
  * `onChange`: la página conserva su estado (useState), su fetch y su debounce — este
@@ -35,8 +36,22 @@ interface FiltersBarProps {
   campos: FiltroCampo[]
 }
 
+/*
+ * Los `<input>` de la barra (fecha y búsqueda). **La altura es la MISMA fórmula que la del
+ * `size="sm"` de `components/ui/select.tsx`, y tiene que seguir siéndolo:** 44px de área táctil
+ * abajo de `md`, y los 30px que `docs/SISTEMA-DE-DISENO.md` §3 fija para la barra de filtros de
+ * `md` para arriba.
+ *
+ * 🔴 POR QUÉ ESTÁ ESCRITO ACÁ Y NO SALE DE UN PRIMITIVO. Al migrar los `<select>` a `<Select>`
+ * (19/8/2026) los selectores tomaron esa altura y estos inputs se quedaron en `min-h-11`, así que
+ * la barra quedó con controles de 30px al lado de controles de 44px — visiblemente peor que antes
+ * de unificar nada. Igualarlos acá es el arreglo mínimo; el correcto es que estos inputs pasen a
+ * `components/ui/input.tsx` con la misma variante de tamaño, y eso es una tanda de patrones.
+ * ⚠️ Mientras tanto: si cambia la altura del `size="sm"` del select, cambia también acá. Son dos
+ * lugares con un solo valor, y el que se olvide vuelve a partir la barra.
+ */
 const FIELD_CLASS =
-  "min-h-11 rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
+  "h-11 rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground md:h-[30px] " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
 const LABEL_CLASS = "flex flex-col gap-1 text-xs text-muted-foreground"
@@ -54,12 +69,12 @@ function Campo({ campo }: { campo: FiltroCampo }) {
   switch (campo.tipo) {
     case "select":
       return (
-        <select className={FIELD_CLASS} value={campo.value} onChange={(e) => campo.onChange(e.target.value)}>
+        <Select size="sm" className="w-auto" value={campo.value} onChange={(e) => campo.onChange(e.target.value)}>
           <option value="">{campo.opcionTodos ?? "Todos"}</option>
           {campo.opciones.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
-        </select>
+        </Select>
       )
     case "date":
       return (

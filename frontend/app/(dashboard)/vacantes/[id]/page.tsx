@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Briefcase, ExternalLink, Plus, Share2 } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
+import { Card } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Badge } from "@/components/ui/badge"
@@ -330,7 +331,7 @@ export default function VacanteDetailPage() {
             }
           />
 
-          <div className="mb-8 rounded-xl border bg-card p-4 md:p-6">
+          <Card className="mb-8">
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <Badge variant={ESTADO_VARIANTS[vacante.estado]}>
                 {ESTADO_LABELS[vacante.estado]}
@@ -342,7 +343,7 @@ export default function VacanteDetailPage() {
             {vacante.descripcion && (
               <p className="text-sm text-foreground">{vacante.descripcion}</p>
             )}
-          </div>
+          </Card>
 
           {/* Va ARRIBA de la publicación: es lo que hay que copiar ANTES de escribir el aviso. */}
           <CodigoPostulacion vacanteId={id} />

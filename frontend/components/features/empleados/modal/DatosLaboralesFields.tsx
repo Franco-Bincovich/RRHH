@@ -2,11 +2,12 @@ import type { ChangeEvent } from "react"
 
 import { Label } from "@/components/ui/label"
 import { RolesInput } from "@/components/ui/RolesInput"
+import { Select } from "@/components/ui/select"
 import { TextFields } from "./TextFields"
 import { AutocompleteFields } from "./AutocompleteFields"
 import { OrganizacionSelects } from "./OrganizacionSelects"
 import {
-  LABORAL_AUTOCOMPLETE, LABORAL_TEXT_FIELDS, SELECT_CLASS,
+  LABORAL_AUTOCOMPLETE, LABORAL_TEXT_FIELDS, INPUT_DATALIST_CLASS,
   type AutocompleteKey, type FieldFactory, type FormData, type FormErrors,
 } from "./_constants"
 import type { Area } from "@/types/area"
@@ -72,16 +73,16 @@ export function DatosLaboralesFields({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="modalidad_trabajo">Modalidad de trabajo</Label>
-        <select
+        <Select
+          className="w-auto"
           id="modalidad_trabajo"
-          className={SELECT_CLASS}
           value={form.modalidad_trabajo}
           onChange={field("modalidad_trabajo")}
         >
           <option value="presencial">Presencial</option>
           <option value="remoto">Remoto</option>
           <option value="hibrido">Híbrido</option>
-        </select>
+        </Select>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -91,7 +92,7 @@ export function DatosLaboralesFields({
         <input
           id="tipo_contrato"
           list="tipo_contrato_opciones"
-          className={SELECT_CLASS}
+          className={INPUT_DATALIST_CLASS}
           value={form.tipo_contrato}
           onChange={field("tipo_contrato")}
           placeholder="Ej: Relación de dependencia"

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 
 import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { fetchEmpresas } from "@/services/empresas"
 import { fetchEquipo } from "@/services/equipo"
 import type { Empresa } from "@/types/empresa"
@@ -18,10 +19,6 @@ interface SeleccionEmpleadoProps {
   errorEmpresa?: string
   errorEmpleado?: string
 }
-
-const SELECT_CLASS =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
 
 /**
  * Bloque Empresa + Empleado del alta de vacaciones/ausencias, con la lógica de rol
@@ -61,12 +58,12 @@ export function SeleccionEmpleado({
     return (
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="empleado_id">Empleado <span className="text-destructive" aria-hidden>*</span></Label>
-        <select id="empleado_id" className={SELECT_CLASS} value={empleadoId} onChange={(e) => onEmpleadoChange(e.target.value)} disabled={loading} aria-required aria-invalid={Boolean(errorEmpleado)}>
+        <Select id="empleado_id" value={empleadoId} onChange={(e) => onEmpleadoChange(e.target.value)} disabled={loading} aria-required aria-invalid={Boolean(errorEmpleado)}>
           <option value="">{loading ? "Cargando..." : "Seleccionar empleado"}</option>
           {equipo.map((m) => (
             <option key={m.id} value={m.id}>{m.apellido}, {m.nombre}{m.empresa ? ` — ${m.empresa}` : ""}</option>
           ))}
-        </select>
+        </Select>
         {errorEmpleado && <p className="text-xs text-destructive" role="alert">{errorEmpleado}</p>}
       </div>
     )
@@ -76,10 +73,10 @@ export function SeleccionEmpleado({
     <>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="empresa_id">Empresa <span className="text-destructive" aria-hidden>*</span></Label>
-        <select id="empresa_id" className={SELECT_CLASS} value={empresaId} onChange={(e) => onEmpresaChange(e.target.value)} aria-required aria-invalid={Boolean(errorEmpresa)}>
+        <Select id="empresa_id" value={empresaId} onChange={(e) => onEmpresaChange(e.target.value)} aria-required aria-invalid={Boolean(errorEmpresa)}>
           <option value="">Seleccionar empresa</option>
           {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-        </select>
+        </Select>
         {errorEmpresa && <p className="text-xs text-destructive" role="alert">{errorEmpresa}</p>}
       </div>
 
