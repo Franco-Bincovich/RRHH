@@ -41,6 +41,16 @@ function aplanar(raices: Objetivo[]): { obj: Objetivo; esHijo: boolean }[] {
 
 interface Props {
   objetivos:  Objetivo[]
+  /**
+   * Raíces del filtro entero, según el backend. El pie de la tabla lo lee de acá y NUNCA de
+   * `objetivos.length`: hoy coinciden porque este listado no pagina, y el día que pagine
+   * `length` es el tamaño de la página.
+   *
+   * ⚠️ El VACÍO sí se deriva de `objetivos`, y es correcto: si la página no trajo nada, no hay
+   * nada que dibujar. Son dos preguntas distintas — "¿cuántos hay?" la contesta el backend,
+   * "¿qué dibujo ahora?" lo contesta lo que llegó.
+   */
+  total:      number
   showEmpresa: boolean
   canWrite:   boolean
   onEdit:     (obj: Objetivo) => void
@@ -48,7 +58,7 @@ interface Props {
   deletingId: string | null
 }
 
-export function ListView({ objetivos, showEmpresa, canWrite, onEdit, onDelete, deletingId }: Props) {
+export function ListView({ objetivos, total, showEmpresa, canWrite, onEdit, onDelete, deletingId }: Props) {
   if (objetivos.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
@@ -58,6 +68,7 @@ export function ListView({ objetivos, showEmpresa, canWrite, onEdit, onDelete, d
   }
 
   return (
+    <>
     <Table>
       <TableHeader>
         <TableRow>
@@ -115,5 +126,15 @@ export function ListView({ objetivos, showEmpresa, canWrite, onEdit, onDelete, d
         })}
       </TableBody>
     </Table>
+
+    {/* 🔴 EL PIE CUENTA CON `total`, NO CON LO QUE DIBUJÓ LA TABLA. Y el número de arriba no es
+        el de filas: la tabla aplana raíces + subobjetivos, así que casi siempre muestra MÁS
+        renglones que objetivos principales hay. Decir "N filas" acá sería un tercer número
+        distinto para la misma pregunta. */}
+    <p className="mt-3 text-xs text-muted-foreground">
+      {total} {total === 1 ? "objetivo principal" : "objetivos principales"}
+      {total > objetivos.length && ` · se muestran ${objetivos.length}`}
+    </p>
+    </>
   )
 }

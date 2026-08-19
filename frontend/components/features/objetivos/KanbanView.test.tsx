@@ -47,10 +47,16 @@ const RAIZ = obj({ id: "r-1", titulo: "Auditar licencias", estado: "terminado" }
 
 const noop = async () => {}
 
-function render(objetivos: Objetivo[]) {
+/**
+ * `total` por defecto = lo que se pasa, o sea "llegó todo", que es el estado de hoy. Se puede
+ * pasar otro para simular una página parcial — que es la única forma de que el aviso de
+ * conteos incompletos pueda aparecer, y por lo tanto de que su test pueda fallar.
+ */
+function render(objetivos: Objetivo[], total = objetivos.length) {
   return renderToStaticMarkup(
     <KanbanView
       objetivos={objetivos}
+      total={total}
       onMover={noop}
       moviendo={null}
       canWrite={false}
@@ -104,5 +110,33 @@ describe("KanbanView con subobjetivos", () => {
     const html = render([RAIZ])
 
     expect(html).toContain("Auditar licencias")
+  })
+})
+
+/**
+ * 🔴 EL CONTADOR DE CADA COLUMNA SOLO DICE LA VERDAD SI LLEGÓ TODO.
+ *
+ * Hoy siempre llega todo: `objetivo_repo.find_all` devuelve el árbol entero y es el único
+ * listado del sistema que no pagina. El día que pagine, cada `cards.length` pasa a contar lo que
+ * entró en la página — el bug que `HorasTab` ya pagó mostrando "9 h" con 400 cargadas.
+ *
+ * QUÉ TENDRÍA QUE SER DISTINTO PARA QUE ESTOS DOS PUEDAN FALLAR: que `total` dejara de viajar
+ * como prop y el componente lo derivara de `objetivos.length`. Ahí los dos son iguales por
+ * construcción, `parcial` nunca es true y el aviso no aparecería nunca — que es exactamente el
+ * estado al que este par de tests impide volver.
+ */
+describe("KanbanView contra el wrapper paginado", () => {
+  it("no avisa nada cuando el conjunto que llegó es el total", () => {
+    const html = render([PADRE, RAIZ])
+
+    expect(html).not.toContain("Se están mostrando")
+  })
+
+  it("avisa que los contadores están incompletos si el backend dice que hay más", () => {
+    // 2 raíces a la vista, 40 en el filtro: es el escenario del día que el listado pagine.
+    const html = render([PADRE, RAIZ], 40)
+
+    expect(html).toContain("Se están mostrando")
+    expect(html).toContain("40")
   })
 })

@@ -27,6 +27,17 @@ const ESTADO_DOT: Record<EstadoObjetivo, string> = {
 
 interface Props {
   objetivos:  Objetivo[]
+  /**
+   * 🔴 CUÁNTAS RAÍCES HAY EN EL FILTRO ENTERO, según el backend. NO se usa para los badges de
+   * columna —el backend no devuelve un conteo POR ESTADO y no se puede inventar— sino para
+   * saber si `objetivos` es el conjunto completo o una porción.
+   *
+   * Mientras `objetivos.length === total`, cada `cards.length` ES el total de su columna y el
+   * badge dice la verdad. En cuanto el backend pagine, deja de serlo: el badge pasaría a contar
+   * lo que entró en la página, que es el bug de `HorasTab` con otra ropa. Por eso el aviso de
+   * abajo aparece solo, sin que nadie tenga que acordarse de agregarlo ese día.
+   */
+  total:      number
   onMover:    (id: string, estado: EstadoObjetivo) => Promise<void>
   moviendo:   string | null
   canWrite:   boolean
@@ -35,7 +46,9 @@ interface Props {
   deletingId: string | null
 }
 
-export function KanbanView({ objetivos, onMover, moviendo, canWrite, onEdit, onDelete, deletingId }: Props) {
+export function KanbanView({ objetivos, total, onMover, moviendo, canWrite, onEdit, onDelete, deletingId }: Props) {
+  // `objetivos` son las raíces que llegaron; `total` las que hay. Distintos = página parcial.
+  const parcial = total > objetivos.length
   const porEstado = useMemo(() => {
     const map: Record<EstadoObjetivo, Objetivo[]> = { por_hacer: [], haciendo: [], terminado: [] }
     // 🔴 SOLO RAÍCES. El backend ya devuelve el árbol (los hijos vienen anidados en `hijos`),
@@ -48,6 +61,17 @@ export function KanbanView({ objetivos, onMover, moviendo, canWrite, onEdit, onD
 
   return (
     <div className="overflow-x-auto pb-4">
+      {/* 🔴 NO SE PUEDE MOSTRAR EL TABLERO COMPLETO Y NO SE LO VA A FINGIR. Un kanban es un
+          recuento por columna, y con una página parcial cada badge cuenta lo que entró en la
+          página, no lo que hay. El día que el backend pagine, esto aparece solo y avisa; el
+          arreglo de fondo es que el listado devuelva un conteo POR ESTADO, que hoy no existe.
+          Ver docs/DEUDA-TECNICA.md. */}
+      {parcial && (
+        <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          Se están mostrando {objetivos.length} de {total} objetivos principales. Los contadores
+          de cada columna cuentan solo lo que se ve — usá los filtros para acotar el tablero.
+        </p>
+      )}
       <div className="flex gap-4" style={{ width: "max-content" }}>
         {ESTADOS.map((estado) => {
           const cards     = porEstado[estado]

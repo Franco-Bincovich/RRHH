@@ -118,6 +118,7 @@ export default function CandidatosPage() {
         onClose={() => setSeleccionado(null)}
         onDeleted={refetch}
         onAsignada={refetch}
+        onContratado={refetch}
       />
     </div>
   )

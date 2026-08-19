@@ -5,6 +5,22 @@ export type { ClasificacionIA, OrigenClasificacion }
 /** Lo que acepta el filtro: las tres, más el corte por "todavía sin clasificar". */
 export type FiltroClasificacion = ClasificacionIA | "sin_clasificar"
 
+/**
+ * Si la POSTULACIÓN sigue viva. Espejo de `EstadoCandidato` (`backend/schemas/candidato.py:39`),
+ * que a su vez es el espejo del CHECK `candidatos_estado_check`.
+ *
+ * 🔴 ES OTRO EJE QUE `etapa_pipeline`, no una versión suya. La etapa dice DÓNDE está la persona
+ * en el proceso (postulado → … → oferta); el estado dice SI sigue en carrera. Alguien descartado
+ * en entrevista técnica conserva la etapa en la que se cayó, que es lo que permite medir en qué
+ * punto se cae la gente. Por eso el puente a empleado exige LAS DOS cosas: etapa `oferta` y
+ * estado `activo`.
+ *
+ * ⚠️ El backend viene exponiendo este campo desde A4.1 y este tipo NO lo declaraba, así que
+ * llegaba por HTTP y el front lo descartaba sin que nadie lo notara — la misma falla silenciosa
+ * que el comentario de `schemas/candidato.py:104-111` documenta del lado del mapper.
+ */
+export type EstadoCandidato = "activo" | "descartado" | "contratado" | "en_espera"
+
 /** Candidato con el nombre del grupo resuelto (vivo o congelado). Espejo de CandidatoGrupoResponse. */
 export interface CandidatoConGrupo {
   id: string
@@ -16,6 +32,7 @@ export interface CandidatoConGrupo {
   cargo_anterior: string | null
   empresa_anterior: string | null
   etapa_pipeline: EtapaPipeline
+  estado: EstadoCandidato
   score_ia: number | null
   busqueda_congelada: string | null
   cv_storage_path: string | null

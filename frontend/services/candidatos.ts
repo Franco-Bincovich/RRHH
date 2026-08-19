@@ -1,5 +1,6 @@
 import { apiFetch, API_BASE, ApiError, authHeaders, descargarArchivo, type FormatoExport } from "@/services/api"
 import type { CandidatoConGrupo, CandidatosPagina, FiltroClasificacion } from "@/types/candidato"
+import type { Empleado } from "@/types/empleado"
 
 export interface CandidatosFiltros {
   /** Solo los huérfanos: los que entraron sin matchear ninguna búsqueda. */
@@ -63,4 +64,34 @@ export async function deleteCandidato(id: string): Promise<void> {
     try { msg = ((await res.json()) as { message?: string }).message ?? msg } catch { /* sin body */ }
     throw new ApiError(msg, "UNKNOWN", res.status)
   }
+}
+
+/**
+ * Contrata a un candidato en oferta: crea su legajo de empleado en estado `preingreso`.
+ *
+ * 🔴 SOLO TRES CAMPOS, y no es un formulario recortado: es el punto del puente. Todo lo demás
+ * (nombre, apellido, email personal, empresa, área) el backend lo deriva del candidato y de su
+ * vacante. Los tres que van no existen en ninguna de las dos tablas y no se pueden inventar:
+ *   · `email_corporativo` — NO es `candidato.email`, que es personal. La columna es UNIQUE
+ *     GLOBAL, así que meterle el mail personal de alguien lo quema para todo el sistema.
+ *   · `roles` — `vacante.titulo` es el texto del aviso, no el rol del legajo.
+ *   · `fecha_ingreso` — es el acuerdo al que se llegó.
+ * Agregar un cuarto campo es convertir el puente en un alta de empleado con pasos extra.
+ *
+ * 🔴 LA FECHA VA HACIA ADELANTE (`>= hoy`), al revés que `activarEmpleado`, que exige que ya
+ * haya ocurrido. No es una inconsistencia: contratar registra un acuerdo futuro y crea la ficha
+ * en `preingreso`; activar la pasa a `activo` el día que la persona entró. Si ya entró, el
+ * camino es el alta normal de empleado.
+ *
+ * Los seis errores se muestran con su mensaje: CANDIDATO_NOT_FOUND (404), CANDIDATO_SIN_VACANTE,
+ * CANDIDATO_NO_ESTA_EN_OFERTA, CANDIDATO_NO_CONTRATABLE (409), FECHA_INGRESO_PASADA (400), y el
+ * 409 de `email_corporativo` ya usado que llega desde el alta de empleado.
+ */
+export function contratarCandidato(
+  id: string,
+  datos: { email_corporativo: string; roles: string[]; fecha_ingreso: string },
+): Promise<Empleado> {
+  return apiFetch<Empleado>(`/api/candidatos/${id}/contratar`, {
+    method: "POST", body: JSON.stringify(datos),
+  })
 }

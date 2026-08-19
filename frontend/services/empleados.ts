@@ -98,3 +98,19 @@ export async function fetchEmpleadosSeleccionables(
     `/api/empleados/seleccionables?empresa_id=${encodeURIComponent(empresaId)}`,
   )
 }
+
+/**
+ * Pasa un empleado de `preingreso` a `activo`: el día que la persona efectivamente entró.
+ *
+ * Es un ACTO y no una edición de campo, y por eso tiene endpoint propio sin body — el mismo
+ * criterio con el que el backend lo separó del PUT (`routers/empleados.py:62`). Un
+ * `updateEmpleado(id, { estado: "activo" })` saltearía las dos guardas que este camino aplica.
+ *
+ * 🔴 EL MENSAJE DEL 400 SE MUESTRA TAL CUAL. `INGRESO_AUN_NO_OCURRIO` viene redactado con la
+ * fecha adentro y con la salida ("corregí la fecha en el legajo y después activala"): un
+ * genérico de "no se pudo activar" tira justo lo que hace falta para resolverlo. Los otros dos
+ * códigos son EMPLEADO_NOT_FOUND (404) y EMPLEADO_NO_ES_PREINGRESO (409).
+ */
+export async function activarEmpleado(id: string): Promise<Empleado> {
+  return apiFetch<Empleado>(`/api/empleados/${id}/activar`, { method: "POST" })
+}

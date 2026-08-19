@@ -9,38 +9,11 @@ import { Button } from "@/components/ui/button"
 import { CandidatoClasificacion } from "@/components/features/candidatos/CandidatoClasificacion"
 import { CandidatoCv } from "@/components/features/candidatos/CandidatoCv"
 import { CandidatoAcciones } from "@/components/features/candidatos/CandidatoAcciones"
+import {
+  Campo, ETAPA_LABELS, Section,
+} from "@/components/features/candidatos/_candidatoPanelUI"
 import { getCandidatoCvUrl } from "@/services/candidatos"
-import type { EtapaPipeline } from "@/types/vacantes"
 import type { CandidatoConGrupo } from "@/types/candidato"
-
-const ETAPA_LABELS: Record<EtapaPipeline, string> = {
-  postulado: "Postulado",
-  assessment: "Assessment",
-  entrevista_rrhh: "Entrevista RRHH",
-  entrevista_tecnica: "Entrevista Técnica",
-  oferta: "Oferta",
-}
-
-/** Sección del panel: título + contenido. Base para ampliar a edición/notas a futuro. */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-2">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h3>
-      {children}
-    </section>
-  )
-}
-
-/** Campo label + valor; no renderiza nada si el valor está vacío. */
-function Campo({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null
-  return (
-    <div className="flex justify-between gap-4 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-right text-foreground">{value}</span>
-    </div>
-  )
-}
 
 interface Props {
   candidato: CandidatoConGrupo | null
@@ -48,10 +21,13 @@ interface Props {
   onClose: () => void
   onDeleted?: () => void
   onAsignada?: () => void
+  onContratado?: () => void
 }
 
 /** Panel lateral (drawer) de solo lectura con el detalle del candidato, en secciones. */
-export function CandidatoDetailPanel({ candidato, open, onClose, onDeleted, onAsignada }: Props) {
+export function CandidatoDetailPanel({
+  candidato, open, onClose, onDeleted, onAsignada, onContratado,
+}: Props) {
   const [loadingCv, setLoadingCv] = useState(false)
 
   useEffect(() => {
@@ -142,6 +118,7 @@ export function CandidatoDetailPanel({ candidato, open, onClose, onDeleted, onAs
             onClose={onClose}
             onDeleted={onDeleted}
             onAsignada={onAsignada}
+            onContratado={onContratado}
           />
         </div>
       </aside>

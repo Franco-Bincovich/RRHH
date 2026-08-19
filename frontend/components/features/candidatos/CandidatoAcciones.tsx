@@ -1,6 +1,7 @@
 "use client"
 
 import { AsignarVacanteCandidato } from "@/components/features/candidatos/AsignarVacanteCandidato"
+import { ContratarCandidatoButton } from "@/components/features/candidatos/ContratarCandidatoButton"
 import { EliminarCandidatoButton } from "@/components/features/candidatos/EliminarCandidatoButton"
 import type { CandidatoConGrupo } from "@/types/candidato"
 
@@ -14,12 +15,18 @@ import type { CandidatoConGrupo } from "@/types/candidato"
  * 🔴 `vacante_id === null` (asignar) NO es lo mismo que `!busqueda_activa` (borrar). El segundo
  * también es true cuando la búsqueda se borró y el candidato conserva el título congelado — ese
  * candidato SÍ se puede reasignar, y por eso las dos condiciones no se pueden unificar.
+ *
+ * 🔴 Y CONTRATAR PIDE DOS COSAS A LA VEZ, que tampoco se pueden unificar: `etapa_pipeline` en
+ * "oferta" (dónde está en el proceso) Y `estado` en "activo" (si sigue en carrera). Alguien que
+ * llegó a la oferta y después la rechazó queda con etapa "oferta" y estado "descartado": mirar
+ * solo la etapa le ofrecería un botón que el backend rechaza con 409.
  */
 interface Props {
   candidato: CandidatoConGrupo
   onClose: () => void
   onDeleted?: () => void
   onAsignada?: () => void
+  onContratado?: () => void
 }
 
 function Bloque({ title, children }: { title: string; children: React.ReactNode }) {
@@ -31,7 +38,11 @@ function Bloque({ title, children }: { title: string; children: React.ReactNode 
   )
 }
 
-export function CandidatoAcciones({ candidato, onClose, onDeleted, onAsignada }: Props) {
+export function CandidatoAcciones({
+  candidato, onClose, onDeleted, onAsignada, onContratado,
+}: Props) {
+  const contratable = candidato.etapa_pipeline === "oferta" && candidato.estado === "activo"
+
   return (
     <>
       {candidato.vacante_id === null && (
@@ -39,6 +50,14 @@ export function CandidatoAcciones({ candidato, onClose, onDeleted, onAsignada }:
           <AsignarVacanteCandidato
             candidatoId={candidato.id}
             onAsignada={() => { onClose(); onAsignada?.() }}
+          />
+        </Bloque>
+      )}
+      {contratable && (
+        <Bloque title="Contratación">
+          <ContratarCandidatoButton
+            candidato={candidato}
+            onContratado={() => { onClose(); onContratado?.() }}
           />
         </Bloque>
       )}

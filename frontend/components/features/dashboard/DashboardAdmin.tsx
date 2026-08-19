@@ -1,12 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { fetchDashboard } from "@/services/dashboard"
-import type { DashboardData } from "@/services/dashboard"
+import { useCanWrite } from "@/hooks/useCanWrite"
+import { resolverAtencion } from "@/services/dashboard"
 import { AlertasPanel } from "./AlertasPanel"
-import { buildKpis, type KpiCardData } from "./dashboardAdminData"
+import { AtencionPanel } from "./AtencionPanel"
+import { buildKpis, cargarDatosAdmin, type DatosAdmin, type KpiCardData } from "./dashboardAdminData"
 import { DashboardExtras } from "./DashboardExtras"
 import { HeadcountPanel } from "./HeadcountPanel"
 
@@ -35,17 +37,40 @@ function KpiSkeleton() {
 }
 
 export function DashboardAdmin() {
-  const [data, setData] = useState<DashboardData | null>(null)
+  const [datos, setDatos] = useState<DatosAdmin | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [resolviendo, setResolviendo] = useState<string | null>(null)
+  // El permiso de RESOLVER es el de EVENTOS, no el del dashboard: resolver una alerta manual
+  // escribe un evento de agenda, y el backend gatea con EVENTOS + WRITE. Con el permiso de la
+  // pantalla, gerencia_lectura vería un botón que le responde 403.
+  const canResolver = useCanWrite("eventos")
 
   useEffect(() => {
-    fetchDashboard()
-      .then(setData)
+    cargarDatosAdmin()
+      .then(setDatos)
       .catch(() => setError("No se pudo cargar el dashboard."))
       .finally(() => setLoading(false))
   }, [])
 
+  async function resolver(eventoId: string) {
+    setResolviendo(eventoId)
+    try {
+      await resolverAtencion(eventoId)
+      // La alerta se saca de la lista local en vez de recargar todo: el evento resuelto sale de
+      // la ventana de aviso, así que un refetch traería lo mismo menos esta fila — y le
+      // agregaría un parpadeo a los nueve KPIs para quitar un renglón.
+      setDatos((prev) => prev && {
+        ...prev, atencion: prev.atencion.filter((a) => a.evento_id !== eventoId),
+      })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo resolver la alerta.")
+    } finally {
+      setResolviendo(null)
+    }
+  }
+
+  const data = datos?.dashboard ?? null
   const kpis = data ? buildKpis(data) : []
 
   return (
@@ -73,6 +98,32 @@ export function DashboardAdmin() {
           largos distintos dejan de verse parejas.
           ⚠️ NO se lo pongas a la grilla de KPIs de arriba: esas SÍ necesitan el stretch, porque
           su `description` es de largo variable y sin él las 3 de cada fila quedan desparejas. */}
+      {/* 🔴 DOS PANELES DE AVISOS, Y NO SON LO MISMO — se midió, la intersección es CERO.
+          "Requiere tu atención" (arriba, ancho completo) es lo accionable sobre PERSONAS:
+          ingresos próximos, fines de período de prueba y eventos de agenda en ventana.
+          "Alertas activas" (abajo) es la salud del SISTEMA: tablas vacías que dejan un módulo
+          inutilizable, campos del padrón sin cargar, y dos derivadas de KPIs.
+          Va arriba y solo porque es lo que se hace ESTA semana con gente; lo otro es una deuda
+          de carga que se arrastra. Los títulos dicen cuál es cuál para que no se lean como dos
+          listas de lo mismo. Ver docs/DEUDA-TECNICA.md: si los bloqueos de módulo son "alerta"
+          o son otra cosa lo define Capital Humano en el reestilado del dashboard. */}
+      {datos && (
+        <>
+          {datos.atencionError ? (
+            <p className="text-sm text-destructive">
+              No se pudo cargar &quot;Requiere tu atención&quot;. El resto del dashboard está al día.
+            </p>
+          ) : (
+            <AtencionPanel
+              alertas={datos.atencion}
+              canResolver={canResolver}
+              resolviendo={resolviendo}
+              onResolver={resolver}
+            />
+          )}
+        </>
+      )}
+
       {data && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           <HeadcountPanel areas={data.headcount_por_area} />

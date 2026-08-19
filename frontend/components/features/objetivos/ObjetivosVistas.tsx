@@ -53,6 +53,13 @@ interface Props {
   error: boolean
   onReintentar: () => void
   objetivos: Objetivo[]
+  /**
+   * Cuántas RAÍCES hay en el filtro entero, según el backend. Viaja hasta las dos vistas y no se
+   * deriva de `objetivos.length` en ningún lado: hoy coinciden porque este listado no pagina,
+   * y el día que pagine `length` es el tamaño de la página. Ver el contrato al pie de
+   * `schemas/objetivo.py::ObjetivoListResponse`.
+   */
+  total: number
   mostrarEmpresa: boolean
   canWrite: boolean
   onMover: (id: string, estado: EstadoObjetivo) => Promise<void>
@@ -63,7 +70,7 @@ interface Props {
 }
 
 export function ObjetivosVistas({
-  vista, onVista, loading, error, onReintentar, objetivos, mostrarEmpresa,
+  vista, onVista, loading, error, onReintentar, objetivos, total, mostrarEmpresa,
   canWrite, onMover, moviendo, onEdit, onDelete, deletingId,
 }: Props) {
   return (
@@ -81,12 +88,12 @@ export function ObjetivosVistas({
       {loading && <TableSkeleton />}
       {!loading && error && <div className="py-12 text-center text-sm text-destructive">Error al cargar. <button onClick={onReintentar} className="underline">Reintentar</button></div>}
       {!loading && !error && vista === "tablero" && (
-        <KanbanView objetivos={objetivos} onMover={onMover} moviendo={moviendo} canWrite={canWrite}
-          onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
+        <KanbanView objetivos={objetivos} total={total} onMover={onMover} moviendo={moviendo}
+          canWrite={canWrite} onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
       )}
       {!loading && !error && vista === "lista" && (
-        <ListView objetivos={objetivos} showEmpresa={mostrarEmpresa} canWrite={canWrite}
-          onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
+        <ListView objetivos={objetivos} total={total} showEmpresa={mostrarEmpresa}
+          canWrite={canWrite} onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
       )}
     </>
   )

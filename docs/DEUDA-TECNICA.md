@@ -928,6 +928,37 @@ las ata. Gravedad 🟠 · Esfuerzo M.
 
 ---
 
+## 8-quinquies. 🟡 El dashboard quedó con DOS paneles de avisos (19/8/2026, bloque B4)
+
+> **Decisión de producto pendiente, no bug.** El código funciona y las dos listas son correctas;
+> lo que falta definir es si tienen que seguir siendo dos.
+
+Al cablear `GET /api/dashboard/atencion` (A6) la instrucción inicial era que el panel nuevo
+**reemplazara** a `AlertasPanel`, para no mostrar la misma alerta dos veces. Se midió antes de
+borrar nada y **la intersección entre los dos endpoints es CERO**:
+
+| `GET /api/dashboard/atencion` (panel "Requiere tu atención") | `GET /api/dashboard` → `alertas` (panel "Alertas activas") |
+|---|---|
+| `ingreso_proximo` (calculada) | los 5 **bloqueos de módulo**: `costos_nomina`, `inventario_items`, `capacitaciones`, `presupuesto_areas`, `vacantes` vacías (`services/_dashboard_alertas_catalogo.py:31-52`) |
+| `fin_periodo_prueba` (calculada) | **campos vacíos del padrón**: N empleados sin manager, con link al listado filtrado (`_dashboard_alertas.py:70-95`) |
+| `evento_manual` (manual, con autor) | 2 **derivadas de KPIs**: vacantes activas, onboardings en curso (`_dashboard_alertas.py:98-107`) |
+
+Reemplazar habría borrado la columna derecha entera, **que no la muestra ninguna otra pantalla** —
+incluido el aviso de `costos_nomina` vacía, que hoy es la única explicación visible de por qué la
+masa salarial y el historial salarial salen en cero. Por eso **conviven**: atención arriba (lo
+accionable sobre personas esta semana), alertas abajo (la salud del sistema), con títulos que
+dicen cuál es cuál.
+
+🔴 **Lo que queda por decidir, y es de Capital Humano, no de desarrollo: si "no hay ítems de
+inventario cargados" es una ALERTA o es otra cosa.** Un bloqueo de módulo no es un aviso que se
+atiende y se cierra: es un estado que dura meses y que solo se resuelve cargando datos. Mezclarlo
+en una caja llamada "alertas" junto a cosas que sí se resuelven en el día enseña a ignorar la
+caja. Candidatos: un bloque de "puesta a punto" con checklist de carga inicial, un aviso por
+módulo dentro de cada pantalla, o dejarlo como está. **Entra en el reestilado del dashboard, no
+antes.** Gravedad 🟡 · Esfuerzo S (es mover, no construir).
+
+---
+
 ## 9. Superficies que dibuja el NAVEGADOR y el tema oscuro no alcanza
 
 > **11/8/2026.** Relevado entero al arreglar el contraste del popup de los `<select>`

@@ -62,3 +62,55 @@ export interface DashboardData {
 export function fetchDashboard(): Promise<DashboardData> {
   return apiFetch<DashboardData>("/api/dashboard")
 }
+
+// ── Panel "Requiere tu atención" (A6) ──────────────────────────────────────────
+
+/**
+ * Una alerta del panel de atención. Espejo de `AlertaAtencion`
+ * (`backend/schemas/dashboard_atencion.py:22`).
+ *
+ * 🔴 `origen` ES EL DISCRIMINANTE Y NO ES COSMÉTICO: separa dos ciclos de vida distintos.
+ *   · `"calculada"` — se DERIVA del padrón al leer (un ingreso que se viene, un período de
+ *     prueba que termina). No tiene fila ni id: desaparece cuando desaparece su causa, y por eso
+ *     NO se puede resolver a mano. El backend rechaza el intento con ALERTA_NO_RESOLUBLE (409).
+ *   · `"manual"` — es una fila de `eventos_agenda` dentro de su ventana de aviso. Trae
+ *     `evento_id` (con qué se resuelve) y `creado_por_nombre` (quién la creó).
+ *
+ * `tipo` es `string` y no una unión cerrada A PROPÓSITO, siguiendo al backend: un tipo calculado
+ * nuevo no tiene por qué romper el front, que pinta por `origen`.
+ */
+export interface AlertaAtencion {
+  origen: "calculada" | "manual"
+  tipo: string
+  mensaje: string
+  /** Fecha del HECHO (el ingreso, el fin de prueba, el evento). Es la clave de orden. */
+  fecha: string | null
+  href: string | null
+  evento_id: string | null
+  creado_por_nombre: string | null
+}
+
+export interface AtencionData {
+  alertas: AlertaAtencion[]
+}
+
+/** Las calculadas y las manuales en UNA lista, ya ordenada por fecha del hecho por el backend. */
+export function fetchAtencion(): Promise<AtencionData> {
+  return apiFetch<AtencionData>("/api/dashboard/atencion")
+}
+
+/**
+ * Resuelve una alerta MANUAL. `origen` viaja en el body a propósito: es lo que le permite al
+ * backend contestar ALERTA_NO_RESOLUBLE (409) cuando se intenta resolver una calculada, en vez
+ * de un 404 mudo por un id que no existe.
+ *
+ * 🔴 El gate del backend es EVENTOS + WRITE, no DASHBOARD: resolver escribe un evento de agenda.
+ * Un rol que puede VER el dashboard no necesariamente puede resolver — por eso el panel decide
+ * si muestra el botón con el permiso de eventos, no con el de la pantalla.
+ */
+export function resolverAtencion(eventoId: string): Promise<unknown> {
+  return apiFetch<unknown>("/api/dashboard/atencion/resolver", {
+    method: "POST",
+    body: JSON.stringify({ origen: "manual", evento_id: eventoId }),
+  })
+}

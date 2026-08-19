@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/PageHeader"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Button } from "@/components/ui/button"
 import { EmpleadoModal } from "@/components/features/empleados/EmpleadoModal"
+import { ActivarEmpleadoButton } from "@/components/features/empleados/ficha/ActivarEmpleadoButton"
 import { LoadingSkeleton } from "@/components/features/empleados/ficha/_primitives"
 import { OffboardingModal } from "@/components/features/empleados/ficha/OffboardingModal"
 import { DatosEmpleadoSection } from "@/components/features/empleados/ficha/DatosEmpleadoSection"
@@ -77,6 +78,12 @@ export default function EmpleadoDetailPage() {
         action={
           canWrite ? (
             <div className="flex gap-2">
+              {/* Solo en `preingreso`: es el único estado desde el que el backend acepta el
+                  pase. Las dos acciones de ciclo son excluyentes por construcción —quien
+                  todavía no entró no se puede dar de baja— así que nunca se ven juntas. */}
+              {empleado.estado === "preingreso" && (
+                <ActivarEmpleadoButton empleado={empleado} onActivado={recargarEmpleado} />
+              )}
               {empleado.estado === "activo" && (
                 <Button
                   variant="outline"

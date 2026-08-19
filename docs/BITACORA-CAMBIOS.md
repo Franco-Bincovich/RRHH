@@ -40,6 +40,64 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-19 · B1–B6 — los 7 endpoints huérfanos ganan botón + el wrapper de objetivos · commits pendientes
+
+**Qué cambió.** Frontend puro: **cero endpoints nuevos, cero cambios de backend salvo un archivo
+de tests**. Los siete endpoints que el bloque A dejó publicados y sin UI ahora se pueden usar
+desde la pantalla, y el tablero de objetivos pasó a leer el `total` del wrapper.
+
+1. **Confirmar ingreso** (`POST /api/empleados/{id}/activar`) — botón en la ficha del empleado,
+   visible solo con `estado === "preingreso"`.
+2. **Confirmar baja** (`POST /api/offboarding/{id}/efectivizar`) — botón en la tarjeta del
+   proceso, con diálogo propio: pide la fecha real de egreso y avisa que es irreversible.
+   🔴 **Es el primer camino alcanzable desde la UI que pone a alguien en `estado='baja'`.** Hasta
+   hoy, en producción ningún offboarding se podía cerrar y ningún empleado pasaba nunca a baja.
+3. **Contratar candidato** (`POST /api/candidatos/{id}/contratar`) — botón + modal de tres campos
+   en el panel del candidato, con `etapa_pipeline === "oferta"` Y `estado === "activo"`.
+   🔑 Con esto `candidatos.estado` gana su primer escritor alcanzable: `contratado` deja de ser un
+   valor del CHECK que nadie puede escribir.
+4. **Panel "Requiere tu atención"** (`GET /api/dashboard/atencion` + `/resolver`) — panel nuevo en
+   el dashboard de admin. 🔴 **NO reemplazó a `AlertasPanel`, que era el plan.** Se midió y la
+   intersección entre los dos endpoints es CERO: `/atencion` trae personas y fechas, `/dashboard`
+   trae salud del sistema (5 bloqueos de módulo, campos vacíos del padrón, 2 derivadas de KPIs).
+   Borrarlo habría dejado sin ninguna pantalla el aviso de `costos_nomina` vacía, que es hoy la
+   única explicación visible de por qué la masa salarial sale en cero. Los dos conviven, con
+   títulos distintos y una decisión de producto anotada en `DEUDA-TECNICA.md §8-quinquies`.
+5. **Import de Formación por Excel** (`POST /api/importacion/formacion/{preview,confirmar}`) —
+   botón + modal en el tab Catálogo, con los cinco grupos del preview a la vista.
+6. **Objetivos contra el wrapper paginado** — la pantalla guardaba `data.items` y tiraba `total`.
+   Ahora `total` viaja hasta las dos vistas, el encabezado y el pie de la lista lo usan, y el
+   tablero **avisa solo** si `items.length < total` (el día que el listado pagine, los contadores
+   por columna del kanban dejan de ser totales y la pantalla lo dice en vez de mentir).
+
+**Backend tocado (un solo archivo, de tests):** `tests/test_callers_huerfanos.py` — se sacaron las
+**7 excepciones** que quedaron muertas. El barrido las pidió solo: dio rojo con
+"Endpoints declarados sin front que AHORA sí se llaman", que es exactamente el ciclo que esa
+lista pretende. Es la tercera vez que funciona (antes: link público de horas, `GET /api/eventos/
+pendientes`). **Ningún endpoint de producción se tocó.**
+
+**Divisiones que el límite de líneas exigió** (van en el commit de su bloque, no aparte):
+`offboarding/page.tsx` 311 → **99** (+ `useOffboardings` 70, `OffboardingCard` 127,
+`_offboardingLabels` 42, `_offboardingEstado` 50) · `CatalogoTab` 159 → **133** (+ `CatalogoTabla`
+106) · `CandidatoDetailPanel` 154 → **127** (+ `_candidatoPanelUI` 40, se pasó del límite al
+sumarle la prop nueva) · el modal y el preview del import nuevos se partieron al nacer.
+
+**Un tipo del front estaba incompleto y llegó por esta vía:** `CandidatoConGrupo` no declaraba
+`estado`, que el backend expone desde A4.1 — o sea que viajaba por HTTP y el front lo descartaba
+en silencio, el mismo modo de falla que `schemas/candidato.py:104-111` documenta del otro lado.
+
+**Impacto en infraestructura:**
+- **Ninguno.** Sin migraciones, sin env vars, sin dependencias, sin buckets, sin endpoints nuevos,
+  sin cambios de auth, sin procesos de fondo, sin dependencias de dominio.
+- ⚠️ Lo único a saber para el deploy: **el backend de estos 7 ya está en producción**, así que
+  este front se puede publicar sin esperar nada. Vale igual el orden de la sección Deploy de
+  `CLAUDE.md` (verificar `sofia-backend` antes de probar en `hrkarstec.site`).
+- 🔴 **Para el día del cutover:** `POST /api/offboarding/{id}/efectivizar` pasa a usarse de verdad
+  desde hoy. Es el endpoint que escribe `empleados.fecha_egreso` y cierra la instancia, y hace
+  **dos escrituras sin transacción** (limitación conocida y declarada de PostgREST). Con volumen
+  real de uso, la ventana entre las dos deja de ser teórica.
+
+---
 ## 2026-08-19 · A3.3 — cierra el BLOQUE A · commits pendientes
 
 **Qué cambió.** Tres cosas independientes, la última del bloque A (backend). (1) `CLAUDE.md`

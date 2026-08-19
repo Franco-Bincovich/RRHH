@@ -24,6 +24,20 @@ export default function ObjetivosPage() {
   const [empresaActivaId] = useState<string | null>(getEmpresaActivaId)
   const [vista, setVista]           = useState<Vista>("tablero")
   const [objetivos, setObjetivos]   = useState<Objetivo[]>([])
+  /**
+   * 🔴 EL TOTAL LO DICE EL BACKEND, SIEMPRE — nunca `objetivos.length`.
+   *
+   * Hoy los dos números coinciden porque este listado es el único del sistema que no pagina
+   * (`objetivo_repo.find_all` trae el árbol entero). El día que pagine —y el wrapper ya tiene la
+   * forma final para eso— `items` pasa a ser una página y `length` diría "20" sobre 400 sin
+   * dejar de compilar. Es el bug que `HorasTab` ya pagó una vez: mostraba "9 h" con 400 cargadas
+   * porque sumaba con `.reduce()` sobre la página en lugar de leer el total.
+   *
+   * ⚠️ CUENTA RAÍCES, no objetivos: los subobjetivos viajan anidados en `hijos`, así que
+   * `total` NO es la cantidad de filas del tablero ni siquiera hoy. El contador dice "objetivos
+   * principales" por eso. El conteo aplanado es otra cosa y solo lo usa el tope de export.
+   */
+  const [total, setTotal]           = useState(0)
   const [loading, setLoading]       = useState(true)
   const [error, setError]           = useState(false)
   const [empresas, setEmpresas]     = useState<Empresa[]>([])
@@ -49,6 +63,7 @@ export default function ObjetivosPage() {
       const override = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
       const data = await fetchObjetivos(override, estadoFiltro || undefined, responsableFiltro || undefined, prioridadFiltro || undefined)
       setObjetivos(data.items)
+      setTotal(data.total)
     } catch { setError(true) }
     finally { setLoading(false) }
   }, [empresaActivaId, empresaFiltro, estadoFiltro, prioridadFiltro, responsableFiltro])
@@ -72,7 +87,14 @@ export default function ObjetivosPage() {
 
   return (
     <div>
-      <PageHeader title="Objetivos" description="Tablero de tareas del equipo de RRHH" />
+      <PageHeader
+        title="Objetivos"
+        description={
+          total === 0
+            ? "Tablero de tareas del equipo de RRHH"
+            : `${total} ${total === 1 ? "objetivo principal" : "objetivos principales"} · tablero del equipo de RRHH`
+        }
+      />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <ObjetivosFiltros
@@ -102,7 +124,7 @@ export default function ObjetivosPage() {
 
       <ObjetivosVistas
         vista={vista} onVista={setVista} loading={loading} error={error} onReintentar={load}
-        objetivos={objetivos} mostrarEmpresa={mostrarEmpresa} canWrite={canWrite}
+        objetivos={objetivos} total={total} mostrarEmpresa={mostrarEmpresa} canWrite={canWrite}
         onMover={handleMover} moviendo={moviendo} deletingId={deletingId}
         onEdit={(o) => { setEditing(o); setModalOpen(true) }} onDelete={handleDelete}
       />

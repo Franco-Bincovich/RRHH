@@ -17,7 +17,8 @@ function candidato(id: string, grupo: string | null, activa = true): CandidatoCo
   return {
     id, vacante_id: grupo ? "v1" : null, nombre: `N${id}`, apellido: "Prueba",
     email: `${id}@x.com`, telefono: null, cargo_anterior: null, empresa_anterior: null,
-    etapa_pipeline: "postulado", score_ia: null, busqueda_congelada: null, cv_storage_path: null,
+    etapa_pipeline: "postulado", estado: "activo", score_ia: null, busqueda_congelada: null,
+    cv_storage_path: null,
     screening_warning: null, clasificacion_ia: null, clasificacion_motivo: null,
     clasificacion_origen: null, created_at: "2026-08-01T09:00:00",
     grupo_nombre: grupo, busqueda_activa: activa,

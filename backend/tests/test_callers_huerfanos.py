@@ -100,65 +100,18 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     # sacaran: `test_las_excepciones_siguen_sin_caller` da rojo cuando algo declarado empieza a
     # tener caller. Es el ciclo que esta lista pretende, funcionando.
 
-    # 🔴 EFECTIVIZACIÓN DE LA BAJA — NO es completitud REST: es la mitad backend de un fix que
-    # todavía no tiene botón. Por eso lleva DISPARADOR explícito y no una razón permanente.
-    # Hasta este cambio, `POST /api/offboarding` daba de baja al empleado en el acto, con la fecha
-    # prevista en el futuro: la persona desaparecía del headcount con treinta días por delante.
-    # Ahora la baja la escribe este endpoint, y alguien la tiene que confirmar.
-    # SALE DE ESTA LISTA cuando `frontend/services/offboarding.ts` tenga su `efectivizarBaja` y la
-    # ficha del proceso tenga el botón con su cartel de confirmación (molde: EliminarVacanteButton).
-    # 🚩 MIENTRAS SIGA ACÁ, LA BAJA NO SE PUEDE EFECTIVIZAR DESDE LA UI, y eso es un estado a
-    # medias que hay que cerrar en la sesión de front: los offboardings quedan abiertos para
-    # siempre y ningún empleado pasa nunca a `baja`. El propio barrido lo va a pedir:
-    # `test_las_excepciones_siguen_sin_caller` da rojo cuando algo declarado empieza a tener caller.
-    ("POST", "/api/offboarding/{instancia_id}/efectivizar"):
-        "la baja EFECTIVA del empleado + cierre de la instancia. Backend del fix de offboarding; "
-        "el botón de la ficha se construye en la sesión de front que sigue.",
-
-    # 🔴 IMPORT DE FORMACIÓN (A5, 19/8/2026) — la mitad backend, con DISPARADOR explícito.
-    # El flujo entero (preview → confirmar, con 22 tests por HTTP) existe y la pantalla todavía
-    # no: la UI del import quedó para la sesión de front, molde ImportarNominaCSVModal.
-    # SALE DE ESTA LISTA cuando `frontend/services/` tenga el wrapper del preview/confirmar y la
-    # pantalla de Formación su modal de import. 🚩 MIENTRAS SIGA ACÁ, el Excel solo se puede
-    # importar por HTTP directo. El propio barrido lo va a pedir cuando el front llegue:
-    # `test_las_excepciones_siguen_sin_caller` da rojo cuando algo declarado gana caller.
-    ("POST", "/api/importacion/formacion/preview"):
-        "preview del import del Excel de Formación. Backend de A5; el modal del front es la "
-        "sesión que sigue.",
-    ("POST", "/api/importacion/formacion/confirmar"):
-        "confirmación del import del Excel de Formación. Misma sesión de front pendiente que "
-        "el preview.",
-
-    # 🔴 ACTIVACIÓN DEL PREINGRESO — mismo caso que el de arriba y en el extremo contrario del
-    # ciclo: es la mitad backend de una feature cuya pantalla es una tanda aparte (el bloque B,
-    # "próximos ingresos"). Lleva DISPARADOR, no razón permanente.
-    # A3.2 alcanzó hasta acá a propósito: el front de esta sesión se limitó a los dos archivos
-    # que BLOQUEABAN el type-check (`types/empleado.ts` y `_camposEmpleados.ts`), porque sin
-    # ellos un preingreso que llegue por la API rompe `next build`.
-    # SALE DE ESTA LISTA cuando `frontend/services/empleados.ts` tenga su `activarEmpleado` y la
-    # ficha tenga el botón con su confirmación (molde: EliminarVacanteButton).
-    # 🚩 MIENTRAS SIGA ACÁ, UN PREINGRESO NO SE PUEDE ACTIVAR DESDE LA UI. Es un estado a medias
-    # con una consecuencia concreta: se pueden CREAR preingresos por el alta, y quedan sin forma
-    # de pasar a `activo` salvo por el PUT del legajo —que no valida que la fecha de ingreso haya
-    # ocurrido, que es justamente la guarda que este endpoint existe para aplicar—.
-    ("POST", "/api/empleados/{id}/activar"):
-        "el pase de preingreso a activo. Backend de la feature de preingresos; la pantalla de "
-        "próximos ingresos y su botón son el bloque B.",
-
-    # 🔴 EL PUENTE CANDIDATO→EMPLEADO — tercer caso del mismo patrón, y el que cierra el ciclo.
-    # Con `/efectivizar` (la salida) y `/activar` (el ingreso), este es la ENTRADA: los tres son
-    # la mitad backend de un acto cuyo botón vive en una tanda de front aparte.
-    # Lleva DISPARADOR, no razón permanente.
-    # SALE DE ESTA LISTA cuando `frontend/services/candidatos.ts` tenga su `contratarCandidato` y
-    # la ficha del candidato tenga el botón con su formulario de tres campos (email corporativo,
-    # roles, fecha de ingreso) y su confirmación. Molde: `EliminarVacanteButton`.
-    # 🚩 MIENTRAS SIGA ACÁ, UN CANDIDATO EN OFERTA NO SE PUEDE CONTRATAR DESDE LA UI. La
-    # consecuencia concreta: `candidatos.estado` sigue sin tener un solo escritor alcanzable, así
-    # que en producción ningún candidato va a llegar nunca a `contratado` y la columna que A4.1
-    # revivió se queda otra vez sin datos — con la diferencia de que ahora el camino existe.
-    ("POST", "/api/candidatos/{id}/contratar"):
-        "el puente candidato→empleado: crea el legajo en `preingreso` y marca la postulación "
-        "como contratada. Backend de A4.2; el botón y su formulario son la tanda de front.",
+    # ✅ LOS CUATRO ACTOS DEL CICLO DE VIDA YA NO ESTÁN ACÁ — el bloque B los cableó
+    # (19/8/2026), y salieron por la puerta que sus propios disparadores describían:
+    #   · `POST /api/candidatos/{id}/contratar`      → ContratarCandidatoButton (la ENTRADA)
+    #   · `POST /api/empleados/{id}/activar`         → ActivarEmpleadoButton en la ficha
+    #   · `POST /api/offboarding/{id}/efectivizar`   → EfectivizarBajaButton en la tarjeta
+    #   · `POST /api/importacion/formacion/{preview,confirmar}` → ImportarFormacionModal
+    # Los cuatro estuvieron declarados con DISPARADOR y no con razón permanente, y los cuatro
+    # dieron el rojo que la lista pretende: `test_las_excepciones_siguen_sin_caller` avisó que
+    # habían ganado caller y pidió que se sacaran. Es el ciclo funcionando por tercera vez (antes
+    # pasó con el link público de horas y con `GET /api/eventos/pendientes`).
+    # 🔑 Lo que esto cierra de verdad: `candidatos.estado` ya tiene un escritor alcanzable desde
+    # la UI, así que `contratado` deja de ser un valor del CHECK que nadie puede escribir.
 
     # Completitud REST: quedan publicados a propósito. El front resuelve lo mismo por otra vía
     # (el listado ya filtra, la baja va por offboarding), pero el endpoint es correcto y barato.
@@ -225,15 +178,13 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     # panel como caller). Su disparador decía "sale de esta lista cuando el dashboard lo llame";
     # el dashboard llama al reemplazo, así que salió por la otra puerta — con la ruta.
 
-    # 🔴 PANEL "REQUIERE TU ATENCIÓN" (A6, 19/8/2026) — la mitad backend, con DISPARADOR.
-    # El flujo entero (calculadas + manuales + resolver) existe y la tarjeta del dashboard
-    # todavía no. SALE DE ESTA LISTA cuando `frontend/` tenga el wrapper de `/atencion` y el
-    # dashboard pinte el panel. 🚩 MIENTRAS SIGA ACÁ, las alertas solo se ven por HTTP directo.
-    ("GET", "/api/dashboard/atencion"):
-        "el panel 'Requiere tu atención' del dashboard. Backend de A6; la tarjeta del front es "
-        "la sesión que sigue.",
-    ("POST", "/api/dashboard/atencion/resolver"):
-        "resuelve una alerta manual del panel. Misma sesión de front pendiente que el GET.",
+    # ✅ EL PANEL "REQUIERE TU ATENCIÓN" YA NO ESTÁ ACÁ: el bloque B lo cableó (19/8/2026).
+    # `AtencionPanel` consume el GET y el botón de resolver de sus alertas manuales llama al POST.
+    # 🔴 Y NO REEMPLAZÓ A `AlertasPanel`, que era el plan: se midió antes de borrar nada y la
+    # intersección entre los dos endpoints es CERO — `/atencion` trae personas y fechas
+    # (ingresos, fin de prueba, eventos de agenda) y `/api/dashboard` trae salud del sistema
+    # (tablas vacías, campos del padrón sin cargar). El dashboard quedó con los dos paneles y con
+    # una decisión de producto anotada en docs/DEUDA-TECNICA.md §8-quinquies.
 
     ("GET", "/api/perfiles-puesto"): _PERFILES,
     ("GET", "/api/perfiles-puesto/campos"): _PERFILES,

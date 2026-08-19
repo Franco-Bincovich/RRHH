@@ -1,15 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, Pencil, Plus, Trash2 } from "lucide-react"
+import { Plus } from "lucide-react"
 import { toast } from "sonner"
-import { EmptyState } from "@/components/ui/EmptyState"
-import { ErrorState } from "@/components/ui/ErrorState"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { CapacitacionModal } from "@/components/features/capacitaciones/CapacitacionModal"
+import { CatalogoTabla } from "@/components/features/capacitaciones/CatalogoTabla"
+import { ImportarFormacionBoton } from "@/components/features/capacitaciones/ImportarFormacionBoton"
+import { ImportarFormacionModal } from "@/components/features/capacitaciones/ImportarFormacionModal"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { fetchCapacitaciones, deleteCapacitacion, exportarCatalogoCapacitaciones } from "@/services/capacitaciones"
 import { fetchEmpresas } from "@/services/empresas"
@@ -21,14 +19,10 @@ const SELECT_CLASS =
   "min-h-[2rem] rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
-function TableSkeleton() {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
-    </div>
-  )
-}
-
+/**
+ * Catálogo de cursos: filtros, acciones y carga. Los cuatro estados de render viven en
+ * `CatalogoTabla`, que es el reparto que `AsignacionesTab`/`AsignacionesCapTable` ya usaban.
+ */
 export function CatalogoTab({ canWrite }: { canWrite: boolean }) {
   const [empresaActivaId] = useState<string | null>(getEmpresaActivaId)
   const [capacitaciones, setCapacitaciones] = useState<Capacitacion[]>([])
@@ -38,6 +32,7 @@ export function CatalogoTab({ canWrite }: { canWrite: boolean }) {
   const [empresaFiltro, setEmpresaFiltro] = useState("")
   const [soloActivos, setSoloActivos] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState<Capacitacion | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -69,6 +64,10 @@ export function CatalogoTab({ canWrite }: { canWrite: boolean }) {
   }
 
   const mostrarFiltroEmpresa = !empresaActivaId && empresas.length > 0
+  // La empresa del import sale del sidebar o del filtro: importar es una ACCIÓN y necesita una
+  // empresa concreta — es contra ese padrón que se matchean los colaboradores y contra ese
+  // catálogo que se decide qué cursos crear. En consolidado el botón queda deshabilitado.
+  const empresaDestino = empresaActivaId ?? (empresaFiltro || "")
 
   return (
     <div>
@@ -91,62 +90,37 @@ export function CatalogoTab({ canWrite }: { canWrite: boolean }) {
           />
         </div>
         {canWrite && (
-          <Button className="min-h-11" onClick={() => { setEditing(null); setModalOpen(true) }}>
-            <Plus className="size-4" />
-            Nuevo curso
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <ImportarFormacionBoton
+              sinEmpresa={!empresaDestino}
+              onClick={() => setImportOpen(true)}
+            />
+            <Button className="min-h-11" onClick={() => { setEditing(null); setModalOpen(true) }}>
+              <Plus className="size-4" />
+              Nuevo curso
+            </Button>
+          </div>
         )}
       </div>
 
-      {loading && <TableSkeleton />}
-      {!loading && error && <ErrorState action={load} />}
-      {!loading && !error && capacitaciones.length === 0 && (
-        <EmptyState icon={<AlertCircle />} title="Sin formaciones" description="No hay cursos en el catálogo para los filtros seleccionados." />
-      )}
+      <CatalogoTabla
+        capacitaciones={capacitaciones}
+        loading={loading}
+        error={error}
+        onReintentar={load}
+        canWrite={canWrite}
+        deletingId={deletingId}
+        onEditar={(c) => { setEditing(c); setModalOpen(true) }}
+        onEliminar={handleDelete}
+        mostrarEmpresa={!empresaActivaId}
+      />
 
-      {!loading && !error && capacitaciones.length > 0 && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Categoría</TableHead>
-              <TableHead>Duración</TableHead>
-              {!empresaActivaId && <TableHead>Empresa</TableHead>}
-              <TableHead>Obligatoria</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {capacitaciones.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.nombre}</TableCell>
-                <TableCell className="text-muted-foreground">{c.categoria ?? "—"}</TableCell>
-                <TableCell className="text-muted-foreground">{c.duracion_horas != null ? `${c.duracion_horas} hs` : "—"}</TableCell>
-                {!empresaActivaId && <TableCell className="text-muted-foreground">{c.empresa_nombre ?? "—"}</TableCell>}
-                <TableCell>
-                  <Badge variant={c.obligatoria ? "default" : "outline"}>{c.obligatoria ? "Sí" : "No"}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={c.activo ? "secondary" : "outline"}>{c.activo ? "Activo" : "Inactivo"}</Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    {canWrite && (
-                      <>
-                        <Button variant="ghost" size="sm" onClick={() => { setEditing(c); setModalOpen(true) }} aria-label="Editar"><Pencil className="size-3.5" /></Button>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={deletingId === c.id} onClick={() => handleDelete(c.id)} aria-label="Eliminar">
-                          {deletingId === c.id ? "..." : <Trash2 className="size-3.5" />}
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <ImportarFormacionModal
+        open={importOpen}
+        empresaId={empresaDestino}
+        onClose={() => setImportOpen(false)}
+        onSuccess={() => { void load() }}
+      />
 
       <CapacitacionModal
         open={modalOpen}
