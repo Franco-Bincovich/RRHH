@@ -90,7 +90,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary shadow-lg">
-            <Building2 className="size-7 text-white" />
+            <Building2 className="size-7 text-primary-foreground" />
           </div>
           <div className="text-center">
             <h1 className="text-xl font-bold tracking-tight text-foreground">HR Karstec</h1>

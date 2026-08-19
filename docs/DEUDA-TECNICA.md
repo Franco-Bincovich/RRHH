@@ -974,7 +974,26 @@ antes.** Gravedad 🟡 · Esfuerzo S (es mover, no construir).
 | **132 tooltips nativos (`title=`) en 30+ archivos** — los dibuja el SISTEMA OPERATIVO | `title=` en `app/(dashboard)/` (areas, auditoria, empleados, reportes, costos, empresas, objetivos, offboarding, onboarding, proyectos, … 30 archivos) | 🔴 **No se pueden estilar con CSS de ninguna forma**, ni con `color-scheme`. La única salida es reemplazarlos por un componente de tooltip propio — es una tanda de UX, no un fix de contraste | ⬜ | L |
 | **10 `<input type="checkbox">` sin `accent-color`** — cero usos de `accent-color` en el repo, así que el check se dibuja con el azul del SISTEMA y no con `--primary` | los 10 checkbox del front, incluidos los `multiselect` de `components/ui/FiltersBar.tsx` | Es una propiedad sobre `input`, no sobre `option`. Una línea en `@layer base`, pero es decisión de MARCA (coherencia con `--primary`), no el bug de legibilidad que se arregló | ⬜ | S |
 
-### 🟠 El botón primario en modo oscuro no llega a 4.5:1 — **hallazgo nuevo, 11/8/2026**
+### ✅ ~~El botón primario en modo oscuro no llega a 4.5:1~~ — **CERRADO el 19/8/2026**
+
+> **Lo cerró la paleta de `docs/SISTEMA-DE-DISENO.md` §1**, aprobada por Capital Humano el 16/8
+> después de cuatro iteraciones — o sea, por la vía que este ítem pedía: una decisión de marca,
+> no un ajuste de test. La salida elegida fue la segunda de las dos que estaban planteadas acá:
+> **`--primary-foreground` dejó de ser blanco en oscuro** y pasó al fondo de página (`#0B1220`),
+> con `--primary` aclarado a `#7DA9FB`. El par pasó de **3.68:1 a 7.97:1**.
+> Se arregló junto con `--sidebar-primary/--sidebar-primary-foreground`, que arrastraba la misma
+> brecha con el mismo valor y **este ítem no mencionaba** (era el mismo azul declarado en una
+> segunda variable; tocar una sola habría dejado el ítem activo del sidebar con el contraste
+> viejo).
+> Las dos entradas se **borraron** de `BRECHAS_DECLARADAS`, que es lo que el propio ítem
+> anticipaba: la verificación es en las dos direcciones y una excepción que ya cumple pone el
+> test en rojo. `BRECHAS_DECLARADAS` quedó **vacío**.
+
+El diagnóstico original, que sigue siendo la explicación de por qué pasó. ⚠️ **Todo lo que
+sigue hasta el aviso de los `input type="date"` es el texto del 11/8/2026, conservado sin
+editar: describe el estado ANTERIOR al cierre, no el de hoy.** En particular, donde dice "no
+se arregló" y "queda vigilado en `BRECHAS_DECLARADAS`", hoy se lee al revés: se arregló, y
+por eso la entrada ya no está.
 
 Salió al escribir `frontend/app/contrasteTokens.test.ts`, que mide los pares de tokens de verdad:
 
@@ -1003,6 +1022,33 @@ la excepción en vez de quedar de adorno).
 > no lo apaga). **No hay ninguna regla propia en el repo para ellos.** Si en la prueba visual
 > aparecen mal, el diagnóstico cambia de raíz: querría decir que el `color-scheme` inline NO está
 > llegando, y eso es un ítem nuevo — no se arregla con más CSS por control.
+
+### 🟠 `utils/colorEmpresa.ts` — 26 hex que ningún token alcanza, porque se aplican INLINE
+
+> **19/8/2026**, anotado al aplicar la paleta de Capital Humano. **No se tocó en esa sesión, a
+> propósito**: el arreglo pasa por cambiar el MECANISMO, no el valor, y eso es una sesión propia.
+
+`utils/colorEmpresa.ts` tiene **26 hex** repartidos en **8 paletas pastel** (`bg`/`text`/`dot` por
+empresa, más `MULTI_PROY`) y se aplican con **`style={{ background, color }}` INLINE**. Las tres
+componentes que las consumen son las del organigrama —**14 puntos de aplicación**, no los tres
+que se suelen citar—: `components/features/organigrama/ArbolProyecto.tsx` (`:21`, `:32`, `:38`,
+`:55`, `:126`, `:156`, `:162`, `:163`), `CardsProyecto.tsx` (`:16`, `:23`, `:32`, `:80`) y
+`ArbolEmpresa.tsx` (`:13`, `:93`).
+
+🔴 **El estilo inline gana sobre cualquier clase o variable.** Son 8 paletas pastel claras con
+texto oscuro, y **en modo oscuro quedan como parches blancos**: ninguna clase de Tailwind ni
+ningún token de `globals.css` los alcanza. Cambiar la paleta del producto —como se acaba de
+hacer— no los mueve un milímetro.
+
+🔴 **Y `contrasteTokens.test.ts` no los mira, porque solo lee `globals.css`.** No es una falla del
+barrido: es su alcance. Un color que nace en un `.ts` y viaja por `style={{}}` no pasa por ninguna
+hoja de estilo, así que no hay archivo donde el test pueda encontrarlo. Está anotado también en el
+encabezado del propio test, para que un verde suyo no se lea como "el front entero cumple".
+
+**Por dónde va el arreglo cuando se haga:** que las 8 paletas dejen de ser hex literales y pasen a
+ser variables CSS con su variante oscura (o pares `bg-*`/`text-*` de Tailwind), y que los
+componentes apliquen **clases**, no `style`. Mientras siga siendo `style={{}}`, cualquier tema que
+se defina arriba es decorativo para estas tres pantallas. Gravedad 🟠 · Esfuerzo M.
 
 ---
 

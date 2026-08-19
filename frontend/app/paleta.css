@@ -1,0 +1,134 @@
+/*
+ * ─── LA PALETA ────────────────────────────────────────────────────────────────────────────
+ *
+ * 🔴 **ESTE ARCHIVO ES SOLO LOS VALORES**, y vive aparte de `globals.css` desde el 19/8/2026.
+ * No es una separación estética: al entrar esta paleta —con 8 tokens semánticos nuevos por
+ * tema y el porqué de cada decisión escrito al lado— `globals.css` pasó de 175 a 262 líneas,
+ * sobre el límite de 200 que `docs/ORDEN-Y-LEGIBILIDAD.md` §2 fija para "cualquier otro
+ * archivo". El corte natural era este, y deja los dos lados con una sola responsabilidad:
+ * acá los VALORES (qué color es cada token) y en `globals.css` el CABLEADO (el `@theme
+ * inline` que convierte cada token en utilidad de Tailwind, la capa base y el print).
+ *
+ * Lo importa `globals.css` arriba de todo, así que sigue habiendo UN solo punto de entrada:
+ * `app/layout.tsx` importa `globals.css` y nada más. El orden entre los dos archivos no
+ * afecta al `@theme inline` — ese bloque mapea `--color-x: var(--x)` y el `var()` lo resuelve
+ * el navegador, no el compilador.
+ *
+ * Fuente: `docs/SISTEMA-DE-DISENO.md` §1, aprobado por Capital Humano el 16/8/2026 después de
+ * cuatro iteraciones. **Los valores no se ajustan acá**: si hay que cambiar un color, se cambia
+ * el documento y después este archivo. Aplicada el 19/8/2026.
+ *
+ * `app/contrasteTokens.test.ts` mide estos dos bloques —los dos, no solo el oscuro— contra el
+ * umbral AA de 4.5:1. Un token que se toque sin mirar el contraste rojea ahí.
+ *
+ * ⚠️ Los `--chart-*` NO vienen del documento: su §1 no es exhaustiva del archivo y no los
+ * menciona. Se conservan con su valor anterior para no perder tokens por omisión. Hoy no tienen
+ * ningún consumidor (`RadarChart` y `EvolucionChart` no los usan), así que quedan a la espera de
+ * que el sistema de diseño defina la paleta de gráficos.
+ */
+
+:root {
+  --background: #F5F7FA;
+  --card: #FFFFFF;
+  --popover: #FFFFFF;
+  --muted: #EFF2F6;
+  --secondary: #EFF2F6;
+  --accent: #EEF2FE;
+
+  --foreground: #0E1726;
+  --card-foreground: #0E1726;
+  --popover-foreground: #0E1726;
+  --muted-foreground: #59657A;
+  --secondary-foreground: #3B4759;
+  --accent-foreground: #1B4FD8;
+
+  --primary: #1B4FD8;
+  --primary-foreground: #FFFFFF;
+  --ring: #1B4FD8;
+
+  --border: #E2E7EE;
+  --input: #CBD3DE;
+  --destructive: #B42318;
+  --success: #0F7A5A;
+  --success-wash: #E7F5EF;
+  --success-line: #B7E0CE;
+  --warning: #8A5A00;
+  --warning-wash: #FDF3E2;
+  --warning-line: #EBD3A3;
+  --danger-wash: #FDEEEC;
+  --danger-line: #F2C4BE;
+
+  --sidebar: #0E1726;
+  --sidebar-foreground: #C9D3E2;
+  --sidebar-accent: #1B2436;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #1E2939;
+  --sidebar-primary: #1B4FD8;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-ring: #1B4FD8;
+
+  --radius: 0.625rem;
+
+  /* Sin fuente en el sistema de diseño — conservados del valor anterior, ver el encabezado. */
+  --chart-1: oklch(0.476 0.187 258);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+}
+
+.dark {
+  --background: #0B1220;
+  --card: #151E2E;
+  --popover: #1C2637;
+  --muted: #0E1626;
+  --secondary: #1C2637;
+  --accent: #16223A;
+
+  --foreground: #E7ECF3;
+  --card-foreground: #E7ECF3;
+  --popover-foreground: #E7ECF3;
+  --muted-foreground: #9AA7BB;
+  --secondary-foreground: #C2CCDA;
+  --accent-foreground: #7DA9FB;
+
+  /*
+   * 🔴 `--primary-foreground` DEJA DE SER BLANCO. Lo que va encima de la primaria en oscuro es
+   * el fondo de la página (#0B1220), no blanco: el azul se aclaró a #7DA9FB para que el botón
+   * resalte, y con blanco encima daba 3.68:1. Así da 7.97:1.
+   * Por eso los dos `text-white` que había sobre `bg-primary` (`app/login/page.tsx` y
+   * `app/cambiar-password/page.tsx`) pasaron a `text-primary-foreground` en este mismo cambio:
+   * un blanco hardcodeado se queda con la brecha vieja y el test no lo ve.
+   */
+  --primary: #7DA9FB;
+  --primary-foreground: #0B1220;
+  --ring: #7DA9FB;
+
+  --border: #26303F;
+  --input: #38445A;
+  --destructive: #FF8A80;
+  --success: #5FD3A6;
+  --success-wash: #0F2A22;
+  --success-line: #1E4739;
+  --warning: #E5B34B;
+  --warning-wash: #2A2312;
+  --warning-line: #4A3D1C;
+  --danger-wash: #2E1614;
+  --danger-line: #552724;
+
+  --sidebar: #080E1A;
+  --sidebar-foreground: #B9C5D6;
+  --sidebar-accent: #161F30;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #1A2434;
+  --sidebar-primary: #7DA9FB;
+  --sidebar-primary-foreground: #0B1220;
+  --sidebar-ring: #7DA9FB;
+
+  /* Sin fuente en el sistema de diseño — conservados del valor anterior, ver el encabezado. */
+  --chart-1: oklch(0.6 0.18 258);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+}

@@ -40,6 +40,52 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-19 · Paleta de Capital Humano aplicada + el test de contraste pasa a medir los DOS temas · commits pendientes
+
+**Qué cambió.** Frontend puro, tres commits, **cero backend, cero endpoints, cero migraciones**.
+La paleta de `docs/SISTEMA-DE-DISENO.md` §1 —aprobada por Capital Humano el 16/8— reemplazó los
+bloques `:root` y `.dark`, y el barrido de contraste, que hasta hoy solo leía el bloque oscuro,
+pasó a medir los dos temas.
+
+🔴 **`globals.css` se PARTIÓ EN DOS.** Con los 8 tokens semánticos nuevos por tema y el porqué de
+cada decisión escrito al lado, el archivo llegaba a 262 líneas, sobre el límite de 200 de
+`docs/ORDEN-Y-LEGIBILIDAD.md` §2. Ahora **`app/paleta.css` tiene los VALORES** (134 líneas) y
+**`app/globals.css` el CABLEADO** (142: el `@theme inline`, la capa base y el print), importando al
+primero en su primera línea. **Sigue habiendo un solo punto de entrada** — `app/layout.tsx` importa
+`globals.css` y nada más—, y el test de contraste apunta ahora a `paleta.css`. `npm run build`
+verificado después del corte: la paleta compila al CSS estático igual que antes.
+
+1. **`frontend/styles/design-system.ts` BORRADO** (47 líneas, y con él la carpeta `styles/`, que
+   quedó vacía). Tenía **cero importadores** —verificado por grep sobre todo el repo— y estaba
+   desactualizado: no tenía variante oscura de `primary`, así que "revivirlo" como catálogo habría
+   metido el `#1A56DB` viejo en los dos temas. El único catálogo vivo es `globals.css`, que Tailwind
+   v4 configura por CSS con `@theme inline` (no hay `tailwind.config.ts`).
+   ⚠️ Las tres referencias que quedan son PROSA en `docs/`: `DIAGNOSTICO-COMPONENTES.md` (que ya lo
+   declaraba muerto), `PLAN_DESARROLLO_AHORA.md` (histórico) y **`docs/UX-UI.md:70`, que todavía lo
+   prescribe como "único archivo de tokens de diseño por producto"** — esa convención de agencia
+   quedó desactualizada por Tailwind v4 y **no se tocó** en esta sesión.
+2. **`contrasteTokens.test.ts` mide los dos temas.** Antes parseaba solo `.dark` y el `:root` no se
+   leía nunca. Eso escondía que `--muted/--muted-foreground` daba **4.34:1 en modo claro**, por
+   debajo del umbral AA: era un par que no estaba en la lista **y además** vivía en el tema que no
+   se parseaba. Ahora hay 10 pares × 2 temas, guarda de mínimo por bloque, y `parseColor` **rechaza**
+   los colores con canal alfa en vez de medirlos ignorándolo.
+3. **La paleta aplicada.** Los 35 tokens de modo claro y los 34 de oscuro del documento entraron
+   con su valor exacto; los 5 `--chart-*` de cada tema **se conservaron** porque el documento no los
+   menciona y no había que perderlos por omisión. Los 8 semánticos nuevos (`--success*`, `--warning*`,
+   `--danger-*`) se sumaron también al `@theme inline`, sin lo cual Tailwind no genera sus utilidades.
+
+**Impacto en infraestructura: Ninguno.** Sin migraciones, sin variables de entorno, sin
+dependencias, sin buckets, sin endpoints, sin cambios de auth ni de CORS. `npm run build` verde y
+la paleta compila al CSS estático.
+
+**Lo único que le toca al deploy es el orden de siempre:** es un cambio de front, así que sale por
+`sofia-front`; no hay nada que esperar de `sofia-backend`.
+
+🔴 **Queda un recorrido visual pendiente** (ver el reporte de la sesión). El cambio más visible no
+es el azul: en modo CLARO el sidebar pasó a ser **oscuro** (`#0E1726`), que es lo que el sistema de
+diseño define. Y `--radius` bajó de 0.75rem a 0.625rem, con la escala entera derivando ahora de esa
+variable — antes `--radius-md` y `--radius-lg` estaban hardcodeados.
+
 ## 2026-08-19 · B1–B6 — los 7 endpoints huérfanos ganan botón + el wrapper de objetivos · commits pendientes
 
 **Qué cambió.** Frontend puro: **cero endpoints nuevos, cero cambios de backend salvo un archivo

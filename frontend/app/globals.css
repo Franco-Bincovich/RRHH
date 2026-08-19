@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+/* Los VALORES de la paleta viven aparte por el límite de 200 líneas — el porqué, allá. */
+@import "./paleta.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -27,6 +29,24 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  /*
+   * Los seis semánticos de `docs/SISTEMA-DE-DISENO.md` §1. Van mapeados acá —y no solo
+   * declarados abajo— porque sin la entrada `--color-*` Tailwind v4 no genera las utilidades:
+   * `bg-success-wash`, `text-warning` o `border-success-line` no existirían y quedarían como
+   * clases mudas que no rompen el build y no pintan nada.
+   *
+   * `--danger-*` acompaña a `--destructive`, que es quien pone el color del texto/borde fuerte:
+   * el sistema nombra el par suave como "danger" y el repo ya tenía "destructive" para el
+   * fuerte. Se respetan los dos nombres en vez de renombrar 40 usos de `destructive`.
+   */
+  --color-success: var(--success);
+  --color-success-wash: var(--success-wash);
+  --color-success-line: var(--success-line);
+  --color-warning: var(--warning);
+  --color-warning-wash: var(--warning-wash);
+  --color-warning-line: var(--warning-line);
+  --color-danger-wash: var(--danger-wash);
+  --color-danger-line: var(--danger-line);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -39,83 +59,31 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /*
+   * 🔴 LA ESCALA DE RADIOS DERIVA ENTERA DE `--radius`. Antes no: `--radius-md` (0.5rem) y
+   * `--radius-lg` (0.75rem) estaban escritos a mano y los otros cinco salían de un `calc()`.
+   *
+   * `--radius-lg` engañaba especialmente: su literal 0.75rem era EXACTAMENTE el `--radius` de
+   * entonces, así que se comportaba como derivado sin serlo. Al bajar `--radius` a 0.625rem
+   * (los 10px que fija el sistema de diseño) los cinco derivados se movían y esos dos se
+   * quedaban en el valor viejo — y `rounded-lg` es el radio más usado del front (214 usos:
+   * botones, inputs y paneles), así que el cambio de paleta habría dejado justo al radio
+   * principal fuera del sistema.
+   *
+   * Los dos factores salen del propio documento, que fija el radio en "10px en paneles; 7px en
+   * controles": `lg` = 1 × 10px = el radio de panel, y `md` = 0.7 × 10px = 7px, el de control
+   * chico (su único consumidor real es el `rounded-[min(var(--radius-md),10px)]` de las
+   * variantes xs/sm de `components/ui/button.tsx`).
+   */
   --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  --radius-md: calc(var(--radius) * 0.7);
+  --radius-lg: calc(var(--radius) * 1);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
-  --background: #f8fafc;
-  --foreground: oklch(0.145 0 0);
-  --card: #ffffff;
-  --card-foreground: oklch(0.145 0 0);
-  --popover: #ffffff;
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: #1a56db;
-  --primary-foreground: #ffffff;
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: #1a56db;
-  --chart-1: oklch(0.476 0.187 258);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.75rem;
-  --sidebar: #f8fafc;
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #1a56db;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: oklch(0.94 0.005 247);
-  --sidebar-accent-foreground: oklch(0.145 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: #1a56db;
-}
-
-.dark {
-  --background: #0f172a;
-  --foreground: oklch(0.985 0 0);
-  --card: #1e293b;
-  --card-foreground: oklch(0.985 0 0);
-  --popover: #1e293b;
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: #3b82f6;
-  --chart-1: oklch(0.6 0.18 258);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: #1e293b;
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: oklch(0.279 0.041 260 / 80%);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: #3b82f6;
-}
 
 @layer base {
   * {
