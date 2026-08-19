@@ -71,6 +71,63 @@ son literalmente los puntos de entrada del bloque B.
 se verificó contra el código de hoy (endpoints vía `test_callers_huerfanos.py`, archivos vía
 medición directa).
 
+### Lo que la auditoría del 19/8/2026 agregó a esta lista
+
+Cinco ítems que salieron de auditar el backend contra `VERIFICACION-BACKEND.md`. **Ninguno se
+arregló en esa sesión (era auditoría) ni en la de cierre (era inventario).** Los cinco son para
+el bloque B o posteriores.
+
+1. 🔴 **`objetivos` no cumple tres de las seis reglas transversales, y es deuda PREEXISTENTE.**
+   No pagina (`objetivo_repo.find_all` trae el árbol entero, sin `.range()`) · `ObjetivoResponse`
+   tipa `id`/`empresa_id`/`responsable_id`/`parent_id` como `str` en vez de `UUID` (el "error #1
+   del porteo") · **el CRUD manual no audita**: `objetivo_service` y `_objetivos_write` no llaman
+   a `AuditService` en ningún punto, y el único evento del módulo lo emite el import por Excel.
+   **Nada de esto lo introdujo el bloque A**: `objetivo_service.py` viene del commit `347afb3`, y
+   la migración 119 sólo sumó `tipo`/`areas_involucradas`/`periodicidad`. La falta de auditoría
+   ya estaba auto-declarada en `tests/test_auditoria_coherente.py`, que excluye a objetivos del
+   barrido **a la espera de una definición de producto**.
+   > **Qué auditar en el CRUD de objetivos no es una decisión técnica: la define Capital Humano.**
+   > Un tablero interno del equipo de RRHH no tiene por qué dejar el mismo rastro que un legajo.
+   >
+   > 🔴 **Y hay una interacción sin resolver que impide tratar la paginación como tarea suelta:**
+   > objetivos es un **árbol**, y hay una regla escrita —y correcta— de que **un hijo cuyo padre
+   > no pasa el filtro se promueve a raíz** (`_objetivos_arbol.py`). Paginar un árbol con esa
+   > regla **no es agregar `.range()`**: hay que decidir qué es "una página" (¿raíces? ¿nodos
+   > aplanados?), qué pasa con un hijo promovido que cae en otra página que su padre, y cómo se
+   > cuenta el `total` sin mezclar las dos cosas — el tope de export ya tiene esa trampa anotada
+   > (`_objetivos_arbol.contar_con_hijos` vs. `count="exact"`). **Es diseño, y por eso no entra
+   > en una sesión suelta.**
+   > ⚠️ **Hoy `objetivos` tiene 1 fila en producción** (verificado contra el catálogo el
+   > 19/8/2026), no 68 como se dijo en algún resumen: la urgencia es baja, el trabajo de diseño
+   > no.
+
+2. **`adjuntos.fecha_vencimiento` existe desde la migración 113, con índice parcial
+   (`idx_adjuntos_vencimiento`), y tiene CERO wiring.** Verificado contra el catálogo el
+   19/8/2026: la columna y el índice están, y **0 filas** la tienen cargada. No hay una sola
+   referencia a `fecha_vencimiento` en `schemas/`, `services/`, `routers/` ni en todo el
+   frontend. La migración la creó diciendo que era "para la alerta 'documentos próximos a vencer'
+   del dashboard".
+   > 🔴 **El riesgo real no es la columna muerta: es que alguien la vea y dé la alerta por
+   > hecha.** El sistema de diseño declara "documentos próximos a vencer" como **inexistente**
+   > (no hay lista de documentos obligatorios), y una columna con índice parece exactamente lo
+   > contrario. Si se retoma, lo que falta no es DDL: es el catálogo de qué documentos vencen.
+
+3. **Falta `GET /api/objetivos/{id}`.** `ObjetivoService.get_by_id` está escrito esperando la
+   ruta, y `registro_routers.py:180-183` lo dice en un comentario propio. **No se construye
+   ahora**: sería el **octavo** endpoint publicado sin botón, sumándose a los siete de la tabla
+   de arriba. Se monta cuando el bloque B tenga la pantalla que lo pida, no antes.
+
+4. **`Inventario` está visible en `nav-config.ts:76` sin ningún flag**, contra la decisión de
+   dejarlo fuera del menú que `VERIFICACION-BACKEND.md` §10 declara como alcance cerrado. No es
+   alcance que se coló en el bloque A —el ítem viene de commits viejos y `Seccion.INVENTARIO`
+   tiene permisos normales—, es una decisión que quedó escrita en un lado y no aplicada en el
+   otro. **Se resuelve en B1, junto con la navegación. Anotado, no tocado.**
+
+5. **"Plan de desarrollo (Próximamente)" no existe en el front** — grep de `"Plan de desarrollo"`,
+   `plan_desarrollo` y `roadmap` en `frontend/`: cero matches. **No es alcance perdido**: es un
+   ítem de la navegación NUEVA y va en el bloque B. Se anota sólo para que nadie lo busque como
+   si se hubiera borrado.
+
 ### 🔴 `identificacion_repo.registrar_intento` se traga TODO error — evaluado en A3.3, NO arreglado
 
 El INSERT del log forense del link público está envuelto en `except Exception: logger.warning(...)`

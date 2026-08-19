@@ -137,6 +137,22 @@ límite de línea y qué decisiones de producto quedaron abiertas está en
 `docs/DEUDA-TECNICA.md`, sección **"Cierre del bloque A (19/8/2026)"** — es el punto de partida
 del bloque B, léela antes de escribir el primer componente.
 
+> 🔴 **LO PRIMERO QUE EL BLOQUE B TIENE QUE SABER — EL TABLERO DE OBJETIVOS SE CONSTRUYE CONTRA EL
+> WRAPPER PAGINADO, AUNQUE EL BACKEND HOY DEVUELVA TODO.**
+> `ObjetivoListResponse` **ya** tiene la forma final `{items, total, page, page_size,
+> total_pages}`; lo único provisorio es que hoy `total == len(items)` porque `objetivo_repo`
+> todavía trae el árbol entero (es la única lista del sistema que no pagina — ver *Deuda*).
+> **Qué significa en la práctica, sin excepción:** el front lee **`total`** para los contadores
+> del encabezado, monta **`Pagination`**, y **NUNCA asume que le llegó el conjunto completo** —
+> ni `items.length` como total, ni `.reduce()` sobre `items` para un agregado, ni contar o
+> filtrar en el cliente lo que el backend ya sabe contar.
+> **Por qué ahora y no cuando se pagine:** escrito contra el wrapper, el día que el backend
+> pagine **el front no cambia una sola línea**. Escrito contra "me llega todo", hay que rehacer
+> contadores, filtros y agregados — y ese día ya es septiembre. Es el bug que `HorasTab` ya pagó
+> una vez: decía "9 h" con 400 h cargadas, porque sumaba con `.reduce()` sobre la página en lugar
+> de leer el total del backend. El contrato está escrito también en `schemas/objetivo.py`, al pie
+> de `ObjetivoListResponse`.
+
 **Bloques previos, completos, con commits en `main`** (sin cambios desde la última medición):
 Fases 0–3 (blindaje, reportes+KPIs, barrera de empresa, deuda estructural) · Bloques B
 (filtros/exports) · C (compromisos del directorio, salvo C6 sin alcance) · D–L (agosto: mails,
@@ -575,28 +591,37 @@ Las rutas salen de **`app.routes`** (introspección de FastAPI), no de una lista
 - Guardas: `>= 8` exports y `>= 8` pares detectados · ningún export huérfano sin excepción declarada · **ninguna excepción que apunte a una ruta borrada** (una excepción muerta es ruido que oculta el próximo caso).
 
 **2. `tests/test_limite_export.py::TestTodosLosExportsChequean` — barrido del límite de export.**
-Barre los **18 services con export** y verifica que cada uno (a) importe `verificar_limite_export` y (b) **lo invoque en el cuerpo de `exportar`** (importarlo no alcanza — se comprueba con `inspect.getsource`). Sin él, el próximo export nace sin control y nadie se entera hasta que un usuario recibe un archivo incompleto.
+Barre los **20 services con export** y verifica que cada uno (a) importe `verificar_limite_export` y (b) **lo invoque en el cuerpo de `exportar`** (importarlo no alcanza — se comprueba con `inspect.getsource`). Sin él, el próximo export nace sin control y nadie se entera hasta que un usuario recibe un archivo incompleto.
 - Excepciones declaradas con razón: `reporte_export_service` (reporte puntual por id) y `reportes/_reporte_auditoria` (acotado a un mes por construcción, conserva un truncado **declarado** con nota en el archivo).
-- Guarda: `assert len(EXPORTS) >= 18`. ⚠️ **`EXPORTS` sigue siendo una lista a mano** (a diferencia del barrido de paridad, que descubre por `app.routes`): un export nuevo entra al barrido solo si alguien lo agrega. Pasarlo a introspección es el ítem **K2** de `docs/ORDEN-SESIONES-CODIGO.md`.
+- Guarda: `assert len(EXPORTS) >= 20` (medido el 19/8/2026; entraron `perfil_puesto_service` y `recategorizacion_service`). ⚠️ **`EXPORTS` sigue siendo una lista a mano** (a diferencia del barrido de paridad, que descubre por `app.routes`): un export nuevo entra al barrido solo si alguien lo agrega. Pasarlo a introspección es el ítem **K2** de `docs/ORDEN-SESIONES-CODIGO.md`.
 
 > Hay un **tercero, en el front**: `components/layout/nav-config.test.ts` compara `NAV_GROUPS` contra `seccionDeRuta` de `permisos.ts`, también con guarda de mínimo (`>= 20` ítems). Cubre al próximo módulo que se agregue al sidebar.
 
-### `LIMITE_FILAS_EXPORT = 5000` — y por qué (`services/_limite_export.py`)
+### `LIMITE_FILAS_EXPORT = 20000` — y por qué (`services/_limite_export.py`)
 
 Antes cada export pedía `page_size=100000` y armaba el archivo con lo que entrara: un pedido más grande salía **incompleto y sin ninguna señal**. Ahora un pedido que lo supera devuelve **422 `EXPORT_DEMASIADAS_FILAS`** con un mensaje para alguien de RRHH (dice cuántas filas dio la consulta, cuál es el máximo, y que use los filtros).
 
-> 🔴 **POR QUÉ 5.000 Y NO 100.000: el techo real de un export NO son las filas, es el TIEMPO — y el 100.000 nunca se alcanzaba.**
-> · **30 s** — timeout httpx del cliente de Supabase (`settings.supabase_timeout`). Es el más bajo y el que corta primero.
-> · **~8 s** — `statement_timeout` del rol `authenticator` con el que PostgREST se conecta.
-> · **120 s** — `statement_timeout` de la instancia. Nunca llega a regir.
-> · el límite de Vercel, que además puede no ser el declarado.
-> 5.000 es 250× el padrón actual y queda cómodo debajo de todos. **Un número alto "por las dudas" reproduce el mismo bug con otra cara: en vez de un archivo truncado, un timeout sin mensaje.**
+> 🔴 **ERA 5.000 HASTA EL 13/8/2026 Y HOY SON 20.000. Este documento afirmó "5.000" hasta el
+> 19/8 — seis días de más.** El archivo tiene el detalle medido; acá va lo que hay que saber.
+> **El techo real de un export no son las filas sino el TIEMPO, pero cuál de los techos corta
+> también estaba mal.** Se decía que era el timeout httpx de 30 s del cliente de Supabase.
+> Medido sobre 27.597 filas de auditoría: traer las filas **4,2 s**, CSV **4,1 s**, Excel
+> **39-53 s**, PDF **126 s**. O sea **la base aporta el 8% y el 92% es construir el archivo**:
+> ese timeout no llega a dispararse nunca. El que rige es **el de la función de Vercel, 300 s**.
+> **De dónde sale el 20.000:** de la tasa real de eventos (0,174 por empleado por día, medida en
+> producción), proyectada a 1.005 colaboradores → ~16.000 por trimestre. El **5.000 anterior no
+> alcanzaba ni para UN MES** a esa escala, y auditoría —el módulo del que RRHH exporta histórico—
+> era el único que a escala no se podía exportar nunca. Ese es el bug que el cambio cerró.
+> ⚠️ **Lo que 20.000 NO cubre, y hay que decirlo: el AÑO entero** (~64.000 eventos, que en PDF
+> pasan los 300 s). Un export anual **no se arregla subiendo el número**: pide export asíncrono o
+> paginado por trimestre desde la UI. Sigue anotado como deuda.
+> ⚠️ **El formato pesa más que las filas: 31× entre CSV y PDF** sobre el mismo conjunto. El
+> límite es uno solo para los tres y está calibrado para que entre el más lento.
 
 Es **constante de módulo, NO variable de entorno**: subirlo exige revisar los techos de tiempo, y eso es una decisión, no configuración.
 
-⚠️ **Alcance real, para no venderlo de más.** En los exports **paginados** (empleados, vacaciones, ausencias, auditoría) el total llega por `count="exact"` y el control actúa **antes** de cargar nada grande. En los que no paginan el repo no expone un conteo, así que el chequeo corre sobre la lista ya traída — igual que antes: no hay regresión, pero un volumen que muera por timeout muere antes de llegar acá.
-> ✅ **Las asignaciones de capacitación/formación SALIERON de esta lista (mig 118, la 118_indices_paginacion.sql).** `AsignacionRepo.find_all` pagina con `.range()` + `count="exact"` desde la sesión de escala; el CLAUDE.md viejo las tenía adentro y ya no corresponde.
-> **Los que siguen sin paginar (no reverificado más allá de estos tres esta sesión):** el **catálogo** de capacitaciones/formación (`CapacitacionService.exportar` — catálogo chico por diseño, no es el caso de riesgo del 5.000), inventario ítems, inventario asignaciones, objetivos. Cerrarlo del todo pide un `contar()` por repo: tanda propia.
+⚠️ **Alcance real, para no venderlo de más.** En los exports **paginados** el total llega por `count="exact"` y solo se traen las filas del tope: ahí el control actúa **antes** de cargar nada grande. **Hoy son ocho**: empleados, vacaciones, ausencias, auditoría y —desde la sesión 2 de paginación (14/8/2026)— capacitaciones/asignaciones, inventario/ítems, inventario/asignaciones y proyectos.
+> 🔴 **EL ÚNICO QUE TODAVÍA NO PAGINA ES `objetivos`** (este documento decía "cuatro" hasta el 19/8: el catálogo de formación, inventario ítems, inventario asignaciones y objetivos — los tres primeros ya salieron). Su repo no expone un conteo, así que el chequeo corre sobre la lista ya traída. **Y tiene una vuelta propia que hay que resolver al paginarlo:** el archivo trae padres E hijos, así que el tope se cuenta sobre el árbol **aplanado** (`_objetivos_arbol.contar_con_hijos`), no sobre las raíces que `find_all` devuelve — un `count="exact"` sobre la tabla contaría las dos cosas mezcladas. Está anotado en `schemas/objetivo.py`, al lado del campo.
 
 ---
 
@@ -896,7 +921,7 @@ Hay **tres módulos apagados a propósito**. En los tres el código está **ente
 - ✅ **Diff fantasma de auditoría — RESUELTO (Bloque C).** `sin_derivados`. Ver "Audit log".
 - ✅ **6 de 11 reportes rotos en producción — RESUELTO (Bloque C).** + `tests/_postgrest_schema.py` para que no vuelva.
 - ✅ **`fetchEmpleados` posicional — RESUELTO (Fase 3).** Objeto de opciones sobre `EmpleadosFiltros`.
-- ✅ **`page_size=100000` en export — RESUELTO (B7).** `LIMITE_FILAS_EXPORT = 5000` + aviso 422. **En el código ya no queda ningún `100000`** (solo referencias en docs y en demo data SQL).
+- ✅ **`page_size=100000` en export — RESUELTO (B7).** `LIMITE_FILAS_EXPORT = 20000` (era 5.000; se subió el 13/8/2026 con medición, ver arriba) + aviso 422. **En el código ya no queda ningún `100000`** (solo referencias en docs y en demo data SQL).
 - ✅ **`middleware/auth.py` aceptaba cualquier UUID como `X-Empresa-Id` — RESUELTO (A3).** `utils/empresas_cache.py`.
 - ✅ **Posicionales de `services/vacaciones.ts` y `ausencias.ts` — RESUELTO (B2).** Los cuatro (`fetchVacaciones`, `exportarVacaciones`, `fetchAusencias`, `exportarAusencias`) toman `filtros: VacacionesFiltros/AusenciasFiltros`, y listado y export comparten el traductor `queryVacaciones`/`queryAusencias`. **Ya no hay filtros posicionales corridos entre hermanas.** (`page`/`pageSize` siguen posicionales en los `fetch*`, lo cual es correcto: el export no se pagina.)
 - ✅ **`state` de OAuth adivinable — RESUELTO (A4).** Nonce de un solo uso.

@@ -169,3 +169,20 @@ class ObjetivoListResponse(BaseModel):
     page: int = 1
     page_size: int = 0
     total_pages: int = 0
+
+    # ── 🔴 CONTRATO CON EL FRONTEND — LEER ANTES DE ESCRIBIR EL TABLERO ───────────────────────
+    # EL TABLERO DE OBJETIVOS SE CONSTRUYE CONTRA ESTE WRAPPER, **AUNQUE HOY EL BACKEND DEVUELVA
+    # TODO**. La respuesta YA tiene la forma final `{items, total, page, page_size, total_pages}`;
+    # lo único provisorio es que `total == len(items)`.
+    #
+    # Concretamente, y sin excepción: el front lee **`total`** para los contadores del encabezado,
+    # monta **`Pagination`**, y **NUNCA asume que le llegó el conjunto completo** — nada de
+    # `items.length` como total, nada de `.reduce()` sobre `items` para sacar un agregado, nada de
+    # filtrar o contar en el cliente lo que el backend ya sabe contar.
+    #
+    # POR QUÉ IMPORTA AHORA Y NO CUANDO SE PAGINE: si el tablero se escribe contra "me llega
+    # todo", el día que el backend pagine hay que volver a tocarlo entero —contadores, filtros y
+    # agregados—, y ese día ya es septiembre. Escrito contra el wrapper, **el front no cambia una
+    # sola línea**: le empiezan a llegar 20 de 68 y todo lo que muestra sigue siendo correcto.
+    # Es exactamente el bug que `HorasTab` ya pagó una vez (decía "9 h" con 400 h cargadas,
+    # porque sumaba con `.reduce()` sobre la página en vez de leer el total del backend).

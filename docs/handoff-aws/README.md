@@ -143,12 +143,31 @@ tiene un rollback (`_rollback_auth`) que hoy se apoya en él.
 Salen de los patrones recurrentes documentados. Se corren antes de cada entrega y el resultado
 queda escrito en `BARRIDO-PATRONES.md`.
 
+> 🔴 **REESCRITOS EL 19/8/2026 — LOS CUATRO ANTERIORES ESTABAN CIEGOS.** Si tenés la versión vieja
+> pegada en algún lado, tirala: cada uno dejaba pasar en silencio justo lo que venía a buscar. El
+> detalle medido de qué no veía cada uno está en `VERIFICACION-BACKEND.md` §11.
+
 ```bash
-grep -rn "uuid.*==" backend/                      # comparaciones UUID contra string
-grep -rn "supabase_admin.auth" backend/           # SDK de auth remanente
-grep -rn "model_dump()" backend/ | grep -v mode=  # escrituras sin serializar
-grep -rn ": str" backend/schemas/ | grep _id      # IDs mal tipados
+# 1 · comparaciones de id sin coaccionar los dos lados
+grep -rnE "(^|[^_a-zA-Z])(id|[a-z_]+_id)[[:space:]]*(==|!=)" backend/ --exclude-dir=venv
+# 2 · SDK de auth remanente — CUALQUIER cliente, no solo el admin
+grep -rnE "supabase[a-z_]*\.auth\." backend/ --exclude-dir=venv
+# 3 · escrituras sin serializar — model_dump CON o SIN argumentos
+grep -rn "model_dump(" backend/ --exclude-dir=venv | grep -v 'mode="json"'
+# 4 · IDs mal tipados — incluye `id` pelado y `Optional[str]`
+grep -rnE "\b(id|[a-z_]+_id)[[:space:]]*:[[:space:]]*(Optional\[)?str" backend/schemas/
 ```
+
+Resumen de la ceguera, para que se entienda por qué no alcanza con "correr los greps": el 1
+devolvía **15 matches y los 15 eran falsos positivos**, sin ver ninguna de las ~20 comparaciones
+reales; el 2 miraba un solo cliente y perdía 3 de 8 usos del SDK de auth; el 3 buscaba el literal
+`model_dump()` **sin argumentos** y por eso no veía 17 escrituras con `exclude_none=True`; el 4
+perdía 51 campos entre los `Optional[str]` y los `id` pelados (la línea `    id: str` no contiene
+`_id`). Los cuatro, además, escaneaban `backend/venv/`.
+
+🔑 **Para IDs mal tipados el grep ya no es la fuente**: el inventario vive en
+`backend/tests/test_ids_tipados.py`, que separa **entrada** (payload de escritura — rompe al
+portear) de **salida** (`*Response` — no rompe), que es la distinción que un grep no puede hacer.
 
 Que el dev los encuentre en septiembre cuesta horas de debugging. Que se los entreguemos
 listados cuesta una sesión.
