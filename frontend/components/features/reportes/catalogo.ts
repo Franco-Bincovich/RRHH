@@ -66,7 +66,7 @@ export const REPORTES_ESTANDAR: ReporteEstandar[] = [
     id: "anual_consolidado",
     titulo: "Informe Anual Consolidado",
     descripcion:
-      "Resumen del año completo: ingresos, egresos, headcount por área, procesos, vacaciones, capacitaciones y evaluaciones. Exporta a Excel con múltiples hojas.",
+      "Resumen del año completo: ingresos, egresos, headcount por área, procesos, vacaciones, formación y evaluaciones. Exporta a Excel con múltiples hojas.",
     icon: CalendarDays,
     usaPeriodo: false,
     usaAnio: true,
@@ -107,9 +107,9 @@ export const REPORTES_ESTANDAR: ReporteEstandar[] = [
   },
   {
     id: "capacitacion",
-    titulo: "Capacitación por área",
+    titulo: "Formación por área",
     descripcion:
-      "Asignaciones de capacitación del período por área: completadas, en curso, pendientes y horas totales.",
+      "Asignaciones de formación del período por área: completadas, en curso, pendientes y horas totales.",
     icon: GraduationCap,
     usaPeriodo: true,
   },

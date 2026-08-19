@@ -87,7 +87,7 @@ export const NAV_GROUPS: ReadonlyArray<NavGroupDef> = [
     { label: "Eventos", href: "/eventos", icon: CalendarHeart, seccion: "eventos" },
   ] },
   { label: "Desempeño", items: [
-    { label: "Capacitaciones", href: "/capacitaciones", icon: GraduationCap, seccion: "capacitaciones" },
+    { label: "Formación", href: "/capacitaciones", icon: GraduationCap, seccion: "capacitaciones" },
     { label: "Evaluaciones", href: "/evaluaciones", icon: ClipboardCheck, seccion: "evaluaciones" },
     { label: "Objetivos", href: "/objetivos", icon: Target, seccion: "objetivos" },
   ] },

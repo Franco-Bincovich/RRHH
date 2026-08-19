@@ -40,6 +40,135 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-19 · A3.3 — cierra el BLOQUE A · commits pendientes
+
+**Qué cambió.** Tres cosas independientes, la última del bloque A (backend). (1) `CLAUDE.md`
+remedido de punta a punta — migraciones, tablas, conteos de carpetas y de tests, suite,
+barridos, rate limits — después de que cada sesión A2–A6 lo dejara un poco más desactualizado.
+(2) El import de nómina (CSV) ya NO da de baja a un preingreso cuando el archivo trae Fecha
+Baja: la fila se SALTEA y se REPORTA con motivo (`_nomina_empleados_baja.py`, nuevo — corte por
+seam de `nomina_empleados_service.py`, que estaba en 149/150). Antes esa fila saltaba directo a
+`dar_de_baja`, evitando las guardas de `_offboarding_efectivizar` — incluida la que existe para
+que quien nunca entró no figure como baja del mes. (3) El link público de horas ya distingue en
+el log forense "se fue" (`inactivo`) de "todavía no entró" (`preingreso`, motivo propio) —
+`_identificacion_resolver.py` intercepta el estado ANTES del rechazo genérico. El usuario ve el
+mismo rechazo único de siempre; solo cambia lo que queda escrito en `intentos_identificacion`.
+
+**Migración 121 escrita, NO corrida** (la corre Franco):
+`intentos_identificacion_resultado_check` pasa de 6 a 7 valores, sumando `'preingreso'`.
+🔴 **El orden de deploy es una condición dura, no una recomendación**: `identificacion_repo.
+registrar_intento` envuelve el INSERT del log forense en un `except Exception` que se traga
+todo (a propósito, para no reabrir el oráculo de timing del rechazo único). Si el código que
+escribe `'preingreso'` sale ANTES que esta migración, cada intento de un preingreso en el link
+público **se pierde SIN error, SIN log y SIN fila** — el 23514 del CHECK viejo lo atrapa el
+except, no sube al usuario, y el único rastro es un `logger.warning` que nadie monitorea en
+caliente. `schema.sql` ya tiene el CHECK nuevo escrito (documento de reconstrucción, no cambia
+producción). Ver `docs/DEUDA-TECNICA.md` para si ese `except` merece arreglarse.
+
+**Impacto en infraestructura:**
+- **Migración 121** — DDL puro, ensancha un CHECK (superconjunto estricto, no puede fallar por
+  datos), sin backfill ni trigger. **NO se corrió en esta sesión.** Verificación posterior en 4
+  bloques BEGIN/ROLLBACK separados dentro del archivo.
+- **Env vars / dependencias / buckets / endpoints:** ninguno.
+- Resto: ninguno.
+
+🔴 **Cierre del bloque A — lista para el bloque B (frontend)**, en `docs/DEUDA-TECNICA.md` bajo
+"Cierre del bloque A (19/8/2026)": endpoints con backend y sin botón, archivos en el techo con
+su corte identificado, y las tres decisiones de producto que quedaron abiertas.
+
+---
+## 2026-08-19 · A6 — el panel "Requiere tu atención" del dashboard · commits pendientes
+
+**Qué cambió.** `GET /api/dashboard/atencion`: UNA lista con las dos clases de alerta del
+sistema de diseño, distinguibles por `origen` — **calculadas** (ingresos próximos: preingresos
+con fecha_ingreso hasta hoy+7, SIN piso para que el que nadie activó no desaparezca; fin de
+período de prueba: `fecha_ingreso + parametros_empresa.periodo_prueba_dias` cayendo en la
+semana, CON piso porque un período vencido terminó solo) y **manuales** (los eventos de agenda
+en ventana de aviso, con `evento_id` y el nombre de quien los creó). Dos ciclos de vida
+escritos y separados: la manual se resuelve (`POST /api/dashboard/atencion/resolver`, delega en
+el write path de eventos, gate EVENTOS+WRITE); la calculada NO se resuelve a mano — responde
+`ALERTA_NO_RESOLUBLE` (409) — porque sin fila donde persistir el resuelto, la misma causa la
+volvería a levantar mañana. **Todo se resuelve AL LEER**: cero jobs, cero precálculo.
+🔴 **"Vacaciones sin resolver" NO se implementó: el dato no existe** — `solicitudes_vacaciones`
+no tiene estado de aprobación (columnas: fechas, dias, cancelada, tipo, periodo; el "estado" se
+deriva del calendario). Vale más una alerta menos que una que miente; queda anotado en deuda.
+🔴 **`GET /api/eventos/pendientes` se BORRÓ**: nunca tuvo caller (era "la sesión 2" del
+dashboard) y este panel lo reemplaza devolviendo lo mismo más las calculadas. La lógica
+(`EventoAgendaService.pendientes`) sigue viva con el panel como caller. Los dos endpoints
+nuevos van montados en `routers/dashboard.py` (62/80) para no dividir `registro_routers.py`
+(197/200). Suite: 3980 → **3994**, verde.
+
+**Impacto en infraestructura:** **Ninguno.**
+- **Migraciones / env vars / dependencias / buckets / auth:** sin cambios. Las tablas y el
+  parámetro (`eventos_agenda`, `parametros_empresa.periodo_prueba_dias`) existen desde 113/114.
+- **Endpoints:** +2 con auth (`GET /api/dashboard/atencion` READ de DASHBOARD ·
+  `POST /api/dashboard/atencion/resolver` WRITE de EVENTOS), −1 (`GET /api/eventos/pendientes`,
+  que nunca tuvo consumidor — no es un breaking change para nadie real). Ninguno público.
+- ⚠️ **Nada depende de un cron** — verificado para todo el panel: las ventanas se evalúan por
+  request. Si algún día aparece un job, no es de este módulo.
+
+---
+## 2026-08-19 · A5 (cierre) — import del Excel de Formación · commits pendientes
+
+**Qué cambió.** El import de Formación de punta a punta: `POST /api/importacion/formacion/preview`
+(no persiste; devuelve filas a importar, rechazadas con motivo, capacitaciones a CREAR, personas
+sin match que van a `nombre_libre`, y pares de nombres sospechosamente parecidos) y
+`POST /api/importacion/formacion/confirmar` (revalida y escribe). Decisiones implementadas: la
+empresa viene del FORM (el Excel no menciona sociedades) · estado por diccionario explícito
+("Finalizado"→completado, "Sin iniciar"→pendiente; otro valor rechaza la fila, nunca default) ·
+fechas derivadas de Año+mes al primer día del mes (sin mes: entra sin fecha Y se reporta —
+condición para que los reportes de formación y anual vean el lote) · matcheo por nombre en LOS
+DOS ÓRDENES sin fuzzy para asignar (el fuzzy solo AVISA pares parecidos) · capacitación
+get-or-create por título exacto, atributos de la primera fila, duración conflictiva reportada ·
+"Área / Equipo" y "Puesto" no se importan. El 23505 de las DOS unicidades de
+`empleado_capacitacion` (inventariadas SIN protección en A4.1) ahora se traduce a error legible
+por fila: **reimportar el mismo archivo reporta duplicados, no rompe ni duplica**
+(`_formacion_duplicado`, molde `_objetivos_duplicado`).
+🔴 **Primer evento de auditoría del módulo de capacitaciones**: `importacion_formacion`, UN
+evento por lote, emitido SIEMPRE (también con 0 filas), con `ids_creados` y
+`capacitaciones_creadas` (el lote escribe dos tablas).
+Archivos nuevos: transforms/valores/matcheo/preview/service/duplicado/payload +
+`routers/importacion_formacion.py` + `schemas/importacion_formacion.py`; `asignacion_repo.save`
+aprende `estado`/`fecha_completado`/`empleado_id` NULL y se agregó `empleados_por_empresa`.
+Tests: 45 nuevos (23 puros + 22 por HTTP con fixture xlsx SINTÉTICO — el Excel real NO va al
+repo: nombres de personas reales). Suite: 3934 → **3980**, verde. Front intacto (740, `tsc` 0).
+
+**Impacto en infraestructura:** **Ninguno.**
+- **Migraciones / env vars / dependencias / buckets / auth:** sin cambios (openpyxl ya estaba).
+- **Endpoints NUEVOS:** los dos de arriba, con auth, gate `IMPORTACION + WRITE` (solo
+  admin_rrhh) y la franja de rate limit `scope="import"` compartida — que pasa de 5 a **7
+  endpoints sobre el mismo 10/hora**. Ninguno es público.
+- ⚠️ Los dos endpoints están declarados SIN caller de front (barrido #5, con disparador): el
+  modal de la pantalla Formación es la sesión de front que sigue.
+
+---
+## 2026-08-19 · A5.1 — columnas de formación cableadas + renombre visible a "Formación" · commits pendientes
+
+**Qué cambió.** Las 7 columnas de la migración 116 que la base tenía y el código ignoraba ahora
+viajan por la API: `capacitaciones.entidad_capacitadora/modalidad/tipo` y
+`empleado_capacitacion.proyecto/anio/mes` entran y salen (Create/Update/Response + `save()` +
+los dos exports); `nombre_libre`, que ya salía, ahora también entra. `anio`/`mes` son `str` a
+propósito (las columnas son TEXT) y las tres del catálogo quedan sin Literal (sin CHECK en la
+base, vocabulario no estabilizado — escrito en `schemas/capacitacion.py`). Se agregó el barrido
+de columnas para las dos tablas (`tests/test_columnas_capacitaciones.py`, molde candidatos, con
+el concepto `DERIVADOS`) + tests HTTP de ida y vuelta (`tests/test_capacitacion_columnas_http.py`).
+El módulo pasa a llamarse **"Formación" SOLO en texto visible** (~31 sitios: nav, títulos,
+modales, filtros, mensajes de error, títulos de reportes, alerta del dashboard, Panel de
+Procesos, hojas y nombres de archivo de export). NO cambió nada de contrato: tablas, columnas,
+endpoints, `Seccion.CAPACITACIONES`, `TipoReporte "capacitacion"`, códigos de error y logs
+quedan como estaban; la ruta del front sigue siendo `/capacitaciones`.
+`capacitacion_repo.py` (98/100) se partió: el enriquecido se mudó a
+`repositories/_capacitacion_row.py` (molde `_asignacion_row`). Suite: 3915 → **3934**, verde;
+front 740 verde, `tsc` 0.
+
+**Impacto en infraestructura:** **Ninguno.**
+- **Migraciones:** ninguna — las columnas ya existían (116). El DDL pendiente de la UNIQUE que
+  bloquea la recertificación anual quedó DECLARADO en `docs/DEUDA-TECNICA.md`, no ejecutado.
+- **Variables de entorno / dependencias / buckets / endpoints / auth:** sin cambios. Los
+  archivos de export cambian de nombre visible (`formacion.*`, `catalogo-formacion.*`) — no es
+  contrato de máquina.
+
+---
 ## 2026-08-18 · A4.2 — el puente candidato→empleado · commits pendientes
 
 **Qué cambió.** `POST /api/candidatos/{id}/contratar`: convierte un candidato en oferta en un

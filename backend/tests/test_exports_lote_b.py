@@ -322,7 +322,7 @@ class TestExportCatalogoCapacitaciones:
         # campo del original no prueba sobre lo mismo: la proyección real los lee.
         fila_asig = asignaciones([SimpleNamespace(
             empresa_nombre="K", empleado_id="e1", empleado_nombre="Ana", nombre_libre=None,
-            area_nombre="IT",
+            area_nombre="IT", proyecto=None, anio=None, mes=None,
             capacitacion_nombre="Excel", estado="en_curso", fecha_asignacion=None,
             fecha_limite=None, fecha_completado=None, certificado_url=None)])[0]
         assert "Empleado" in fila_asig and "Empleado" not in catalogo(_CATALOGO)[0]

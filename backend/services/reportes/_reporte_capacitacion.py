@@ -51,7 +51,7 @@ def generate_capacitacion(mes: int, anio: int, empresa_id: Optional[UUID] = None
     ]
 
     return {
-        "titulo": f"Capacitación por área — {periodo_str(mes, anio)}",
+        "titulo": f"Formación por área — {periodo_str(mes, anio)}",
         "periodo": {"mes": mes, "anio": anio},
         "total_asignaciones": sum(v["asignaciones"] for v in acum.values()),
         "por_area": sorted(por_area, key=lambda x: x["asignaciones"], reverse=True),

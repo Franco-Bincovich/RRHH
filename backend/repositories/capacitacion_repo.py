@@ -1,28 +1,18 @@
-"""Repositorio de catálogo de capacitaciones. Acceso a Supabase con supabase_admin."""
+"""Repositorio de catálogo de capacitaciones. Acceso a Supabase con supabase_admin.
+
+El enriquecido (`_build`) vive en `_capacitacion_row` (molde `_asignacion_row`): este archivo
+estaba en 98/100 y las tres columnas de la migración 116 no entraban en el `save()`.
+"""
 from typing import List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._capacitacion_row import _build
 from schemas.capacitacion import CapacitacionCreate, CapacitacionResponse
 from utils.errors import AppError
 from utils.logger import logger
 
 _T = "capacitaciones"
-
-
-def _build(rows: List[dict]) -> List[CapacitacionResponse]:
-    """Enriquece filas con empresa_nombre."""
-    if not rows:
-        return []
-    emp_map = {
-        e["id"]: e["nombre"]
-        for e in supabase_admin.table("empresas").select("id, nombre")
-        .in_("id", list({r["empresa_id"] for r in rows})).execute().data or []
-    }
-    return [
-        CapacitacionResponse.model_validate({**r, "empresa_nombre": emp_map.get(r["empresa_id"])})
-        for r in rows
-    ]
 
 
 class CapacitacionRepo:
@@ -50,6 +40,9 @@ class CapacitacionRepo:
             "descripcion": data.descripcion,
             "categoria": data.categoria,
             "duracion_horas": data.duracion_horas,
+            "entidad_capacitadora": data.entidad_capacitadora,
+            "modalidad": data.modalidad,
+            "tipo": data.tipo,
             "obligatoria": data.obligatoria,
         }).execute()
         if not res.data:

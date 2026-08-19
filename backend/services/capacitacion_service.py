@@ -37,8 +37,8 @@ class CapacitacionService:
         exactamente el bug que la invariante list↔export existe para evitar."""
         items = self._repo.find_all(empresa_id, solo_activos)
         verificar_limite_export(len(items))
-        datos = {"Capacitaciones": construir_filas_export(items)}
-        return build_export(nombre="Catálogo de capacitaciones", datos=datos, filename_base="capacitaciones", formato=formato)
+        datos = {"Formaciones": construir_filas_export(items)}
+        return build_export(nombre="Catálogo de formaciones", datos=datos, filename_base="catalogo-formacion", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> CapacitacionResponse:
         """
@@ -49,7 +49,7 @@ class CapacitacionService:
         """
         row = self._repo.find_by_id(str(id), empresa_id)
         if not row:
-            raise AppError("Capacitación no encontrada", "CAPACITACION_NOT_FOUND", 404)
+            raise AppError("Formación no encontrada", "CAPACITACION_NOT_FOUND", 404)
         return row
 
     def create(self, data: CapacitacionCreate, created_by: str) -> CapacitacionResponse:
@@ -73,7 +73,7 @@ class CapacitacionService:
             AppError: CAPACITACION_NOT_FOUND (404), NOMBRE_REQUERIDO (422).
         """
         if not self._repo.find_by_id(str(id), empresa_id):
-            raise AppError("Capacitación no encontrada", "CAPACITACION_NOT_FOUND", 404)
+            raise AppError("Formación no encontrada", "CAPACITACION_NOT_FOUND", 404)
         payload = data.model_dump(exclude_none=True)
         if "nombre" in payload and not payload["nombre"].strip():
             raise AppError("El nombre es requerido", "NOMBRE_REQUERIDO", 422)
@@ -89,7 +89,7 @@ class CapacitacionService:
             AppError: CAPACITACION_NOT_FOUND (404) si no existe.
         """
         if not self._repo.find_by_id(str(id), empresa_id):
-            raise AppError("Capacitación no encontrada", "CAPACITACION_NOT_FOUND", 404)
+            raise AppError("Formación no encontrada", "CAPACITACION_NOT_FOUND", 404)
         if self._repo.has_asignaciones(str(id)):
             self._repo.set_activo(str(id), empresa_id, False)
             logger.info("Capacitación desactivada (tiene asignaciones)", extra={"capacitacion_id": str(id)})

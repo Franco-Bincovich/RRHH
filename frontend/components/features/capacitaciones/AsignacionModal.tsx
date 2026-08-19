@@ -117,7 +117,7 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Asignar capacitación</DialogTitle>
+          <DialogTitle>Asignar formación</DialogTitle>
         </DialogHeader>
 
         <form id="asig-form" onSubmit={handleSubmit} noValidate>
@@ -133,10 +133,10 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="asig_cap">Capacitación <span className="text-destructive" aria-hidden>*</span></Label>
+              <Label htmlFor="asig_cap">Formación <span className="text-destructive" aria-hidden>*</span></Label>
               <select id="asig_cap" className={SEL} value={form.capacitacion_id} onChange={field("capacitacion_id")} disabled={!form.empresa_id || loadingCap} aria-required aria-invalid={Boolean(errors.capacitacion_id)}>
                 <option value="">
-                  {!form.empresa_id ? "Seleccioná primero una empresa" : loadingCap ? "Cargando..." : "Seleccionar capacitación"}
+                  {!form.empresa_id ? "Seleccioná primero una empresa" : loadingCap ? "Cargando..." : "Seleccionar formación"}
                 </option>
                 {capacitaciones.map((c) => (
                   <option key={c.id} value={c.id}>

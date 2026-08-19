@@ -12,12 +12,22 @@ from pydantic import BaseModel
 
 # ── Catálogo de capacitaciones ─────────────────────────────────────────────────
 
+# 🔴 `entidad_capacitadora`, `modalidad` y `tipo` van como `str` LIBRE, sin Literal ni Enum, a
+# propósito: las columnas son text sin CHECK (mig 116) porque el Excel real es una planilla a
+# mano y el vocabulario no se conoce todavía (42 filas traen UN solo valor de modalidad y de
+# tipo). Angostar el conjunto acá inventaría un contrato que la base no tiene, contra un padrón
+# que no alcanza para decidirlo. Cuando el vocabulario se estabilice, normalizar es una migración
+# chica + un Literal; al revés no.
+
 class CapacitacionCreate(BaseModel):
     empresa_id: UUID
     nombre: str
     descripcion: Optional[str] = None
     categoria: Optional[str] = None
     duracion_horas: Optional[float] = None
+    entidad_capacitadora: Optional[str] = None
+    modalidad: Optional[str] = None
+    tipo: Optional[str] = None
     obligatoria: bool = False
 
 
@@ -26,6 +36,9 @@ class CapacitacionUpdate(BaseModel):
     descripcion: Optional[str] = None
     categoria: Optional[str] = None
     duracion_horas: Optional[float] = None
+    entidad_capacitadora: Optional[str] = None
+    modalidad: Optional[str] = None
+    tipo: Optional[str] = None
     obligatoria: Optional[bool] = None
     activo: Optional[bool] = None
 
@@ -38,6 +51,9 @@ class CapacitacionResponse(BaseModel):
     descripcion: Optional[str] = None
     categoria: Optional[str] = None
     duracion_horas: Optional[float] = None
+    entidad_capacitadora: Optional[str] = None
+    modalidad: Optional[str] = None
+    tipo: Optional[str] = None
     obligatoria: bool
     activo: bool
     created_at: datetime
@@ -50,17 +66,33 @@ class CapacitacionListResponse(BaseModel):
 
 # ── Asignaciones empleado × capacitación ─────────────────────────────────────
 
+# ⚠️ `anio` y `mes` son `str`, no int, y NO es un descuido: las columnas son TEXT (mig 116)
+# porque el Excel los trae a mano y sin normalizar ("2026", "marzo"/"Marzo"). Tiparlos int acá
+# inventaría un contrato que la base no tiene y rompería el import con el archivo real.
+# `nombre_libre` en el Create no reemplaza a `empleado_id` (que sigue obligatorio: la pantalla
+# asigna a un colaborador del padrón y la empresa se hereda de él): es el nombre crudo del Excel,
+# y puede acompañar a una fila vinculada. Las filas SIN empleado nacen del import (A5.2), que
+# escribe por el repo, no por este endpoint.
+
 class AsignacionCreate(BaseModel):
     capacitacion_id: UUID
     empleado_id: UUID
     fecha_asignacion: Optional[date] = None
     fecha_limite: Optional[date] = None
+    proyecto: Optional[str] = None
+    anio: Optional[str] = None
+    mes: Optional[str] = None
+    nombre_libre: Optional[str] = None
 
 
 class AsignacionUpdate(BaseModel):
     estado: Optional[str] = None
     fecha_limite: Optional[date] = None
     fecha_completado: Optional[date] = None
+    proyecto: Optional[str] = None
+    anio: Optional[str] = None
+    mes: Optional[str] = None
+    nombre_libre: Optional[str] = None
 
 
 class AsignacionResponse(BaseModel):
@@ -78,6 +110,9 @@ class AsignacionResponse(BaseModel):
     nombre_libre: Optional[str] = None
     area_id: Optional[str] = None
     area_nombre: Optional[str] = None
+    proyecto: Optional[str] = None
+    anio: Optional[str] = None
+    mes: Optional[str] = None
     estado: str
     fecha_asignacion: Optional[date] = None
     fecha_limite: Optional[date] = None

@@ -115,6 +115,20 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
         "la baja EFECTIVA del empleado + cierre de la instancia. Backend del fix de offboarding; "
         "el botón de la ficha se construye en la sesión de front que sigue.",
 
+    # 🔴 IMPORT DE FORMACIÓN (A5, 19/8/2026) — la mitad backend, con DISPARADOR explícito.
+    # El flujo entero (preview → confirmar, con 22 tests por HTTP) existe y la pantalla todavía
+    # no: la UI del import quedó para la sesión de front, molde ImportarNominaCSVModal.
+    # SALE DE ESTA LISTA cuando `frontend/services/` tenga el wrapper del preview/confirmar y la
+    # pantalla de Formación su modal de import. 🚩 MIENTRAS SIGA ACÁ, el Excel solo se puede
+    # importar por HTTP directo. El propio barrido lo va a pedir cuando el front llegue:
+    # `test_las_excepciones_siguen_sin_caller` da rojo cuando algo declarado gana caller.
+    ("POST", "/api/importacion/formacion/preview"):
+        "preview del import del Excel de Formación. Backend de A5; el modal del front es la "
+        "sesión que sigue.",
+    ("POST", "/api/importacion/formacion/confirmar"):
+        "confirmación del import del Excel de Formación. Misma sesión de front pendiente que "
+        "el preview.",
+
     # 🔴 ACTIVACIÓN DEL PREINGRESO — mismo caso que el de arriba y en el extremo contrario del
     # ciclo: es la mitad backend de una feature cuya pantalla es una tanda aparte (el bloque B,
     # "próximos ingresos"). Lleva DISPARADOR, no razón permanente.
@@ -204,16 +218,22 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     ("PUT", "/api/recategorizaciones/{id}"): _RECAT,
     ("GET", "/api/empleados/{empleado_id}/recategorizaciones"): _RECAT,
 
-    # 🔴 AGENDA DE EVENTOS — UNA sola ruta declarada, y por un motivo distinto al de las dos
-    # familias de arriba: acá el front SÍ se construyó en la misma sesión que el backend, así que
-    # las otras cinco rutas del módulo tienen caller real. `/pendientes` es lo que va a consumir
-    # la tarjeta del dashboard, que es la SESIÓN 2. DISPARADOR: sale de esta lista cuando
-    # `frontend/services/eventos.ts` gane su `fetchEventosPendientes` y el dashboard lo llame. Si
-    # para entonces sigue acá, el endpoint quedó publicado e inalcanzable.
-    ("GET", "/api/eventos/pendientes"):
-        "lo consume la tarjeta del dashboard, que es la sesión 2 de esta feature. El endpoint "
-        "sale de la sesión 1 porque el filtro de ventana de aviso es lo que había que dejar "
-        "probado. DISPARADOR: sale de acá cuando el dashboard lo llame.",
+    # ✅ `GET /api/eventos/pendientes` YA NO ESTÁ ACÁ: su "sesión 2" llegó (A6, 19/8/2026) y la
+    # tarjeta del dashboard consume `GET /api/dashboard/atencion`, que devuelve los eventos
+    # pendientes JUNTO con las alertas calculadas. El endpoint viejo quedaba huérfano para
+    # siempre y se BORRÓ (la lógica sigue viva en `EventoAgendaService.pendientes`, ahora con el
+    # panel como caller). Su disparador decía "sale de esta lista cuando el dashboard lo llame";
+    # el dashboard llama al reemplazo, así que salió por la otra puerta — con la ruta.
+
+    # 🔴 PANEL "REQUIERE TU ATENCIÓN" (A6, 19/8/2026) — la mitad backend, con DISPARADOR.
+    # El flujo entero (calculadas + manuales + resolver) existe y la tarjeta del dashboard
+    # todavía no. SALE DE ESTA LISTA cuando `frontend/` tenga el wrapper de `/atencion` y el
+    # dashboard pinte el panel. 🚩 MIENTRAS SIGA ACÁ, las alertas solo se ven por HTTP directo.
+    ("GET", "/api/dashboard/atencion"):
+        "el panel 'Requiere tu atención' del dashboard. Backend de A6; la tarjeta del front es "
+        "la sesión que sigue.",
+    ("POST", "/api/dashboard/atencion/resolver"):
+        "resuelve una alerta manual del panel. Misma sesión de front pendiente que el GET.",
 
     ("GET", "/api/perfiles-puesto"): _PERFILES,
     ("GET", "/api/perfiles-puesto/campos"): _PERFILES,

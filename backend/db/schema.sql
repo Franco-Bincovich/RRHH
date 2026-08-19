@@ -1274,7 +1274,7 @@ ALTER TABLE public.evaluacion_evaluados ADD CONSTRAINT evaluacion_evaluados_perf
 ALTER TABLE public.evaluacion_resultados ADD CONSTRAINT evaluacion_resultados_tipo_evaluador_check CHECK ((tipo_evaluador = ANY (ARRAY['AUTOEVALUACION'::text, 'AUTOEVALUACION_LIDER'::text, 'SUPERIOR_INMEDIATO'::text, 'PAR'::text, 'COLABORADOR'::text, 'LIBRES'::text])));
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_horas_check CHECK ((horas > (0)::numeric));
 -- Migracion 104. Los cinco desenlaces posibles de un intento de identificacion.
-ALTER TABLE public.intentos_identificacion ADD CONSTRAINT intentos_identificacion_resultado_check CHECK ((resultado = ANY (ARRAY['ok'::text, 'sin_coincidencia'::text, 'inactivo'::text, 'sin_clientes'::text, 'ambiguo'::text, 'bloqueado'::text])));
+ALTER TABLE public.intentos_identificacion ADD CONSTRAINT intentos_identificacion_resultado_check CHECK ((resultado = ANY (ARRAY['ok'::text, 'sin_coincidencia'::text, 'inactivo'::text, 'sin_clientes'::text, 'ambiguo'::text, 'bloqueado'::text, 'preingreso'::text])));
 -- Migracion 103. Acepta NULL a proposito: las filas del camino viejo no llevan modalidad.
 ALTER TABLE public.horas_proyecto ADD CONSTRAINT horas_proyecto_modalidad_check CHECK ((modalidad IS NULL OR modalidad = ANY (ARRAY['home_office'::text, 'on_site'::text])));
 -- Migracion 103. La tabla tiene EXACTAMENTE DOS formas de fila: o las tres del costeo por

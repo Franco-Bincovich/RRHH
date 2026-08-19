@@ -585,12 +585,10 @@ class TestVentanaDeAviso:
                     dias_aviso=365, nombre="El limite"))
         assert "El limite" in self._pendientes(svc)
 
-    async def test_pendientes_no_matchea_como_id(self, agenda, como) -> None:
-        """`/pendientes` está declarado ANTES de `/{id}`: al revés matchearía como el path param
-        `id: UUID` y el pedido moriría en un 422 antes de llegar al handler."""
-        async with como() as c:
-            r = await c.get(f"{BASE}/pendientes")
-        assert r.status_code == 200 and isinstance(r.json(), list)
+    # ✅ Acá vivía `test_pendientes_no_matchea_como_id`: fijaba que `GET /pendientes` estuviera
+    # declarado antes de `/{id}`. La ruta se BORRÓ en A6 (la reemplaza `/api/dashboard/atencion`,
+    # que consume `service.pendientes` — los tests de la ventana de arriba siguen cubriéndolo).
+    # Sin ruta literal bajo este prefijo, no queda colisión de orden que fijar.
 
 
 # ── 3. El toggle de resueltos en el listado ───────────────────────────────────
@@ -645,26 +643,33 @@ class TestResolver:
         assert cuerpo["resuelta"] is False
         assert cuerpo["resuelta_at"] is None and cuerpo["resuelta_por"] is None
 
-    async def test_el_resuelto_sale_de_los_pendientes_y_vuelve(self, almacen, como) -> None:
-        """El ciclo completo por HTTP: resolver lo saca del panel y desresolver lo devuelve.
+    async def test_el_resuelto_sale_de_los_pendientes_y_vuelve(self, almacen, como,
+                                                               auditoria) -> None:
+        """El ciclo completo: resolver lo saca del panel y desresolver lo devuelve.
 
-        ⚠️ Acá el evento se siembra relativo a `date.today()` REAL y no a `HOY`, porque el
-        endpoint no recibe la fecha: la toma del día. Los tests de la VENTANA en sí van por el
-        service con `hoy` fijo — este mira el ciclo resolver/desresolver, no el cálculo.
-        """
+        ⚠️ Acá el evento se siembra relativo a `date.today()` REAL y no a `HOY`, porque el toggle
+        no recibe la fecha: la toma del día. Los tests de la VENTANA en sí van con `hoy` fijo.
+        ⚠️ Las ESCRITURAS van por HTTP; la lectura del panel va por `service.pendientes`, que es
+        lo que quedó de este módulo desde que la ruta `GET /pendientes` se borró en A6 (la
+        reemplaza `/api/dashboard/atencion`, cuyo ciclo HTTP completo vive en
+        `test_dashboard_atencion.py` — este test fija que el WRITE PATH deje la fila como el
+        panel la necesita, no la superficie del panel)."""
         almacen.catalogo["eventos_agenda"] = [
             _evento(VENCIDO, YO, True, str(date.today() - timedelta(days=14)),
                     dias_aviso=7, nombre="Vencido sin resolver"),
         ]
+        svc = EventoAgendaService(audit=auditoria)
+        def panel():
+            return _nombres(svc.pendientes(EMPRESA, YO, "admin_rrhh"))
         async with como() as c:
-            antes = await c.get(f"{BASE}/pendientes")
+            antes = panel()
             await c.put(f"{BASE}/{VENCIDO}/resuelta", json={"resuelta": True})
-            durante = await c.get(f"{BASE}/pendientes")
+            durante = panel()
             await c.put(f"{BASE}/{VENCIDO}/resuelta", json={"resuelta": False})
-            despues = await c.get(f"{BASE}/pendientes")
-        assert "Vencido sin resolver" in _nombres(antes.json())
-        assert "Vencido sin resolver" not in _nombres(durante.json())
-        assert "Vencido sin resolver" in _nombres(despues.json())
+            despues = panel()
+        assert "Vencido sin resolver" in antes
+        assert "Vencido sin resolver" not in durante
+        assert "Vencido sin resolver" in despues
 
     async def test_el_PUT_generico_no_puede_tocar_resuelta(self, almacen, como) -> None:
         """`resuelta` no está en `EventoUpdate` y además el write path la descarta: por esa vía
@@ -1006,7 +1011,7 @@ class TestPermisos:
             r = await getattr(c, metodo)(ruta, **kw)
         assert r.status_code == 403
 
-    @pytest.mark.parametrize("ruta", [BASE, f"{BASE}/pendientes", f"{BASE}/{PUB_YO}"])
+    @pytest.mark.parametrize("ruta", [BASE, f"{BASE}/{PUB_YO}"])
     async def test_mandos_medios_no_llega_ni_a_leer(self, almacen, como, ruta) -> None:
         """`EVENTOS` no está en `MANDOS_MEDIOS_SECCIONES`: ese rol solo opera en vacaciones y
         ausencias."""
@@ -1055,11 +1060,13 @@ class TestContratoDelModulo:
         assert not any("exportar" in r.path for r in rutas)
 
     def test_las_seis_rutas_estan_montadas(self) -> None:
+        """Seis desde A6: `GET /pendientes` se borró — lo reemplaza `/api/dashboard/atencion`.
+        Este set en igualdad ESTRICTA es lo que garantiza que la ruta vieja no reviva ni quede
+        una séptima sin decidir."""
         montadas = {(m, r.path) for r in app.routes if getattr(r, "path", "").startswith(BASE)
                     for m in (r.methods - {"HEAD", "OPTIONS"})}
         assert montadas == {
             ("GET", "/api/eventos"), ("POST", "/api/eventos"),
-            ("GET", "/api/eventos/pendientes"),
             ("GET", "/api/eventos/{id}"), ("PUT", "/api/eventos/{id}"),
             ("DELETE", "/api/eventos/{id}"), ("PUT", "/api/eventos/{id}/resuelta"),
         }

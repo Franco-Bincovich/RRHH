@@ -101,7 +101,7 @@ export function CatalogoTab({ canWrite }: { canWrite: boolean }) {
       {loading && <TableSkeleton />}
       {!loading && error && <ErrorState action={load} />}
       {!loading && !error && capacitaciones.length === 0 && (
-        <EmptyState icon={<AlertCircle />} title="Sin capacitaciones" description="No hay cursos en el catálogo para los filtros seleccionados." />
+        <EmptyState icon={<AlertCircle />} title="Sin formaciones" description="No hay cursos en el catálogo para los filtros seleccionados." />
       )}
 
       {!loading && !error && capacitaciones.length > 0 && (

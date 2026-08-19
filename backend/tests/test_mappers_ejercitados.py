@@ -122,6 +122,12 @@ _EJERCITADOS: dict[str, str] = {
     # de lista vacía (`.in_("id", [])` no es un filtro válido), que es el borde del mismo bug.
     # Los tests lo llaman CON elementos en los dos sentidos — con ids y con la lista vacía.
     "_asignacion_row._q":                        "test_capacitacion_nombre_libre",
+    # 🚩 Estaba en _SIN_EJERCITAR como `capacitacion_repo._build`, con el motivo "0 filas,
+    # disparador: que RRHH cargue el primer catálogo". Lo movió OTRA cosa: al cablear las tres
+    # columnas de la mig 116 el repo quedaba en 101/100 y el mapper se mudó a su satélite
+    # `_capacitacion_row.py` (mismo corte que `_asignacion_row`). El test que lo ejercita CON
+    # filas llegó en la misma sesión — la entrada no se borró, se MOVIÓ acá, como pide la regla.
+    "_capacitacion_row._build":                  "test_capacitacion_columnas_http",
     # Recategorizaciones. `_mapa` se ejercita TRANSITIVAMENTE desde `build`, igual que los
     # `_nombres` y el `_mapa` de `_hora_row`. Los dos early-return son guardas de lista vacía
     # (`.in_("id", [])` no es un filtro válido) y los tests los recorren en los DOS sentidos:
@@ -148,9 +154,9 @@ _EJERCITADOS: dict[str, str] = {
 # El que queda tiene su tabla en 0 filas Y no entra en el bloque I. La razón dice QUÉ lo movería
 # a urgente, para que la decisión no haya que rehacerla desde cero.
 _SIN_EJERCITAR: dict[str, str] = {
-    "capacitacion_repo._build":
-        "capacitaciones: 0 filas y NO entra en el bloque I (que es vacaciones, ausencias e "
-        "inventario). Disparador: que RRHH cargue el primer catálogo de capacitaciones.",
+    # La única entrada que vivía acá (`capacitacion_repo._build`, "0 filas, disparador: el
+    # primer catálogo") se fue el 19/8/2026: el mapper se mudó a `_capacitacion_row._build` y su
+    # test llegó en la misma sesión. La entrada está MOVIDA a la lista de declarados, no borrada.
 }
 
 

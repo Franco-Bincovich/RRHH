@@ -12,6 +12,102 @@
 
 ---
 
+## 0. 🔴 CIERRE DEL BLOQUE A (19/8/2026) — la lista con la que arranca el frontend
+
+El bloque A (backend) cerró con A3.3. El frontend arranca de acá: todo lo que sigue es backend
+listo esperando UI, deuda de línea identificada, o una decisión de producto que el código no
+puede tomar solo.
+
+### Endpoints con backend y sin botón
+
+| Endpoint | Sesión | Qué hace | Declarado en `test_callers_huerfanos.py` |
+|---|---|---|---|
+| `POST /api/candidatos/{id}/contratar` | A4.2 | Candidato en oferta → legajo en `preingreso` | sí, con disparador |
+| `POST /api/empleados/{id}/activar` | A3.2 | `preingreso` → `activo`, valida `fecha_ingreso` no futura | sí, con disparador |
+| `POST /api/offboarding/{instancia_id}/efectivizar` | previa a A3 | Baja EFECTIVA + cierre de instancia | sí, con disparador |
+| `GET /api/dashboard/atencion` | A6 | Panel "Requiere tu atención" — calculadas + manuales | sí, con disparador |
+| `POST /api/dashboard/atencion/resolver` | A6 | Resuelve una alerta MANUAL (409 si es calculada) | sí, con disparador |
+| `POST /api/importacion/formacion/preview` | A5 | Preview del Excel de Formación | sí, con disparador |
+| `POST /api/importacion/formacion/confirmar` | A5 | Confirma el import — catálogo + asignaciones | sí, con disparador |
+
+Los siete tienen tests por HTTP verdes y están montados; ninguno es público. El disparador de
+cada declaración en `_ENDPOINTS_SIN_FRONT` es "sale de la lista cuando `frontend/` lo llame" —
+son literalmente los puntos de entrada del bloque B.
+
+### Archivos en el techo — el corte va PRIMERO la próxima vez que se toquen
+
+| Archivo | Líneas/límite | Qué falta para cortar |
+|---|---|---|
+| `registro_routers.py` | **197/200** | El próximo router nuevo (no un endpoint en uno existente) exige dividir esto primero. Molde pendiente de elegir: por dominio (routers de escritura/lectura ya separan así en varios módulos) o por familia (importación, dashboard, etc.). A6 y A3.3 evitaron el problema montando en routers existentes con aire — no va a ser posible indefinidamente. |
+| `routers/capacitaciones.py` | 78/80 | El próximo endpoint del catálogo de Formación (no de import: eso ya salió por su propio router) exige el corte lecturas/escrituras, molde `eventos_agenda.py` / `eventos_agenda_escrituras.py`. |
+| `repositories/asignacion_repo.py` | 95/100 | El próximo método de asignaciones de formación. Molde de corte: `_asignacion_row.py` (ya existe, es el satélite de mapeo) — el próximo corte sería un segundo satélite o mover escrituras, como se hizo con `evento_agenda_repo.py`. |
+| `services/reporte_service.py` | 143/150 | El próximo reporte del catálogo. Molde: extraer el dispatcher a `reporte_generators.py` más generadores, patrón ya usado por `services/reportes/`. |
+
+### Decisiones de producto que quedaron abiertas (el código no las puede tomar solo)
+
+1. **"Vacaciones sin resolver" no existe como dato** (A6). `solicitudes_vacaciones` no tiene
+   estado de aprobación — sus columnas son fechas, `dias`, `cancelada`, `tipo`, `periodo`,
+   `dias_liquidados`; el "estado" que muestran las pantallas se DERIVA del calendario. El
+   sistema de diseño promete la tercera alerta calculada sobre un modelo que no la tiene.
+   Salidas sin decidir: (a) construir un flujo de aprobación — revierte la decisión de producto
+   original de "sin flujos de aprobación"; (b) reinterpretar la alerta sobre `vacaciones_pendientes`
+   (saldos adeudados por período, hoy 0 filas — otro significado); (c) sacarla del diseño.
+2. **La recertificación anual de Formación está bloqueada para las filas CON empleado** (A5.1/A5.2).
+   `UNIQUE (capacitacion_id, empleado_id)` no lleva el año: la misma persona en el mismo curso
+   dos años seguidos es un duplicado para la base. `ux_ec_nombre_libre` sí lleva año+mes, pero
+   solo rige `WHERE empleado_id IS NULL`. Hoy no choca (el Excel real de 2026 no tiene el caso);
+   el import de 2027 sí. Es DDL (sumar el año a la clave, o una parcial equivalente) — decidir
+   junto con quien defina el ciclo de recertificación, no como una migración técnica suelta.
+3. **`tipo_contrato` no viaja en el puente candidato→empleado** (A4.2). `EmpleadoCreate` lo
+   acepta pero `_candidato_contratar_mapeo.py` no lo completa desde ningún campo de `candidatos`
+   ni de `vacantes` — la vacante SÍ tiene `tipo_contrato` (mismo vocabulario que `empleados`,
+   verificado en su momento), así que técnicamente es mapeable, pero no se mapeó porque no
+   estaba pedido y una decisión de "¿el contrato de la vacante es el contrato real, o RRHH lo
+   define recién al contratar?" no es de código. Queda en el default del schema (si tiene) o
+   vacío. **No verificado en esta sesión si esto sigue siendo así al día de hoy** — confirmar
+   contra `_candidato_contratar_mapeo.py` antes de asumirlo en el bloque B.
+
+⚠️ El punto 3 es memoria de sesiones anteriores, no releída en A3.3 — el resto de esta lista sí
+se verificó contra el código de hoy (endpoints vía `test_callers_huerfanos.py`, archivos vía
+medición directa).
+
+### 🔴 `identificacion_repo.registrar_intento` se traga TODO error — evaluado en A3.3, NO arreglado
+
+El INSERT del log forense del link público está envuelto en `except Exception: logger.warning(...)`
+desde antes de esta sesión, y sigue así. Es lo que vuelve **obligatorio, no recomendado**, el
+orden de deploy de la migración 121 (CHECK primero, código después): si el código que escribe
+`'preingreso'` sale antes que la migración, **cada intento de un preingreso se pierde SIN error,
+SIN log y SIN fila** — el 23514 lo atrapa el except, no sube al usuario (el flujo público sigue
+viendo el rechazo único de siempre) y lo único que queda es un `logger.warning` de severidad
+baja que nadie monitorea en caliente. A fines prácticos: invisible.
+
+**¿Merece arreglarse?** No se tocó en A3.3 — el pedido fue evaluar, no corregir. La evaluación:
+
+- **A favor de dejarlo como está:** el motivo original sigue vigente. Si el INSERT del log
+  fallara y la excepción se propagara, el tiempo de respuesta del endpoint público cambiaría
+  según si el intento se pudo loguear o no, reabriendo por la ventana de timing el oráculo que
+  el rechazo único cierra por la puerta (`identificacion_service.py`, sección "EL TIMING
+  TAMBIÉN ES UN CANAL"). Envolver TODO en un `except` amplio es la forma más simple de
+  garantizar que el forense nunca afecte el camino de éxito o de rechazo.
+- **En contra de dejarlo como está:** "se traga todo" incluye errores que NO tienen nada que ver
+  con timing — un 23514 por un CHECK desalineado (exactamente este caso), una columna renombrada,
+  un typo en el nombre de tabla. Ninguno de esos afecta el timing si se detecta de otra forma:
+  **loguear a nivel ERROR en vez de WARNING, o emitir una métrica contable** (un contador de
+  "inserts forenses fallidos") no reintroduce el oráculo de timing —no cambia CUÁNDO responde el
+  endpoint, solo qué tan visible es el fallo después— y sí habría hecho que este problema
+  apareciera en un dashboard de errores en vez de depender de que alguien lea un WARNING.
+- **El riesgo concreto de no tocarlo:** el próximo valor que alguien agregue a
+  `intentos_identificacion.resultado` sin correr su migración primero repite el mismo modo de
+  falla, y nadie se entera hasta que audite manualmente esta tabla o note un patrón de "faltan
+  filas" contra el volumen esperado de intentos.
+
+**Conclusión sin arreglar nada:** el diseño (tragar todo para proteger el timing) es correcto;
+la SEVERIDAD del log (WARNING, no monitoreado) es lo discutible, y es una decisión de
+observabilidad —qué se alerta y quién lo mira— no de código. Queda para quien defina la
+estrategia de alertas del repo, no para esta sesión.
+
+---
+
 ## 1. Código muerto
 
 | Qué | Dónde | Callers reales | Gravedad | Esf. |
@@ -607,21 +703,58 @@ choque sale como 500 `INTERNAL_ERROR`:**
 
 | # | Tabla | Unicidad | Por qué está en este orden |
 |---|---|---|---|
-| 1 | `empleado_capacitacion` | `(capacitacion_id, empleado_id)` + `ux_ec_nombre_libre` | **El más probable, y con fecha.** Ver la nota de A5 abajo. |
+| 1 | ✅ `empleado_capacitacion` | `(capacitacion_id, empleado_id)` + `ux_ec_nombre_libre` | **CERRADO en A5 (19/8/2026)** — `_formacion_duplicado` traduce el 23505. Ver la nota de abajo. |
 | 2 | `areas` | `codigo` — **GLOBAL, sin empresa** | Dos empresas que quieran un área con el mismo código chocan. Con 2 empresas y 12 áreas cargadas ya es alcanzable a mano, y el operador no tiene forma de saber que el código lo tomó otra sociedad. |
 | 3 | `empresas` | `cuit`, `nombre` | Alta manual, campos que se tipean. `_validate_cuit` valida **formato**, no unicidad — es fácil leerlo como si cubriera las dos cosas. Baja frecuencia: se cargan 2–5 empresas en la vida del sistema. |
 | 4 | `vacaciones_pendientes` | `(empleado_id, periodo)` | `insert` crudo. Hoy la tabla está en 0; se vuelve alcanzable cuando RRHH cargue los saldos por período. |
 | 5 | `evaluacion_evaluados` / `evaluacion_resultados` | claves del lote | El import ya verifica por CONTEO y el `confirmar` crea el lote con período temporal, así que un choque acá es raro **y además no pierde datos**. Es el menos urgente de los cinco. |
 
-> 🚩 **`empleado_capacitacion` se arregla dentro de A5, cuando el import del Excel inserte sus 53
-> filas.** Hoy el choque es hipotético porque las asignaciones se cargan de a una desde la UI y
-> repetir la misma a mano es difícil. **Con un import de 53 filas deja de serlo**: una corrida
-> repetida —que es el caso normal, no el excepcional: alguien reintenta porque no está seguro de
-> si la primera terminó— choca en la primera fila ya cargada y el import entero muere con un 500
-> sin decir por qué. Es el mismo perfil de bug que ya pagó el import de objetivos, y ahí la salida
-> fue exactamente ésta (`_objetivos_duplicado`). **No adelantarlo: el arreglo correcto depende de
-> si el import va a ser idempotente por `on_conflict` o va a reportar la fila duplicada, y eso se
-> decide con el archivo real de RRHH en la mano.**
+> ✅ **`empleado_capacitacion` — RESUELTO dentro de A5 (19/8/2026), exactamente como esta nota lo
+> pedía.** La decisión que faltaba se tomó con el archivo real en la mano: el import **reporta la
+> fila duplicada** (no `on_conflict` — que además la parcial `ux_ec_nombre_libre` no soporta, por
+> ser índice por expresión). `services/_formacion_duplicado.duplicado_legible` traduce el 23505
+> de los DOS índices a `FORMACION_DUPLICADA` (409) con mensaje legible; reimportar el mismo
+> archivo reporta duplicados fila por fila, sin 500 y sin duplicar
+> (`tests/test_formacion_import.py::TestReimport`). El alta manual de asignaciones sigue con su
+> `except Exception → YA_ASIGNADO` de siempre (`asignacion_service.create`) — más ancho, pero
+> anterior y con un solo camino de escritura. La nota original queda abajo para el contexto de
+> los otros cuatro casos de la tabla, que siguen abiertos.
+
+> *(La nota original, del 17/8:)* `empleado_capacitacion` se arregla dentro de A5, cuando el
+> import del Excel inserte sus 53 filas. Hoy el choque es hipotético porque las asignaciones se
+> cargan de a una desde la UI y repetir la misma a mano es difícil. Con un import de 53 filas
+> deja de serlo: una corrida repetida —que es el caso normal, no el excepcional: alguien
+> reintenta porque no está seguro de si la primera terminó— choca en la primera fila ya cargada
+> y el import entero muere con un 500 sin decir por qué. Es el mismo perfil de bug que ya pagó
+> el import de objetivos, y ahí la salida fue exactamente ésta (`_objetivos_duplicado`). No
+> adelantarlo: el arreglo correcto depende de si el import va a ser idempotente por
+> `on_conflict` o va a reportar la fila duplicada, y eso se decide con el archivo real de RRHH
+> en la mano.
+
+> 🚩 **Y la misma UNIQUE tiene un segundo problema, distinto del choque por reintento: PROHÍBE la
+> recertificación anual para las filas CON empleado.** `UNIQUE (capacitacion_id, empleado_id)` no
+> lleva el año, así que la misma persona en el mismo curso en dos años distintos es un duplicado
+> para la base — mientras que `ux_ec_nombre_libre` SÍ lleva `anio`/`mes` en la clave, pero solo
+> rige `WHERE empleado_id IS NULL`. O sea: la recertificación anual —caso real del Excel, que la
+> verificación (F) de la migración 116 celebra— **funciona para los nombres sueltos y está
+> bloqueada para los matcheados.** Hoy no choca (las 2 repeticiones del archivo 2026 son cursos
+> distintos); **el import de 2027 sí**. El arreglo es DDL (sumar el año a la clave, o una parcial
+> equivalente) y quedó **fuera de alcance** de la sesión del 19/8 que cableó las columnas —
+> decidirlo junto con el import de A5.2, que es quien define la semántica de idempotencia.
+
+### 🟠 "Vacaciones sin resolver" — la tercera alerta del panel de atención NO existe (A6, 19/8/2026)
+
+El sistema de diseño lista tres alertas calculadas para "Requiere tu atención"; se implementaron
+DOS (ingresos próximos, fin de período de prueba). **"Vacaciones sin resolver" no se puede
+calcular porque el dato no existe**: `solicitudes_vacaciones` no tiene estado de aprobación —sus
+columnas son fechas, `dias`, `cancelada`, `tipo`, `periodo`, `dias_liquidados`— y el "estado"
+que muestran las pantallas se DERIVA del calendario (`derive_estado`). "Sin flujos de
+aprobación" fue decisión de producto de la primera época; el prototipo del sistema de diseño
+promete encima de un modelo que no la tiene. Salidas posibles, ninguna decidida: (a) construir
+el flujo de aprobación (feature grande, revierte una decisión); (b) reinterpretar la alerta
+sobre `vacaciones_pendientes` (saldos adeudados por período — otro significado, hoy 0 filas);
+(c) sacarla del diseño. **Se eligió alertar UNA cosa menos antes que una que miente** — decidir
+con RRHH/directorio, no en una sesión de código.
 
 ### 🔴 Los 32 repos con `select("*")` — una pregunta que el repo no sabe hacer
 
@@ -642,8 +775,14 @@ Los otros dos tampoco podían: `test_mappers_ejercitados` persigue mappers con
 lista, y aunque lo listara, ejercitar un mapper prueba que su cuerpo CORRE, no que mapee todas las
 columnas—, y `test_contrato_repos` compara métodos entre capas, que no sabe qué es una columna.
 
-**Estado:** `tests/test_columnas_candidatos.py` cubre **1 de los 32 repos** que leen con
-`select("*")`. Los otros 31 no se midieron.
+**Estado (remedido el 19/8/2026):** hoy son **30 archivos** de `repositories/` los que leen con
+`select("*")` (el 32 era la medición anterior; la lista se mueve con cada corte de repo). El
+patrón cubre **3 tablas — candidatos, capacitaciones y empleado_capacitacion — o sea 4 de esos
+30 archivos** (`candidato_repo` + `_candidato_row`, `capacitacion_repo`, `asignacion_repo`):
+`tests/test_columnas_candidatos.py` y `tests/test_columnas_capacitaciones.py`, este último con el
+concepto `DERIVADOS` para los campos que resuelve un join (el porqué de no retrofitearlo en
+candidatos está en el encabezado de `tests/_columnas_capacitaciones.py`). Quedan **26 sin
+barrido**.
 **Qué haría falta:** por cada repo, la tabla + el modelo de salida + la tabla de renombres y de
 columnas no expuestas CON su razón (el inventario de candidatos son 11 entradas). El barrido en sí
 ya está escrito y es genérico salvo por esas declaraciones.

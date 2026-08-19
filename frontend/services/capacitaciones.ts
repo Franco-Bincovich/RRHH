@@ -37,7 +37,7 @@ export async function fetchCapacitaciones(
  * 🔴 SE LLAMA `exportarCatalogoCapacitaciones`, NO `exportarCapacitaciones`: ese nombre ya lo usa
  * el export de ASIGNACIONES (más abajo). Son dos listados distintos, en dos pestañas distintas y
  * con dos endpoints distintos — el catálogo dice qué cursos existen, las asignaciones quién hizo
- * cuál. El archivo baja con nombre "catalogo-capacitaciones" por el mismo motivo.
+ * cuál. El archivo baja con nombre "catalogo-formacion" por el mismo motivo.
  *
  * 🔴 `soloActivos` viaja por la misma `queryCatalogo` que el listado: sin él, el archivo traería
  * las capacitaciones inactivas que la tabla está ocultando. Es el bug exacto que la invariante
@@ -50,7 +50,7 @@ export function exportarCatalogoCapacitaciones(
   soloActivos = true,
 ): Promise<void> {
   return descargarArchivo(
-    `${BASE}/exportar`, formato, "catalogo-capacitaciones",
+    `${BASE}/exportar`, formato, "catalogo-formacion",
     empresaIdOverride ? { "X-Empresa-Id": empresaIdOverride } : undefined,
     queryCatalogo(soloActivos),
   )
@@ -165,7 +165,7 @@ export function exportarCapacitaciones(
   filtros: AsignacionesCapacitacionFiltros = {},
 ): Promise<void> {
   return descargarArchivo(
-    "/api/capacitaciones/asignaciones/exportar", formato, "capacitaciones",
+    "/api/capacitaciones/asignaciones/exportar", formato, "formacion",
     headersEmpresa(filtros.empresaIdOverride), queryAsignaciones(filtros),
   )
 }

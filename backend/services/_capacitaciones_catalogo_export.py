@@ -31,6 +31,10 @@ def construir_filas_export(items: List[CapacitacionResponse]) -> List[dict]:
             "Nombre": c.nombre,
             "Descripción": c.descripcion,
             "Categoría": c.categoria,
+            # Las tres de la mig 116, tal cual la base las guarda (text libre, sin vocabulario).
+            "Entidad capacitadora": c.entidad_capacitadora,
+            "Modalidad": c.modalidad,
+            "Tipo": c.tipo,
             "Duración (horas)": c.duracion_horas,
             "Obligatoria": "Sí" if c.obligatoria else "No",
             "Estado": "Activa" if c.activo else "Inactiva",

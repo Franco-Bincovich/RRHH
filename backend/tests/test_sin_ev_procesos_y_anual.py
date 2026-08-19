@@ -226,7 +226,7 @@ class TestReporteAnualSeGeneraSinLaMetricaDeEv:
         assert "evaluaciones_finalizadas" not in datos
         assert "Evaluaciones finalizadas" not in datos["_sheets"]["Actividad del año"]
         # el control del control: la hoja existe y trae las métricas que SÍ quedaron
-        assert "Capacitaciones completadas" in datos["_sheets"]["Actividad del año"]
+        assert "Formaciones completadas" in datos["_sheets"]["Actividad del año"]
 
     async def test_no_consulta_ninguna_tabla_ev(self, app_autenticada, monkeypatch) -> None:
         fake = _SupabaseSoloTablasVivas()

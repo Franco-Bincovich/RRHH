@@ -44,7 +44,7 @@ class AsignacionService:
                               1, LIMITE_FILAS_EXPORT)
         verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
         filas = construir_filas_export(pagina.items)
-        return build_export(nombre="Capacitaciones", datos={"Asignaciones": filas}, filename_base="capacitaciones", formato=formato)
+        return build_export(nombre="Formación", datos={"Asignaciones": filas}, filename_base="formacion", formato=formato)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> AsignacionResponse:
         """Retorna asignación por ID. Raises ASIGNACION_NOT_FOUND (404)."""
@@ -68,13 +68,14 @@ class AsignacionService:
         if not empresa_id:
             raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
         if not self._cap_repo.find_empresa_for(str(data.capacitacion_id), empresa_id):
-            raise AppError("Capacitación no encontrada", "CAPACITACION_NOT_FOUND", 404)
+            raise AppError("Formación no encontrada", "CAPACITACION_NOT_FOUND", 404)
         try:
-            row = self._repo.save(str(data.capacitacion_id), str(data.empleado_id), empresa_id, data.fecha_asignacion, data.fecha_limite)
+            row = self._repo.save(str(data.capacitacion_id), str(data.empleado_id), empresa_id, data.fecha_asignacion, data.fecha_limite,
+                                  proyecto=data.proyecto, anio=data.anio, mes=data.mes, nombre_libre=data.nombre_libre)
         except AppError:
             raise
         except Exception:
-            raise AppError("El empleado ya tiene esta capacitación asignada", "YA_ASIGNADO", 409)
+            raise AppError("El empleado ya tiene esta formación asignada", "YA_ASIGNADO", 409)
         logger.info("Capacitación asignada", extra={"asignacion_id": row.id, "created_by": created_by})
         return row
 
@@ -96,6 +97,11 @@ class AsignacionService:
             payload["fecha_limite"] = str(data.fecha_limite)
         if data.fecha_completado is not None:
             payload["fecha_completado"] = str(data.fecha_completado)
+        # Los cuatro de la mig 116, con la misma semántica `is not None` que las fechas: un campo
+        # omitido no se toca; vaciar uno es mandar "" (str vacío), no None.
+        for campo in ("proyecto", "anio", "mes", "nombre_libre"):
+            if getattr(data, campo) is not None:
+                payload[campo] = getattr(data, campo)
         updated = self._repo.update(str(id), empresa_id, payload)
         logger.info("Asignación actualizada", extra={"asignacion_id": str(id)})
         return updated  # type: ignore[return-value]

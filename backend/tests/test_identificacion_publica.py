@@ -61,8 +61,10 @@ DNI_SIN_CLIENTES = "30111444"
 DNI_AMBIGUO = "30111555"
 DNI_INEXISTENTE = "99999999"
 DNI_OTRO_OK = "30111666"
+DNI_PREINGRESO = "30111777"
 
-# Los CINCO desenlaces, no uno. Ver el punto 1 del encabezado.
+# Los SEIS desenlaces de rechazo, no uno. Ver el punto 1 del encabezado. El sexto es de A3.3:
+# el preingreso se rechaza igual que siempre, pero el log forense lo distingue de la baja.
 _PADRON: dict[str, list] = {
     DNI_OK: [{"id": EMP_ACTIVO, "nombre": "Juan Carlos", "estado": "activo",
               "empresa_id": EMPRESA_CON}],
@@ -70,6 +72,8 @@ _PADRON: dict[str, list] = {
                    "empresa_id": EMPRESA_CON}],
     DNI_BAJA: [{"id": EMP_BAJA, "nombre": "Pedro", "estado": "baja",
                 "empresa_id": EMPRESA_CON}],
+    DNI_PREINGRESO: [{"id": str(uuid4()), "nombre": "Lucía", "estado": "preingreso",
+                      "empresa_id": EMPRESA_CON}],
     DNI_SIN_CLIENTES: [{"id": EMP_SIN_CLI, "nombre": "Sofía", "estado": "activo",
                         "empresa_id": EMPRESA_SIN}],
     DNI_AMBIGUO: [{"id": str(uuid4()), "nombre": "Ana", "estado": "activo",
@@ -154,10 +158,10 @@ async def _rechazo(svc: IdentificacionService, dni: str) -> AppError:
 
 
 class TestRechazoUnico:
-    """🔴 Los CINCO motivos salen exactamente igual. Se comparan ENTRE SÍ y no contra un literal:
-    un literal escrito a mano dejaría pasar el caso en que los cinco cambian juntos."""
+    """🔴 Los SEIS motivos salen exactamente igual. Se comparan ENTRE SÍ y no contra un literal:
+    un literal escrito a mano dejaría pasar el caso en que todos cambian juntos."""
 
-    @pytest.mark.parametrize("dni", [DNI_INEXISTENTE, DNI_BAJA, DNI_AMBIGUO])
+    @pytest.mark.parametrize("dni", [DNI_INEXISTENTE, DNI_BAJA, DNI_AMBIGUO, DNI_PREINGRESO])
     async def test_todos_dan_el_mismo_status_code_y_mensaje(self, repo, dni) -> None:
         base = await _rechazo(_svc(repo), DNI_INEXISTENTE)
         otro = await _rechazo(_svc(repo), dni)
@@ -258,12 +262,22 @@ class TestPayloadMinimo:
 class TestRegistroDeIntentos:
     @pytest.mark.parametrize("dni,esperado", [
         (DNI_INEXISTENTE, "sin_coincidencia"), (DNI_BAJA, "inactivo"),
-        (DNI_AMBIGUO, "ambiguo"),
+        (DNI_AMBIGUO, "ambiguo"), (DNI_PREINGRESO, "preingreso"),
     ])
     async def test_cada_motivo_queda_registrado_con_su_nombre(self, repo, dni, esperado) -> None:
-        """Hacia afuera son uno; adentro son cuatro. Sin esto el log no sirve para investigar."""
+        """Hacia afuera son uno; adentro se distinguen. Sin esto el log no sirve para investigar."""
         await _rechazo(_svc(repo), dni)
         assert repo.intentos[0]["resultado"] == esperado
+
+    async def test_a33_el_preingreso_no_es_un_inactivo(self, repo) -> None:
+        """🔴 A3.3 (migración 121): el forense distingue "todavía no entró" de "se fue" — y el
+        par en el MISMO test es el contraste que impide que un resolver que loguee todo como
+        'preingreso' (o todo como 'inactivo') pase en verde. El usuario ve el mismo rechazo:
+        eso lo fija TestRechazoUnico, que suma el preingreso a su parametrize."""
+        await _rechazo(_svc(repo), DNI_PREINGRESO)
+        await _rechazo(_svc(repo), DNI_BAJA)
+        assert repo.intentos[0]["resultado"] == "preingreso"
+        assert repo.intentos[1]["resultado"] == "inactivo"
 
     async def test_sin_clientes_en_el_sistema_se_registra_como_sin_clientes(self, repo) -> None:
         """🔴 SALIÓ DEL PARAMETRIZE PORQUE DEJÓ DE DEPENDER DEL DNI (migración 108). El motivo ya

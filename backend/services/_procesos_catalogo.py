@@ -33,7 +33,7 @@ _META: List[tuple[str, str, str]] = [
     ("onboarding_instancias", "onboarding", "Onboarding"),
     ("offboarding_instancias", "offboarding", "Offboarding"),
     ("vacantes", "vacantes", "Vacantes"),
-    ("empleado_capacitacion", "capacitaciones", "Capacitaciones"),
+    ("empleado_capacitacion", "capacitaciones", "Formación"),
     ("objetivos", "objetivos", "Objetivos"),
 ]
 

@@ -125,7 +125,7 @@ export function CapacitacionModal({ open, onClose, onSuccess, editing }: Props) 
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Editar capacitación" : "Nueva capacitación"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Editar formación" : "Nueva formación"}</DialogTitle>
         </DialogHeader>
 
         <form id="cap-form" onSubmit={handleSubmit} noValidate>
@@ -173,7 +173,7 @@ export function CapacitacionModal({ open, onClose, onSuccess, editing }: Props) 
                 onChange={(e) => setForm((p) => ({ ...p, obligatoria: e.target.checked }))}
                 className="h-4 w-4 cursor-pointer rounded border border-input accent-primary"
               />
-              <Label htmlFor="cap_obligatoria" className="cursor-pointer font-normal">Capacitación obligatoria</Label>
+              <Label htmlFor="cap_obligatoria" className="cursor-pointer font-normal">Formación obligatoria</Label>
             </div>
 
           </div>
@@ -183,7 +183,7 @@ export function CapacitacionModal({ open, onClose, onSuccess, editing }: Props) 
         <DialogFooter>
           <Button type="button" variant="outline" className="min-h-11" onClick={onClose} disabled={submitting}>Cancelar</Button>
           <Button type="submit" form="cap-form" className="min-h-11" disabled={submitting}>
-            {submitting ? "Guardando..." : isEditing ? "Guardar cambios" : "Crear capacitación"}
+            {submitting ? "Guardando..." : isEditing ? "Guardar cambios" : "Crear formación"}
           </Button>
         </DialogFooter>
       </DialogContent>

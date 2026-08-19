@@ -21,7 +21,7 @@ export default function CapacitacionesPage() {
   return (
     <div>
       <PageHeader
-        title="Capacitaciones"
+        title="Formación"
         description="Gestión del catálogo de cursos y asignaciones a empleados"
       />
 

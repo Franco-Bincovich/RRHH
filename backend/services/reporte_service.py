@@ -115,7 +115,7 @@ class ReporteService:
             "ausentismo":        f"Ausentismo por área — {periodo_str(mes_e, anio_e)}",
             "listado_vac_aus":   f"Vacaciones y ausencias — {periodo_str(mes_e, anio_e)}",
             "presupuesto":       f"Presupuesto vs real — {periodo_str(mes_e, anio_e)}",
-            "capacitacion":      f"Capacitación por área — {periodo_str(mes_e, anio_e)}",
+            "capacitacion":      f"Formación por área — {periodo_str(mes_e, anio_e)}",
             "auditoria":         f"Auditoría — {periodo_str(mes_e, anio_e)}",
         }
 

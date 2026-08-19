@@ -26,7 +26,7 @@ es un número que sale distinto y que nadie puede verificar a ojo.
 | **PUT** | `EmpleadoUpdate.estado` | el Literal de los 5 del CHECK — **y NADA más** |
 | **activar** | `EmpleadoUpdate(estado="activo")` | es preingreso · la fecha de ingreso ya ocurrió |
 | **efectivizar** | `dar_de_baja(...)` | instancia abierta · no es baja · no es preingreso · fecha |
-| **nómina** | `dar_de_baja(...)` | 🔴 **NINGUNA** — ver la nota abajo |
+| **nómina** | `dar_de_baja(...)` | ✅ **preingreso rechazado y reportado (A3.3)** — ver la nota abajo. Sigue sin las otras tres guardas de `efectivizar` (instancia abierta, no es baja, fecha) para el resto de los casos. |
 | **contratar** | `EmpleadoCreate(**campos)` con `estado='preingreso'` | candidato de la empresa · con vacante · en `oferta` · postulación `activa` · fecha de ingreso NO pasada |
 
 🔴 **`contratar` ES EL PRIMER CAMINO DE LA FORMA `splat`, Y EL BARRIDO NO LO VEÍA.** Se agregó el
@@ -44,12 +44,17 @@ a cualquiera a cualquier estado del CHECK sin verificar nada: puede volver un `a
 eso existe; pero mientras el botón de activar no esté en la UI (bloque B), es también el único
 camino disponible, que es exactamente lo que no queremos que se vuelva costumbre.
 
-🔴 **NÓMINA ESCRIBE `baja` SIN NINGUNA GUARDA DE ESTADO.** `nomina_empleados_service` llama a
-`dar_de_baja` con solo mirar si la fila del CSV trae `Fecha Baja`. Un preingreso que aparezca en
-el archivo con esa columna cargada pasa a `baja` sin pasar por ninguna de las guardas de
-`_offboarding_efectivizar`. Está declarado acá, con su razón, **y NO se arregló en A3.2 a
-propósito**: cambiarlo altera el comportamiento de un import que RRHH corre todos los meses, y
-esa es una decisión de producto, no un bug de tipos. Ver `docs/DEUDA-TECNICA.md`.
+✅ **NÓMINA YA NO ESCRIBE `baja` SOBRE UN PREINGRESO — CERRADO EN A3.3.** Hasta A3.2,
+`nomina_empleados_service` llamaba a `dar_de_baja` con solo mirar si la fila del CSV traía
+`Fecha Baja`, sin pasar por ninguna de las guardas de `_offboarding_efectivizar`: un preingreso
+con esa columna cargada pasaba a `baja` sin que nadie lo hubiera activado nunca. Desde A3.3, la
+fila se SALTEA y se REPORTA con motivo —`services/_nomina_empleados_baja.py::
+rechazar_baja_de_preingreso`, que corre ANTES de cualquier escritura de la fila— en vez de darla
+de baja. **No es equivalente a las cuatro guardas de `efectivizar`**: es UNA guarda puntual para
+el caso "nunca entró"; un activo o un empleado en licencia con `Fecha Baja` sigue pasando a baja
+sin más chequeo que ese, que es el comportamiento de siempre para el import mensual que RRHH
+corre. Decisión de producto, no un bug de tipos — está escrita en el encabezado de
+`_nomina_empleados_baja.py` y en `docs/DEUDA-TECNICA.md` (cerrada, no reabrir).
 """
 
 
@@ -65,8 +70,9 @@ _CAMINOS: dict = {
         "ACTIVAR — POST /api/empleados/{id}/activar. Tres guardas, la de fecha es el corazón.",
     ("services/_offboarding_efectivizar.py", "dar_de_baja", "empleado_repo.dar_de_baja"):
         "EFECTIVIZAR — POST /api/offboarding/{id}/efectivizar. Cuatro guardas.",
-    ("services/nomina_empleados_service.py", "dar_de_baja", "self._emp_repo.dar_de_baja"):
-        "NÓMINA — import mensual. 🔴 SIN guarda de estado (ver el encabezado).",
+    ("services/_nomina_empleados_baja.py", "dar_de_baja", "emp_repo.dar_de_baja"):
+        "NÓMINA — import mensual. ✅ Guarda de preingreso desde A3.3 (ver el encabezado); "
+        "mudado de nomina_empleados_service.py al cortar por seam (estaba en 149/150).",
     ("services/_candidato_contratar_mapeo.py", "splat",
      "EmpleadoCreate(**campos) con estado='preingreso'"):
         "CONTRATAR — POST /api/candidatos/{id}/contratar. CINCO guardas, todas antes de "
@@ -151,11 +157,15 @@ class TestSonExactamenteCincoCaminos:
         """Efectivizar y nómina llaman a `dar_de_baja`, que es el único sitio que escribe
         'baja'. Es lo que garantiza que una baja SIEMPRE lleve `fecha_egreso`: una segunda
         escritura por su cuenta podría poner el estado sin la fecha, y esa persona se caería
-        del headcount y del conteo de bajas de todos los meses a la vez."""
+        del headcount y del conteo de bajas de todos los meses a la vez.
+
+        `services/_nomina_empleados_baja.py`, no `nomina_empleados_service.py`, desde A3.3: el
+        `dar_de_baja` de nómina se mudó al cortar el service por seam (estaba en 149/150) — es
+        el MISMO camino, en el archivo donde vive la guarda que lo protege."""
         callers = {e.archivo for e in escrituras()
                    if e.forma == "dar_de_baja" and "repositories/" not in e.archivo}
         assert callers == {
-            "services/_offboarding_efectivizar.py", "services/nomina_empleados_service.py",
+            "services/_offboarding_efectivizar.py", "services/_nomina_empleados_baja.py",
         }
 
 

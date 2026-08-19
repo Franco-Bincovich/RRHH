@@ -69,7 +69,7 @@ export function AsignacionesCapTable({
       <TableHeader>
         <TableRow>
           <TableHead>Empleado</TableHead>
-          <TableHead>Capacitación</TableHead>
+          <TableHead>Formación</TableHead>
           <TableHead>Estado</TableHead>
           {mostrarEmpresa && <TableHead>Empresa</TableHead>}
           <TableHead>Fecha límite</TableHead>

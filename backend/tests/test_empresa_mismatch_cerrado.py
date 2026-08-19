@@ -59,7 +59,9 @@ class _FakeAsignacionRepo:
     def find_empresa_for_empleado(self, empleado_id):
         return EMPRESA_A if str(empleado_id) == str(EMPLEADO_A) else None
 
-    def save(self, cap_id, emp_id, empresa_id, *_a):
+    def save(self, cap_id, emp_id, empresa_id, *_a, **_kw):
+        # `**_kw` absorbe los cuatro keyword-only de la mig 116 (proyecto/anio/mes/nombre_libre):
+        # este fake mira la EMPRESA, no el payload — de eso se ocupa test_capacitacion_columnas_http.
         return SimpleNamespace(id=str(uuid4()), empresa_id=empresa_id)
 
 

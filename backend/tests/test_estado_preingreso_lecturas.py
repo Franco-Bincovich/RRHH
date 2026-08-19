@@ -58,6 +58,13 @@ _DECLARADAS: dict = {
     ("repositories/sucesion_repo.py", "eq", "activo"): (1, _A),
     ("repositories/sucesion_repo.py", "in_", "ESTADOS_EN_PLANTILLA"): (1, _PLANTILLA),
     ("services/_dashboard_alertas.py", "eq", "activo"): (1, _A),
+    # A6: el panel "Requiere tu atención". El `eq preingreso` es la PRIMERA lectura del repo que
+    # busca preingresos A PROPÓSITO (las demás los excluyen): la alerta de ingresos próximos.
+    # El `eq activo` es el universo del fin de período de prueba — un preingreso no está en
+    # prueba todavía, una baja ya no.
+    ("services/_dashboard_atencion_calculadas.py", "eq", "preingreso"):
+        (1, "¿el ingreso está por ocurrir? — la alerta se apaga cuando el pase a activo ocurre"),
+    ("services/_dashboard_atencion_calculadas.py", "eq", "activo"): (1, _A),
     ("services/_dashboard_headcount.py", "eq", "activo"): (1, _A),
     ("services/_dashboard_kpis.py", "eq", "activo"): (2, _A),
     ("services/_reporte_anual_metricas.py", "eq", "activo"): (1, _A),
@@ -104,14 +111,20 @@ _INDETERMINADAS: dict = {
 # ── Comparaciones en Python contra un literal del CHECK ─────────────────────────────────────
 _PYTHON: dict = {
     ("services/_identificacion_resolver.py", "activo"):
-        (1, "link público de horas: != 'activo' → rechaza también al preingreso. 🔴 El motivo "
-            "que loguea sigue siendo 'inactivo' y NO distingue al preingreso: darle uno propio "
-            "exige ensanchar el CHECK de intentos_identificacion.resultado (migración 121, "
-            "pendiente). Ver DEUDA-TECNICA."),
+        (1, "link público de horas: != 'activo' → rechaza también al preingreso. ✅ Desde A3.3 "
+            "el preingreso ya NO cae acá: lo intercepta la comparación de abajo, con motivo "
+            "forense propio (migración 121). Esta queda como la red para baja/licencia/etc."),
+    ("services/_identificacion_resolver.py", "preingreso"):
+        (1, "A3.3: motivo forense PROPIO en intentos_identificacion — el log distingue 'se fue' "
+            "de 'todavía no entró'. El usuario ve el MISMO rechazo único; la distinción vive "
+            "solo en la tabla. Exige el CHECK de la 121 (el insert forense traga el 23514)."),
     ("services/_offboarding_efectivizar.py", "baja"):
         (1, "¿ya se fue? — 409 EMPLEADO_YA_DE_BAJA"),
     ("services/_offboarding_efectivizar.py", "ESTADO_PREINGRESO"):
         (1, "¿todavía no entró? — 409 EMPLEADO_PREINGRESO, ANTES de _validar_fecha (A3.2)"),
+    ("services/_nomina_empleados_baja.py", "ESTADO_PREINGRESO"):
+        (1, "A3.3: Fecha Baja del CSV sobre un preingreso — la fila se SALTEA y se reporta, "
+            "nunca se da de baja. Ver el encabezado del módulo."),
     ("services/asignaciones_service.py", "ESTADOS_EN_PLANTILLA"):
         (1, "¿puedo asignarlo a un proyecto? — pasó de '¿es baja?' a '¿está en plantilla?'"),
     ("services/asignaciones_service.py", "ESTADO_PREINGRESO"):
@@ -179,11 +192,14 @@ class TestLosCriteriosSiguenSiendoLosQueSon:
     """Ancla SEMÁNTICA, no de conteo: qué pregunta hace cada grupo. Un cambio de criterio que
     conservara la cantidad de comparaciones pasaría los tests de arriba y rojearía acá."""
 
-    def test_el_grupo_a_son_quince_y_preguntan_por_activo(self) -> None:
-        """Los 15 quedaron correctos GRATIS con la migración 120 (un preingreso no es 'activo').
-        Que sigan siendo 15 es lo que dice que nadie los "arregló" de más."""
+    def test_el_grupo_a_son_dieciseis_y_preguntan_por_activo(self) -> None:
+        """Los 15 originales quedaron correctos GRATIS con la migración 120 (un preingreso no es
+        'activo'); que siguieran siendo 15 era lo que decía que nadie los "arregló" de más.
+        El 16.º es de A6 (19/8/2026): el universo del fin de período de prueba en
+        `_dashboard_atencion_calculadas.py` — nació DESPUÉS de la 120, con el criterio ya
+        correcto, no es un retoque de los quince."""
         grupo_a = sum(c for (_f, _m, v), (c, cr) in _DECLARADAS.items() if cr is _A)
-        assert grupo_a == 15
+        assert grupo_a == 16
         assert all(v == "activo" for (_f, _m, v), (_c, cr) in _DECLARADAS.items() if cr is _A)
 
     def test_los_dos_sitios_de_plantilla_usan_la_constante_compartida(self) -> None:

@@ -49,6 +49,7 @@ from routers.mail_historial import router as mail_historial_router
 from routers.plantillas import router as plantillas_router
 from routers.importacion_nomina import router as importacion_nomina_router
 from routers.importacion_objetivos import router as importacion_objetivos_router
+from routers.importacion_formacion import router as importacion_formacion_router
 from routers.integraciones import router as integraciones_router
 from routers.reportes import router as reportes_router
 from routers.sucesion import router as sucesion_router
@@ -156,6 +157,7 @@ def registrar(app: FastAPI) -> None:
     app.include_router(mail_historial_router, prefix="/api/mails", tags=["plantillas"])  # historial de envíos
     app.include_router(importacion_nomina_router, prefix="/api/importacion", tags=["importacion"])
     app.include_router(importacion_objetivos_router, prefix="/api/importacion", tags=["importacion"])
+    app.include_router(importacion_formacion_router, prefix="/api/importacion", tags=["importacion"])
     app.include_router(integraciones_router, prefix="/api/integraciones", tags=["integraciones"])
     app.include_router(configuracion_router, prefix="/api/configuracion", tags=["configuracion"])
     app.include_router(screening_router, prefix="/api/screening", tags=["screening"])

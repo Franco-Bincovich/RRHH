@@ -12,9 +12,10 @@ excepción, cinco mensajes distintos serían un typo de distancia y el rechazo �
 impide que esta ruta se vuelva un oráculo de dnis— dependería de la disciplina de quien edite.
 La contracara de esa regla vive en el encabezado de `identificacion_service.py`.
 
-Los cinco resultados SÍ se distinguen acá adentro y se guardan en
+Los seis resultados de rechazo SÍ se distinguen acá adentro y se guardan en
 `intentos_identificacion.resultado`: el log es lo único que le permite a RRHH ver que alguien
-está probando dnis. Los valores son los del CHECK de esa tabla (migración 104).
+está probando dnis. Los valores son los del CHECK de esa tabla (migración 104; 'preingreso'
+lo sumó la 121, en A3.3).
 """
 from typing import Optional, Tuple
 
@@ -33,7 +34,7 @@ def decidir(repo, limitador, dni: str) -> Tuple[str, Optional[dict]]:
         dni: El valor ya normalizado (sin espacios) que mandó el cliente.
 
     Returns:
-        `(resultado, empleado|None)`. `resultado` es uno de los cinco motivos o `OK`. El empleado
+        `(resultado, empleado|None)`. `resultado` es uno de los seis motivos o `OK`. El empleado
         vuelve incluso en el rechazo por `sin_clientes`, para que el log pueda decir a quién
         correspondía.
     """
@@ -56,6 +57,14 @@ def decidir(repo, limitador, dni: str) -> Tuple[str, Optional[dict]]:
         return "ambiguo", None
 
     empleado = filas[0]
+    # 🔴 'preingreso' ANTES que el genérico, con motivo forense PROPIO (migración 121): el log
+    # es lo único que distingue "se fue" de "todavía no entró", y un preingreso probando el
+    # link antes de su fecha es un caso normal, no una baja que investigar. El USUARIO ve el
+    # MISMO rechazo único que todos — la distinción vive solo en la tabla.
+    # ⚠️ El valor exige el CHECK de la 121 corrido: `registrar_intento` traga el 23514 y la
+    # fila forense se perdería en silencio. El orden de deploy está en la migración.
+    if empleado.get("estado") == "preingreso":
+        return "preingreso", None
     if empleado.get("estado") != "activo":
         return "inactivo", None
     if not repo.hay_clientes_activos():

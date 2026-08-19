@@ -19,6 +19,7 @@ from schemas.importacion_nomina_empleados import (
     ImportacionNominaEmpleadosResult, build_create, build_update,
 )
 from services import _nomina_empleados_transforms as tx
+from services._nomina_empleados_baja import aplicar_vinculos, rechazar_baja_de_preingreso
 from services._nomina_parsers import email_valido
 from services._import_csv import abrir
 from services._audit_payloads_import import payload_importacion_nomina
@@ -121,6 +122,8 @@ class NominaEmpleadosImportService:
         # el diff de auditoría necesita (viene del mismo SELECT con joins que find_by_id).
         validadas = self._catalogos.areas_validadas()
         existente = self._emp_repo.find_by_dni(f["dni"], UUID(empresa_id))
+        # A3.3: Fecha Baja sobre un preingreso saltea la fila ENTERA, antes de escribir nada.
+        rechazar_baja_de_preingreso(existente, f["fecha_baja"])
         if existente:
             self._empleados.update_empleado(
                 UUID(existente.id), build_update(f, UUID(area_id), email), UUID(empresa_id),
@@ -133,17 +136,8 @@ class NominaEmpleadosImportService:
                 UUID(empresa_id), areas_validadas=validadas, auditar=False)
             empleado_id, nuevo = empleado.id, True
 
-        if f["fecha_baja"]:
-            self._emp_repo.dar_de_baja(empleado_id, f["fecha_baja"], UUID(empresa_id))
-        # Gerencia → proyecto (crear/reusar) + asignar el empleado (no si está de baja).
-        # empresa_id del empleado: es la que acabamos de escribir, no hace falta consultarla.
-        self._proyectos.resolver_y_asignar(
-            empresa_id, f["gerencia"], empleado_id, f["roles"][0], bool(f["fecha_baja"]),
-            empresa_id)
-        # Fecha Ingreso Reconocida → cesión (idempotente por fecha, best-effort).
-        self._cesiones.crear_si_falta(empleado_id, empresa_id, f["fecha_ingreso_reconocida"])
-        # Superior: se ANOTA acá y se resuelve DESPUÉS del loop — el jefe puede estar en una fila
-        # posterior. Anotarlo desde acá es lo que garantiza que solo se resuelvan las filas que
-        # de verdad se escribieron, aun si el presupuesto corta el archivo. Ver `_nomina_superiores`.
-        self._superiores.registrar(fila, empleado_id, empresa_id, f)
+        # Baja + proyecto + cesión + superior: el tramo vive en `_nomina_empleados_baja` (el
+        # archivo estaba en 149/150 y la guarda de A3.3 no entraba). Los porqués se mudaron ahí.
+        aplicar_vinculos(self._emp_repo, self._proyectos, self._cesiones, self._superiores,
+                         f, fila, empleado_id, empresa_id)
         return nuevo, faltan, empleado_id

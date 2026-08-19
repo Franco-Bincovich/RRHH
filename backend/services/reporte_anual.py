@@ -90,7 +90,7 @@ def generate_anual_consolidado(anio: int, empresa_id: Optional[UUID] = None) -> 
             "Actividad del año": {
                 "Solicitudes de vacaciones": solicitudes_vacaciones,
                 "Días de vacaciones tomados": dias_vacaciones,
-                "Capacitaciones completadas": cap_completadas,
+                "Formaciones completadas": cap_completadas,
                 "Objetivos terminados": obj_terminados,
             },
         },

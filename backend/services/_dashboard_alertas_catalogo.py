@@ -38,8 +38,8 @@ BLOQUEOS: Tuple[Bloqueo, ...] = (
             "nadie. Cargá los ítems en Inventario.",
             "/inventario"),
     Bloqueo("capacitaciones", "sin_capacitaciones", "warning",
-            "No hay capacitaciones en el catálogo: no se puede asignar ninguna a un empleado. "
-            "Cargalas en Capacitaciones.",
+            "No hay formaciones en el catálogo: no se puede asignar ninguna a un empleado. "
+            "Cargalas en Formación.",
             "/capacitaciones"),
     Bloqueo("presupuesto_areas", "sin_presupuesto", "warning",
             "No hay presupuestos por área cargados: el reporte de presupuesto vs. real no puede "

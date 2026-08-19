@@ -1,3 +1,7 @@
+// 🔴 `entidad_capacitadora`, `modalidad` y `tipo` son string LIBRE, sin union de literales, a
+// propósito: las columnas son text sin CHECK (mig 116) y el vocabulario real no se conoce — el
+// Excel trae UN solo valor de cada una. Angostar el tipo acá inventaría un contrato que el
+// backend y la base no tienen. Espejo del mismo comentario en schemas/capacitacion.py.
 export interface Capacitacion {
   id: string
   empresa_id: string
@@ -6,6 +10,9 @@ export interface Capacitacion {
   descripcion: string | null
   categoria: string | null
   duracion_horas: number | null
+  entidad_capacitadora: string | null
+  modalidad: string | null
+  tipo: string | null
   obligatoria: boolean
   activo: boolean
   created_at: string
@@ -17,6 +24,9 @@ export interface CapacitacionCreate {
   descripcion?: string
   categoria?: string
   duracion_horas?: number
+  entidad_capacitadora?: string
+  modalidad?: string
+  tipo?: string
   obligatoria: boolean
 }
 
@@ -25,6 +35,9 @@ export interface CapacitacionUpdate {
   descripcion?: string
   categoria?: string
   duracion_horas?: number
+  entidad_capacitadora?: string
+  modalidad?: string
+  tipo?: string
   obligatoria?: boolean
   activo?: boolean
 }
@@ -50,6 +63,11 @@ export interface Asignacion {
   nombre_libre: string | null
   area_id: string | null
   area_nombre: string | null
+  // ⚠️ `anio` y `mes` son string, no number: las columnas son TEXT (mig 116) porque el Excel
+  // los trae a mano y sin normalizar ("2026", "marzo"/"Marzo"). No parsearlos.
+  proyecto: string | null
+  anio: string | null
+  mes: string | null
   estado: "pendiente" | "en_curso" | "completado"
   fecha_asignacion: string | null   // "YYYY-MM-DD"
   fecha_limite: string | null
@@ -67,16 +85,24 @@ export interface AsignacionCreate {
   empleado_id: string
   fecha_asignacion?: string
   fecha_limite?: string
+  proyecto?: string
+  anio?: string
+  mes?: string
+  nombre_libre?: string
 }
 
 export interface AsignacionUpdate {
   estado?: "pendiente" | "en_curso" | "completado"
   fecha_limite?: string
   fecha_completado?: string
+  proyecto?: string
+  anio?: string
+  mes?: string
+  nombre_libre?: string
 }
 
 export interface AsignacionListResponse {
-  items: Asignacion[]
+  items: Asignacion[]
   /**
    * 🔴 HOY `total === items.length` porque este listado NO pagina: el backend devuelve todo.
    * El día que pagine (sesiones 2–5), `total` pasa a ser "cuántas hay" y `items` una página.

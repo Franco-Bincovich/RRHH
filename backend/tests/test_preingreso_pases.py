@@ -381,17 +381,14 @@ class TestElLinkPublicoConUnPreingreso:
         resultado, _ = self._decidir("preingreso")
         assert resultado != "ok"
 
-    def test_el_motivo_que_se_loguea_HOY_es_inactivo_y_no_uno_propio(self) -> None:
-        """🔴 ESTE TEST FIJA UNA LIMITACIÓN CONOCIDA, NO EL COMPORTAMIENTO DESEADO.
-        El forense no distingue "se fue" de "todavía no entró": los dos quedan como `inactivo`.
-        Darle motivo propio al preingreso exige ensanchar el CHECK de
-        `intentos_identificacion.resultado` (hoy: ok · sin_coincidencia · inactivo · sin_clientes
-        · ambiguo · bloqueado), o sea una migración, que quedó fuera de A3.2.
-        ⚠️ Y no alcanza con escribir el valor nuevo sin la migración: `registrar_intento` se
-        traga todo error a propósito, así que la fila del log DESAPARECERÍA en silencio — peor
-        que la etiqueta imprecisa. Cuando corra la migración 121, este test cambia de valor
-        esperado y es lo que va a recordar que hay que hacerlo."""
-        assert self._decidir("preingreso")[0] == "inactivo"
+    def test_el_motivo_que_se_loguea_es_preingreso_no_inactivo(self) -> None:
+        """✅ CERRADO EN A3.3 (migración 121) — este test fijaba la limitación conocida
+        ("el forense no distingue 'se fue' de 'todavía no entró': los dos quedan como
+        `inactivo`") y ahora fija lo contrario: el motivo propio.
+        ⚠️ El valor nuevo exige el CHECK de la 121 corrido — `registrar_intento` se traga todo
+        error a propósito, así que sin la migración la fila del log DESAPARECERÍA en silencio.
+        Ver `services/_identificacion_resolver.py` y `docs/DEUDA-TECNICA.md`."""
+        assert self._decidir("preingreso")[0] == "preingreso"
 
     def test_un_activo_pasa(self) -> None:
         """CONTRASTE: sin esto, un `return "inactivo"` incondicional pasaría los dos de arriba."""

@@ -108,16 +108,40 @@ septiembre**, objetivo interno **6 de septiembre** para dejarle dos semanas de c
 infra. Los otros tres documentos de plan quedaron atrás y **cada uno declara a quién supersede**:
 `ORDEN-SESIONES-CODIGO.md` (11/8, bloques A–L) → `PLAN-DE-TRABAJO.md` (5/8) → `Plan de trabajo`
 (v2, 27/7). Ninguno se borra; todos son registro. **Para "qué se hace ahora" manda el primero.**
+⚠️ El plan del 6/9 describe la Fase 0 y el congelamiento del 21/8 como TRABAJO FUTURO — ya
+ocurrieron. Esta sección se reescribió el 19/8/2026 con el estado real; el documento en sí no
+se tocó (es de Franco).
 
-**Fases 0–3 y bloques A, B, C, D, E, F, G, H, L y J5 COMPLETOS**, con commits en `main`.
+**🟢 EL BLOQUE A (backend de seguridad/estado) ESTÁ CERRADO.** Sesiones A2 a A6 más A3.3, todas
+sobre `main`, sin frontend:
 
-- **Fase 0** (blindaje pre-testing) · **Fase 1** (reportes + KPIs) · **Fase 2** (barrera de empresa) · **Fase 3** (deuda estructural).
-- **BLOQUE A — Seguridad.** A1 assessment apagado también en backend · A2 rate limiting por franjas · A3 validación de `X-Empresa-Id` contra empresas reales · A4 nonce OAuth de un solo uso. Ver "Hardening (Bloque A)".
-- **BLOQUE B — Filtros y exports.** B1 matriz · B2 fundación · B3 filtro por área · B4 filtro por proyecto · B5/B6 filtros expuestos y rango de fechas · B7 límite de export con aviso. Ver "Filtros y exports (Bloque B)".
-- **BLOQUE C — Compromisos del directorio.** C1 historial salarial · C2 exports de nómina y auditoría · C3 entrevista de salida · C4 domicilio desglosado (mig 081) · C5 Áreas al sidebar. **C6 (plantillas públicas/privadas) NO está hecho** — sigue sin alcance definido.
-- **BLOQUES D–L** (agosto). **E** Comunicación: envío de plantillas de mail, destinatario libre e historial · **F** CV screening de punta a punta (Gmail → clasificador) · **G/H** export en 25 módulos, subobjetivos, import de objetivos por Excel · **L** clientes como catálogo GLOBAL (migs 108/109) · **J5** desmontaje de `ev_*` y drop de las 11 tablas muertas (mig 112). El bloque **B de objetivos se CANCELÓ**: `responsable_id → users` es el modelo correcto, los objetivos son tablero del equipo de RRHH.
+- **A2/A3** — el estado `preingreso`: CHECK ensanchado (mig 120), 18 lecturas de `empleados.estado`
+  auditadas y correctas gratis, `POST /api/empleados/{id}/activar` (guardas: es preingreso · la
+  fecha de ingreso ya ocurrió), `POST /api/offboarding/{id}/efectivizar` con guarda de
+  preingreso (quien nunca entró no figura como baja del mes).
+- **A3.3** — cierra el bloque: import de nómina ya NO da de baja a un preingreso (lo saltea y
+  reporta) · el link público distingue en el forense "se fue" de "todavía no entró" (mig 121,
+  **escrita, no corrida**) · este documento, remedido.
+- **A4.2** — el puente candidato→empleado: `POST /api/candidatos/{id}/contratar` (candidato en
+  oferta → legajo en `preingreso`, cinco guardas).
+- **A5 / A5.1 / A5.2** — módulo de Formación (ex-Capacitaciones): renombre de texto visible, las
+  7 columnas del Excel de formación cableadas de punta a punta, e import completo por Excel
+  (`POST /api/importacion/formacion/preview` y `/confirmar`) con matcheo de personas, traducción
+  de estado y duplicados reportados en vez de romper.
+- **A6** — el panel "Requiere tu atención" del dashboard: `GET /api/dashboard/atencion` (alertas
+  calculadas + manuales de agenda, en una sola respuesta) y `POST /api/dashboard/atencion/resolver`.
 
-**Lo que sigue (Fase 0 del plan del 6/9):** los 5 IDs tipados `str` que deberían ser `UUID` · centralizar los 3 buckets de Storage · decidir si el link público de horas va a v2 · después, el diagnóstico grande y el lote único de migraciones (113 en adelante), que **congela el schema el 21/8**.
+**🔴 TODO LO ANTERIOR TIENE BACKEND CON TESTS VERDES Y CERO BOTÓN EN EL FRONT.** El bloque B
+(frontend) todavía no arrancó. La lista completa de qué necesita UI, qué archivos están al
+límite de línea y qué decisiones de producto quedaron abiertas está en
+`docs/DEUDA-TECNICA.md`, sección **"Cierre del bloque A (19/8/2026)"** — es el punto de partida
+del bloque B, léela antes de escribir el primer componente.
+
+**Bloques previos, completos, con commits en `main`** (sin cambios desde la última medición):
+Fases 0–3 (blindaje, reportes+KPIs, barrera de empresa, deuda estructural) · Bloques B
+(filtros/exports) · C (compromisos del directorio, salvo C6 sin alcance) · D–L (agosto: mails,
+CV screening, exports en 25 módulos, clientes globales, desmontaje de `ev_*`). El bloque B DE
+OBJETIVOS se canceló (decisión de producto, ver más abajo).
 
 ### 🔴 EL PROBLEMA #1 NO ES CÓDIGO: RRHH no cargó datos
 Verificado contra el catálogo vivo (**12/8/2026**): **2 empresas, 31 empleados** (19 + 12), y casi todo lo demás vacío:
@@ -195,7 +219,8 @@ Vive en `utils/`, no en un router (antes el `Limiter` estaba en `routers/auth.py
 
 - **`client_ip(request)`** — key_func propia. `X-Forwarded-For` se construye de izquierda a derecha: las entradas de la **derecha** las escribió nuestra infraestructura y son confiables; las de la izquierda las pudo inventar el cliente. Con N proxies confiables la IP real es `hops[-N]` (`settings.trusted_proxy_hops`). Si el header trae menos saltos de los declarados, cae a la IP de la conexión. **NO usar `slowapi.util.get_ipaddr`**: busca `"X_FORWARDED_FOR"` con guiones bajos, que no es un header HTTP válido, así que esa rama nunca corre y siempre devuelve `request.client.host`, en silencio.
 - **Baseline por middleware** — `SlowAPIMiddleware` aplica `default_limits = ["300/minute"]` a **todo endpoint sin decorador propio**, sin tocar un solo router. Un endpoint decorado **ignora** el baseline (`override_defaults=True` es el default de `limiter.limit`): el decorador reemplaza, no se suma.
-- **Franjas por riesgo** (de más restrictiva a menos): público sin auth 10/min (5/min el submit de assessment) · login 5/min, refresh 20/min, cambiar-password 10/hora · **import 10/hora compartido** (`scope="import"`, 5 endpoints) · **export 30/hora compartido** (`scope="export"`) · `POST /reportes/generar` 20/hora (llama a Claude, cada request cuesta plata) · `/health` **exento**.
+- **Franjas por riesgo** (de más restrictiva a menos): público sin auth 10/min (5/min el submit de assessment) · login 5/min, refresh 20/min, cambiar-password 10/hora · **import 10/hora compartido** (`scope="import"`, **9 endpoints** medidos el 19/8/2026: los 2 de cada uno de objetivos/formación/nómina-empleados/nómina-costos + el 1 de evaluaciones) · **export 100/hora POR USUARIO compartido** (`scope="export"`, vía el decorador único `limite_export` de `utils/rate_limit.py` — **28 endpoints** decorados con `@limite_export`, uno por router; reemplazó un "30/hora por IP" que agotaba los 30 en minutos con 10 empresas y modo consolidado) · `POST /reportes/generar` 20/hora (llama a Claude, cada request cuesta plata) · `/health` **exento**.
+  > ⚠️ **No hay una franja "export 30/hora" separada de `limite_export`**: son el mismo mecanismo. Una sesión anterior (A5.1) leyó el `@limite_export` de `capacitaciones.py` como "otra cosa" porque no encontró el literal `scope="export"` repetido en cada router — está centralizado en `utils/rate_limit.py:105`, no repetido.
 - **Handler 429 propio** — `rate_limit_handler` arma el body con `global_error_handler`, el mismo que produce todos los errores de la app, así el 429 no puede divergir del contrato `{error, message, code}` que el front espera. Agrega `Retry-After`; si no se puede calcular, sale sin el header (perder un header es aceptable, convertir el 429 en 500 no).
 
 > 🚨 **`headers_enabled=False` es A PROPÓSITO, no un olvido — no lo "corrijas".**
@@ -233,12 +258,15 @@ La purga de vencidos corre en el camino que **crea** states (el que genera las f
 ```
 backend/
 ├── main.py              ← entrada + middleware (71 líneas; el registro se fue a registro_routers.py)
-├── registro_routers.py  ← registrar(app): monta 64 de los 66 routers (2 los gatea un flag). Es
+├── registro_routers.py  ← registrar(app): 77 app.include_router() (75 incondicionales + 2
+│                          gateados por flag: assessment_enabled, horas_publico_enabled). Es
 │                          FUNCIÓN, no módulo con efectos: los flags se leen AL LLAMARLA, así un
-│                          test puede encenderlos y re-registrar.
+│                          test puede encenderlos y re-registrar. 🔴 197/200 líneas — el próximo
+│                          router NUEVO exige dividirlo primero (ver "Líneas" más abajo).
 ├── config/settings.py   ← única fuente de config y env (Settings() se instancia en import)
-├── routers/             ← 66 archivos, 225 rutas montadas, sin lógica (límite 80 líneas)
-├── services/            ← 192 archivos de lógica de negocio (215 con submódulos) (límite 150)
+├── routers/             ← 81 archivos (límite 80 líneas cada uno)
+├── services/            ← 231 archivos de lógica de negocio (257 con submódulos: export/ 8,
+│                          mailer/ 6, reportes/ 12) (límite 150)
 │   ├── _empleado_scope.py     ← barrera de empresa/ownership sobre el empleado target (Fase 2)
 │   ├── _adjunto_padres.py     ← resolver de la entidad padre de un adjunto (Fase 2)
 │   ├── _empleados_write.py    ← altas/ediciones de empleado, extraído por límite
@@ -264,7 +292,7 @@ backend/
 │   ├── mailer/                ← punto de salida ÚNICO de mails; expone solo enviar_mail
 │   ├── export/                ← punto de salida ÚNICO de exports; expone build_export
 │   └── reportes/              ← un submódulo por familia + _common.py
-├── repositories/        ← 82 archivos, único acceso a DB (límite 100, satélites incluidos)
+├── repositories/        ← 111 archivos, único acceso a DB (límite 100, satélites incluidos)
 │   ├── cliente_repo.py        ← catálogo GLOBAL (sin empresa); `existe_nombre` compara TODO el catálogo en Python, NO con .ilike()
 │   ├── _hora_row.py           ← mapper de horas_proyecto con lookups por lote (anti-N+1)
 │   ├── identificacion_repo.py, sesion_horas_repo.py ← DNI → empleado · nonces de sesión del link público
@@ -280,16 +308,32 @@ backend/
 │                          ni `signedURL`. Al pasar a S3 se toca ESTE archivo y ninguno más.
 ├── schemas/             ← Pydantic in/out (+ empleado_out.py y _provincias.py)
 ├── utils/               ← permisos.py, errors.py, logger.py, rate_limit.py, empresas_cache.py
-├── db/schema.sql        ← FUENTE DE RECONSTRUCCIÓN (52 tablas, 133 FK, 141 índices standalone)
-├── migrations/          ← 110 archivos SQL; backend va por 112 (075–077 viven en migracionAWS/)
+├── db/schema.sql        ← FUENTE DE RECONSTRUCCIÓN (55 tablas — CREATE TABLE contados el
+│                          19/8/2026; FKs/índices no remedidos esta sesión)
+├── migrations/          ← 121 archivos SQL (075–077 viven en migracionAWS/)
 ├── ruff.toml            ← config de ruff (reemplazó pyproject.toml, por Vercel)
 ├── pytest.ini           ← config de pytest (asyncio_mode=auto, testpaths=tests)
-└── tests/               ← 157 archivos test_*.py + _postgrest_schema.py y _barrido_callers.py (helpers)
+└── tests/               ← 211 archivos .py: 192 `test_*.py` + 19 helpers `_*.py` (exentos del
+                            límite de 200 los primeros, NO los segundos — ver "Líneas")
 ```
 
 **Env vars obligatorias** (sin default → rompen el import si faltan): `supabase_url`, `supabase_anon_key`, `supabase_service_key`, `jwt_secret`, `anthropic_api_key`, `resend_api_key`. Con default: `assessment_enabled`, **`horas_publico_enabled`** (`false` — enciende el link público de carga de horas), `trusted_proxy_hops`, `rate_limit_storage_uri`, `supabase_timeout` (30 s), Google OAuth, `frontend_url`, `allowed_origins`. La migración a AWS agrega `database_url`.
 
-**Migraciones y salud de base.** La última del backend es **112** (`drop_tablas_muertas`), 110 archivos SQL en total. ✅ **Verificado objeto por objeto contra el catálogo el 12/8/2026: NO hay pendientes.** Corridas la 080, 089, 102–112. Producción tiene 52 tablas, ninguna `ev_*`, y `clientes` ya sin `empresa_id` (2 índices, 0 FKs salientes, los 4 clientes y su hora imputada intactos).
+**Migraciones y salud de base.** 121 archivos SQL. La última ESCRITA es **121**
+(`intentos_identificacion_preingreso`, A3.3) — **NO corrida a la fecha de este documento**, la
+corre Franco. La última CORRIDA en producción sigue siendo la **120** (`empleados_estado_preingreso`,
+17/8/2026: agrega `'preingreso'` al CHECK de `empleados.estado`). ⚠️ **Sin MCP de Supabase en
+las últimas sesiones, este párrafo NO está reverificado contra el catálogo VIVO** desde el
+12/8/2026 (112, `drop_tablas_muertas`, 52 tablas en ese momento) — lo que sigue es una
+proyección a partir de qué migraciones se ESCRIBIERON después y su propio texto dice si
+requieren correrse antes de la siguiente para no fallar. Migraciones 113–121 escritas y (según
+sus propios encabezados) pensadas para correr en orden antes del congelamiento de schema:
+**113** (perfiles_puesto, recategorizaciones, eventos_agenda, +3 tablas → 55) · 114 (post-deploy
+del lote 113) · 115 (índices de escala) · 116 (11 columnas finales + `empleado_id` nullable en
+`empleado_capacitacion`) · 117 (categoria en recategorizaciones) · 118 (índices de paginación) ·
+119 (objetivo.tipo + areas array) · 120 (estado preingreso) · **121 (preingreso en el forense
+del link público — escrita en A3.3, no corrida)**. `db/schema.sql` (el documento de
+reconstrucción, no producción) ya refleja 113–121 completas, incluida la 121.
 > ⚠️ **La 109 estuvo pendiente y este documento lo afirmó al revés durante unas horas.** Decía "108–112 todas corridas" tras verificar **solo el conteo de tablas** (52 = 52), y la 109 no crea ni borra tablas —borra una columna y tres objetos—, así que era invisible a esa comprobación. **Contar tablas no alcanza para decir que `schema.sql` refleja producción: hay que mirar el objeto que la migración toca.** Es el tercer desfasaje del encabezado de `schema.sql`; la regla que sale de los tres está escrita ahí. Las 072/073/074 corrigieron drift. **Destructivas: la 084** (`DROP COLUMN modalidad_contratacion` y `nivel`), **la 109** (drop de `clientes.empresa_id`) **y la 112** (drop de 11 tablas). `000_run_all.sql` **deprecado con guard que aborta**. Detalle de reconstrucción desde cero en **`docs/DEPLOY.md`**.
 
 **Contraste schema.sql ↔ catálogo vivo (reverificado el 12/8/2026, ya con la 112 corrida):**
@@ -494,7 +538,11 @@ Dedup por DNI. Dos flujos, ambos gateados `Seccion.IMPORTACION + WRITE` (solo ad
 
 ### Superficie de filtros hoy (verificada por introspección de `app.routes`, 12/8/2026)
 
-**26 endpoints con parámetro `formato`** (= exports). **18 aceptan además filtros propios**; los
+**26 endpoints con parámetro `formato`** (= exports), inventario del 12/8/2026 — **no
+reverificado en detalle esta sesión, pero el conteo de `@limite_export` mide 28 el 19/8**
+(formación/import sumó un router de import que NO exporta, así que la diferencia no es 1:1;
+antes de confiar en el "26" para una tarea puntual, remedir por introspección de `app.routes`
+como indica el propio método de abajo). **18 aceptan además filtros propios**; los
 otros 8 exportan el listado entero (empresas, equipo, offboarding, onboarding, onboarding/
 templates, períodos, usuarios y el export de un reporte por id). Los que llevan filtros:
 
@@ -546,7 +594,9 @@ Antes cada export pedía `page_size=100000` y armaba el archivo con lo que entra
 
 Es **constante de módulo, NO variable de entorno**: subirlo exige revisar los techos de tiempo, y eso es una decisión, no configuración.
 
-⚠️ **Alcance real, para no venderlo de más.** En los exports **paginados** (empleados, vacaciones, ausencias, auditoría) el total llega por `count="exact"` y el control actúa **antes** de cargar nada grande. En los **cuatro que no paginan** (capacitaciones, inventario ítems, inventario asignaciones, objetivos) el repo no expone un conteo, así que el chequeo corre sobre la lista ya traída — igual que antes: no hay regresión, pero un volumen que muera por timeout muere antes de llegar acá. Cerrarlo del todo pide un `contar()` por repo: tanda propia.
+⚠️ **Alcance real, para no venderlo de más.** En los exports **paginados** (empleados, vacaciones, ausencias, auditoría) el total llega por `count="exact"` y el control actúa **antes** de cargar nada grande. En los que no paginan el repo no expone un conteo, así que el chequeo corre sobre la lista ya traída — igual que antes: no hay regresión, pero un volumen que muera por timeout muere antes de llegar acá.
+> ✅ **Las asignaciones de capacitación/formación SALIERON de esta lista (mig 118, la 118_indices_paginacion.sql).** `AsignacionRepo.find_all` pagina con `.range()` + `count="exact"` desde la sesión de escala; el CLAUDE.md viejo las tenía adentro y ya no corresponde.
+> **Los que siguen sin paginar (no reverificado más allá de estos tres esta sesión):** el **catálogo** de capacitaciones/formación (`CapacitacionService.exportar` — catálogo chico por diseño, no es el caso de riesgo del 5.000), inventario ítems, inventario asignaciones, objetivos. Cerrarlo del todo pide un `contar()` por repo: tanda propia.
 
 ---
 
@@ -931,22 +981,36 @@ contra el catálogo el 12/8/2026).
 - **"Compatibilidad con una posición"** (sucesión): feature nunca construida, no deuda técnica. El ranking es por assessment genérico. Cuando RRHH la reclame, definir qué significa compatibilidad antes de improvisar.
 
 ### Tests
-- **Backend: 3260 passed** en **160 archivos `test_*.py`** (+ `tests/_postgrest_schema.py` y `tests/_barrido_callers.py`, que son helpers, no tests). `pytest -q` desde `backend/` con `venv`. *(Remedido el 12/8/2026.)*
-  > 📌 **La secuencia, para que 3234 no parezca una caída inexplicada:** 3280 (11/8) → **3229** (J5a: se borraron los tests del módulo `ev_*`) → **3228** (J5b: se cerró la excepción con vencimiento de los triggers) → **3234** (los 6 tests del fix ASCII de `requirements`). Bajó porque se borró código, no porque se perdieran tests.
-- **Front: `npm test` (= `vitest run`) — 647 tests en 53 archivos, verdes en las DOS plataformas.** *(Windows verificado el 12/8/2026.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Backend: 4004 passed** en **192 archivos `test_*.py`** (+ **19 helpers** `tests/_*.py`, que no son tests — 211 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 19/8/2026, al cerrar A3.3 / el bloque A.)*
+  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → **4004** (A3.3). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
+- **Front: `npm test` (= `vitest run`) — 740 tests en 62 archivos, verdes.** *(Windows verificado el 19/8/2026; la Mac quedó verificada por última vez el 12/8 con 647. Sin sesión de frontend desde A6, este número no se movió.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
   > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
-- **Los QUINCE barridos estructurales** — cada uno cubre automáticamente lo que se agregue después, y **todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una extracción rota devolvería 0 elementos y pasaría en el vacío:
+- **Son 19 barridos estructurales conocidos** (16 backend + 3 front), renumerados el 19/8/2026 —
+  la lista anterior tenía dos numeraciones distintas conviviendo (1–11 y 12–15 fuera de orden) y
+  le faltaban 3 barridos que ya existían. **Cada uno cubre automáticamente lo que se agregue
+  después, y todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una
+  extracción rota devolvería 0 elementos y pasaría en el vacío:
   1. `tests/test_paridad_list_export.py` — el export acepta los mismos Query que el listado.
   2. `tests/test_limite_export.py::TestTodosLosExportsChequean` — todo export llama a `verificar_limite_export`.
   3. `tests/test_selects_repos.py` — **todo** `select` con embed del repo, validado con AST contra `db/schema.sql`. Descubrimiento por introspección, nunca una lista.
   4. `tests/test_espejo_permisos.py` — `frontend/services/permisos.ts` contra `utils/permisos.py`: secciones, acciones, roles y `MANDOS_MEDIOS_SECCIONES`.
   5. `tests/test_callers_huerfanos.py` — símbolos de `services/`+`repositories/` que nadie llama, y endpoints montados que el front nunca pide.
   6. `tests/test_mappers_ejercitados.py` · 7. `tests/test_contrato_repos.py` · 8. `tests/test_auditoria_coherente.py` · 9. `tests/test_nombres_definidos.py` · 10. `tests/test_triggers_updated_at.py`.
-  11. `frontend/components/layout/nav-config.test.ts` — `NAV_GROUPS` contra `seccionDeRuta`.
-  15. **`tests/test_acceso_a_datos.py` (NUEVO, 12/8/2026)** — **solo `repositories/` habla con la base.** Barre por AST todas las capas que no son repos y rojea ante un `.table()`/`.rpc()` no declarado. 🔑 Las excepciones son **4 FAMILIAS** (`reporte`, `dashboard`, `organigrama`, `procesos`), no 19 archivos, y **un test impide que pasen de 5**: una lista larga es la que nadie mira (K2/K7). Guarda de mínimo ≥250 archivos + contracara (`repositories/` tiene que seguir consultando). El inventario de las 58 declaradas vive en `docs/handoff-aws/ACCESO-A-DATOS.md`.
-  14. **`tests/test_storage_punto_unico.py` (NUEVO, 12/8/2026)** — ningún service ni repo nombra un bucket ni llama al SDK de Storage: todo pasa por `integrations/storage.py`. **Por AST, no por texto**, porque varios docstrings dicen "bucket privado 'documentos'" y un grep los marcaría — hay un quinto test que fija que la prosa NO cuenta, para que nadie "arregle" el falso positivo borrando documentación. Guarda de mínimo ≥150 archivos.
-  12. **`frontend/services/barridoFront.test.ts` (NUEVO, 10/8/2026)** — exports de `services/` que ningún componente importa, en dos buckets (huérfano / solo-tests), con excepciones declaradas con razón y verificadas en las dos direcciones.
-  13. **`frontend/app/contrasteTokens.test.ts` (NUEVO, 11/8/2026)** — ratio WCAG de los pares fondo/texto del bloque `.dark` de `globals.css`, parseando hex y oklch del archivo real. Vigila que la paleta oscura siga siendo legible: la regla de `option` (`globals.css:154-158`) no elige colores, los toma prestados de `--popover`/`--popover-foreground`, así que un ajuste de paleta puede volver el popup ilegible **sin tocar la regla**. Ancla la fórmula con valores literales antes de medir nada (blanco/negro = 21:1 por hex y por oklch), porque una conversión mal implementada daría ratios inventados que pasan siempre. Excepción declarada y verificada en las dos direcciones: `--primary`/`--primary-foreground` da **3.68:1** en oscuro (6.18:1 en claro) — el botón primario, anotado en `docs/DEUDA-TECNICA.md` §9.
+  11. **`tests/test_acceso_a_datos.py`** — **solo `repositories/` habla con la base.** Barre por AST todas las capas que no son repos y rojea ante un `.table()`/`.rpc()` no declarado. 🔑 Las excepciones son **4 FAMILIAS** (`reporte`, `dashboard`, `organigrama`, `procesos`), no 19 archivos, y **un test impide que pasen de 5**: una lista larga es la que nadie mira (K2/K7). Guarda de mínimo ≥250 archivos + contracara. El inventario de las 58 declaradas vive en `docs/handoff-aws/ACCESO-A-DATOS.md`.
+  12. **`tests/test_storage_punto_unico.py`** — ningún service ni repo nombra un bucket ni llama al SDK de Storage: todo pasa por `integrations/storage.py`. **Por AST, no por texto**, porque varios docstrings dicen "bucket privado 'documentos'" y un grep los marcaría — hay un quinto test que fija que la prosa NO cuenta. Guarda de mínimo ≥150 archivos.
+  13. **`tests/test_columnas_candidatos.py`** (A4.1) — toda columna de `candidatos` está EXPUESTA o DECLARADA con razón, en las dos direcciones (código→base Y base→código). El primero de su clase: los otros barridos de columnas viajan código→base y no ven una columna que el `select("*")` trae y nadie usa.
+  14. **`tests/test_columnas_capacitaciones.py`** (A5.1) — mismo patrón, generalizado a 2 tablas (`capacitaciones`, `empleado_capacitacion`) con el concepto extra de `DERIVADOS` (campos resueltos por join, no columnas). El patrón cubre 3 tablas / 4 de los ~30 archivos con `select("*")` — quedan ~26 sin barrido.
+  15. **`tests/test_estado_preingreso_lecturas.py`** (A2/A3) — toda COMPARACIÓN contra `empleados.estado` en el código, declarada con su criterio (grupo A "¿está activo hoy?", plantilla, alta, baja).
+  16. **`tests/test_estado_preingreso_escrituras.py`** (A2/A3.3) — hermano del anterior: toda ESCRITURA de `empleados.estado`. Los SEIS caminos (alta, PUT, activar, efectivizar, nómina, contratar) con sus guardas o la ausencia declarada.
+  17. **`frontend/components/layout/nav-config.test.ts`** — `NAV_GROUPS` contra `seccionDeRuta`.
+  18. **`frontend/services/barridoFront.test.ts`** — exports de `services/` que ningún componente importa, en dos buckets (huérfano / solo-tests), con excepciones declaradas con razón y verificadas en las dos direcciones.
+  19. **`frontend/app/contrasteTokens.test.ts`** — ratio WCAG de los pares fondo/texto del bloque `.dark` de `globals.css`, parseando hex y oklch del archivo real. Vigila que la paleta oscura siga siendo legible: la regla de `option` (`globals.css:154-158`) no elige colores, los toma prestados de `--popover`/`--popover-foreground`, así que un ajuste de paleta puede volver el popup ilegible **sin tocar la regla**. Ancla la fórmula con valores literales antes de medir nada (blanco/negro = 21:1 por hex y por oklch). Excepción declarada y verificada en las dos direcciones: `--primary`/`--primary-foreground` da **3.68:1** en oscuro (6.18:1 en claro) — el botón primario, anotado en `docs/DEUDA-TECNICA.md` §9.
+  > ⚠️ **Esta lista es una FOTO, compilada por grep del marcador "BARRIDO ESTRUCTURAL" + memoria
+  > de sesión, no una re-auditoría exhaustiva de cada archivo.** Puede faltar alguno con un
+  > docstring que no use ese marcador literal. La forma de reconstruirla de cero, si hace falta:
+  > `grep -ril "BARRIDO ESTRUCTURAL" backend/tests/` + revisar a mano los que no usan ese texto
+  > (`test_paridad_list_export.py`, `test_limite_export.py`, `test_triggers_updated_at.py` no lo
+  > usan literal y hay que buscarlos por su propósito).
 
 > 🔴 **POR QUÉ HICIERON FALTA DOS BARRIDOS DE CÓDIGO MUERTO Y NO ALCANZA UNO.** El #5 empareja
 > *(path, método)* contra los **literales de path escritos en el front**; el #12 mira **quién
@@ -976,3 +1040,40 @@ contra el catálogo el 12/8/2026).
 - **Commits los hace Franco manualmente** (nunca Claude Code). Commits y push desacoplados: no hay push hasta que Franco lo decida. Preferir commits por sub-sesión.
 - Formato convencional (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`, `test:`).
 - Solo `main` y `origin/main`. Sin ramas sueltas.
+
+---
+
+## 🔴 POR QUÉ ESTE ARCHIVO SE PUDRE, Y LA PROPUESTA PARA QUE DEJE DE HACERLO
+
+Este documento se leyó al empezar cada sesión desde A2 hasta A6 y ninguna lo corrigió — no por
+descuido puntual, sino porque **actualizarlo compite con la tarea real de la sesión y siempre
+pierde**: nadie abre un CLAUDE.md de 1000+ líneas a mitad de un bugfix para remedir 15 conteos
+que no tienen que ver con lo que está arreglando. El resultado, siete sesiones después, fue esta
+misma corrección: siete números falsos, tres de ellos contradictorios entre sí (la cantidad de
+archivos de test aparecía de tres formas distintas en el mismo archivo).
+
+**La propuesta — una sola cosa, sin depender de que alguien se acuerde:**
+
+Un **barrido estructural que compare los números que este documento AFIRMA contra los que el
+repo TIENE**, en el mismo espíritu que los otros 19: `tests/test_claude_md_no_miente.py`
+(exento del límite de 200 por vivir en `tests/`, como el resto de los `test_*.py`). Parsea este
+archivo buscando un puñado de patrones ya estables ("N archivos SQL en `migrations/`", "N
+archivos en `routers/`", "Backend: N passed", el número del CHECK de `empleados.estado`) con una
+tabla de regex→medición real (`len(Path("migrations").glob("*.sql"))`, un conteo de rutas,
+etc.), y **rojea si divergen más de un margen razonable** (la suite de tests, por ejemplo, va a
+moverse SIEMPRE que se agregue un test — el barrido no puede exigir igualdad exacta ahí, solo
+que el número no esté a cientos de distancia).
+
+Por qué esto y no otra cosa:
+- **No depende de memoria ni de disciplina** — es lo que ya funciona para los otros 19 barridos:
+  el CI (o `pytest -q` local) lo hace fallar solo, no hace falta que nadie se acuerde de mirar.
+- **Es barato de mantener**: el barrido no necesita saber SI un número es correcto, solo que
+  coincida con lo medible — la corrección del texto la sigue haciendo una sesión humana (o de
+  Claude), el barrido solo avisa que hace falta.
+- **No exige actualizar CLAUDE.md en cada sesión** (eso es lo que ya falló siete veces): exige
+  que la PRÓXIMA sesión que toque algo medido por el barrido no pueda cerrar en verde sin
+  corregir el número, que es un incentivo que sí funciona en este repo — es literalmente el
+  patrón que sostiene los otros 19.
+- **No se construye acá.** Es la propuesta, no la implementación: decidir qué números vale la
+  pena anclar (no todos: "31 empleados" es dato de producción y no se ancla, como pidió esta
+  sesión) es una decisión de una tanda propia, con el archivo completo por delante.

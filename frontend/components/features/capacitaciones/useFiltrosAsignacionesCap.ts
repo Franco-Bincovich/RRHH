@@ -71,7 +71,7 @@ export function useFiltrosAsignacionesCap(onFiltroChange: () => void) {
     ...(empleados.length > 0 ? [{ tipo: "select" as const, label: "Empleado", value: empleadoFiltro, opcionTodos: "Todos los empleados",
       onChange: (v: string) => { setEmpleadoFiltro(v); onFiltroChange() },
       opciones: empleados.map((e) => ({ value: e.id, label: `${e.apellido}, ${e.nombre}` })) }] : []),
-    ...(capacitaciones.length > 0 ? [{ tipo: "select" as const, label: "Capacitación", value: capacitacionFiltro, opcionTodos: "Todas las capacitaciones",
+    ...(capacitaciones.length > 0 ? [{ tipo: "select" as const, label: "Formación", value: capacitacionFiltro, opcionTodos: "Todas las formaciones",
       onChange: (v: string) => { setCapacitacionFiltro(v); onFiltroChange() },
       opciones: capacitaciones.map((c) => ({ value: c.id, label: c.nombre })) }] : []),
     { tipo: "select" as const, label: "Estado", value: estadoFiltro, opcionTodos: "Todos los estados",

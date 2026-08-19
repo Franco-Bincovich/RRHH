@@ -43,21 +43,12 @@ async def list_eventos(
                           incluir_resueltas=incluir_resueltas)
 
 
-# 🔴 `/pendientes` va ANTES de `/{id}`: si fuera después, FastAPI resuelve por ORDEN DE
-# DECLARACIÓN y "pendientes" matchearía como el path param `id: UUID` → 422 en vez de la lista.
-@router.get("/pendientes", response_model=list[EventoResponse], dependencies=[Depends(require_permission(SECCION, Accion.READ))])
-async def eventos_pendientes(
-    request: Request,
-    service: EventoAgendaService = Depends(_service),
-) -> list[EventoResponse]:
-    """Los que ya entraron en su ventana de aviso. Sin paginar y sin resueltos.
-
-    Es lo que va a consumir la tarjeta del dashboard (sesión 2). Sale de acá y no de
-    `dashboard_service` porque el dato es de este módulo: el panel lo va a leer, no lo calcula.
-    """
-    return service.pendientes(get_empresa_id(request), *sujeto(request))
-
-
+# ✅ Acá vivió `GET /pendientes` ("lo que va a consumir la tarjeta del dashboard, sesión 2").
+# Esa sesión llegó (A6, 19/8/2026) y la tarjeta consume `GET /api/dashboard/atencion`, que
+# devuelve los eventos pendientes JUNTO con las alertas calculadas: este endpoint quedaba
+# huérfano para siempre y se BORRÓ. La lógica no se movió: `EventoAgendaService.pendientes`
+# sigue acá y la consume el panel. (Con la ruta se fue también la nota sobre declarar
+# `/pendientes` antes de `/{id}` — sin ruta literal, no hay colisión que ordenar.)
 @router.get("/{id}", response_model=EventoResponse, dependencies=[Depends(require_permission(SECCION, Accion.READ))])
 async def get_evento(
     id: UUID,

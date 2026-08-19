@@ -42,7 +42,13 @@ def construir_filas_export(items: List[AsignacionResponse]) -> List[dict]:
             "Empleado": a.empleado_nombre or a.nombre_libre or "",
             "Empleado vinculado": "Sí" if a.empleado_id else "No",
             "Área": a.area_nombre,
-            "Capacitación": a.capacitacion_nombre,
+            "Formación": a.capacitacion_nombre,
+            # Los tres del Excel de formación (mig 116). `anio`/`mes` salen como el texto que la
+            # base guarda ("2026", "marzo"): formatearlos acá inventaría una normalización que el
+            # dato no tiene.
+            "Proyecto": a.proyecto,
+            "Año": a.anio,
+            "Mes": a.mes,
             "Estado": _ESTADO_LABEL.get(a.estado, a.estado),
             "Fecha asignación": _fecha(a.fecha_asignacion),
             "Fecha límite": _fecha(a.fecha_limite),

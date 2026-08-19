@@ -51,13 +51,19 @@ class AsignacionRepo:
         res = q.maybe_single().execute()
         return _build([res.data])[0] if res.data else None
 
-    def save(self, capacitacion_id: str, empleado_id: str, empresa_id: str, fecha_asignacion: Optional[date], fecha_limite: Optional[date]) -> AsignacionResponse:
-        """Inserta asignación y retorna el registro enriquecido."""
+    def save(self, capacitacion_id: str, empleado_id: Optional[str], empresa_id: str, fecha_asignacion: Optional[date], fecha_limite: Optional[date],
+             *, proyecto: Optional[str] = None, anio: Optional[str] = None, mes: Optional[str] = None, nombre_libre: Optional[str] = None,
+             estado: str = "pendiente", fecha_completado: Optional[str] = None) -> AsignacionResponse:
+        """Inserta asignación y retorna el registro enriquecido. `anio`/`mes` son TEXT (mig 116).
+        `empleado_id` None = fila de nombre libre (solo el import escribe así). `estado` default
+        pendiente = el alta manual de siempre; el import pasa el traducido del Excel."""
         res = supabase_admin.table(_T).insert({
             "capacitacion_id": capacitacion_id, "empleado_id": empleado_id, "empresa_id": empresa_id,
-            "estado": "pendiente",
+            "estado": estado,
             "fecha_asignacion": str(fecha_asignacion) if fecha_asignacion else None,
             "fecha_limite": str(fecha_limite) if fecha_limite else None,
+            "fecha_completado": fecha_completado,
+            "proyecto": proyecto, "anio": anio, "mes": mes, "nombre_libre": nombre_libre,
         }).execute()
         if not res.data:
             logger.error("Supabase insert vacío en empleado_capacitacion")
@@ -82,3 +88,8 @@ class AsignacionRepo:
         """Retorna empresa_id del empleado, o None si no existe."""
         res = supabase_admin.table("empleados").select("empresa_id").eq("id", empleado_id).maybe_single().execute()
         return str(res.data["empresa_id"]) if res.data else None
+
+    def empleados_por_empresa(self, empresa_id: str) -> list:
+        """El padrón de la empresa para el matcheo del import: UNA query, nunca una por fila."""
+        return (supabase_admin.table("empleados").select("id, nombre, apellido")
+                .eq("empresa_id", empresa_id).execute().data or [])

@@ -30,6 +30,7 @@ const VINCULADA: Asignacion = {
   capacitacion_id: "c1", capacitacion_nombre: "Higiene y seguridad",
   empleado_id: "emp1", empleado_nombre: "Ana Gómez", nombre_libre: null,
   area_id: "ar1", area_nombre: "Sistemas", estado: "completado",
+  proyecto: null, anio: "2026", mes: "marzo",
   fecha_asignacion: null, fecha_limite: null, fecha_completado: null,
   certificado_url: null, created_at: "2026-08-13T10:00:00Z",
 }

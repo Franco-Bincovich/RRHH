@@ -8,15 +8,15 @@ tiempo, levantar el error único y emitir la sesión. `_PISO_SEGUNDOS` NO se mov
 monkeypatchean sobre este módulo.
 
 🔴 RECHAZO ÚNICO: HAY UN SOLO `raise` EN TODO EL ARCHIVO.
-Los CINCO motivos por los que una identificación puede no prosperar —el dni no existe, existe
-pero el empleado está de baja, existe pero su empresa no tiene clientes que cargar, matchea en
-más de una empresa, o superó el límite de intentos— salen por el MISMO `AppError`: mismo status,
-mismo code, mismo mensaje. Desde afuera son un solo estado. Que haya un único punto de salida no
-es estilo: es lo que hace imposible que alguien agregue un sexto motivo con un mensaje propio y
-abra un oráculo sin darse cuenta. Mismo criterio que `_oauth_state.consumir` y que la barrera de
-empresa de la Fase 2.
+Los SEIS motivos por los que una identificación puede no prosperar —el dni no existe, existe
+pero el empleado está de baja, existe pero todavía no ingresó (preingreso, A3.3), existe pero
+el sistema no tiene clientes que cargar, matchea en más de una empresa, o superó el límite de
+intentos— salen por el MISMO `AppError`: mismo status, mismo code, mismo mensaje. Desde afuera
+son un solo estado. Que haya un único punto de salida no es estilo: es lo que hizo que el sexto
+motivo (preingreso) entrara SIN abrir un oráculo — cambió el log, no la respuesta. Mismo
+criterio que `_oauth_state.consumir` y que la barrera de empresa de la Fase 2.
 
-Adentro los cinco SÍ se distinguen, y se guardan en `intentos_identificacion.resultado`: el log
+Adentro los seis SÍ se distinguen, y se guardan en `intentos_identificacion.resultado`: el log
 es lo único que le permite a RRHH ver que alguien está probando dnis.
 
 🔴 EL TIMING TAMBIÉN ES UN CANAL, Y SE NIVELA.
