@@ -133,7 +133,7 @@ class _EmpleadoRepo:
         self.updates.append(emp.dni or "")
         return emp                                # mismos valores → diff vacío
 
-    def dar_de_baja(self, empleado_id, fecha_egreso, empresa_id=None):
+    def dar_de_baja(self, empleado_id, fecha_egreso, empresa_id=None, motivo=None):
         return True
 
 

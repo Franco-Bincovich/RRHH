@@ -123,7 +123,7 @@ class _EmpleadoRepo(_Contador):
         self._reg("update")
         return _empleado(str(id), "30111222")
 
-    def dar_de_baja(self, empleado_id, fecha_egreso, empresa_id=None):
+    def dar_de_baja(self, empleado_id, fecha_egreso, empresa_id=None, motivo=None):
         self._reg("dar_de_baja")
         return True
 

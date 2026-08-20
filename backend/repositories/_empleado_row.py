@@ -1,10 +1,15 @@
 """
 Primitivas compartidas del repositorio de empleados: la tabla, el SELECT con joins, el filtro de
-empresa, el filtro de ESTADO, el ORDEN del listado y el mapper de fila. Aisladas para que el repo
-de lectura y el de escritura las compartan sin que ninguno de los dos pase su límite de líneas.
+empresa, el filtro de ESTADO y el mapper de fila. Aisladas para que el repo de lectura y el de
+escritura las compartan sin que ninguno de los dos pase su límite de líneas.
 
-`with_empresa`, `filtro_estado` y `ordenado` tienen la MISMA forma —toman una query y devuelven
-una query— y por eso viven juntas: son las tres piezas que `find_all` compone sobre el SELECT.
+`with_empresa` y `filtro_estado` tienen la MISMA forma —toman una query y devuelven una query— y
+por eso viven juntas: son las piezas que `find_all` compone sobre el SELECT.
+
+⚠️ `ordenado` era la tercera y se mudó a `repositories/_empleado_orden.py` el 20/8/2026, al dejar
+de ser un `return` de una línea: con los dos órdenes por fecha pasó a ser un vocabulario, una
+tabla de traducción y una regla sobre el desempate. Las dos de acá siguen siendo UN predicado
+cada una. El porqué completo del corte está en el encabezado de aquel archivo.
 """
 from typing import Optional
 from uuid import UUID
@@ -46,33 +51,13 @@ def filtro_estado(q, estado: Optional[str]):
     ⚠️ Un `estado` explícito manda SIEMPRE, `"preingreso"` incluido: el filtro puede apuntar a
     cualquier valor del CHECK. Esto cambia el default, no esconde ninguna fila.
 
-    Vive acá y no en `empleado_repo` por la misma razón que `with_empresa` y `ordenado`: toma una
-    query y devuelve una query. No importa `supabase_admin` —recibe la query ya construida—, así
+    Vive acá y no en `empleado_repo` por la misma razón que `with_empresa`: toma una query y
+    devuelve una query. No importa `supabase_admin` —recibe la query ya construida—, así
     que no se escapa del parcheo por módulo que usan los tests del repo.
     """
     if estado:
         return q.eq("estado", estado)
     return q.neq("estado", ESTADO_PREINGRESO)
-
-
-def ordenado(q):
-    """Aplica el orden TOTAL del listado: apellido, nombre y el desempate por `id`.
-
-    🔴 HASTA EL 14/8/2026 ESTE LISTADO PAGINABA SIN NINGÚN `.order()`. Un `.range()` sobre un
-    SELECT sin orden le deja a Postgres elegir el orden de las filas, y no tiene por qué elegir
-    el mismo en dos consultas distintas: la página 2 podía repetir a alguien de la 1 o saltearlo.
-    No daba error ni se veía en los tests — se veía como un empleado que "no está en la lista".
-
-    🔴 EL `id` NO ES DECORACIÓN. `apellido, nombre` no es un orden TOTAL: en el padrón de escala
-    411 de 1.005 personas comparten los dos campos con alguien. Entre empatados, Postgres tampoco
-    garantiza un orden estable entre ejecuciones, así que sin el desempate el bug de arriba
-    sobrevive en su versión chica.
-
-    ⚠️ El `id` va ASCENDENTE. El índice que sirve esta consulta —`idx_empleados_empresa_apellido
-    (empresa_id, apellido, nombre, id)`, migración 118— se creó con esa forma exacta; pedir el
-    desempate al revés obligaría a un nodo de sort que el índice existe para evitar.
-    """
-    return q.order("apellido").order("nombre").order("id")
 
 
 def row(r: dict) -> EmpleadoResponse:

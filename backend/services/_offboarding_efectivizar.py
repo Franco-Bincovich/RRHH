@@ -40,6 +40,7 @@ from typing import Optional
 from uuid import UUID
 
 from services._audit_payloads_offboarding import payload_efectivizacion_baja
+from services._offboarding_fecha_egreso import validar_fecha
 from utils.errors import AppError
 from utils.estados_empleado import ESTADO_PREINGRESO
 from utils.logger import logger
@@ -107,14 +108,27 @@ def efectivizar(repo, empleado_repo, audit, instancia_id: UUID, fecha_egreso: da
             "EMPLEADO_PREINGRESO", 409,
         )
 
-    _validar_fecha(fecha_egreso, empleado.fecha_ingreso)
+    validar_fecha(fecha_egreso, empleado.fecha_ingreso)
 
     # El ORDEN de las dos escrituras importa: primero el empleado, después la instancia. Si
     # fallara la segunda, queda un empleado de baja con su offboarding todavía abierto — visible y
     # reintentable. Al revés quedaría la instancia cerrada con la persona contando como activa, o
     # sea el bug original de vuelta y sin ninguna pantalla que lo muestre.
+    # 🔴 EL MOTIVO VIAJA CON LA BAJA, y el precio está aceptado: `empleados.motivo_baja` es
+    # TEXTO LIBRE (migración 064, para las bajas históricas del CSV de nómina) y desde ahora
+    # recibe TAMBIÉN los valores del vocabulario cerrado de `offboarding_instancias.
+    # motivo_egreso` (CHECK de 7). **Van a convivir las dos formas en la misma columna.**
+    # Se acepta porque las dos contestan la misma pregunta —por qué se fue— y el único lector
+    # (`_reporte_movimientos`) ya trata el vacío con `or "Sin especificar"`, así que no
+    # distingue el origen ni lo necesita.
+    # Lo que esto CIERRA: hasta hoy toda baja hecha por offboarding salía como "Sin
+    # especificar" en el reporte de Altas y bajas, teniendo el motivo guardado en la fila de
+    # al lado. El dato existía y no llegaba a la única pantalla que lo pregunta.
+    # ⚠️ No hay fallback ni default: si la instancia no trae motivo, la columna no se toca
+    # (ver `_empleado_baja_repo.dar_de_baja`). Inventar "otro" sería afirmar algo que nadie dijo.
     if not empleado_repo.dar_de_baja(str(instancia["empleado_id"]), fecha_egreso,
-                                     UUID(empresa_instancia) if empresa_instancia else None):
+                                     UUID(empresa_instancia) if empresa_instancia else None,
+                                     instancia.get("motivo_egreso")):
         raise AppError(*_NO_ENCONTRADO)
     repo.marcar_completado(str(instancia_id), empresa_id)
 
@@ -125,25 +139,3 @@ def efectivizar(repo, empleado_repo, audit, instancia_id: UUID, fecha_egreso: da
         "Baja efectivizada",
         extra={"instancia_id": str(instancia_id), "empleado_id": str(instancia["empleado_id"])},
     )
-
-
-def _validar_fecha(fecha_egreso: date, fecha_ingreso: date) -> None:
-    """Las dos guardas de fecha. Separadas del cuerpo solo por largo; el orden no importa entre sí.
-
-    🔴 LA DE FECHA FUTURA NO ES UNA VALIDACIÓN DE FORMA — ES EL BUG QUE ESTE MÓDULO ARREGLA.
-    Aceptar una fecha que todavía no ocurrió reinstala exactamente el comportamiento viejo: alguien
-    cargaría el egreso previsto para dentro de un mes, el empleado quedaría `estado='baja'` hoy, y
-    volveríamos a tener gente trabajando que no cuenta en el headcount. La baja se efectiviza
-    cuando ocurrió, no cuando se sabe que va a ocurrir; para lo segundo está `fecha_ultimo_dia`,
-    que se carga al abrir el trámite y no toca el estado de nadie.
-    """
-    if fecha_egreso < fecha_ingreso:
-        raise AppError(
-            "La fecha de egreso no puede ser anterior a la fecha de ingreso",
-            "FECHA_EGRESO_INVALIDA", 400,
-        )
-    if fecha_egreso > date.today():
-        raise AppError(
-            "La fecha de egreso no puede ser futura: la baja se efectiviza cuando ocurrió",
-            "FECHA_EGRESO_FUTURA", 400,
-        )

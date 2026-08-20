@@ -153,3 +153,39 @@ EstadoEmpleado = Literal["activo", "baja", "licencia", "suspendido", "preingreso
 # después nadie encuentra: el que busque por qué un alta nace en `activo` va a mirar el schema,
 # no el armado del payload.
 EstadoAlta = Literal["activo", "preingreso"]
+
+# 🔴 CUATRO DE LOS CINCO: `baja` NO ESTÁ. Lo consume `EmpleadoUpdate.estado` (el PUT del
+# legajo), y la ausencia es la decisión de esta constante.
+#
+# QUÉ CIERRA. Hasta el 20/8/2026 el PUT aceptaba los cinco del CHECK sin ninguna otra guarda,
+# así que una edición cualquiera del legajo podía escribir `estado='baja'` **sin pasar por
+# `dar_de_baja`** — o sea sin `fecha_egreso` y sin motivo. Esa fila queda rota en los dos
+# extremos del reporte a la vez: no cae en ningún período (no aparece como baja de ningún
+# mes) y sale del headcount igual. Y desde que la pantalla de Bajas ordena por
+# `fecha_egreso DESC`, además sale PRIMERA de todo, porque Postgres pone los nulos adelante.
+#
+# LA BAJA TIENE DOS VÍAS Y SOLO DOS, y las dos escriben la fecha en el mismo UPDATE:
+#   · `POST /api/offboarding/{id}/efectivizar` → `dar_de_baja(...)` con cuatro guardas.
+#   · el import de nómina con `Fecha Baja`     → `dar_de_baja(...)`, con la guarda de
+#     preingreso de A3.3.
+# El PUT nunca fue una tercera vía legítima: era la puerta que quedaba abierta. Es el mismo
+# cierre que ya se hizo con `DELETE /api/empleados/{id}` (A2), que escribía `baja` sin fecha
+# por otro camino y se borró entero.
+#
+# 🔴 ANGOSTAR UN CONJUNTO ES UNA DECISIÓN PROPIA, y por eso va en su commit y con este texto
+# — es literalmente lo que dijimos al dejar `suspendido` ADENTRO de los otros dos vocabularios
+# (ver más arriba): no se angosta de rebote, en un diff que habla de otra cosa. Acá la
+# decisión se tomó con el grep hecho: **cero callers** mandan `estado="baja"` por el PUT, ni
+# en el backend, ni en los tests, ni en el front (`_guardar.ts` manda `estado` SOLO en el
+# alta, y `buildPayload` no lo incluye en edición).
+#
+# ⚠️ NO REEMPLAZA A `EstadoEmpleado`, que sigue siendo el espejo del CHECK: la columna admite
+# cinco valores y eso no cambió. Lo que cambió es qué puede escribir ESTE camino.
+# `tests/test_preingreso_pases.py` verifica que la diferencia entre los dos sea exactamente
+# `{"baja"}` — si alguien saca otro valor de acá, rojea.
+#
+# ⚠️ CONSECUENCIA ASUMIDA: tampoco se puede DESHACER una baja por el PUT. Corregir una baja
+# mal cargada deja de ser una edición y pasa a necesitar su propio camino, que hoy no existe.
+# Se acepta: una baja mal hecha es un evento raro y con auditoría, y la alternativa era dejar
+# abierta la puerta que rompe la fila en silencio para todos los demás casos.
+EstadoEditable = Literal["activo", "licencia", "suspendido", "preingreso"]

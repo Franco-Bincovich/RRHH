@@ -103,7 +103,8 @@ def activar(repo, audit, empleado_id: UUID, empresa_id: Optional[UUID] = None,
         )
 
     # 🔑 Se reusa `repo.update` con un patch de UN campo en vez de agregarle un método propio al
-    # repo: `_empleado_write_repo.py` está en 99/100 y un método nuevo lo pasaba de largo. No es
+    # repo: `_empleado_write_repo.py` estaba en 99/100 y un método nuevo lo pasaba de largo (hoy
+    # está en 71: `dar_de_baja` se mudó a `_empleado_baja_repo.py` el 20/8). No es
     # una concesión al límite — `actualizar` ya hace exactamente esto (patch parcial con el
     # WHERE de empresa puesto) y un `activar` en el repo sería la misma query con otro nombre.
     actualizado = repo.update(str(empleado_id), EmpleadoUpdate(estado="activo"), empresa_id)

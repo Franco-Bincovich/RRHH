@@ -281,7 +281,7 @@ backend/
 │                          router NUEVO exige dividirlo primero (ver "Líneas" más abajo).
 ├── config/settings.py   ← única fuente de config y env (Settings() se instancia en import)
 ├── routers/             ← 81 archivos (límite 80 líneas cada uno)
-├── services/            ← 231 archivos de lógica de negocio (257 con submódulos: export/ 8,
+├── services/            ← 232 archivos de lógica de negocio (258 con submódulos: export/ 8,
 │                          mailer/ 6, reportes/ 12) (límite 150)
 │   ├── _empleado_scope.py     ← barrera de empresa/ownership sobre el empleado target (Fase 2)
 │   ├── _adjunto_padres.py     ← resolver de la entidad padre de un adjunto (Fase 2)
@@ -308,7 +308,7 @@ backend/
 │   ├── mailer/                ← punto de salida ÚNICO de mails; expone solo enviar_mail
 │   ├── export/                ← punto de salida ÚNICO de exports; expone build_export
 │   └── reportes/              ← un submódulo por familia + _common.py
-├── repositories/        ← 111 archivos, único acceso a DB (límite 100, satélites incluidos)
+├── repositories/        ← 113 archivos, único acceso a DB (límite 100, satélites incluidos)
 │   ├── cliente_repo.py        ← catálogo GLOBAL (sin empresa); `existe_nombre` compara TODO el catálogo en Python, NO con .ilike()
 │   ├── _hora_row.py           ← mapper de horas_proyecto con lookups por lote (anti-N+1)
 │   ├── identificacion_repo.py, sesion_horas_repo.py ← DNI → empleado · nonces de sesión del link público
@@ -319,6 +319,12 @@ backend/
 │   ├── _onboarding_templates_{row,filtros,write}.py ← SELECT+mappers · visibilidad · payloads
 │   └── oauth_state_repo.py    ← crear · consumir · purgar_vencidos (A4)
 ├── integrations/        ← wrappers externos (supabase_client, anthropic)
+│   ├── _cliente_real_en_tests.py ← 🔴 el cliente REAL falla ruidoso bajo pytest, nombrando
+│   │                          el módulo que lo pidió. La suite falsea la base módulo por módulo
+│   │                          (71 archivos, ~172 sitios) y esa lista se desactualiza sola al
+│   │                          mover una función. Escape: `SUPABASE_REAL_EN_TESTS=1`.
+│   └── _http1_workaround.py  ← workaround de supabase 2.9.1. SE BORRA ENTERO al actualizar
+│                            la librería; su condición de salida está escrita adentro.
 │   └── storage.py       ← 🔴 PUNTO DE CONTACTO ÚNICO con Storage. Los 3 buckets y las 4
 │                          operaciones. API neutral al proveedor: afuera no se ve `from_()`
 │                          ni `signedURL`. Al pasar a S3 se toca ESTE archivo y ninguno más.
@@ -330,7 +336,7 @@ backend/
 │                          viven en migracionAWS/). 🔴 121 es el NÚMERO de la última, no la cantidad.
 ├── ruff.toml            ← config de ruff (reemplazó pyproject.toml, por Vercel)
 ├── pytest.ini           ← config de pytest (asyncio_mode=auto, testpaths=tests)
-└── tests/               ← 215 archivos .py: 195 `test_*.py` + 20 helpers `_*.py` (exentos del
+└── tests/               ← 219 archivos .py: 199 `test_*.py` + 20 helpers `_*.py` (exentos del
                             límite de 200 los primeros, NO los segundos — ver "Líneas")
 ```
 
@@ -1036,8 +1042,8 @@ contra el catálogo el 12/8/2026).
 - **"Compatibilidad con una posición"** (sucesión): feature nunca construida, no deuda técnica. El ranking es por assessment genérico. Cuando RRHH la reclame, definir qué significa compatibilidad antes de improvisar.
 
 ### Tests
-- **Backend: 4052 passed** en **195 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 215 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 19/8/2026, al cerrar B4. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
-  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → **4052** (B4). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
+- **Backend: 4115 passed** en **199 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 219 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 20/8/2026, al cerrar las dos vías de bajas incompletas. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
+  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → **4115** (el cliente real bloqueado bajo tests). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
 - **Front: `npm test` (= `vitest run`) — 896 tests en 75 archivos, verdes.** *(Mac, 19/8/2026, al cerrar B4. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
   > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
 - **Son 29 barridos estructurales conocidos** (20 backend + 9 front), renumerados el 19/8/2026 —

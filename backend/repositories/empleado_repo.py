@@ -14,10 +14,10 @@ from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from repositories._empleado_lookup_repo import por_dni, por_id, por_legajo
-from repositories._empleado_row import (
-    SELECT, TABLE, filtro_estado, ordenado as _ordenado, row, with_empresa,
-)
-from repositories._empleado_write_repo import actualizar, dar_de_baja, guardar
+from repositories._empleado_orden import ordenado as _ordenado
+from repositories._empleado_row import SELECT, TABLE, filtro_estado, row, with_empresa
+from repositories._empleado_baja_repo import dar_de_baja
+from repositories._empleado_write_repo import actualizar, guardar
 from schemas.empleado import EmpleadoCreate, EmpleadoResponse, EmpleadoUpdate
 
 
@@ -33,10 +33,12 @@ class EmpleadoRepo:
         es_lider: Optional[bool] = None,
         proyecto_ids: Optional[List[str]] = None,
         sin_manager: Optional[bool] = None,
+        orden: Optional[str] = None,
     ) -> Tuple[List[EmpleadoResponse], int]:
         """Retorna la página de empleados con area_nombre resuelto y el total sin paginar.
         proyecto_ids: ids ya resueltos por el service (None = sin filtro de proyecto); [] = nadie.
-        sin_manager: True = solo los que no tienen superior · False = solo los que sí · None = sin filtro."""
+        sin_manager: True = solo los que no tienen superior · False = solo los que sí · None = sin filtro.
+        orden: None = el orden de siempre (apellido, nombre, id). Ver `_empleado_orden`."""
         start = (page - 1) * page_size
         end = start + page_size - 1
 
@@ -62,7 +64,7 @@ class EmpleadoRepo:
                 f"nombre.ilike.%{search}%,apellido.ilike.%{search}%"
             )
 
-        result = _ordenado(query).range(start, end).execute()
+        result = _ordenado(query, orden).range(start, end).execute()
 
         total = result.count if result.count is not None else 0
         return [row(r) for r in result.data], total
@@ -91,6 +93,8 @@ class EmpleadoRepo:
         """Actualización parcial. Delegado a _empleado_write_repo.actualizar."""
         return actualizar(id, data, empresa_id, self.find_by_id)
 
-    def dar_de_baja(self, empleado_id: str, fecha_egreso: date, empresa_id: Optional[UUID] = None) -> bool:
-        """Baja con fecha de egreso. Delegado a _empleado_write_repo.dar_de_baja."""
-        return dar_de_baja(empleado_id, fecha_egreso, empresa_id)
+    def dar_de_baja(self, empleado_id: str, fecha_egreso: date, empresa_id: Optional[UUID] = None, motivo: Optional[str] = None) -> bool:
+        """Baja con fecha de egreso y motivo. Delegado a `_empleado_baja_repo.dar_de_baja`.
+        `motivo=None` NO toca `motivo_baja` — es lo que evita que el import de nómina se pise
+        su propio texto libre. Ver el encabezado de aquel archivo."""
+        return dar_de_baja(empleado_id, fecha_egreso, empresa_id, motivo)

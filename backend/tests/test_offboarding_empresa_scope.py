@@ -72,7 +72,7 @@ class _EmpleadoRepo:
             return None
         return emp
 
-    def dar_de_baja(self, empleado_id, fecha_egreso, empresa_id=None):
+    def dar_de_baja(self, empleado_id, fecha_egreso, empresa_id=None, motivo=None):
         self.bajas.append(str(empleado_id))
         return True
 

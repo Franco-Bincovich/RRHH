@@ -243,6 +243,25 @@ rojear cuando se cambie, que es lo que va a recordar que la migración tiene que
 
 ### 🟡 El PUT del legajo puede saltearse la guarda de fecha del pase a activo
 
+> ✅ **La MITAD de esta entrada se cerró el 20/8/2026: el PUT ya NO puede dar de baja.**
+> `EmpleadoUpdate.estado` pasó de `EstadoEmpleado` (los 5 del CHECK) a `EstadoEditable` (cuatro,
+> sin `baja`), así que la vía que escribía `estado='baja'` sin `fecha_egreso` ni motivo dejó de
+> existir. Se decidió con el grep hecho: cero callers en backend, tests y front. El porqué completo
+> está en `utils/estados_empleado.py`; el CHECK de la base **no se tocó**.
+>
+> 🔴 **Lo que sigue abierto es lo que esta entrada dice desde el principio:** el PUT puede llevar un
+> `preingreso` a `activo` **sin verificar que la fecha de ingreso haya ocurrido**, salteándose la
+> guarda que `POST /api/empleados/{id}/activar` existe para aplicar. Eso NO se cerró y sigue
+> siendo el caso que el texto de abajo describe.
+>
+> ⚠️ **Y el cierre trajo su propia consecuencia asumida: tampoco se puede DESHACER una baja por el
+> PUT.** Corregir una baja mal cargada dejó de ser una edición del legajo y hoy **no tiene ningún
+> camino**: ni endpoint propio, ni pantalla. Se aceptó porque una baja mal hecha es un evento raro,
+> auditado, y la alternativa era dejar abierta la puerta que rompe la fila para todos los demás
+> casos. **Si RRHH lo pide, es una feature (un "revertir baja" con sus guardas), no un rollback de
+> este cambio.** Gravedad 🟡 · Esfuerzo S.
+
+
 `EmpleadoUpdate.estado` acepta los cinco valores del CHECK y **no valida nada más**: puede llevar
 un `preingreso` a `activo` sin verificar que la fecha de ingreso haya ocurrido, que es
 exactamente la guarda que `POST /api/empleados/{id}/activar` existe para aplicar.
@@ -252,6 +271,163 @@ endpoint que a veces valida y a veces no— pero **no es gratis mientras el bot�
 esté en la UI**: hasta que el bloque B lo construya, el PUT es el ÚNICO camino disponible, que es
 justo lo que no queremos que se vuelva costumbre. Está escrito en el encabezado de
 `tests/test_estado_preingreso_escrituras.py`.
+
+⚠️ **Y desde el 20/8/2026 tiene una segunda consecuencia, medida al agregar el orden por
+`fecha_egreso`:** ese mismo PUT puede escribir `estado='baja'` **sin `fecha_egreso`**, porque no
+pasa por `dar_de_baja` (que las escribe juntas en un solo UPDATE). Una baja sin fecha no cae en
+ningún período —ya estaba anotado— y ahora además **sale ARRIBA de todo** en el orden
+`fecha_egreso_desc` de la pantalla de Bajas, por la colocación de nulos de Postgres (ver la
+entrada de abajo).
+
+### ✅ ~~HAY DOS MOTIVOS DE BAJA Y NO SON EL MISMO DATO~~ — **CERRADO el 20/8/2026 por la opción (a)**
+
+> **Se aplicó la opción (a) del análisis de abajo:** `_offboarding_efectivizar` copia
+> `instancia.motivo_egreso` a `empleados.motivo_baja` en el mismo UPDATE que ya escribía el estado
+> y la fecha. El reporte de Altas y bajas dejó de decir "Sin especificar" para las bajas de
+> offboarding. **El análisis se conserva entero porque el PRECIO sigue vigente y hay que poder
+> leerlo:** `motivo_baja` es texto libre y desde ahora convive con los 7 valores del vocabulario
+> cerrado en la misma columna. Se aceptó porque las dos formas contestan la misma pregunta y el
+> único lector ya trata el vacío con `or "Sin especificar"`.
+>
+> 🔴 **Solo hacia adelante:** las bajas efectivizadas ANTES de este cambio conservan `motivo_baja`
+> en NULL. No hay backfill y no se escribió ninguno — habría que derivarlo de
+> `offboarding_instancias`, y con las dos tablas en cero no hay nada que derivar todavía.
+>
+> ⚠️ **Lo que NO se cerró:** el camino inverso. Una baja del import de nómina sigue sin figurar en
+> `motivos_egreso` del reporte de **Rotación**, que lee `offboarding_instancias` y no `empleados` —
+> esa baja no tiene instancia. Es la mitad que queda, y no la resuelve este cambio.
+
+**El análisis original, que sigue explicando el porqué:**
+
+**Es el hallazgo del bloque 2 de la sesión de `fecha_egreso`, y es una decisión de producto
+pendiente, no un bug que se arregle escribiendo código.** Hoy no se ve porque las dos tablas
+están en cero.
+
+| | `empleados.motivo_baja` | `offboarding_instancias.motivo_egreso` |
+|---|---|---|
+| Qué es | **TEXTO LIBRE** (migración 064, "para las bajas históricas del CSV") | **CHECK de 7 valores** (`renuncia`, `despido`, `acuerdo_mutuo`, `fin_contrato`, `jubilacion`, `fallecimiento`, `otro`) |
+| Quién lo escribe | **solo el import de nómina** (columna `Motivo Baja`, `_nomina_empleados_transforms.py:120`) | **solo el flujo de offboarding**, al ABRIR el trámite (`OffboardingCreate.motivo`) |
+| Quién lo lee | `_reporte_movimientos.py:61` — el listado nominal de bajas de "Altas y bajas" | `_reporte_dotacion.py:117-130` — `motivos_egreso` del reporte de Rotación |
+
+🔴 **Los dos caminos de baja llenan columnas distintas, y ninguno llena la del otro.**
+`_offboarding_efectivizar.efectivizar` escribe `estado='baja'` y `fecha_egreso` y **no toca
+`motivo_baja`**. Consecuencia concreta, ya presente en el código: **toda baja hecha por el flujo
+de offboarding aparece como "Sin especificar" en el reporte de Altas y bajas**, teniendo el
+motivo guardado en la fila de al lado. Y al revés: una baja importada por CSV no figura en
+`motivos_egreso` del reporte de Rotación, porque no tiene instancia.
+
+**Por qué la pantalla de Bajas no se puede construir sin decidir esto primero.** Las tres salidas
+tienen consecuencias distintas y ninguna es obviamente la correcta:
+
+- **(a) Que `efectivizar` copie `instancia.motivo_egreso` a `empleados.motivo_baja`.** Es el
+  cambio más chico (dos líneas en el write path) y el único que deja UNA columna con la
+  respuesta siempre, sin joins en ningún listado. **Arregla de paso el "Sin especificar" del
+  reporte de Altas y bajas.** El precio: mete un valor del vocabulario cerrado en una columna de
+  texto libre, así que la columna pasa a tener las dos formas conviviendo, y cambia lo que un
+  reporte ya publicado muestra — o sea que necesita su commit y su aviso, no colarse en otro.
+- **(b) Join `empleados` → `offboarding_instancias` en el listado.** 🔴 **Es la peor de las tres
+  y conviene descartarla por escrito:** el embed es *to-many* desde `empleados` (una persona
+  puede tener una instancia cancelada y otra completada, `_CERRADOS` contempla las dos), así que
+  devuelve un ARRAY y el mapper tendría que elegir cuál — lógica ambigua escondida en un mapper.
+  Hay **dos FKs** entre las tablas, así que el embed exige nombrar la constraint o es PGRST201.
+  Y sobre todo: lo pagarían **las ~37 pantallas** que usan `/api/empleados`, para una columna que
+  le sirve a una sola.
+- **(c) Endpoint propio de bajas.** Cabe en `routers/offboarding.py` (49/80), pero eso ya no es
+  "exponer el motivo": es construir el módulo Bajas entero con su paginación, sus filtros y su
+  export.
+
+⚠️ **Lo que NO hay que hacer, y por eso queda escrito:** exponer `empleados.motivo_baja` en
+`EmpleadoResponse` "porque es barato". Funcionaría para las bajas importadas y diría **vacío
+para las de offboarding, que son las que SÍ tienen el motivo cargado** — propagaría a una
+pantalla nueva el mismo bug que el reporte de Altas y bajas ya tiene. Gravedad 🟠 · Esfuerzo S
+si es (a), M si es (c).
+
+### 🟡 `fecha_egreso_desc` deja los NULOS ARRIBA — límite del cliente, no elección
+
+En Postgres un `ORDER BY ... DESC` es **`NULLS FIRST`** por default, y `postgrest` 0.17.2 expone
+`order(col, desc=, nullsfirst=, foreign_table=)` — **no tiene `nullslast`**
+(`venv/Lib/site-packages/postgrest/base_request_builder.py:561`). O sea que `NULLS LAST` **no se
+puede expresar desde el cliente**. Consecuencia en la pantalla de Bajas: una baja sin
+`fecha_egreso` (ver la entrada de arriba) sale **primera**, arriba de las bajas recientes.
+
+Está **pineado** en `tests/test_empleado_orden.py::TestLosNulosDeFechaEgresoQuedanArriba` para
+que sea conducta declarada y no una sorpresa; el día que se resuelva, ese test es el que hay que
+dar vuelta. Salidas posibles, ninguna en alcance de una sesión de código: una vista o RPC que
+ordene del lado de la base, subir `postgrest`, o que la pantalla filtre `estado=baja` **y**
+alguien garantice que toda baja lleva fecha (que es la entrada de arriba). Gravedad 🟡 · Esf. S.
+
+### 🟡 ~~Mover una función mueve el punto de monkeypatch y el test SALE A LA RED~~ — **la CONSECUENCIA está cerrada (20/8/2026); la causa sigue**
+
+> ✅ **Se implementó la salida (c) de las tres que esta entrada proponía:**
+> `integrations/_cliente_real_en_tests.py`. Bajo pytest (o `APP_ENV=test`), **invocar** el cliente
+> real levanta un `RuntimeError` que nombra el archivo y la línea que lo pidieron y dice qué
+> sumarle al fixture. Verificado sacando `emp_baja_mod` del fixture de
+> `test_offboarding_baja_efectiva.py`: falla con el mensaje nuevo y **sin `getaddrinfo` en la
+> salida**, o sea que corta antes de tocar la red. Cubierto por
+> `tests/test_cliente_real_bloqueado.py`.
+>
+> 🔴 **LO QUE NO SE CERRÓ, Y ES LA CAUSA: la lista a mano sigue existiendo.** 71 archivos de test
+> y ~172 sitios de `monkeypatch.setattr(<modulo>, "supabase_admin", ...)`, 22 de ellos con listas
+> de tres o más módulos. Mover una función **sigue** dejando su módulo fuera del fixture; lo que
+> cambió es que ahora eso es un rojo inmediato y legible en vez de una salida a la red. Las otras
+> dos salidas que esta entrada proponía —(a) un `conftest.py` que falsee la base para toda la
+> suite, (b) un barrido que compare importadores contra parcheadores— **siguen siendo válidas y
+> siguen sin hacerse**. La (a) es la que borraría la causa. Gravedad 🟡 · Esfuerzo M.
+>
+> ⚠️ **Dos límites del guard, escritos para no venderlo de más:**
+> · **Un caller que se trague todo error se traga también esto.** El caso vivo es
+>   `utils/empresas_cache.py`, que es fail-open por diseño: ahí el guard no avisa. Tampoco
+>   escribe nada, que es lo que viene a impedir.
+> · **No se porta solo a AWS.** Vive en el proxy de Supabase; con asyncpg el objeto es otro y el
+>   agujero se reabre apuntando a RDS. El enganche allá es el pool de `postgres_client.py`.
+>
+> 🔑 **Y dejó un aprendizaje propio, que costó 21 rojos:** la primera versión del guard vivía en
+> `_RootProxy.__getattr__`, y `monkeypatch.setattr(obj, name, val)` hace un `getattr` para
+> guardarse el original ANTES de reemplazarlo — así que rojeaba a los tests que estaban falseando
+> el cliente BIEN. **Leer un atributo no es usar la base; invocar sí.** El guard vive en
+> `_MethodProxy.__call__` y hay un test que lo fija.
+
+**El diagnóstico original, que sigue explicando la causa:**
+
+Medido el 20/8/2026 al mudar `dar_de_baja` de `_empleado_write_repo.py` a `_empleado_baja_repo.py`.
+`tests/test_offboarding_baja_efectiva.py` parchea `supabase_admin` **módulo por módulo**, con una
+lista escrita a mano de los diez que consultan la base. Al mudarse la función, su módulo nuevo no
+estaba en la lista, y el efecto no fue un fake incompleto ni un `AttributeError`: fue el **cliente
+real de Supabase**, con `httpx` saliendo a la red y fallando con `getaddrinfo failed`.
+
+🔴 **Acá no llegó a ningún lado porque la máquina no resuelve el host. En una con red y con las
+credenciales de producción en el entorno, ese test escribe `estado='baja'` sobre la base real.**
+No es hipotético: `SUPABASE_URL` y `SUPABASE_SERVICE_KEY` salen de `settings`, y los tests las
+llenan con valores falsos **solo si nadie las puso antes** (`os.environ.setdefault`). En una
+sesión donde el `.env` esté cargado, ganan las reales.
+
+**Lo que este repo ya tiene y no alcanzó:** el patrón de "parchear todos los módulos que
+consultan" está documentado en el fixture de `test_estado_preingreso_padron.py`, y es correcto —
+pero es una **lista a mano**, así que no puede saber que apareció un módulo nuevo. Salidas
+posibles, ninguna decidida: (a) un `conftest.py` que falsee `integrations.supabase_client` una vez
+para toda la suite y que los tests tengan que desactivar explícitamente; (b) un barrido que
+compare los módulos que importan `supabase_admin` contra los que cada test parchea; (c) hacer que
+el cliente real falle ruidosamente cuando `APP_ENV=test`. La (c) es la más barata y la que cierra
+el riesgo sin tocar ningún test. Gravedad 🟠 · Esfuerzo S.
+
+### 🟡 El barrido de columnas NO cubre `empleados`, que es la tabla central
+
+`test_columnas_candidatos.py` cubre `candidatos` y `test_columnas_capacitaciones.py` cubre
+`capacitaciones` + `empleado_capacitacion`. **`empleados` no está en ninguno de los dos**
+(verificado por grep el 20/8/2026: cero menciones). No es un olvido — la generalización a los
+~32 repos con `select("*")` está declarada como pendiente en la sección 8-ter — pero **esta
+sesión es la evidencia de que la deuda tiene costo**: `fecha_egreso` es *exactamente* el caso que
+ese barrido caza (una columna que el `select("*")` TRAE y que ningún campo del Response publica),
+vivió así desde la migración 003, y la encontró una persona leyendo `schema.sql`, no un test.
+
+🔑 **Y hay más de donde vino esa.** Contrastando el `CREATE TABLE public.empleados` contra
+`EmpleadoResponse`, siguen sin exponerse **13 columnas**: `user_id`, `foto_url`, `potencial`,
+`desempeno`, `updated_at`, `fecha_ingreso_reconocida`, `equipo`, `co_sourcing`, `product_owner`,
+`liderazgo`, `motivo_baja`, `fecha_ingreso_prevista`, `fecha_baja_prevista`. **Ninguna se revisó
+en esta sesión** — se tocó solo `fecha_egreso`, que era la que bloqueaba la pantalla. La
+pregunta que el barrido haría por cada una (¿se decidió no exponerla, o se olvidaron?) sigue sin
+contestar, y `motivo_baja` — que está en esa lista — ya se sabe que es de las segundas.
+Gravedad 🟡 · Esfuerzo M (el inventario de las 66 columnas es el trabajo, no el test).
 
 ---
 
@@ -327,7 +503,25 @@ mover prosa a `docs/`, no partir el módulo.
 > 🔑 **Y antes de tocarlo, leer la entrada de la sección 4 sobre los dos predicados divergentes
 > de este mismo archivo:** si esa decisión de producto se toma, el diff cae en estas mismas
 > líneas y conviene hacer las dos cosas juntas en vez de pasar dos veces por un archivo lleno.
-**Routers 80/80:** `adjuntos.py` · `candidatos.py` · **`offboarding_tramite.py` (nuevo, 17/8)**.
+**Routers 80/80:** `adjuntos.py` · `candidatos.py` · **`offboarding_tramite.py` (nuevo, 17/8)** · **`empleados.py`** (ya estaba en 80/80 el 19/8 y la lista no lo decía; remedido el 20/8).
+**Repos 100/100:** `empleado_repo.py` **llegó al techo el 20/8** (era 97: +1 import y +2 de docstring
+al sumarle el motivo a `dar_de_baja`). **El próximo cambio EXIGE dividir primero.**
+
+> ⚠️ **El corte de `empleado_repo.py` NO es obvio y conviene decidirlo con tiempo:** el archivo es
+> `find_all` (~45 líneas, lo único que crece con cada filtro) más SEIS delegadores de una línea que
+> son la interfaz pública del repo. Partir la interfaz la rompe para los ~40 call sites; el corte
+> real es sacar `find_all` a un `_empleado_listado_repo.py` (molde: `_candidato_listado_repo.py`,
+> que ya existe) y dejar acá la fachada. **No se hizo en esta sesión a propósito**: es un cambio de
+> 40 call sites que no tiene nada que ver con las bajas.
+
+> 🔴 **`routers/empleados.py` sigue en 80/80 después de la sesión del orden, y no por casualidad:**
+> el parámetro `orden` entró **sin agregar una sola línea** — se extendieron la lista de import
+> que ya existía y las dos firmas de una línea del listado y del export. **El próximo endpoint o
+> el próximo import EXIGE dividir primero**, y el corte natural es el que ya tienen los otros
+> seis módulos del repo: `empleados_escrituras.py` con `create`/`activar`/`update`, montado en el
+> MISMO prefijo (las rutas no cambian). ⚠️ Ojo con el costo escondido: eso suma **2 líneas a
+> `registro_routers.py`, que está en 197/200** — o sea que dividir el router obliga a mirar
+> también el registro. Es la razón por la que esta sesión eligió no dividirlo.
 
 > 🔴 **`offboarding_tramite.py` NACIÓ en 80/80, y eso es lo que hay que mirar de este corte.**
 > El 17/8 se partió `offboarding_escrituras.py` (79/80) por el seam del módulo: **ciclo** —

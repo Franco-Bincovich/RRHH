@@ -232,7 +232,11 @@ class TestLaProsaNoCuenta:
     BORRARLOS para limpiar el rojo — y son justo los comentarios que no hay que perder."""
 
     def test_un_docstring_que_nombra_un_estado_no_es_un_hallazgo(self) -> None:
-        con_prosa = "repositories/_empleado_write_repo.py"
+        # 🔴 `_empleado_baja_repo.py` desde el 20/8/2026, no `_empleado_write_repo.py`: la
+        # prosa se mudó con `dar_de_baja` al cortar aquel archivo (estaba en 99/100). LO
+        # CAZÓ LA GUARDA DE ABAJO, que es para lo que está — el barrido siguió en verde y
+        # lo que rojeó fue "cambió el archivo de referencia", que es el mensaje correcto.
+        con_prosa = "repositories/_empleado_baja_repo.py"
         fuente = (RAIZ / con_prosa).read_text(encoding="utf-8")
         # La guarda va primero: sin ella, el día que ese docstring se reescriba este test
         # afirmaría "no hay hallazgos" sobre un archivo que ya no tiene la prosa que motivaba

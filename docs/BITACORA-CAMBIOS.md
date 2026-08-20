@@ -41,6 +41,148 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-20 · El cliente real de Supabase no puede correr bajo tests + el tipo del PUT en el front · commits pendientes
+**Qué cambió:** un commit con dos arreglos. (1) **`integrations/_cliente_real_en_tests.py`**: bajo
+pytest (o `APP_ENV=test`), invocar el cliente REAL de Supabase levanta un `RuntimeError` que
+**nombra el archivo y la línea que lo pidieron** y dice qué sumarle al fixture. Cierra el agujero
+que encontró la sesión anterior: la suite falsea la base módulo por módulo con listas a mano, y al
+mover una función su módulo queda fuera de la lista y el test **sale a la red con la
+`service_key`**. (2) **`frontend/types/empleado.ts`**: `EmpleadoUpdate.estado` pasa a ser espejo
+del `EstadoEditable` del backend (cuatro valores, sin `baja`). Backend: 4105 → **4115 passed**.
+
+**Impacto en infraestructura:**
+
+1. **Migraciones, buckets, endpoints, auth, CORS: sin cambios.** No hay DDL ni superficie HTTP
+   nueva.
+2. ⚠️ **Variable de entorno NUEVA, opcional: `SUPABASE_REAL_EN_TESTS`.** Es la salida de
+   emergencia del guard — con cualquier valor no vacío, el cliente real vuelve a funcionar bajo
+   tests. **NO se declara en Vercel ni en AWS**: en producción no hace nada (el guard solo se
+   activa con pytest importado o `APP_ENV=test`). Existe para un E2E real contra un proyecto de
+   prueba, y es a propósito una variable de entorno y no un flag de código: tiene que verse en el
+   comando que la usa.
+3. **`APP_ENV` pasa a tener un valor con significado: `test`.** Hoy el default es `development` y
+   nadie lo exporta; el guard no depende de eso (usa `"pytest" in sys.modules` como condición
+   principal), pero si algún arnés que no sea pytest necesita la protección, ese es el
+   interruptor.
+4. **El código de producción cambia en un punto caliente:** `_MethodProxy.__call__` de
+   `integrations/supabase_client.py` ahora evalúa el guard en cada eslabón de cada cadena. **El
+   costo es una lectura de una variable de módulo**: la decisión se computa UNA vez por proceso y
+   se cachea. En producción da `False` en el primer query y no se vuelve a mirar.
+5. 🔴 **`supabase_client.py` se partió: el workaround de HTTP/1.1 se fue a
+   `integrations/_http1_workaround.py`** (aquel llegó a 205/200 con el guard). No cambia ningún
+   comportamiento — se movió verbatim y las dos fábricas lo siguen llamando, así que el reintento
+   de `_recreate()` también nace en HTTP/1.1. **Lo que sí cambia es para bien: ese archivo se
+   BORRA ENTERO el día que se actualice `supabase-py` a una versión con `http_client` público
+   (postgrest 2.31+), y su condición de salida está escrita adentro.** Antes había que ir a
+   buscarle los pedazos a un archivo de 200 líneas.
+6. **Para el porteo a AWS:** el guard vive en el proxy de Supabase, así que **no se porta tal
+   cual** — el cliente asyncpg es otro objeto. Si el equivalente no existe del otro lado, el
+   agujero vuelve a abrirse con `DATABASE_URL` apuntando a RDS. El punto de enganche allá es el
+   pool de `postgres_client.py`.
+
+**Hallazgo al pasar, y corrige lo que dije en la entrada anterior:** el tipo del front **no era**
+un `string` suelto. `Partial<EmpleadoCreate> & { estado?: string }` hace que TypeScript INTERSEQUE
+los dos tipos del campo, y `EstadoAlta & string` colapsa a `EstadoAlta` — o sea que el tipo
+admitía DOS estados, no cinco. El problema real era el contrario del que reporté: `licencia` y
+`suspendido` **no se podían mandar** desde el front, y el `& { estado?: string }` se leía como si
+ensanchara. Medido con `tsc`, no supuesto.
+
+## 2026-08-20 · Las dos vías que producían bajas incompletas, cerradas · commits pendientes
+**Qué cambió:** dos commits. (1) **El motivo viaja al efectivizar**: `efectivizar` copia
+`offboarding_instancias.motivo_egreso` a `empleados.motivo_baja` en el mismo UPDATE que ya escribía
+`estado='baja'` y `fecha_egreso`. (2) **`baja` sale del `Literal` de `EmpleadoUpdate.estado`**: el
+PUT del legajo ya no puede dar de baja, porque lo hacía sin `fecha_egreso` ni motivo, salteándose
+las dos únicas vías que sí los escriben. La baja tiene ahora dos caminos y solo dos: efectivizar un
+offboarding, o el import de nómina con `Fecha Baja`. Suite: 4092 → **4105 passed**.
+
+**Impacto en infraestructura:**
+
+1. **Migraciones: NINGUNA.** No hay DDL. `motivo_baja` existe desde la migración 064 y
+   `empleados_estado_check` **no se tocó**: la columna sigue aceptando los cinco valores. Lo que se
+   angostó es qué puede escribir UN camino de la aplicación.
+2. **Variables de entorno, dependencias, buckets, CORS, auth: sin cambios.**
+3. 🔴 **CAMBIA LO QUE MUESTRA UN REPORTE YA PUBLICADO.** El reporte de **Altas y bajas**
+   (`/api/reportes`, tipo `altas_bajas`) va a **empezar a decir el motivo donde antes decía "Sin
+   especificar"**, para toda baja hecha por el flujo de offboarding. No es un cambio de formato ni
+   de columnas: es la misma celda con un valor donde antes había un texto de relleno. Si alguien
+   comparó dos corridas del reporte y anotó "Sin especificar", ese número deja de coincidir. **Solo
+   hacia adelante**: las bajas ya efectivizadas antes de este deploy conservan su `motivo_baja` en
+   NULL y van a seguir diciendo "Sin especificar" — no hay backfill y no se escribió ninguno.
+4. ⚠️ **`PUT /api/empleados/{id}` con `estado: "baja"` pasa a responder 422** donde antes
+   respondía 200. Es un cambio de contrato de la API. **Cero callers**: se verificó por grep en
+   backend, tests y frontend antes de tocarlo (el front manda `estado` solo en el alta —
+   `_guardar.ts` — y `buildPayload` no lo incluye en edición). Los otros cuatro estados
+   (`activo`, `licencia`, `suspendido`, `preingreso`) siguen igual.
+   ⚠️ **Consecuencia asumida: tampoco se puede DESHACER una baja por el PUT.** Corregir una baja
+   mal cargada deja de ser una edición y hoy no tiene camino propio. Anotado en DEUDA.
+5. **Endpoints: ninguno nuevo, ninguno borrado.**
+6. **Para el porteo a AWS:** `dar_de_baja` se mudó de `repositories/_empleado_write_repo.py` a
+   **`repositories/_empleado_baja_repo.py`** (aquel estaba en 99/100). El SQL que hay que portar es
+   el mismo, pero el archivo cambió de nombre — `migracionAWS/backend/repositories/
+   empleado_lookup_repo_NEW.py` tiene su versión asyncpg y **le falta la columna del motivo**:
+   `UPDATE ... SET estado='baja', fecha_egreso=$1` tiene que pasar a escribir también `motivo_baja`
+   **de forma condicional** (si el caller no lo pasa, la columna NO se toca; ver el punto siguiente).
+   🔴 Ese `empleado_lookup_repo_NEW.py` además conserva un `marcar_baja` que escribe el estado **sin
+   fecha** — el equivalente del `baja_logica` que este repo borró. Portarlo tal cual reabriría del
+   otro lado la puerta que este commit acaba de cerrar de este.
+7. 🔴 **Una sutileza que hay que respetar al portar:** el motivo es OPCIONAL y cuando no viene **la
+   columna no se toca**. No es cosmético: el import de nómina escribe el texto libre de `Motivo
+   Baja` y recién DESPUÉS llama a `dar_de_baja`. Un `SET motivo_baja = $x` incondicional le borraría
+   ese texto en cada corrida mensual, en silencio.
+
+**Hallazgo al pasar:** mover `dar_de_baja` de archivo **movió el punto de monkeypatch**, y
+`tests/test_offboarding_baja_efectiva.py` dejó de interceptarlo: en vez de fallar con un fake
+incompleto, **salió a la red con el cliente real de Supabase** (`getaddrinfo failed`). Acá no llegó
+a ningún lado porque la máquina no resuelve el host, pero es una clase de fallo que no avisa por sí
+sola. Está anotado en DEUDA.
+
+## 2026-08-20 · `fecha_egreso` sale por la API + orden opcional del listado de colaboradores · commits pendientes
+**Qué cambió:** las dos brechas de backend que bloqueaban las pantallas de **Próximos ingresos** y
+**Bajas**, en tres commits. (1) **`empleados.fecha_egreso` se expone**: existía en la base desde la
+migración 003 y la escribe `dar_de_baja` en el mismo UPDATE que `estado='baja'`, pero **ningún
+consumidor de `EmpleadoResponse` podía verla** — ni la ficha, ni el listado, ni el export. Ahora
+está en el schema y en el archivo. (2) **El listado acepta un parámetro OPCIONAL `orden`** con dos
+valores (`fecha_ingreso_asc`, `fecha_egreso_desc`); sin él, el orden por apellido no cambia, que
+es lo que ven las ~37 pantallas que ya lo usan. (3) **El motivo de la baja NO se tocó**: se
+diagnosticó y quedó como decisión de producto en `DEUDA-TECNICA.md` (hay DOS columnas de motivo
+en el sistema y no son el mismo dato). Suite: 4052 → **4092 passed**.
+
+**Impacto en infraestructura:**
+
+1. **Migraciones: NINGUNA.** No hay DDL en esta sesión. `fecha_egreso` y `motivo_baja` ya existen
+   en producción (migraciones 003 y 064 respectivamente); lo que cambió es qué expone la API.
+2. **Variables de entorno, dependencias, buckets: sin cambios.**
+3. **Endpoints: ninguno nuevo.** `GET /api/empleados` y `GET /api/empleados/exportar` ganan un
+   query param **opcional** `orden`. Es retrocompatible: sin el parámetro la respuesta es
+   idéntica a la de antes, byte por byte. Un valor fuera del vocabulario responde **422**, no 500.
+4. 🔴 **EL ARCHIVO DEL EXPORT DE COLABORADORES CAMBIA DE FORMA.** `colaboradores.csv/xlsx/pdf`
+   suma una columna **"Fecha de egreso"**, insertada **entre "Fecha de ingreso" y "Localidad"**
+   (no al final). Si algo aguas abajo lo consume por POSICIÓN de columna, se corre. **Nada del
+   sistema los consume** —son descargas para personas—, y es el mismo tipo de aviso que la
+   entrada del 19/8 sobre los encabezados. Las columnas de la base, los endpoints y el valor
+   `entidad` de la auditoría **no se tocaron**.
+5. 🔴 **PARA EL PORTEO A AWS/asyncpg — una conducta que VA A CAMBIAR sola al migrar.** El orden
+   `fecha_egreso_desc` hoy deja los NULOS **arriba**, y no es una decisión: `postgrest` 0.17.2
+   expone `nullsfirst` pero **no tiene `nullslast`**, así que `NULLS LAST` no se puede pedir desde
+   el cliente. **Con asyncpg el SQL se escribe a mano y `ORDER BY fecha_egreso DESC NULLS LAST`
+   pasa a estar disponible.** Cuando se porte este repo, la conducta correcta es la de NULLS LAST
+   — y hay que dar vuelta el test que hoy pinea la actual
+   (`tests/test_empleado_orden.py::TestLosNulosDeFechaEgresoQuedanArriba`), que existe justamente
+   para que el cambio no pase inadvertido.
+6. **Índices: no hacen falta y no se pidieron.** Los dos órdenes nuevos no tienen índice que los
+   sirva (`empleados` solo tiene `idx_empleados_empresa_apellido` para el orden por defecto), pero
+   a 1.000 colaboradores el filtro por `estado` deja un conjunto chico y el `LIMIT` convierte el
+   sort en un top-N. Las formas serían `(empresa_id, fecha_ingreso, id)` y
+   `(empresa_id, fecha_egreso DESC, id)` si algún día hicieran falta. **No se escribió ninguna
+   migración.**
+7. **Procesos fuera de serverless, auth, CORS: sin cambios.**
+
+**Hallazgo al pasar, y es el que más vale de la sesión:** el reporte de **Altas y bajas** dice
+"Sin especificar" en el motivo de **toda baja hecha por el flujo de offboarding**, teniendo el
+motivo guardado. Lee `empleados.motivo_baja` (que solo llena el import de nómina) mientras el
+flujo de offboarding escribe `offboarding_instancias.motivo_egreso` y nunca copia. Hoy invisible
+—las dos tablas están en cero— y detallado con sus tres salidas en `docs/DEUDA-TECNICA.md`.
+
 ## 2026-08-19 · Vocabulario de Capital Humano + el barrido que impide que CLAUDE.md mienta (cierra B4) · commits pendientes
 **Qué cambió:** dos cosas independientes. (1) **Cuatro barridos estructurales nuevos**: dos que
 contrastan los números que CLAUDE.md AFIRMA contra los que el repo TIENE

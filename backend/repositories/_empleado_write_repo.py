@@ -10,9 +10,13 @@ nulo y los mensajes de error son idénticos a antes.
 `actualizar` recibe `find_by_id` como parámetro porque su rama de patch vacío devuelve el
 registro tal como está. Sin eso habría que duplicar esa lectura acá — o, peor, cambiarla por
 un `None` y romper en silencio el update que no toca ningún campo.
+
+⚠️ `dar_de_baja` vivía acá y se mudó a `_empleado_baja_repo.py` el 20/8/2026, al no entrar
+el campo del motivo contra el límite de 100. El corte es por naturaleza, no por tamaño: las
+dos que quedan son el CRUD genérico —escriben lo que les mandan— y aquella es una operación
+de negocio que decide sola qué columnas toca. El porqué completo, en su encabezado.
 """
 from collections.abc import Callable
-from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -65,35 +69,3 @@ def actualizar(
     if not result.data:
         return None
     return row(result.data[0])
-
-
-def dar_de_baja(empleado_id: str, fecha_egreso: date, empresa_id: Optional[UUID] = None) -> bool:
-    """Da de baja a un empleado: setea estado='baja' y fecha_egreso en un solo UPDATE.
-
-    🔴 ES LA ÚNICA ESCRITURA DE `estado='baja'` QUE QUEDA EN EL REPO, y por eso siempre lleva la
-    fecha. Acá vivía además `baja_logica`, que ponía el estado SIN fecha; se borró junto con
-    `DELETE /api/empleados/{id}`, su único caller a través de la cadena. Que no exista más es la
-    parte importante: una baja sin `fecha_egreso` no cae en ningún período, así que la persona
-    desaparecía del headcount y no aparecía en el conteo de bajas de ningún mes — se evaporaba de
-    los dos lados del reporte a la vez.
-
-    Sus DOS callers son el momento en que la salida efectivamente ocurrió:
-    `_offboarding_efectivizar` (alguien la confirma desde la ficha) y `nomina_empleados_service`
-    (el import de nómina trae una columna `Fecha Baja`). La baja es lógica (estado + fecha_egreso),
-    nunca física — así el histórico de costos sigue incluyendo a los que ya no están.
-
-    Args:
-        empleado_id: UUID (str) del empleado a dar de baja.
-        fecha_egreso: fecha de egreso a registrar.
-        empresa_id: si se provee, restringe el WHERE a esa empresa.
-
-    Returns:
-        True si se actualizó alguna fila; False si el empleado no existe o no pertenece a la empresa.
-    """
-    stmt = with_empresa(
-        supabase_admin.table(TABLE)
-        .update({"estado": "baja", "fecha_egreso": str(fecha_egreso)})
-        .eq("id", empleado_id),
-        empresa_id,
-    )
-    return bool(stmt.execute().data)

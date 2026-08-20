@@ -68,7 +68,7 @@ class _RepoConBajas(_RepoCaptura):
         super().__init__(existentes)
         self.bajas: list = []
 
-    def dar_de_baja(self, empleado_id, fecha, empresa_id=None):
+    def dar_de_baja(self, empleado_id, fecha, empresa_id=None, motivo=None):
         self.bajas.append((str(empleado_id), str(fecha)))
         return True
 

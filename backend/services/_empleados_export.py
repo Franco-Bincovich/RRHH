@@ -41,6 +41,11 @@ def construir_filas_export(items: List[EmpleadoResponse]) -> List[dict]:
             "Modalidad": e.modalidad_trabajo,
             "Horas de contrato": e.horas_contrato,
             "Fecha de ingreso": _fecha(e.fecha_ingreso),
+            # Al lado de la de ingreso y no al final: se leen juntas, y una baja sin fecha en
+            # la columna de al lado es la que se nota. Sale VACÍA para quien sigue trabajando
+            # —que es la mayoría de las filas— y eso es correcto: la columna dice "cuándo se
+            # fue", y de la gente activa la respuesta es "todavía no".
+            "Fecha de egreso": _fecha(e.fecha_egreso),
             # Del domicilio salen SOLO las dos agregables: en un listado, calle/número/piso
             # no responden ninguna pregunta, y agregarlas por completitud infla el archivo.
             "Localidad": e.domicilio_localidad,

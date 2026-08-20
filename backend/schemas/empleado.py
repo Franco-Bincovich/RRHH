@@ -15,16 +15,19 @@ from pydantic import BaseModel, field_validator
 from schemas._provincias import Provincia
 # El vocabulario de estados (tipos y constantes) vive en un solo módulo, para que el espejo del
 # CHECK exista una vez. Molde: `schemas/usuario.py`, que importa ROLES_VALIDOS de utils.permisos.
-from utils.estados_empleado import EstadoAlta, EstadoEmpleado
+from utils.estados_empleado import EstadoAlta, EstadoEditable
+from schemas._empleado_orden import OrdenEmpleados
 from schemas.empleado_out import (
     EmpleadoListResponse,
     EmpleadoResponse,
     EmpleadoSeleccionable,
 )
 
-# Re-export: el corte de este módulo NO debe obligar a tocar los imports de nadie.
+# Re-export: el corte de este módulo NO debe obligar a tocar los imports de nadie. `OrdenEmpleados`
+# entra por la misma puerta que los de `empleado_out`: este módulo es la fachada de los schemas de
+# empleados, y el router lo importa de acá sin tener que saber en qué satélite vive cada cosa.
 __all__ = [
-    "EmpleadoBase", "EmpleadoCreate", "EmpleadoUpdate",
+    "EmpleadoBase", "EmpleadoCreate", "EmpleadoUpdate", "OrdenEmpleados",
     "EmpleadoListResponse", "EmpleadoResponse", "EmpleadoSeleccionable",
 ]
 
@@ -127,7 +130,10 @@ class EmpleadoUpdate(BaseModel):
     manager_id: Optional[UUID] = None  # superior inmediato (self-FK a empleados)
     # Espejo del CHECK: los cinco valores. Tipado y no `str` para que un valor inválido salga
     # 422 en la frontera y no 500 desde Postgres. El porqué, en `utils/estados_empleado`.
-    estado: Optional[EstadoEmpleado] = None
+    # 🔴 `EstadoEditable`, NO `EstadoEmpleado`: son CUATRO, sin `baja`. El PUT dejó de poder
+    # dar de baja el 20/8/2026 — escribía el estado sin `fecha_egreso` ni motivo, salteándose
+    # las únicas dos vías que sí los escriben. El porqué completo, en `utils/estados_empleado`.
+    estado: Optional[EstadoEditable] = None
     roles: Optional[List[str]] = None  # si se provee, reemplaza la lista completa
     rol: Optional[str] = None          # DEPRECADO (se dropea en S6)
     dias_vacaciones_asignados: Optional[int] = None

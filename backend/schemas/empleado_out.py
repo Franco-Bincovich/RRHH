@@ -30,6 +30,17 @@ class EmpleadoResponse(BaseModel):
     modalidad_trabajo: str
     tipo_contrato: str
     fecha_ingreso: date
+    # 🔴 EL DATO DE LA BAJA, y hasta el 20/8/2026 la columna existía y NO SALÍA POR LA API.
+    # La escribe `_empleado_write_repo.dar_de_baja` (offboarding e import de nómina) desde
+    # siempre, la leen tres agregados —`bajas_mes` del dashboard, `generate_headcount` y el
+    # listado nominal de `_reporte_movimientos`—, y ningún consumidor de `EmpleadoResponse`
+    # podía verla: ni la ficha, ni el listado, ni el export. Una pantalla de Bajas no podía
+    # decir CUÁNDO se fue cada persona teniendo el dato guardado.
+    #
+    # `Optional` porque la columna es nullable y lo normal es que esté vacía: la trae cargada
+    # solo quien está de baja. NO es un campo que el alta ni el PUT escriban — el único camino
+    # que la setea es `dar_de_baja`, junto con `estado='baja'`, en un solo UPDATE.
+    fecha_egreso: Optional[date] = None
     telefono: Optional[str] = None
     fecha_nacimiento: Optional[date] = None
     dni: Optional[str] = None

@@ -62,10 +62,11 @@ from tests._barrido_escrituras_estado import escrituras
 
 # ── Los SEIS caminos ────────────────────────────────────────────────────────────────────────
 _CAMINOS: dict = {
-    ("schemas/empleado.py", "campo", "EmpleadoCreate.estado = 'activo'"):
+    ("schemas/empleado.py", "campo", "EmpleadoCreate.estado: EstadoAlta = 'activo'"):
         "ALTA — POST /api/empleados. El Literal acota a activo|preingreso.",
-    ("schemas/empleado.py", "campo", "EmpleadoUpdate.estado = None"):
-        "PUT — edición del legajo. El Literal acota a los 5 del CHECK y no valida NADA más.",
+    ("schemas/empleado.py", "campo",
+     "EmpleadoUpdate.estado: Optional[EstadoEditable] = None"):
+        "PUT — edición del legajo. El Literal acota a CUATRO (sin `baja`, desde el 20/8/2026) y no valida NADA más dentro de esos cuatro.",
     ("services/_empleado_activar.py", "kwarg", "EmpleadoUpdate(estado='activo')"):
         "ACTIVAR — POST /api/empleados/{id}/activar. Tres guardas, la de fecha es el corazón.",
     ("services/_offboarding_efectivizar.py", "dar_de_baja", "empleado_repo.dar_de_baja"):
@@ -86,11 +87,14 @@ _CAMINOS: dict = {
 # No son caminos: no los dispara nadie de afuera. Se declaran igual porque son donde la
 # escritura OCURRE, y borrarlas o cambiarlas afecta a los cinco de arriba a la vez.
 _INFRAESTRUCTURA: dict = {
-    ("repositories/_empleado_write_repo.py", "dict",
-     "{'estado': 'baja', 'fecha_egreso': str(fecha_egreso)}"):
-        "la ÚNICA escritura física de 'baja', y por eso siempre lleva la fecha.",
+    ("repositories/_empleado_baja_repo.py", "dict",
+     "{'estado': 'baja', 'fecha_egreso': str(fecha_egreso), **motivo_col}"):
+        "la ÚNICA escritura física de 'baja', y por eso siempre lleva la fecha. Mudada de "
+        "`_empleado_write_repo.py` el 20/8/2026 al sumarle el motivo (estaba en 99/100). "
+        "`**motivo_col` agrega `motivo_baja` SOLO si el caller lo pasa: sin eso el import de "
+        "nómina se borraría su propio texto libre.",
     ("repositories/empleado_repo.py", "dar_de_baja", "dar_de_baja"):
-        "el delegador del repo hacia _empleado_write_repo. No es un caller de negocio.",
+        "el delegador del repo hacia _empleado_baja_repo. No es un caller de negocio.",
 }
 
 # ── Ruido conocido: escriben `estado` de OTRA tabla ─────────────────────────────────────────

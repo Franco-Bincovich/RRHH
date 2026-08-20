@@ -93,14 +93,21 @@ class _RepoEmpleados:
         fila.update(data.model_dump(exclude_none=True))
         return EmpleadoResponse.model_validate(fila)
 
-    def dar_de_baja(self, empleado_id: str, fecha_egreso, empresa_id=None) -> bool:
+    def dar_de_baja(self, empleado_id: str, fecha_egreso, empresa_id=None, motivo=None) -> bool:
         """Calca la escritura real: estado Y fecha juntos, siempre. Un fake que solo pusiera el
-        estado dejaría pasar la regresión que `_empleado_write_repo` documenta (una baja sin
-        fecha se cae del headcount y del conteo de bajas de todos los meses a la vez)."""
+        estado dejaría pasar la regresión que `_empleado_baja_repo` documenta (una baja sin
+        fecha se cae del headcount y del conteo de bajas de todos los meses a la vez).
+
+        🔴 Y calca también la CONDICIONAL del motivo: sin motivo la columna NO se toca. Un fake
+        que escribiera `motivo_baja: None` siempre no podría desmentir el bug que esa condición
+        existe para impedir — que el import de nómina borre el texto libre que acaba de
+        escribir dos líneas antes."""
         fila = self.filas.get(empleado_id)
         if not fila or (empresa_id and fila["empresa_id"] != str(empresa_id)):
             return False
         fila.update({"estado": "baja", "fecha_egreso": str(fecha_egreso)})
+        if motivo:
+            fila["motivo_baja"] = motivo
         return True
 
     def save(self, data: EmpleadoCreate, empresa_id: UUID) -> EmpleadoResponse:
@@ -156,11 +163,45 @@ class TestUnEstadoInvalidoNoLlegaAPostgres:
         with pytest.raises(PydanticValidationError):
             EmpleadoUpdate(estado=valor)
 
-    @pytest.mark.parametrize("valor", ["activo", "baja", "licencia", "suspendido", "preingreso"])
-    def test_el_put_acepta_los_CINCO_del_check(self, valor: str) -> None:
-        """La contracara. `suspendido` está aunque sea valor muerto: el Literal es el espejo del
-        CHECK, y angostarlo es una decisión propia (ver `utils/estados_empleado.py`)."""
+    @pytest.mark.parametrize("valor", ["activo", "licencia", "suspendido", "preingreso"])
+    def test_el_put_acepta_los_CUATRO_editables(self, valor: str) -> None:
+        """La contracara. `suspendido` está aunque sea valor muerto: sacarlo sería otra decisión
+        propia, distinta de la que sacó `baja` (ver `utils/estados_empleado.py`)."""
         assert EmpleadoUpdate(estado=valor).estado == valor
+
+    def test_el_put_NO_puede_dar_de_baja(self) -> None:
+        """🔴 EL CIERRE DEL 20/8/2026, y el motivo por el que este archivo cambió de "los CINCO"
+        a "los CUATRO".
+
+        Hasta hoy una edición cualquiera del legajo podía escribir `estado='baja'` **sin pasar por
+        `dar_de_baja`**, o sea sin `fecha_egreso` y sin motivo. Esa fila queda rota en los dos
+        extremos del reporte a la vez —no cae en ningún período y sale del headcount igual— y
+        desde que la pantalla de Bajas ordena por `fecha_egreso DESC` sale además PRIMERA de todo,
+        porque Postgres pone los nulos adelante.
+
+        La baja tiene DOS vías y solo dos, las dos con su fecha: efectivizar un offboarding y el
+        import de nómina con `Fecha Baja`. El PUT nunca fue una tercera legítima."""
+        with pytest.raises(PydanticValidationError):
+            EmpleadoUpdate(estado="baja")
+
+    def test_la_unica_diferencia_con_el_espejo_del_CHECK_es_baja(self) -> None:
+        """🔴 ATA LOS DOS VOCABULARIOS. `EstadoEmpleado` sigue siendo el espejo del CHECK (la
+        columna admite cinco valores y eso no cambió); `EstadoEditable` es lo que el PUT puede
+        escribir. Que la diferencia sea EXACTAMENTE `{"baja"}` es lo que impide que alguien
+        angoste otro valor de rebote, en un diff que habla de otra cosa — que es justamente lo que
+        este cambio se cuidó de no hacer con `suspendido`.
+
+        Sin este test, los dos Literals son un espejo manual más: pueden separarse sin que nada
+        avise, y la próxima diferencia no la vería nadie."""
+        from typing import get_args
+
+        from utils.estados_empleado import EstadoEditable, EstadoEmpleado
+
+        del_check = set(get_args(EstadoEmpleado))
+        editables = set(get_args(EstadoEditable))
+        assert len(del_check) == 5, "guarda: si `get_args` devolviera vacío, todo pasaría al vacío"
+        assert editables < del_check, "lo editable tiene que ser un subconjunto de lo que el CHECK acepta"
+        assert del_check - editables == {"baja"}
 
     @pytest.mark.parametrize("valor", ["baja", "licencia", "suspendido"])
     def test_el_alta_rechaza_los_estados_que_no_son_de_alta(self, valor: str) -> None:
@@ -315,7 +356,7 @@ class _RepoOffboarding:
     def __init__(self, empleado_id: str) -> None:
         self.completados: list = []
         self._inst = {"id": "i1", "empleado_id": empleado_id, "estado": "iniciado",
-                      "empresa_id": EMPRESA}
+                      "empresa_id": EMPRESA, "motivo_egreso": "renuncia"}
 
     def find_instancia_min(self, instancia_id: str, empresa_id=None):
         return dict(self._inst)

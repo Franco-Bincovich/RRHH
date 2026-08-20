@@ -89,8 +89,14 @@ def _campos(arbol: ast.Module, rel: str) -> list:
             if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name) \
                     and item.target.id == "estado":
                 default = ast.unparse(item.value) if item.value else "<sin default>"
+                # 🔴 LA ANOTACIÓN ENTRA EN EL DETALLE, y no solo el default. Es lo que hace
+                # que ANGOSTAR el vocabulario de un camino sea visible para el inventario:
+                # hasta el 20/8/2026 esto guardaba solo `EmpleadoUpdate.estado = None`, así
+                # que sacarle `baja` al Literal no movía una coma y la declaración —que
+                # afirma qué valores acepta cada camino— no la verificaba nadie.
+                tipo = ast.unparse(item.annotation)
                 out.append(Escritura(rel, item.lineno, "campo",
-                                     f"{nodo.name}.estado = {default}"))
+                                     f"{nodo.name}.estado: {tipo} = {default}"))
     return out
 
 

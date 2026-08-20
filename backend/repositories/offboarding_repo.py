@@ -53,7 +53,8 @@ class OffboardingRepo:
         return _inst_row(ins.data[0], _activos.activos_de(inst_id))
 
     def find_instancia_min(self, instancia_id: str, empresa_id: Optional[UUID] = None) -> Optional[dict]:
-        """{id, empresa_id, estado, empleado_id} de la instancia, o None si no existe / es de otra
+        """{id, empresa_id, estado, empleado_id, motivo_egreso} de la instancia, o None si no
+        existe / es de otra
         empresa. Los activos no llevan barrera propia (se alcanzan por instancia_id), así que la
         barrera del módulo va sobre la instancia. Devuelve la fila —no un bool— para que el caller
         reuse su empresa_id.
@@ -64,8 +65,12 @@ class OffboardingRepo:
         barrera de empresa ya viaja acá — pedirla dos veces sería una ida de más a la base y, peor,
         dos lugares donde acordarse del `.eq("empresa_id")`. El otro caller
         (`marcar_activo_devuelto`) solo mira que la fila exista, así que las columnas de más no le
-        cambian nada."""
-        q = supabase_admin.table(_OI).select("id,empresa_id,estado,empleado_id").eq("id", instancia_id)
+        cambian nada.
+
+        ⚠️ `motivo_egreso` se sumó el 20/8/2026 por el mismo criterio y para lo mismo: la
+        efectivización lo copia a `empleados.motivo_baja`. Va en ESTA query —y no en una
+        segunda— porque es la misma fila que ya se está trayendo con su barrera de empresa."""
+        q = supabase_admin.table(_OI).select("id,empresa_id,estado,empleado_id,motivo_egreso").eq("id", instancia_id)
         res = _with_empresa(q, empresa_id).maybe_single().execute()
         return res.data if res and res.data else None
 

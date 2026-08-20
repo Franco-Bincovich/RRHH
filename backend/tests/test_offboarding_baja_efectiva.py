@@ -68,6 +68,7 @@ import httpx  # noqa: E402
 import pytest  # noqa: E402
 
 import middleware.auth as auth_mod  # noqa: E402
+import repositories._empleado_baja_repo as emp_baja_mod  # noqa: E402
 import repositories._empleado_lookup_repo as emp_lookup_mod  # noqa: E402
 import repositories._empleado_row as emp_row_mod  # noqa: E402
 import repositories._empleado_write_repo as emp_write_mod  # noqa: E402
@@ -323,7 +324,9 @@ def cliente(monkeypatch, almacen):
     monkeypatch.setattr(auth_mod, "registrar_actividad", lambda uid: None)
     monkeypatch.setattr(auth_mod, "sesion_expirada", lambda e: False)
     monkeypatch.setattr(auth_mod, "resolver_empresa_id", lambda h, p: EMPRESA)
-    for mod in (emp_lookup_mod, emp_row_mod, emp_write_mod, emp_repo_mod, off_repo_mod,
+    # 🔴 `emp_baja_mod` es donde vive `dar_de_baja` desde el 20/8/2026. Sin parchearlo, el
+    # test no falla con un fake incompleto: SALE A LA RED con el cliente real de Supabase.
+    for mod in (emp_baja_mod, emp_lookup_mod, emp_row_mod, emp_write_mod, emp_repo_mod, off_repo_mod,
                 activos_mod, audit_repo_mod, config_repo_mod, reporte_repo_mod, dash_mod,
                 headcount_mod, alertas_mod, kpis_mod, r_dot_mod, r_mov_mod, r_aus_mod,
                 r_cost_mod, r_dist_mod):

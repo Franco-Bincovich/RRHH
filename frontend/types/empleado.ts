@@ -122,7 +122,32 @@ export interface EmpleadoCreate {
   es_lider?: boolean
 }
 
-export type EmpleadoUpdate = Partial<EmpleadoCreate> & { estado?: string }
+/**
+ * Los CUATRO estados que el PUT del legajo puede escribir. Espejo del `EstadoEditable` del
+ * backend (`utils/estados_empleado.py`), que es un `Literal["activo", "licencia", "suspendido",
+ * "preingreso"]`.
+ *
+ * 🔴 `baja` NO ESTÁ, y es la decisión de este tipo. Hasta el 20/8/2026 el PUT aceptaba los cinco
+ * del CHECK, así que una edición cualquiera del legajo escribía `estado='baja'` **sin
+ * `fecha_egreso` ni motivo** — sin pasar por `dar_de_baja`, que es donde las tres se escriben
+ * juntas. Esa fila queda rota en los dos extremos del reporte a la vez y, desde que la pantalla
+ * de Bajas ordena por `fecha_egreso DESC`, sale además primera de todo. La baja tiene dos vías y
+ * solo dos: efectivizar un offboarding, o el import de nómina con `Fecha Baja`.
+ *
+ * ⚠️ NO es `EstadoEmpleado` (los cinco del CHECK, que es lo que el campo puede VALER y lo que
+ * declara `Empleado.estado`): es lo que este camino puede ESCRIBIR. Son dos preguntas distintas
+ * y el backend las tiene en dos Literals distintos por eso mismo.
+ */
+export type EstadoEditable = "activo" | "licencia" | "suspendido" | "preingreso"
+
+/**
+ * ⚠️ `Omit` + intersección, y NO `Partial<EmpleadoCreate> & { estado?: ... }` a secas. Con la
+ * intersección sola, TypeScript INTERSECA los dos tipos del campo: `EstadoAlta & string` colapsa
+ * a `EstadoAlta`, así que el tipo terminaba admitiendo DOS estados en vez de los cuatro que el
+ * backend acepta — `licencia` y `suspendido` no se podían mandar y nadie lo notaba, porque el
+ * `& { estado?: string }` se leía como si ensanchara. Medido con `tsc` el 20/8/2026.
+ */
+export type EmpleadoUpdate = Omit<Partial<EmpleadoCreate>, "estado"> & { estado?: EstadoEditable }
 
 /** Proyección liviana de empleado para poblar selects (ej. superior inmediato). */
 export interface EmpleadoSeleccionable {
