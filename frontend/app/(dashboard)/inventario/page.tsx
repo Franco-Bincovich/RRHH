@@ -22,7 +22,7 @@ export default function InventarioPage() {
     <div>
       <PageHeader
         title="Inventario"
-        description="Gestión de ítems asignados a empleados"
+        description="Gestión de ítems asignados a colaboradores"
       />
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabList className="mb-6">

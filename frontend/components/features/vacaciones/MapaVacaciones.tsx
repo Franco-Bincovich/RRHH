@@ -101,7 +101,7 @@ export function MapaVacaciones({ solicitudes }: MapaVacacionesProps) {
           <thead>
             <tr>
               <th className="sticky left-0 z-10 bg-muted border-b border-r border-border min-w-[160px] px-3 py-2 text-left font-medium text-muted-foreground">
-                Empleado
+                Colaborador
               </th>
               {dayHeaders.map(({ d, dow, isWeekend }) => (
                 <th

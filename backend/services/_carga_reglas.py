@@ -40,7 +40,7 @@ def verificar_ventana(fecha: date, hoy: date) -> None:
     if fecha < hoy - timedelta(days=DIAS_HACIA_ATRAS):
         raise AppError(
             f"Solo se pueden cargar los últimos {DIAS_HACIA_ATRAS} días. "
-            "Para algo más viejo, hablá con Recursos Humanos.",
+            "Para algo más viejo, hablá con Capital Humano.",
             "FECHA_MUY_VIEJA", 422)
 
 

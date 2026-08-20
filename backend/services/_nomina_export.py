@@ -18,7 +18,7 @@ def construir_filas_export(items: List[NominaResponse]) -> List[dict]:
     return [
         {
             "Empresa": n.empresa_nombre,
-            "Empleado": n.empleado_nombre,
+            "Colaborador": n.empleado_nombre,
             "Área": n.area_nombre,
             "Mes": n.mes,
             "Año": n.anio,

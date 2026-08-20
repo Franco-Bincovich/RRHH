@@ -33,7 +33,7 @@ const PAGE_SIZE_INICIAL = 20
  */
 export default function EmpleadosPage() {
   return (
-    <Suspense fallback={<PageHeader title="Empleados" description="Cargando..." />}>
+    <Suspense fallback={<PageHeader title="Colaboradores" description="Cargando..." />}>
       <EmpleadosListado />
     </Suspense>
   )
@@ -75,7 +75,7 @@ function EmpleadosListado() {
   return (
     <div>
       <PageHeader
-        title="Empleados"
+        title="Colaboradores"
         /*
          * 🔴 EL CONTEO REAL SE MANTIENE DURANTE LA CARGA (§3: "el conteo real en el subtítulo, así
          * la pantalla no salta cuando llegan los datos"). `data` NO se limpia al refiltrar, así que

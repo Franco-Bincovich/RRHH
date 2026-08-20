@@ -17,7 +17,7 @@ def construir_filas_export(items: List[EvaluadoListadoItem]) -> List[dict]:
             "Perfil": "Líder" if i.perfil == "lider" else "General",
             "Tipos de evaluador": ", ".join(i.tipos),
             "Nota final": i.nota_final if i.nota_final is not None else "Sin nota",
-            "Empleado asignado": "Sí" if i.asignado else "No",
+            "Colaborador asignado": "Sí" if i.asignado else "No",
         }
         for i in items
     ]

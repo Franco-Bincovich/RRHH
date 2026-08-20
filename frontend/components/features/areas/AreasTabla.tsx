@@ -34,7 +34,7 @@ export function AreasTabla({ areas, canWrite, onEdit, onDelete }: Props) {
           <TableHead>Nombre</TableHead>
           <TableHead>Descripción</TableHead>
           <TableHead>Responsable</TableHead>
-          <TableHead className="text-right">Empleados</TableHead>
+          <TableHead className="text-right">Colaboradores</TableHead>
           <TableHead className="w-24 text-right">Acciones</TableHead>
         </TableRow>
       </TableHeader>

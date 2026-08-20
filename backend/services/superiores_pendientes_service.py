@@ -15,7 +15,7 @@ son literalmente el mismo código — leer el encabezado de ese módulo.
 Qué pasa con cada pendiente al re-resolver:
   · se resolvió  → se escribe el `manager_id` y la fila SE BORRA de la tabla.
   · sigue sin resolverse → la fila queda, con el motivo ACTUALIZADO (puede haber cambiado: lo que
-    antes era "no hay ningún empleado con ese nombre" puede ser hoy "2 empleados con ese nombre").
+    antes era "no hay ningún colaborador con ese nombre" puede ser hoy "2 empleados con ese nombre").
 """
 from typing import List, Optional
 from uuid import UUID
@@ -93,7 +93,7 @@ def _nombre_empleado(fila: dict) -> str:
     """'APELLIDO, NOMBRE' del empleado, resuelto por el embed del repo (no está duplicado)."""
     emp = fila.get("empleados") or {}
     partes = [x for x in (emp.get("apellido"), emp.get("nombre")) if x]
-    return ", ".join(partes) or "(empleado sin nombre)"
+    return ", ".join(partes) or "(colaborador sin nombre)"
 
 
 def _item(fila: dict) -> SuperiorPendienteItem:

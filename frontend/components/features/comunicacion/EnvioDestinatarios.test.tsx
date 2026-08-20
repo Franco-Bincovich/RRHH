@@ -117,7 +117,7 @@ describe("un fallo de carga NO se muestra como «no hay empleados»", () => {
   it("🔴 y NUNCA aparece el texto de lista vacía", () => {
     const html = render([], { error: true })
 
-    expect(html).not.toContain("No hay empleados activos")
+    expect(html).not.toContain("No hay colaboradores activos")
     expect(html).not.toContain("Nadie coincide")
   })
 
@@ -143,7 +143,7 @@ describe("estados vacíos", () => {
   }
 
   it("sin búsqueda, el mensaje habla de que no hay empleados", () => {
-    expect(renderVacio("")).toContain("No hay empleados activos")
+    expect(renderVacio("")).toContain("No hay colaboradores activos")
   })
 
   it("con búsqueda, habla de la búsqueda — el motivo del vacío no es el mismo", () => {
@@ -157,7 +157,7 @@ describe("estados vacíos", () => {
         onSearch={() => {}} onToggle={() => {}} onReintentar={() => {}}
       />,
     )
-    expect(html).not.toContain("No hay empleados activos")
+    expect(html).not.toContain("No hay colaboradores activos")
     expect(html).toContain("animate-pulse")
   })
 })

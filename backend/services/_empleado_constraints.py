@@ -30,19 +30,19 @@ from utils.errors import AppError
 # el 404 idéntico existe justamente porque ahí sí la hay.
 _POR_CONSTRAINT = {
     "empleados_email_corporativo_key": (
-        "Ya existe un empleado con ese email corporativo. El email corporativo es único en todo "
-        "el sistema, así que puede estar tomado por un empleado de otra empresa.",
+        "Ya existe un colaborador con ese email corporativo. El email corporativo es único en todo "
+        "el sistema, así que puede estar tomado por un colaborador de otra empresa.",
         "EMAIL_CORPORATIVO_DUPLICADO",
     ),
     "empleados_empresa_dni_uq": (
-        "Ya existe un empleado con ese DNI en esta empresa.",
+        "Ya existe un colaborador con ese DNI en esta empresa.",
         "DNI_DUPLICADO",
     ),
     # 🔑 MISMO code que el del pre-chequeo de `_empleados_utils.ensure_legajo_unico`, a propósito:
     # es el mismo hecho contado por el otro camino (su carrera). Dos codes distintos obligarían al
     # front a manejar dos casos para una sola cosa.
     "empleados_legajo_empresa_key": (
-        "Ya existe un empleado con ese legajo en esta empresa.",
+        "Ya existe un colaborador con ese legajo en esta empresa.",
         "LEGAJO_DUPLICADO",
     ),
 }
@@ -50,7 +50,7 @@ _POR_CONSTRAINT = {
 # 🔴 EL FALLBACK ES LO QUE CONSERVA LA CONCLUSIÓN DEL MOLDE DE OBJETIVOS: un índice único FUTURO
 # no puede volver a subir como 500. Reconocer el nombre elige el MENSAJE; no decide si es un 409.
 _GENERICO = (
-    "Ya existe un empleado con esos datos: alguno de los campos únicos está repetido.",
+    "Ya existe un colaborador con esos datos: alguno de los campos únicos está repetido.",
     "EMPLEADO_DUPLICADO",
 )
 

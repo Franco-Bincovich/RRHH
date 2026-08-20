@@ -30,7 +30,7 @@ from services.vacaciones_service import VacacionesService
 
 _SELF, _S1, _S2 = "e-self", "s1", "s2"
 
-_HEADERS = ["Empresa", "Empleado", "Área", "Fecha desde", "Fecha hasta",
+_HEADERS = ["Empresa", "Colaborador", "Área", "Fecha desde", "Fecha hasta",
             "Días", "Tipo", "Comentario", "Estado", "Cancelada", "Creada"]
 _UUID_KEYS = {"id", "empresa_id", "empleado_id", "area_id"}
 
@@ -62,7 +62,7 @@ def test_export_formatea_cancelada_y_fechas():
     assert fila["Cancelada"] == "Sí"                   # booleano → Sí/No
     assert fila["Creada"] == "05/01/2026"              # sin hora/microsegundos
     assert fila["Fecha desde"] == "10/01/2026" and fila["Fecha hasta"] == "20/01/2026"
-    assert fila["Empresa"] == "Karstec" and fila["Empleado"] == "Ana Lopez"
+    assert fila["Empresa"] == "Karstec" and fila["Colaborador"] == "Ana Lopez"
     assert fila["Días"] == 11 and fila["Tipo"] == "dia_free"
 
 

@@ -92,7 +92,7 @@ export function EmpleadoCombobox({
   if (value) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-input px-2.5 py-1.5">
-        <span className="flex-1 truncate text-sm">{etiqueta || "Empleado seleccionado"}</span>
+        <span className="flex-1 truncate text-sm">{etiqueta || "Colaborador seleccionado"}</span>
         <button
           type="button"
           className="text-xs text-muted-foreground underline hover:text-primary"

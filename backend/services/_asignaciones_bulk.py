@@ -123,7 +123,7 @@ def asignar_area(asignar_uno: Callable, proyectos_repo, areas_repo, proyecto_id:
         # faltante que el usuario puede arreglar. Con 6 de las 9 áreas teniendo una sola
         # persona, un área vacía es un escenario real, no teórico.
         raise AppError(
-            "El área no tiene empleados para asignar. Revisá que tengan el área cargada en su ficha.",
+            "El área no tiene colaboradores para asignar. Revisá que tengan el área cargada en su ficha.",
             "AREA_SIN_EMPLEADOS", 422)
 
     return clasificar(asignar_uno, proyecto_id, [UUID(e) for e in empleado_ids], data)

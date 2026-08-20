@@ -67,7 +67,7 @@ export function NominaModal({ open, onClose, onSuccess }: NominaModalProps) {
       for (const emp of all) initial[emp.id] = { bruto: "", neto: "" }
       setRows(initial)
     } catch {
-      setError("No se pudo cargar la lista de empleados.")
+      setError("No se pudo cargar la lista de colaboradores.")
     } finally {
       setLoading(false)
     }
@@ -93,7 +93,7 @@ export function NominaModal({ open, onClose, onSuccess }: NominaModalProps) {
     })
 
     if (toSave.length === 0) {
-      setError("Ingresá al menos un empleado con monto bruto y monto neto.")
+      setError("Ingresá al menos un colaborador con monto bruto y monto neto.")
       return
     }
 
@@ -193,7 +193,7 @@ export function NominaModal({ open, onClose, onSuccess }: NominaModalProps) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="pb-2 pr-4 text-left font-medium text-muted-foreground">Empleado</th>
+                  <th className="pb-2 pr-4 text-left font-medium text-muted-foreground">Colaborador</th>
                   {!empresaActivaId && (
                     <th className="pb-2 pr-4 text-left font-medium text-muted-foreground">Empresa</th>
                   )}

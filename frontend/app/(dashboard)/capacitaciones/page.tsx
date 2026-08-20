@@ -22,7 +22,7 @@ export default function CapacitacionesPage() {
     <div>
       <PageHeader
         title="Formación"
-        description="Gestión del catálogo de cursos y asignaciones a empleados"
+        description="Gestión del catálogo de cursos y asignaciones a colaboradores"
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>

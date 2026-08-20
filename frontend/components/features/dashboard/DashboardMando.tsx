@@ -62,7 +62,7 @@ export function DashboardMando() {
   // Los ceros son datos válidos (mando sin gente), no un empty state — se muestran normales.
   const widgets: Widget[] = data
     ? [
-        { title: "Empleados a cargo", value: data.empleados_a_cargo, icon: Users, description: "Personas de tu equipo" },
+        { title: "Colaboradores a cargo", value: data.empleados_a_cargo, icon: Users, description: "Personas de tu equipo" },
         { title: "De vacaciones este mes", value: data.vacaciones_mes, icon: Umbrella, description: "Solicitudes que tocan el mes en curso" },
         { title: "Ausencias este mes", value: data.ausencias_mes, icon: CalendarX2, description: "Registros que tocan el mes en curso" },
       ]

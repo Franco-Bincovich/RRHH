@@ -53,7 +53,7 @@ def construir_filas_export(items: List[OffboardingResponse]) -> List[dict]:
     return [
         {
             "Empresa": o.empresa_nombre,
-            "Empleado": o.empleado_nombre,
+            "Colaborador": o.empleado_nombre,
             "Motivo": _motivo(o.motivo),
             "Estado": o.estado,
             "Inicio": _fecha(o.fecha_inicio),

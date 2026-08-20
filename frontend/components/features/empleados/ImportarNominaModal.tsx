@@ -60,7 +60,7 @@ export function ImportarNominaModal({ open, onClose, onSuccess }: ImportarNomina
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetAndClose() }}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{result ? "Resultado de la importación" : "Importar nómina de empleados"}</DialogTitle>
+          <DialogTitle>{result ? "Resultado de la importación" : "Importar nómina de colaboradores"}</DialogTitle>
         </DialogHeader>
 
         {!result ? (
@@ -89,7 +89,7 @@ export function ImportarNominaModal({ open, onClose, onSuccess }: ImportarNomina
             </label>
 
             <div className="rounded-lg border bg-muted/30 p-3 text-xs">
-              <p className="mb-1.5 font-medium text-foreground">Se crean empleados, empresas (Organismo) y áreas (Sector) desde el archivo.</p>
+              <p className="mb-1.5 font-medium text-foreground">Se crean colaboradores, empresas (Organismo) y áreas (Sector) desde el archivo.</p>
               <p className="font-mono leading-relaxed text-muted-foreground">{COLUMNAS_27}</p>
             </div>
           </div>

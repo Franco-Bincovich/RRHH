@@ -22,7 +22,7 @@ export function AvisoIrreversible() {
           Revisá bien antes de cargar. Una vez enviado no se puede editar ni borrar.
         </p>
         <p className="text-muted-foreground">
-          Si te equivocaste, avisale a Recursos Humanos. Podés cargar hasta{" "}
+          Si te equivocaste, avisale a Capital Humano. Podés cargar hasta{" "}
           {DIAS_HACIA_ATRAS} días hacia atrás, con un máximo de {MAX_HORAS_DIA} horas por día.
         </p>
       </div>

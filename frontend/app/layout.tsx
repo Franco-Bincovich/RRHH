@@ -11,7 +11,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "HR Karstec",
-  description: "Plataforma de gestión del ciclo de vida del empleado",
+  description: "Plataforma de gestión del ciclo de vida del colaborador",
 }
 
 export default function RootLayout({

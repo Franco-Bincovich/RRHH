@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ErrorCarga } from "@/components/ui/ErrorCarga"
 import { Select } from "@/components/ui/select"
 
-export const ERROR_CANDIDATOS = "No se pudieron cargar los empleados."
+export const ERROR_CANDIDATOS = "No se pudieron cargar los colaboradores."
 
 interface Props {
   open: boolean
@@ -48,7 +48,7 @@ export function AsignarEmpleadosModal({ open, proyectoId, yaAsignadosIds, onClos
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle className="text-base">Asignar empleados</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-base">Asignar colaboradores</DialogTitle></DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="grid grid-cols-2 gap-3">
             <Select value={areaFiltro} onChange={(e) => setAreaFiltro(e.target.value)} aria-label="Filtrar por área">

@@ -68,5 +68,5 @@ def validar(cand, fecha_ingreso: date) -> None:
     if fecha_ingreso < date.today():
         raise AppError(
             "La fecha de ingreso no puede ser anterior a hoy. Contratar registra un acuerdo "
-            "hacia adelante; si la persona ya entró, el camino es el alta de empleado.",
+            "hacia adelante; si la persona ya entró, el camino es el alta de colaborador.",
             "FECHA_INGRESO_PASADA", 400)

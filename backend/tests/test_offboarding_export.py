@@ -166,7 +166,7 @@ class TestColumnas:
 
     def test_son_las_esperadas_y_en_orden(self) -> None:
         assert list(construir_filas_export(_CATALOGO)[0]) == [
-            "Empresa", "Empleado", "Motivo", "Estado", "Inicio",
+            "Empresa", "Colaborador", "Motivo", "Estado", "Inicio",
             "Activos devueltos", "Activos totales", "Progreso",
             "Accesos revocados", "Accesos totales", "Entrevista de salida",
         ]
@@ -187,7 +187,7 @@ class TestColumnas:
 
     def test_cada_proceso_conserva_SUS_valores(self) -> None:
         filas = construir_filas_export(_CATALOGO)
-        assert [f["Empleado"] for f in filas] == ["Ana Gómez", "Beto Pérez", "Caro Díaz"]
+        assert [f["Colaborador"] for f in filas] == ["Ana Gómez", "Beto Pérez", "Caro Díaz"]
         assert [f["Progreso"] for f in filas] == ["60%", "0%", "0%"]
 
     def test_el_motivo_sale_con_el_texto_de_la_pantalla(self) -> None:

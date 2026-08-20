@@ -20,7 +20,7 @@ def construir_filas_export(items: List[AsignacionResponse]) -> List[dict]:
     return [
         {
             "Empresa": a.empresa_nombre,
-            "Empleado": a.empleado_nombre,
+            "Colaborador": a.empleado_nombre,
             "Equipo": a.item_nombre,
             "Tipo": a.item_tipo,
             "N° serie": a.item_numero_serie,

@@ -33,7 +33,7 @@ class CesionService:
         """Carga el empleado validando pertenencia a la empresa activa. 404 si no existe/no pertenece."""
         emp = self._empleados.find_by_id(str(empleado_id), empresa_id)
         if not emp:
-            raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
+            raise AppError("Colaborador no encontrado", "EMPLEADO_NOT_FOUND", 404)
         return emp
 
     def _cesion_owned(self, id: UUID, empresa_id: Optional[UUID]) -> CesionResponse:

@@ -45,7 +45,7 @@ export function CostosPorAreaTable({
           <TableRow>
             {mostrarEmpresa && <TableHead>Empresa</TableHead>}
             <TableHead>Área</TableHead>
-            <TableHead className="text-right">Empleados</TableHead>
+            <TableHead className="text-right">Colaboradores</TableHead>
             <TableHead className="text-right">Costo mensual</TableHead>
             <TableHead className="text-right">Costo promedio</TableHead>
             <TableHead className="text-right">% del total</TableHead>

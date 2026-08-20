@@ -197,7 +197,7 @@ def test_un_area_vacia_da_un_mensaje_propio(monkeypatch) -> None:
     with pytest.raises(AppError) as exc:
         svc.asignar_area(PROYECTO_A, _pedido(AREA_VACIA), EMPRESA_A)
     assert exc.value.code == "AREA_SIN_EMPLEADOS" and exc.value.status_code == 422
-    assert "área no tiene empleados" in exc.value.message
+    assert "área no tiene colaboradores" in exc.value.message
     assert asignador.creadas == []
 
 

@@ -15,8 +15,8 @@ interface Message {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SUGGESTIONS = [
-  "¿Qué empleados están en onboarding?",
-  "Mostrá los empleados activos del área de Sistemas",
+  "¿Qué colaboradores están en onboarding?",
+  "Mostrá los colaboradores activos del área de Sistemas",
   "¿Cuáles son las vacantes activas?",
   "¿Quiénes están en zona verde en el 9-box?",
 ]
@@ -125,7 +125,7 @@ export function AIPanel() {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground leading-none">HR Karstec</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Asistente de RRHH</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Asistente de Capital Humano</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -153,7 +153,7 @@ export function AIPanel() {
           {messages.length === 0 ? (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground text-center">
-                Preguntale algo a HR Karstec sobre tus datos de RRHH
+                Preguntale algo a HR Karstec sobre tus datos de Capital Humano
               </p>
               <div className="grid grid-cols-1 gap-1.5">
                 {SUGGESTIONS.map((s) => (

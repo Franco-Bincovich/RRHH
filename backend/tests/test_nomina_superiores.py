@@ -231,7 +231,7 @@ class TestLosTresEstados:
         resueltos, pendientes = sup.resolver()
         assert (resueltos, _cortos(repo.escritos)) == (0, {})
         assert pendientes[0].superior == "FANTASMA, PEDRO"
-        assert "ningún empleado" in pendientes[0].motivo
+        assert "ningún colaborador" in pendientes[0].motivo
 
     def test_no_hay_matcheo_por_similitud(self, monkeypatch) -> None:
         """'GOMES' no matchea 'GOMEZ'. Si algún día alguien mete fuzzy, este test lo frena."""
@@ -348,7 +348,7 @@ class TestElIndice:
         Se importa la nómina de la empresa A —ninguna fila de la B— y el superior está cargado en
         la B. La primera versión acotaba el índice a "las empresas presentes en el archivo", que
         suena razonable: acá habría pedido solo la A, no habría encontrado al jefe, y habría
-        reportado "no hay ningún empleado con ese nombre". Sin error, sin aviso, y justo en el caso
+        reportado "no hay ningún colaborador con ese nombre". Sin error, sin aviso, y justo en el caso
         cruzado que motivó todo el cambio. Ver `indice_por_nombre`.
 
         Para que este test falle alcanza con volver a pasarle un scope de empresas al índice."""
@@ -431,7 +431,7 @@ class TestLosPendientesSePersisten:
         assert sup.pendientes_repo.guardados == [{
             "empleado_id": _uid("s"), "empresa_id": EMPRESA_A,
             "apellido_csv": "FANTASMA", "nombre_csv": "PEDRO",
-            "motivo": "no hay ningún empleado cargado con ese nombre",
+            "motivo": "no hay ningún colaborador cargado con ese nombre",
         }]
 
     def test_un_resuelto_se_BORRA_de_los_pendientes(self, monkeypatch) -> None:

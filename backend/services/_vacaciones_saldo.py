@@ -111,7 +111,7 @@ def calcular_saldo(repo, empleado_id, empresa_id=None, pendientes_repo=None) -> 
     """
     datos = repo.find_datos_para_saldo(str(empleado_id), empresa_id)
     if datos is None:
-        raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
+        raise AppError("Colaborador no encontrado", "EMPLEADO_NOT_FOUND", 404)
     hoy = date.today()
     ingreso = _fecha(datos.get("fecha_ingreso"))
     pendientes = pendientes_repo.find_by_empleado(str(empleado_id), empresa_id) if pendientes_repo else []

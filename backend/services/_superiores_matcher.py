@@ -59,7 +59,7 @@ def resolver(anotados: List[dict], repo) -> Tuple[List[str], List[dict]]:
     for a in anotados:
         candidatos = indice.get(a["clave"], [])
         if not candidatos:
-            pendientes.append({**a, "motivo": "no hay ningún empleado cargado con ese nombre"})
+            pendientes.append({**a, "motivo": "no hay ningún colaborador cargado con ese nombre"})
         elif len(candidatos) > 1:
             pendientes.append({**a, "motivo": f"{len(candidatos)} empleados con ese nombre: hay que elegir cuál"})
         else:

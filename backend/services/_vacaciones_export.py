@@ -22,7 +22,7 @@ def construir_filas_export(items: List[SolicitudVacacionesResponse]) -> List[dic
     return [
         {
             "Empresa": s.empresa_nombre,
-            "Empleado": s.empleado_nombre,
+            "Colaborador": s.empleado_nombre,
             "Área": s.area_nombre,
             "Fecha desde": _fecha(s.fecha_desde),
             "Fecha hasta": _fecha(s.fecha_hasta),

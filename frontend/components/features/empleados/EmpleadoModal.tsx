@@ -49,7 +49,7 @@ export function EmpleadoModal({ open, onClose, onSuccess, empleado }: EmpleadoMo
       {/* El ancho lo pone el patrón (560px, §3), no el modal: por eso ya no lleva `max-w-2xl`. */}
       <DialogContent patron="formulario">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar empleado" : "Nuevo empleado"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar colaborador" : "Nuevo colaborador"}</DialogTitle>
           {/*
            * 🔴 UNA LÍNEA QUE EXPLICA LA CONSECUENCIA, no lo que el modal es (§3). "Cargá los datos
            * del empleado" describe el formulario y no le dice nada a nadie; lo que el usuario no
@@ -138,7 +138,7 @@ export function EmpleadoModal({ open, onClose, onSuccess, empleado }: EmpleadoMo
             className="min-h-11"
             disabled={submitting}
           >
-            {submitting ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear empleado"}
+            {submitting ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear colaborador"}
           </Button>
         </DialogFooter>
       </DialogContent>

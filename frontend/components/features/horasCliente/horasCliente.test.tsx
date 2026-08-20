@@ -75,7 +75,7 @@ describe("KPIsHorasPanel", () => {
   it("muestra los cuatro KPIs", () => {
     const html = _render(<KPIsHorasPanel kpis={KPIS} />)
     for (const label of ["Horas del mes", "Clientes con carga",
-                         "Empleados que cargaron", "Registros"]) {
+                         "Colaboradores que cargaron", "Registros"]) {
       expect(html).toContain(label)
     }
   })

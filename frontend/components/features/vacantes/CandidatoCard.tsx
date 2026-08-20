@@ -8,7 +8,7 @@ import type { ClasificacionIA, EtapaPipeline } from "@/types/vacantes"
 const ETAPA_LABELS: Record<EtapaPipeline, string> = {
   postulado: "Postulado",
   assessment: "Assessment",
-  entrevista_rrhh: "Entrevista RRHH",
+  entrevista_rrhh: "Entrevista Capital Humano",
   entrevista_tecnica: "Entrevista Técnica",
   oferta: "Oferta",
 }

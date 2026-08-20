@@ -12,7 +12,7 @@ interface Props {
 }
 
 const OPCIONES: { id: ModoEnvio; label: string }[] = [
-  { id: "empleados", label: "Empleados del sistema" },
+  { id: "empleados", label: "Colaboradores del sistema" },
   { id: "libre", label: "Escribir direcciones" },
 ]
 

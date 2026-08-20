@@ -61,12 +61,12 @@ describe("con una plantilla que usa variables", () => {
     const html = render(true)
 
     expect(html).toContain(MOTIVO_VARIABLES)
-    expect(html).toContain("solo se puede enviar a empleados")
+    expect(html).toContain("solo se puede enviar a colaboradores")
     expect(html).not.toContain("{{")   // no se le muestra la sintaxis interna al usuario
   })
 
   it("el modo de empleados SIGUE habilitado: es el que sí resuelve las variables", () => {
-    expect(deshabilitado(render(true), "Empleados del sistema")).toBe(false)
+    expect(deshabilitado(render(true), "Colaboradores del sistema")).toBe(false)
   })
 })
 
@@ -82,14 +82,14 @@ describe("con una plantilla sin variables", () => {
 
   it("los dos modos se ofrecen", () => {
     const html = render(false)
-    expect(boton(html, "Empleados del sistema")).not.toBeNull()
+    expect(boton(html, "Colaboradores del sistema")).not.toBeNull()
     expect(boton(html, "Escribir direcciones")).not.toBeNull()
   })
 })
 
 describe("el modo activo se marca", () => {
   it("empleados", () => {
-    expect(boton(render(false, "empleados"), "Empleados del sistema")).toContain('aria-pressed="true"')
+    expect(boton(render(false, "empleados"), "Colaboradores del sistema")).toContain('aria-pressed="true"')
   })
 
   it("libre", () => {
@@ -98,6 +98,6 @@ describe("el modo activo se marca", () => {
 
   it("y solo uno a la vez (si no, no habría forma de saber qué se va a mandar)", () => {
     const html = render(false, "libre")
-    expect(boton(html, "Empleados del sistema")).toContain('aria-pressed="false"')
+    expect(boton(html, "Colaboradores del sistema")).toContain('aria-pressed="false"')
   })
 })

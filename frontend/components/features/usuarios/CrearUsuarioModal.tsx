@@ -91,8 +91,8 @@ export function CrearUsuarioModal({ open, onClose, onCreated }: CrearUsuarioModa
   }
 
   const hint = form.rol === "mandos_medios"
-    ? "Opcional. Solo se listan empleados marcados como líderes."
-    : "Opcional. Se listan todos los empleados activos."
+    ? "Opcional. Solo se listan colaboradores marcados como líderes."
+    : "Opcional. Se listan todos los colaboradores activos."
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>

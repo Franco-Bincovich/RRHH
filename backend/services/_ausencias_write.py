@@ -36,10 +36,10 @@ def crear(repo, audit, periodos, ownership, data: AusenciaCreate, created_by: st
         AppError: EMPLEADO_NOT_FOUND (404) si el empleado no existe.
     """
     if not puede_gestionar_empleado(created_by, rol, data.empleado_id, ownership):
-        raise AppError("No autorizado para gestionar este empleado", "OWNERSHIP_DENIED", 403)
+        raise AppError("No autorizado para gestionar este colaborador", "OWNERSHIP_DENIED", 403)
     empresa_id = repo.find_empresa_for_empleado(str(data.empleado_id))
     if not empresa_id:
-        raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
+        raise AppError("Colaborador no encontrado", "EMPLEADO_NOT_FOUND", 404)
     verificar_periodo_abierto(empresa_id, "ausencias", rol, desde=data.fecha_desde, hasta=data.fecha_hasta, repo=periodos)
     dias = (data.fecha_hasta - data.fecha_desde).days + 1
     row = repo.save(

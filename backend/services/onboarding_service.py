@@ -63,7 +63,7 @@ class OnboardingService:
         instancia = self._repo.find_instancia_by_empleado(str(empleado_id), empresa_id)
         if not instancia:
             raise AppError(
-                "No hay onboarding activo para este empleado",
+                "No hay onboarding activo para este colaborador",
                 "ONBOARDING_NOT_FOUND",
                 404,
             )

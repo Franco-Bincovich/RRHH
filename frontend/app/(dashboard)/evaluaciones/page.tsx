@@ -34,7 +34,7 @@ export default function EvaluacionesPage() {
     <EmptyState
       icon={<ClipboardList />}
       title="Todavía no hay resultados importados"
-      description={canWrite ? "Importá los archivos de un ciclo desde la pestaña “Importar resultados”." : "Cuando RRHH cargue un ciclo, vas a ver acá las métricas."}
+      description={canWrite ? "Importá los archivos de un ciclo desde la pestaña “Importar resultados”." : "Cuando Capital Humano cargue un ciclo, vas a ver acá las métricas."}
     />
   )
 

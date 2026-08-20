@@ -137,5 +137,5 @@ export function mensajeDeError(e: unknown): string {
  * caso está quien pregunta— y a la vez le da a un empleado real la única acción que le sirve.
  */
 export const AYUDA_IDENTIFICACION =
-  "Si el número es correcto y sigue sin funcionar, avisale a Recursos Humanos: puede que tu " +
+  "Si el número es correcto y sigue sin funcionar, avisale a Capital Humano: puede que tu " +
   "usuario todavía no esté habilitado."

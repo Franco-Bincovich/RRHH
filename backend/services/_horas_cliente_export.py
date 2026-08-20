@@ -31,7 +31,7 @@ def construir_filas_export(items: List[HoraResponse]) -> List[dict]:
     return [
         {
             "Cliente": h.cliente_nombre or "Sin cliente",
-            "Empleado": h.empleado_nombre,
+            "Colaborador": h.empleado_nombre,
             "Empresa": h.empleado_empresa_nombre,
             "Fecha": _fecha(h.fecha),
             "Horas": h.horas,

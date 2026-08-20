@@ -26,7 +26,7 @@ function cuerpo(d: DatosComunes) {
 export async function enviarSeleccion(proyectoId: string, ids: string[], d: DatosComunes): Promise<boolean> {
   try {
     const res = await asignarBulk(proyectoId, { empleado_ids: ids, ...cuerpo(d) })
-    const ok = `${res.asignados.length} empleado${res.asignados.length !== 1 ? "s" : ""} asignado${res.asignados.length !== 1 ? "s" : ""}`
+    const ok = `${res.asignados.length} colaborador${res.asignados.length !== 1 ? "es" : ""} asignado${res.asignados.length !== 1 ? "s" : ""}`
     const yaEstaban = res.ya_asignados.length ? `${res.ya_asignados.length} ya estaban en el proyecto.` : ""
     if (res.errores.length) toast.warning(`${ok}. ${yaEstaban} ${res.errores.length} no se pudieron.`.trim())
     else if (yaEstaban) toast.success(`${ok}. ${yaEstaban}`)

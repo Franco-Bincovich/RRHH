@@ -15,7 +15,7 @@ export function KPIsHorasPanel({ kpis }: { kpis: KPIsHoras }) {
   const tarjetas = [
     { label: "Horas del mes", valor: kpis.horas_totales.toLocaleString("es-AR"), icon: Clock },
     { label: "Clientes con carga", valor: String(kpis.clientes_con_carga), icon: Building2 },
-    { label: "Empleados que cargaron", valor: String(kpis.empleados_que_cargaron), icon: Users },
+    { label: "Colaboradores que cargaron", valor: String(kpis.empleados_que_cargaron), icon: Users },
     { label: "Registros", valor: String(kpis.registros), icon: ListChecks },
   ]
   return (

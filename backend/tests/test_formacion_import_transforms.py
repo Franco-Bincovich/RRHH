@@ -142,7 +142,7 @@ class TestMatcheo:
     def test_dos_homonimos_dan_ambiguo_no_eligen(self) -> None:
         idx = IndiceEmpleados(_PADRON + [{"id": "e9", "nombre": "Camila", "apellido": "Quiroga"}])
         empleado, motivo = idx.resolver("Quiroga Camila")
-        assert empleado is None and "más de un empleado" in motivo
+        assert empleado is None and "más de un colaborador" in motivo
 
 
 class TestParesParecidos:

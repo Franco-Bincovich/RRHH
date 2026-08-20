@@ -95,7 +95,7 @@ export default function ProcesosPage() {
     <div className="space-y-6">
       <PageHeader
         title="Panel de Procesos"
-        description="Estado actual de los procesos operativos de RRHH"
+        description="Estado actual de los procesos operativos de Capital Humano"
       />
 
       {loading ? (

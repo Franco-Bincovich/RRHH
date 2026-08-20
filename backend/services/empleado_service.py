@@ -91,7 +91,7 @@ class EmpleadoService:
         pagina = self.get_empleados(1, LIMITE_FILAS_EXPORT, empresa_id, area_id, estado, search, es_lider, proyecto_id, sin_manager)
         verificar_limite_export(pagina.total)  # total exacto (count="exact"), respeta los filtros
         items = pagina.items
-        return build_export(nombre="Empleados", datos={"Empleados": construir_filas_export(items)}, filename_base="empleados", formato=formato)
+        return build_export(nombre="Colaboradores", datos={"Colaboradores": construir_filas_export(items)}, filename_base="colaboradores", formato=formato)
 
     def get_empleado(self, id: UUID, empresa_id: Optional[UUID] = None) -> EmpleadoResponse:
         """

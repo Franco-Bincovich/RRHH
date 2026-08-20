@@ -31,7 +31,7 @@ export function BarraIdentidad({ empleado, acciones }: { empleado: Empleado; acc
     <div className="mb-4">
       <nav aria-label="Migas de pan" className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
         <Link href="/empleados" className="rounded-sm underline-offset-2 hover:text-foreground hover:underline">
-          Empleados
+          Colaboradores
         </Link>
         <ChevronRight className="size-3" aria-hidden="true" />
         {/* La miga actual NO es un link: llevaría a la página en la que ya estás. */}

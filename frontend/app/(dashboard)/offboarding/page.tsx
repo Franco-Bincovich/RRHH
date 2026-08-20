@@ -67,7 +67,7 @@ export default function OffboardingPage() {
         <EmptyState
           icon={<UserMinus />}
           title="Sin procesos activos"
-          description="No hay empleados en proceso de offboarding actualmente."
+          description="No hay colaboradores en proceso de offboarding actualmente."
         />
       ) : (
         <ul className="space-y-4" role="list">

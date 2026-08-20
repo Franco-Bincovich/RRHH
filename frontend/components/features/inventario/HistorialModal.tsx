@@ -50,7 +50,7 @@ export function HistorialModal({ item, onClose }: Props) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Empleado</TableHead>
+                <TableHead>Colaborador</TableHead>
                 <TableHead>Desde</TableHead>
                 <TableHead>Hasta</TableHead>
                 <TableHead>Estado devolución</TableHead>

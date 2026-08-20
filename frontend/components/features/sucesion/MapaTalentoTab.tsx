@@ -75,10 +75,10 @@ export function MapaTalentoTab({
         {!loading && !error && empleadosFiltrados.length === 0 && (
           <EmptyState
             icon={<Layers />}
-            title="Sin empleados en el mapa"
+            title="Sin colaboradores en el mapa"
             description={selectedArea
-              ? "No hay empleados en esta área con potencial y desempeño asignados."
-              : "Asigná potencial y desempeño a los empleados activos para verlos aquí."}
+              ? "No hay colaboradores en esta área con potencial y desempeño asignados."
+              : "Asigná potencial y desempeño a los colaboradores activos para verlos aquí."}
           />
         )}
         {!loading && !error && empleadosFiltrados.length > 0 && (

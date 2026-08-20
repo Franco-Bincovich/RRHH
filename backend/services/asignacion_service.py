@@ -66,7 +66,7 @@ class AsignacionService:
         """
         empresa_id = self._repo.find_empresa_for_empleado(str(data.empleado_id))
         if not empresa_id:
-            raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
+            raise AppError("Colaborador no encontrado", "EMPLEADO_NOT_FOUND", 404)
         if not self._cap_repo.find_empresa_for(str(data.capacitacion_id), empresa_id):
             raise AppError("Formación no encontrada", "CAPACITACION_NOT_FOUND", 404)
         try:
@@ -75,7 +75,7 @@ class AsignacionService:
         except AppError:
             raise
         except Exception:
-            raise AppError("El empleado ya tiene esta formación asignada", "YA_ASIGNADO", 409)
+            raise AppError("El colaborador ya tiene esta formación asignada", "YA_ASIGNADO", 409)
         logger.info("Capacitación asignada", extra={"asignacion_id": row.id, "created_by": created_by})
         return row
 

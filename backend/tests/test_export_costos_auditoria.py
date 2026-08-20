@@ -267,7 +267,7 @@ class TestExportNomina:
 class TestColumnasNomina:
     def test_no_vuelca_uuids_crudos(self) -> None:
         fila = filas_nomina([_nomina(EMPRESA_A)])[0]
-        assert fila["Empleado"] == "Ana García" and fila["Área"] == "Tecnología"
+        assert fila["Colaborador"] == "Ana García" and fila["Área"] == "Tecnología"
         assert not any("-" in str(v) and len(str(v)) == 36 for v in fila.values())
 
     def test_los_montos_salen_como_numero(self) -> None:

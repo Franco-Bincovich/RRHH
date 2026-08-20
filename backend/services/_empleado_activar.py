@@ -89,7 +89,7 @@ def activar(repo, audit, empleado_id: UUID, empresa_id: Optional[UUID] = None,
         # saber por qué el botón no hizo nada. No es un oráculo — ya pasó la barrera de empresa,
         # así que a esta altura el empleado es suyo y su estado ya se lo muestra la pantalla.
         raise AppError(
-            f"Solo se puede activar un preingreso, y este empleado está en '{empleado.estado}'",
+            f"Solo se puede activar un preingreso, y este colaborador está en '{empleado.estado}'",
             "EMPLEADO_NO_ES_PREINGRESO", 409,
         )
 
@@ -110,7 +110,7 @@ def activar(repo, audit, empleado_id: UUID, empresa_id: Optional[UUID] = None,
     if not actualizado:
         # El UPDATE no tocó ninguna fila pese a que el SELECT la encontró: se la llevaron entre
         # las dos queries. Mismo 404 que arriba, para no inventar un estado intermedio.
-        raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
+        raise AppError("Colaborador no encontrado", "EMPLEADO_NOT_FOUND", 404)
 
     audit.registrar(**payload_activacion_empleado(
         actualizado, usuario_id, empleado.empresa_id,

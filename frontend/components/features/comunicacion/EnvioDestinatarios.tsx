@@ -5,7 +5,7 @@ import { ErrorCarga } from "@/components/ui/ErrorCarga"
 
 const INPUT_CLS = "flex min-h-[2.75rem] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
-export const ERROR_DESTINATARIOS = "No se pudieron cargar los empleados."
+export const ERROR_DESTINATARIOS = "No se pudieron cargar los colaboradores."
 
 interface Props {
   /** Los que se ven con el filtro de búsqueda aplicado. */
@@ -66,7 +66,7 @@ export function EnvioDestinatarios({
             <div className="h-9 animate-pulse bg-muted" />
           ) : visibles.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-              {search ? "Nadie coincide con la búsqueda." : "No hay empleados activos para enviar."}
+              {search ? "Nadie coincide con la búsqueda." : "No hay colaboradores activos para enviar."}
             </p>
           ) : visibles.map((e) => (
             <label key={e.id} className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm">

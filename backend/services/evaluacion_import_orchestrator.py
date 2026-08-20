@@ -127,7 +127,7 @@ class EvaluacionImportOrchestrator:
         """Fail-closed: ningún empleado_id puede ser de otra empresa (la barandilla del matcheo)."""
         del_empresa = {str(c.empleado_id) for c in self._matcheo.find_empleados_empresa(empresa_id)}
         if any(e.empleado_id and str(e.empleado_id) not in del_empresa for e in evaluados):
-            raise AppError("Hay empleados que no pertenecen a la empresa del lote",
+            raise AppError("Hay colaboradores que no pertenecen a la empresa del lote",
                            "EMPLEADO_FUERA_DE_EMPRESA", 422)
 
     def _guardar_equivalencias(self, empresa_id: str, evaluados: List[EvaluadoConfirm],

@@ -27,7 +27,7 @@ interface Props {
 /**
  * 🔴 LOS DOS VACÍOS NO SON EL MISMO VACÍO, y ésta es la función que los separa.
  *
- * "No hay empleados" es una afirmación sobre la BASE. Decirla cuando lo que pasó es que nadie
+ * "No hay colaboradores" es una afirmación sobre la BASE. Decirla cuando lo que pasó es que nadie
  * coincide con lo tipeado manda al usuario a cargar gente que ya existe — y es literalmente la
  * frase que ya mintió una vez acá, cuando un 422 se mostraba como lista vacía.
  *
@@ -37,7 +37,7 @@ interface Props {
 export function mensajeVacio(termino: string): string {
   return termino.trim()
     ? `Sin resultados para "${termino.trim()}". Probá con otro nombre o apellido.`
-    : "No hay empleados activos para elegir."
+    : "No hay colaboradores activos para elegir."
 }
 
 export function ResultadosEmpleados({
@@ -45,7 +45,7 @@ export function ResultadosEmpleados({
 }: Props) {
   if (error) {
     return (
-      <ErrorCarga mensaje="No se pudieron cargar los empleados." onReintentar={onReintentar} />
+      <ErrorCarga mensaje="No se pudieron cargar los colaboradores." onReintentar={onReintentar} />
     )
   }
   if (cargando) {

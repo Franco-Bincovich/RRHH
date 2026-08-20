@@ -22,13 +22,13 @@ def ensure_legajo_unico(
         return
     existing = repo.find_by_legajo(legajo, empresa_id)
     if existing and existing.id != exclude_id:
-        raise AppError("Ya existe un empleado con ese legajo en esta empresa", "LEGAJO_DUPLICADO", 409)
+        raise AppError("Ya existe un colaborador con ese legajo en esta empresa", "LEGAJO_DUPLICADO", 409)
 
 
 def empleado_or_404(empleado: Optional[EmpleadoResponse]) -> EmpleadoResponse:
     """Devuelve el empleado o lanza EMPLEADO_NOT_FOUND (404) si es None."""
     if not empleado:
-        raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
+        raise AppError("Colaborador no encontrado", "EMPLEADO_NOT_FOUND", 404)
     return empleado
 
 

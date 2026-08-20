@@ -59,7 +59,7 @@ class SucesionService:
         existente = self._planes_repo.get_plan_by_empleado(str(data.empleado_id))
         if existente:
             raise AppError(
-                "El empleado ya tiene un plan de carrera activo",
+                "El colaborador ya tiene un plan de carrera activo",
                 "PLAN_ALREADY_EXISTS",
                 409,
             )

@@ -135,5 +135,5 @@ def empresa_de(empleado: EmpleadoResponse) -> UUID:
             un INSERT con `empresa_id` NOT NULL y saldría como 500 en vez de decir qué faltó.
     """
     if empleado.empresa_id is None:
-        raise ValueError(f"El empleado {empleado.id} no tiene empresa cargada")
+        raise ValueError(f"El colaborador {empleado.id} no tiene empresa cargada")
     return UUID(str(empleado.empresa_id))

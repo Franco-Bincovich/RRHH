@@ -48,7 +48,7 @@ export function VacacionesTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Empleado</TableHead>
+          <TableHead>Colaborador</TableHead>
           <TableHead>Área</TableHead>
           {showEmpresa && <TableHead>Empresa</TableHead>}
           <TableHead>Desde</TableHead>

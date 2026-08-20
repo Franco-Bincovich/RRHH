@@ -35,7 +35,7 @@ def construir_filas_export(items: List[AreaResponse]) -> List[dict]:
             "Área": a.nombre,
             "Descripción": a.descripcion,
             "Responsable": a.responsable_nombre,
-            "Empleados": a.cantidad_empleados,
+            "Colaboradores": a.cantidad_empleados,
             "Creada": _fecha(a.created_at),
         }
         for a in items

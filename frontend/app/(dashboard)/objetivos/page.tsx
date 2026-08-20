@@ -91,8 +91,8 @@ export default function ObjetivosPage() {
         title="Objetivos"
         description={
           total === 0
-            ? "Tablero de tareas del equipo de RRHH"
-            : `${total} ${total === 1 ? "objetivo principal" : "objetivos principales"} · tablero del equipo de RRHH`
+            ? "Tablero de tareas del equipo de Capital Humano"
+            : `${total} ${total === 1 ? "objetivo principal" : "objetivos principales"} · tablero del equipo de Capital Humano`
         }
       />
 

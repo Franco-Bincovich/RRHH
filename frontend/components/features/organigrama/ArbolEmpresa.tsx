@@ -75,7 +75,7 @@ export function ArbolEmpresa() {
   if (empresas.length === 0) return (
     <div className="flex flex-col items-center gap-2 py-16">
       <Users className="size-8 text-muted-foreground" />
-      <p className="text-sm text-muted-foreground">No hay áreas ni empleados cargados.</p>
+      <p className="text-sm text-muted-foreground">No hay áreas ni colaboradores cargados.</p>
     </div>
   )
 

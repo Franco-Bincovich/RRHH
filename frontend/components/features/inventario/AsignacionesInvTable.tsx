@@ -59,7 +59,7 @@ export function AsignacionesInvTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Empleado</TableHead>
+          <TableHead>Colaborador</TableHead>
           <TableHead>Ítem</TableHead>
           <TableHead>Tipo</TableHead>
           <TableHead>N° Serie</TableHead>

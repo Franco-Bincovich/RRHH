@@ -57,9 +57,9 @@ export function SeleccionEmpleado({
   if (isMando) {
     return (
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="empleado_id">Empleado <span className="text-destructive" aria-hidden>*</span></Label>
+        <Label htmlFor="empleado_id">Colaborador <span className="text-destructive" aria-hidden>*</span></Label>
         <Select id="empleado_id" value={empleadoId} onChange={(e) => onEmpleadoChange(e.target.value)} disabled={loading} aria-required aria-invalid={Boolean(errorEmpleado)}>
-          <option value="">{loading ? "Cargando..." : "Seleccionar empleado"}</option>
+          <option value="">{loading ? "Cargando..." : "Seleccionar colaborador"}</option>
           {equipo.map((m) => (
             <option key={m.id} value={m.id}>{m.apellido}, {m.nombre}{m.empresa ? ` — ${m.empresa}` : ""}</option>
           ))}
@@ -81,7 +81,7 @@ export function SeleccionEmpleado({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="empleado_id">Empleado <span className="text-destructive" aria-hidden>*</span></Label>
+        <Label htmlFor="empleado_id">Colaborador <span className="text-destructive" aria-hidden>*</span></Label>
         <EmpleadoCombobox
           id="empleado_id" value={empleadoId} empresaId={empresaId || undefined}
           disabled={!empresaId} mensajeDeshabilitado="Seleccioná primero una empresa"

@@ -205,7 +205,7 @@ describe("la ayuda del rechazo de identificación", () => {
     // Hoy hay 0 clientes cargados y eso rechaza a TODO el padrón, pero desde el front se ve
     // igual que un DNI mal tipeado. El texto es CONSTANTE: al no depender de la respuesta no
     // distingue nada, así que no rompe la garantía — y le da al empleado la acción que sí sirve.
-    expect(AYUDA_IDENTIFICACION).toContain("Recursos Humanos")
+    expect(AYUDA_IDENTIFICACION).toContain("Capital Humano")
     for (const motivo of ["cliente", "baja", "inactiv", "no existe", "límite"]) {
       expect(AYUDA_IDENTIFICACION.toLowerCase()).not.toContain(motivo)
     }

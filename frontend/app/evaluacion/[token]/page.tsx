@@ -246,7 +246,7 @@ export default function AssessmentPublicPage() {
             <div className="space-y-2">
               <h1 className="text-2xl font-bold text-foreground">¡Evaluación completada!</h1>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Tus respuestas fueron registradas correctamente. El equipo de RRHH procesará tus resultados y te notificará en los próximos días.
+                Tus respuestas fueron registradas correctamente. El equipo de Capital Humano procesará tus resultados y te notificará en los próximos días.
               </p>
             </div>
             <p className="text-xs text-muted-foreground">Podés cerrar esta pestaña.</p>

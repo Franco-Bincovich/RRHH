@@ -74,7 +74,7 @@ function IniciarModal({ activos, onClose, onSuccess }: IniciarModalProps) {
       const instancia = await iniciarOnboarding(selectedId, selectedTemplateId || undefined)
       onSuccess(instancia)
     } catch {
-      setError("No se pudo iniciar el onboarding. Verificá que el empleado no tenga uno activo.")
+      setError("No se pudo iniciar el onboarding. Verificá que el colaborador no tenga uno activo.")
       setIniciando(false)
     }
   }
@@ -118,11 +118,11 @@ function IniciarModal({ activos, onClose, onSuccess }: IniciarModalProps) {
               htmlFor="emp-select"
               className="mb-1.5 block text-sm font-medium text-foreground"
             >
-              Empleado
+              Colaborador
             </label>
 
             {/*
-              El cartel "Todos los empleados activos ya tienen un onboarding en curso" se fue con
+              El cartel "Todos los colaboradores activos ya tienen un onboarding en curso" se fue con
               la lista precargada: con búsqueda contra el backend nadie tiene el padrón entero en
               memoria, así que esa afirmación no se puede sostener. El combobox dice lo que sí
               sabe — "sin resultados para lo que buscaste" —, que además era el mensaje correcto
@@ -316,7 +316,7 @@ export default function OnboardingPage() {
         <EmptyState
           icon={<UserCheck />}
           title="Sin procesos activos"
-          description="No hay empleados en proceso de onboarding actualmente."
+          description="No hay colaboradores en proceso de onboarding actualmente."
         />
       ) : (
         <ul className="space-y-3" role="list">

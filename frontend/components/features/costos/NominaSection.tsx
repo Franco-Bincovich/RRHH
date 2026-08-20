@@ -78,7 +78,7 @@ export function NominaSection({ mes, anio, canWrite, mostrarEmpresa, onGuardado 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Empleado</TableHead>
+                <TableHead>Colaborador</TableHead>
                 {mostrarEmpresa && <TableHead>Empresa</TableHead>}
                 <TableHead>Área</TableHead>
                 <TableHead className="text-right">Monto bruto</TableHead>

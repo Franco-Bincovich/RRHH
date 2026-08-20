@@ -69,7 +69,7 @@ class MailEnvioService:
             raise AppError("Plantilla no encontrada", "PLANTILLA_NOT_FOUND", 404)
         if data.empleado_ids and data.destinatarios_libres:
             raise AppError(
-                "Elegí empleados del sistema o direcciones escritas a mano, no las dos cosas en "
+                "Elegí colaboradores del sistema o direcciones escritas a mano, no las dos cosas en "
                 "el mismo envío.", "ENVIO_MODO_MIXTO", 422)
 
         lote = lote or LoteMails()
@@ -97,7 +97,7 @@ class MailEnvioService:
         """
         emp = self._empleados.find_by_id(str(empleado_id), empresa_id)
         if not emp or not emp.email_corporativo:
-            lote.registrar_fallo(str(empleado_id), "el empleado no tiene email corporativo cargado")
+            lote.registrar_fallo(str(empleado_id), "el colaborador no tiene email corporativo cargado")
             return
         if self._log.ya_enviado(plantilla["clave"], str(empleado_id)):
             lote.registrar_omitido()   # ← lo que hace continuable el reintento

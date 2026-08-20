@@ -70,7 +70,7 @@ export function KpisCostos({ dashboard, mes, anio, totalEmpleados }: Props) {
       description: `Mensual bruto — ${MESES_LARGOS[mes - 1]} ${anio}`,
     },
     {
-      title: "Costo promedio / empleado",
+      title: "Costo promedio / colaborador",
       value: pesos(dashboard.costo_promedio),
       icon: Users,
       description: `Sobre ${totalEmpleados} colaboradores`,

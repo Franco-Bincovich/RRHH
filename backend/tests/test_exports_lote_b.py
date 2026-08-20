@@ -325,7 +325,7 @@ class TestExportCatalogoCapacitaciones:
             area_nombre="IT", proyecto=None, anio=None, mes=None,
             capacitacion_nombre="Excel", estado="en_curso", fecha_asignacion=None,
             fecha_limite=None, fecha_completado=None, certificado_url=None)])[0]
-        assert "Empleado" in fila_asig and "Empleado" not in catalogo(_CATALOGO)[0]
+        assert "Colaborador" in fila_asig and "Colaborador" not in catalogo(_CATALOGO)[0]
 
     def test_el_limite_muerde_y_un_export_normal_no(self) -> None:
         svc = CapacitacionService(repo=SimpleNamespace(
@@ -378,7 +378,7 @@ class TestExportOnboarding:
 
         filas = construir_filas_export(_ONBOARDINGS)
 
-        assert [f["Empleado"] for f in filas] == ["Ana Gómez", "Beto Pérez"]
+        assert [f["Colaborador"] for f in filas] == ["Ana Gómez", "Beto Pérez"]
         assert [f["Progreso"] for f in filas] == ["30%", "80%"]
         assert [f["Tareas completadas"] for f in filas] == [3, 8]
 

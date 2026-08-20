@@ -237,7 +237,7 @@ class TestColumnas:
 
     def test_son_las_esperadas_y_en_orden(self) -> None:
         assert list(construir_filas_export(_CATALOGO)[0]) == [
-            "Empresa", "Empleado", "Área", "Período", "Días", "Liquidados",
+            "Empresa", "Colaborador", "Área", "Período", "Días", "Liquidados",
             "Sin liquidar", "Comentario", "Cargado",
         ]
 
@@ -248,7 +248,7 @@ class TestColumnas:
 
     def test_cada_registro_conserva_SUS_valores(self) -> None:
         filas = construir_filas_export(_CATALOGO)
-        assert [f["Empleado"] for f in filas] == ["Ana Gómez", "Beto Pérez", "Caro Díaz"]
+        assert [f["Colaborador"] for f in filas] == ["Ana Gómez", "Beto Pérez", "Caro Díaz"]
         assert [f["Período"] for f in filas] == [2024, 2025, 2023]
         assert [f["Área"] for f in filas] == ["Sistemas", "Comercial", "Legales"]
 
@@ -274,7 +274,7 @@ class TestColumnas:
         sin = _CATALOGO[0].model_copy(update={"comentario": None, "area_nombre": None})
         fila = construir_filas_export([sin])[0]
         assert fila["Comentario"] is None and fila["Área"] is None
-        assert fila["Empleado"] == "Ana Gómez"
+        assert fila["Colaborador"] == "Ana Gómez"
 
 
 # ── 4. El límite de export, de los dos lados ──────────────────────────────────

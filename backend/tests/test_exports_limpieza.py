@@ -69,7 +69,7 @@ def test_inventario_export_sin_uuids_con_nombres():
     )
     fila = filas_inventario([row])[0]
     assert _UUID_KEYS.isdisjoint(fila.keys())
-    assert fila["Empresa"] == "Karstec" and fila["Empleado"] == "Ana Lopez"
+    assert fila["Empresa"] == "Karstec" and fila["Colaborador"] == "Ana Lopez"
     assert fila["Equipo"] == "Notebook Dell" and fila["N° serie"] == "SN-9"
     assert fila["Fecha asignación"] == "01/03/2026" and fila["Creada"] == "01/03/2026"
     assert fila["Fecha devolución"] == ""  # None → ''
@@ -167,7 +167,7 @@ def test_areas_export_sin_uuids_con_nombres():
     fila = filas_areas([_area()])[0]
     assert _UUID_KEYS.isdisjoint(fila.keys())
     assert fila["Área"] == "GESTION DE DEUDA" and fila["Responsable"] == "Ana Gómez"
-    assert fila["Descripción"] == "Cobranzas y mora" and fila["Empleados"] == 4
+    assert fila["Descripción"] == "Cobranzas y mora" and fila["Colaboradores"] == 4
     assert fila["Creada"] == "15/01/2026"  # sin hora
 
 
@@ -183,7 +183,7 @@ def test_areas_export_NO_colapsa_nombres_repetidos():
     escondería un área entera y su dotación."""
     filas = filas_areas([_area(cantidad_empleados=4), _area(cantidad_empleados=9)])
     assert len(filas) == 2
-    assert [f["Empleados"] for f in filas] == [4, 9]
+    assert [f["Colaboradores"] for f in filas] == [4, 9]
 
 
 # ── Candidatos · Períodos · Catálogo de capacitaciones · Onboarding ───────────
@@ -260,7 +260,7 @@ def test_onboarding_export_sin_uuids_y_con_la_fecha_formateada():
     )
     fila = filas_onboarding([row])[0]
     assert _UUID_KEYS_LOTE_B.isdisjoint(fila.keys())
-    assert fila["Empleado"] == "Ana Gómez" and fila["Área"] == "Sistemas"
+    assert fila["Colaborador"] == "Ana Gómez" and fila["Área"] == "Sistemas"
     # 🔴 `fecha_inicio` llega como str: el `_fecha` de los otros exports reventaría acá.
     assert fila["Inicio"] == "10/02/2026"
     assert fila["Progreso"] == "30%" and fila["Tareas totales"] == 10
@@ -294,7 +294,7 @@ def test_usuarios_export_sin_ids_ni_credenciales():
     fila = filas_usuarios([row])[0]
     assert _UUID_KEYS.isdisjoint(fila.keys())
     assert fila["Nombre"] == "Ana" and fila["Email"] == "ana@karstec.com"
-    assert fila["Rol"] == "Administrador RRHH"   # traducido, no el enum crudo
+    assert fila["Rol"] == "Administrador Capital Humano"   # traducido, no el enum crudo
     assert fila["Activo"] == "Sí"
     # Ni la key ni el valor: un hash renombrado seguiría siendo un hash.
     assert "$2b$12$secreto" not in str(fila) and "ultimo_acceso" not in str(fila)
@@ -406,7 +406,7 @@ def test_pendientes_export_sin_uuids_con_nombres():
     fila = filas_pendientes([row])[0]
     assert _UUID_KEYS.isdisjoint(fila.keys())
     assert row.id not in str(fila) and row.empleado_id not in str(fila)
-    assert fila["Empleado"] == "Ana Gómez" and fila["Área"] == "Sistemas"
+    assert fila["Colaborador"] == "Ana Gómez" and fila["Área"] == "Sistemas"
     assert fila["Período"] == 2024 and fila["Cargado"] == "10/02/2026"  # sin hora
 
 

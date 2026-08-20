@@ -223,10 +223,10 @@ export function ImportarNominaCSVModal({ open, onClose, onSuccess }: ImportarNom
               <p className="mb-1.5 font-medium text-foreground">Columnas del template:</p>
               <p className="font-mono text-muted-foreground">dni, anio, mes, salario_bruto, neto</p>
               <div className="mt-2 grid grid-cols-1 gap-1 text-muted-foreground sm:grid-cols-2">
-                <span><strong>dni:</strong> identifica al empleado dentro de la empresa</span>
+                <span><strong>dni:</strong> identifica al colaborador dentro de la empresa</span>
                 <span><strong>anio / mes:</strong> período de la nómina (ej. 2024 / 5)</span>
                 <span><strong>salario_bruto / neto:</strong> importes numéricos ≥ 0</span>
-                <span className="sm:col-span-1"><strong>Si ya existe</strong> nómina para ese empleado + período, se actualizará.</span>
+                <span className="sm:col-span-1"><strong>Si ya existe</strong> nómina para ese colaborador + período, se actualizará.</span>
               </div>
             </div>
           </div>
@@ -268,7 +268,7 @@ export function ImportarNominaCSVModal({ open, onClose, onSuccess }: ImportarNom
                   <tr className="border-b bg-muted/50">
                     <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Fila</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Estado</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Empleado</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Colaborador</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">DNI</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Período</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Bruto</th>

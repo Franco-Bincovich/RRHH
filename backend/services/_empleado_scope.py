@@ -80,5 +80,5 @@ def ensure_empleado_visible(repo, ownership_repo, empleado_id, empresa_id: Optio
     """
     empleado = ensure_empleado_de_empresa(repo, empleado_id, empresa_id)
     if not puede_gestionar_empleado(user_id, rol, empleado_id, ownership_repo):
-        raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
+        raise AppError("Colaborador no encontrado", "EMPLEADO_NOT_FOUND", 404)
     return empleado

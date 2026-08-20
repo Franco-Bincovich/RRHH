@@ -12,26 +12,12 @@ import { EmpresaSelector } from "@/components/layout/EmpresaSelector"
 import { ThemeToggle } from "@/components/layout/ThemeToggle"
 import { NavItem } from "@/components/layout/NavItem"
 import { NavGroup } from "@/components/layout/NavGroup"
-import { DASHBOARD_ITEM, NAV_GROUPS, type NavLink } from "@/components/layout/nav-config"
-import { getRol, puede } from "@/services/permisos"
+import type { NavGroupDef } from "@/components/layout/nav-config"
+import {
+  adminVisible, esActivo, grupoDeRuta, gruposVisibles, superioresVisibles,
+} from "@/components/layout/nav-visibilidad"
+import { getRol } from "@/services/permisos"
 import type { UserRol } from "@/types/auth"
-
-/** Label del grupo que contiene la ruta activa, o null (para abrirlo por defecto). */
-function grupoDeRuta(pathname: string): string | null {
-  const g = NAV_GROUPS.find((grp) =>
-    grp.items.some((i) => pathname === i.href || pathname.startsWith(`${i.href}/`)),
-  )
-  return g?.label ?? null
-}
-
-/** ¿El rol puede ver este item? Gating de sección (existente) + gating opcional por rol (soloRol).
- *  Sin soloRol → solo cuenta la sección (retrocompat). rol=null (pre-mount) → un item con soloRol
- *  no se muestra (null no está en ninguna lista), evitando flash hasta conocer el rol. */
-function itemVisible(item: NavLink, rol: UserRol | null): boolean {
-  const seccionOk = item.seccion === null || (rol !== null && puede(rol, item.seccion, item.accion ?? "read"))
-  const rolOk = !item.soloRol || (rol !== null && item.soloRol.includes(rol))
-  return seccionOk && rolOk
-}
 
 export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -45,15 +31,26 @@ export function Sidebar() {
     setRol(getRol())
   }, [])
 
-  // Grupos con sus items filtrados por permiso; se descartan los que quedan vacíos.
-  const visibleGroups = NAV_GROUPS.map((g) => ({
-    label: g.label,
-    items: g.items.filter((i) => itemVisible(i, rol)),
-  })).filter((g) => g.items.length > 0)
+  // Los 6 grupos + Administración aparte, ya filtrados por permiso (los vacíos se descartan).
+  const visibleGroups = gruposVisibles(rol)
+  const admin = adminVisible(rol)
+  const superiores = superioresVisibles(rol)
 
   const closeMobile = () => setMobileOpen(false)
   const toggleGroup = (label: string) => setOpenGroup((cur) => (cur === label ? null : label))
-  const dashActivo = pathname === DASHBOARD_ITEM.href || pathname.startsWith(`${DASHBOARD_ITEM.href}/`)
+
+  const renderGrupo = (g: NavGroupDef) => (
+    <NavGroup
+      key={g.label}
+      label={g.label}
+      icon={g.icon}
+      items={g.items}
+      open={openGroup === g.label}
+      onToggle={() => toggleGroup(g.label)}
+      pathname={pathname}
+      onNavigate={closeMobile}
+    />
+  )
 
   return (
     <>
@@ -107,29 +104,29 @@ export function Sidebar() {
 
         <Separator />
 
-        {/* Navegación: Dashboard fijo + grupos colapsables */}
+        {/* Navegación: Dashboard · Reportes · Auditoría fijos arriba, fuera de los grupos
+            (sistema de diseño §4); después los 6 grupos; Administración al final, separada. */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="space-y-1" role="list">
-            <li>
-              <NavItem
-                href={DASHBOARD_ITEM.href}
-                label={DASHBOARD_ITEM.label}
-                icon={DASHBOARD_ITEM.icon}
-                isActive={dashActivo}
-                onClick={closeMobile}
-              />
-            </li>
-            {visibleGroups.map((g) => (
-              <NavGroup
-                key={g.label}
-                label={g.label}
-                items={g.items}
-                open={openGroup === g.label}
-                onToggle={() => toggleGroup(g.label)}
-                pathname={pathname}
-                onNavigate={closeMobile}
-              />
+            {superiores.map((item) => (
+              <li key={item.href}>
+                <NavItem
+                  href={item.href}
+                  label={item.label}
+                  icon={item.icon}
+                  isActive={esActivo(item.href, pathname)}
+                  onClick={closeMobile}
+                />
+              </li>
             ))}
+            <li aria-hidden="true" className="my-2 border-t border-sidebar-border" />
+            {visibleGroups.map(renderGrupo)}
+            {admin && (
+              <>
+                <li aria-hidden="true" className="my-2 border-t border-sidebar-border" />
+                {renderGrupo(admin)}
+              </>
+            )}
           </ul>
         </nav>
 

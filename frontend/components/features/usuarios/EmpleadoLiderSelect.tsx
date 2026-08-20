@@ -22,7 +22,7 @@ function etiqueta(e: EmpleadoLider): string {
   return `${e.apellido}, ${e.nombre}${e.legajo ? ` · ${e.legajo}` : ""}`
 }
 
-const HINT_DEFAULT = "Opcional. Solo se listan empleados marcados como líderes."
+const HINT_DEFAULT = "Opcional. Solo se listan colaboradores marcados como líderes."
 
 /** Selector buscable de empleados para vincular al usuario. Incluye "sin vincular". */
 export function EmpleadoLiderSelect({ value, onChange, options, loading, error, onRetry, hint }: EmpleadoLiderSelectProps) {
@@ -36,9 +36,9 @@ export function EmpleadoLiderSelect({ value, onChange, options, loading, error, 
   if (error) {
     return (
       <div className="flex flex-col gap-1.5">
-        <Label>Empleado vinculado</Label>
+        <Label>Colaborador vinculado</Label>
         <div className="rounded-md border border-destructive/40 p-3 text-sm">
-          <span className="text-destructive">No se pudieron cargar los empleados.</span>{" "}
+          <span className="text-destructive">No se pudieron cargar los colaboradores.</span>{" "}
           <button type="button" className="underline hover:text-primary" onClick={onRetry}>
             Reintentar
           </button>
@@ -49,7 +49,7 @@ export function EmpleadoLiderSelect({ value, onChange, options, loading, error, 
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor="empleado-lider-search">Empleado vinculado</Label>
+      <Label htmlFor="empleado-lider-search">Colaborador vinculado</Label>
       <p className="text-xs text-muted-foreground">{hint ?? HINT_DEFAULT}</p>
       <div className="relative">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -63,7 +63,7 @@ export function EmpleadoLiderSelect({ value, onChange, options, loading, error, 
           autoComplete="off"
         />
       </div>
-      <ul role="listbox" aria-label="Empleados" className="max-h-44 overflow-y-auto rounded-md border">
+      <ul role="listbox" aria-label="Colaboradores" className="max-h-44 overflow-y-auto rounded-md border">
         <li>
           <Opcion selected={value === ""} onClick={() => onChange("")}>
             <span className="italic text-muted-foreground">Sin vincular</span>

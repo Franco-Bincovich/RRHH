@@ -81,7 +81,7 @@ def iniciar(repo, empleado_repo, audit, data: OffboardingCreate,
     existente = repo.find_by_empleado(str(data.empleado_id))
     if existente:
         raise AppError(
-            "El empleado ya tiene un proceso de offboarding activo",
+            "El colaborador ya tiene un proceso de offboarding activo",
             "OFFBOARDING_ALREADY_ACTIVE",
             409,
         )

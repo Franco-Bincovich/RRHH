@@ -76,10 +76,10 @@ def crear(repo, periodos, ownership, data: SolicitudVacacionesCreate, created_by
         AppError: VACACIONES_SOLAPAMIENTO (422) si hay fechas solapadas del mismo tipo para el mismo empleado.
     """
     if not puede_gestionar_empleado(created_by, rol, data.empleado_id, ownership):
-        raise AppError("No autorizado para gestionar este empleado", "OWNERSHIP_DENIED", 403)
+        raise AppError("No autorizado para gestionar este colaborador", "OWNERSHIP_DENIED", 403)
     empresa_id = repo.find_empresa_for_empleado(str(data.empleado_id))
     if not empresa_id:
-        raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
+        raise AppError("Colaborador no encontrado", "EMPLEADO_NOT_FOUND", 404)
     verificar_periodo_abierto(empresa_id, "vacaciones", rol, desde=data.fecha_desde, hasta=data.fecha_hasta, repo=periodos)
 
     overlapping = repo.find_overlapping(
@@ -87,7 +87,7 @@ def crear(repo, periodos, ownership, data: SolicitudVacacionesCreate, created_by
     )
     if overlapping:
         raise AppError(
-            "El empleado ya tiene una solicitud del mismo tipo en ese período",
+            "El colaborador ya tiene una solicitud del mismo tipo en ese período",
             "VACACIONES_SOLAPAMIENTO",
             422,
         )

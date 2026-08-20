@@ -15,7 +15,7 @@ const EMAIL = /^[^@\s,;]+@[^@\s,;]+\.[A-Za-z]{2,}$/
 
 /** El motivo que se muestra cuando el modo libre está deshabilitado. Lo importa el test. */
 export const MOTIVO_VARIABLES =
-  "Esta plantilla usa datos del empleado, así que solo se puede enviar a empleados del sistema."
+  "Esta plantilla usa datos del colaborador, así que solo se puede enviar a colaboradores del sistema."
 
 export function emailValido(direccion: string): boolean {
   return EMAIL.test((direccion ?? "").trim())

@@ -62,7 +62,7 @@ export default function EquipoPage() {
       {!loading && !error && miembros.length === 0 && (
         <EmptyState
           icon={<UsersRound />}
-          title="Todavía no tenés empleados a cargo"
+          title="Todavía no tenés colaboradores a cargo"
           description="Cuando se te asignen personas como responsable directo, van a aparecer acá."
         />
       )}

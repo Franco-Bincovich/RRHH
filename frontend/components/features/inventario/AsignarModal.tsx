@@ -103,7 +103,7 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
               {errors.item_id && <p className="text-xs text-destructive" role="alert">{errors.item_id}</p>}
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="asig_emp">Empleado <span className="text-destructive" aria-hidden>*</span></Label>
+              <Label htmlFor="asig_emp">Colaborador <span className="text-destructive" aria-hidden>*</span></Label>
               <EmpleadoCombobox
                 id="asig_emp" value={form.empleado_id} empresaId={form.empresa_id || undefined}
                 disabled={!form.empresa_id} mensajeDeshabilitado="Seleccioná una empresa primero"

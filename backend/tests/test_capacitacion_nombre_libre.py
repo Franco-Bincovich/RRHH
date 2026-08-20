@@ -273,7 +273,7 @@ class TestElExport:
         _montar(monkeypatch, [_CON_EMPLEADO, _SIN_EMPLEADO])
         texto = (await _get(f"{_RUTA}/exportar?formato=csv")).content.decode("utf-8-sig")
         filas = {ln.split(",")[1]: ln for ln in texto.splitlines() if "," in ln}
-        assert "Empleado vinculado" in texto, "el export no distingue un nombre suelto de uno real"
+        assert "Colaborador vinculado" in texto, "el export no distingue un nombre suelto de uno real"
         assert filas["Ana Gómez"].split(",")[2] == "Sí"
         assert filas[_NOMBRE_SUELTO].split(",")[2] == "No"
 

@@ -90,7 +90,7 @@ def crear(ausencias_repo, datos_repo, empleado_id: str, empresa_id: str,
         raise AppError("Ya cargaste una licencia para esas fechas.", "LICENCIA_DUPLICADA", 409)
 
     if estimadas:
-        logger.info("Licencia con jornada estimada: el empleado no tiene horas_contrato",
+        logger.info("Licencia con jornada estimada: el colaborador no tiene horas_contrato",
                     extra={"empleado_id": empleado_id})
     return CargaLicenciaResponse(
         id=row.id, fecha_desde=data.fecha_desde, fecha_hasta=data.fecha_hasta, dias=dias,

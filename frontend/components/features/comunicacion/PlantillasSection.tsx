@@ -51,7 +51,7 @@ export function PlantillasSection({ editable }: { editable: boolean }) {
         value="plantillas"
         icon={<Mail className="size-4" />}
         title="Plantillas de mail"
-        description="El texto de los mails que el sistema envía. Podés usar variables como el nombre del empleado."
+        description="El texto de los mails que el sistema envía. Podés usar variables como el nombre del colaborador."
         badge={items.length > 0 && <Badge variant="secondary" className="ml-auto">{items.length}</Badge>}
       >
         {loading ? (

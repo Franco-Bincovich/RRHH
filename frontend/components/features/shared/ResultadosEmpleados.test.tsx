@@ -47,9 +47,9 @@ describe("mensajeVacio distingue los dos vacíos", () => {
     expect(conBusqueda).not.toBe(sinBusqueda)
     expect(conBusqueda).toContain("Sin resultados")
     expect(conBusqueda).toContain("Perez")
-    expect(sinBusqueda).toContain("No hay empleados")
+    expect(sinBusqueda).toContain("No hay colaboradores")
     // El de búsqueda NO puede afirmar nada sobre la base: es la frase que ya mintió una vez.
-    expect(conBusqueda).not.toContain("No hay empleados")
+    expect(conBusqueda).not.toContain("No hay colaboradores")
   })
 
   it("un término con espacios no genera un mensaje distinto al mismo término sin ellos", () => {
@@ -62,13 +62,13 @@ describe("los cuatro desenlaces", () => {
     const html = _render({ empleados: [], termino: "Zzzz" })
 
     expect(html).toContain("Sin resultados")
-    expect(html).not.toContain("No hay empleados")
+    expect(html).not.toContain("No hay colaboradores")
   })
 
   it("🔴 sin buscar nada y sin nadie: ahí sí, 'no hay empleados activos'", () => {
     const html = _render({ empleados: [], termino: "" })
 
-    expect(html).toContain("No hay empleados activos")
+    expect(html).toContain("No hay colaboradores activos")
     expect(html).not.toContain("Sin resultados")
   })
 
@@ -78,7 +78,7 @@ describe("los cuatro desenlaces", () => {
     expect(html).toContain("No se pudieron cargar")
     expect(html).toContain("Reintentar")
     expect(html).not.toContain("Sin resultados")
-    expect(html).not.toContain("No hay empleados")
+    expect(html).not.toContain("No hay colaboradores")
   })
 
   it("cargando no se confunde con vacío", () => {

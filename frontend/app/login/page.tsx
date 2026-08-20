@@ -192,7 +192,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          ¿Problemas para ingresar? Contactá a RRHH.
+          ¿Problemas para ingresar? Contactá a Capital Humano.
         </p>
 
       </div>

@@ -31,7 +31,7 @@ export function NuevoPlanModal({
   }, [open])
 
   async function handleSubmit() {
-    if (!form.empleado_id) { setError("Seleccioná un empleado."); return }
+    if (!form.empleado_id) { setError("Seleccioná un colaborador."); return }
     if (!form.cargo_objetivo.trim()) { setError("El cargo objetivo es requerido."); return }
     setLoading(true)
     setError(null)
@@ -61,7 +61,7 @@ export function NuevoPlanModal({
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <Label htmlFor="plan-empleado">
-              Empleado <span className="text-destructive" aria-hidden>*</span>
+              Colaborador <span className="text-destructive" aria-hidden>*</span>
             </Label>
             <EmpleadoCombobox
               id="plan-empleado"

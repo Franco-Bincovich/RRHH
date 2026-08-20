@@ -71,7 +71,7 @@ export function ClientesColapsables({ clientes, onVerDetalle }: Props) {
                   <div key={i} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
                     <div className="min-w-0">
                       <span className="font-medium text-foreground">
-                        {ln.empleado_nombre ?? "Sin empleado"}
+                        {ln.empleado_nombre ?? "Sin colaborador"}
                       </span>
                       <span className="ml-2 text-xs text-muted-foreground">
                         {[ln.proyecto_texto, ln.tarea_texto,

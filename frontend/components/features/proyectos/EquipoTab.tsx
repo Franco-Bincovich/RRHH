@@ -42,7 +42,7 @@ export function EquipoTab({ proyectoId, proyectoEmpresaId, canWrite }: Props) {
   }
 
   async function handleDelete(asig: Asignacion) {
-    if (!confirm(`¿Quitar a ${asig.empleado_nombre ?? "este empleado"} del proyecto?`)) return
+    if (!confirm(`¿Quitar a ${asig.empleado_nombre ?? "este colaborador"} del proyecto?`)) return
     try { await deleteAsignacion(proyectoId, asig.id); toast.success("Asignación eliminada"); await load() }
     catch { toast.error("No se puede quitar: tiene horas registradas.") }
   }
@@ -66,7 +66,7 @@ export function EquipoTab({ proyectoId, proyectoEmpresaId, canWrite }: Props) {
       </div>
 
       {asignaciones.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">Sin empleados asignados.</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">Sin colaboradores asignados.</p>
       ) : (
         <div className="divide-y divide-border rounded-xl border bg-card">
           {asignaciones.map((a) => {

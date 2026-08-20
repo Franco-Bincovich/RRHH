@@ -42,7 +42,7 @@ def fecha_antiguedad(fecha_ingreso: Optional[date], fecha_reconocida: Optional[d
     """
     if fecha_ingreso is None:
         raise AppError(
-            "El empleado no tiene fecha de ingreso, sin ella no se puede calcular el cupo de vacaciones",
+            "El colaborador no tiene fecha de ingreso, sin ella no se puede calcular el cupo de vacaciones",
             "EMPLEADO_SIN_FECHA_INGRESO", 422,
         )
     if fecha_reconocida is None:

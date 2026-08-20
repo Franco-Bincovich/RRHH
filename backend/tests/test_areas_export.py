@@ -200,7 +200,7 @@ class TestListadoYExportCoinciden:
 
         sistemas = [f for f in filas if f["Área"] == "Sistemas"]
         assert len(sistemas) == 2
-        assert {f["Empleados"] for f in sistemas} == {5, 2}
+        assert {f["Colaboradores"] for f in sistemas} == {5, 2}
 
 
 # ── 3. El router pasa lo que recibe ───────────────────────────────────────────

@@ -42,7 +42,7 @@ export const REPORTES_ESTANDAR: ReporteEstandar[] = [
     id: "costos",
     titulo: "Reporte de Costos",
     descripcion:
-      "Nómina total y por área, desvío presupuestario, costo promedio por empleado y evolución mensual del período.",
+      "Nómina total y por área, desvío presupuestario, costo promedio por colaborador y evolución mensual del período.",
     icon: DollarSign,
     usaPeriodo: true,
   },
@@ -76,7 +76,7 @@ export const REPORTES_ESTANDAR: ReporteEstandar[] = [
     id: "saldos_vacaciones",
     titulo: "Saldos de vacaciones",
     descripcion:
-      "Por empleado: días asignados, tomados (los cancelados no restan) y saldo disponible. Marca a quienes no tienen días asignados.",
+      "Por colaborador: días asignados, tomados (los cancelados no restan) y saldo disponible. Marca a quienes no tienen días asignados.",
     icon: Palmtree,
     usaPeriodo: true,
   },
@@ -93,7 +93,7 @@ export const REPORTES_ESTANDAR: ReporteEstandar[] = [
     id: "listado_vac_aus",
     titulo: "Vacaciones y ausencias",
     descripcion:
-      "Listado plano de todas las vacaciones y ausencias del período: empleado, área, tipo, fechas, días y motivo/estado.",
+      "Listado plano de todas las vacaciones y ausencias del período: colaborador, área, tipo, fechas, días y motivo/estado.",
     icon: ClipboardList,
     usaPeriodo: true,
   },

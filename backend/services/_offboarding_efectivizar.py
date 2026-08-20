@@ -88,7 +88,7 @@ def efectivizar(repo, empleado_repo, audit, instancia_id: UUID, fecha_egreso: da
     if not empleado:
         raise AppError(*_NO_ENCONTRADO)
     if empleado.estado == "baja":
-        raise AppError("El empleado ya está dado de baja", "EMPLEADO_YA_DE_BAJA", 409)
+        raise AppError("El colaborador ya está dado de baja", "EMPLEADO_YA_DE_BAJA", 409)
 
     # 🔴 GUARDA EXPLÍCITA PARA EL PREINGRESO, Y VA ANTES DE `_validar_fecha` A PROPÓSITO.
     # Hasta el 18/8/2026 este caso lo cortaba `_validar_fecha` POR ACCIDENTE: un preingreso tiene
@@ -102,7 +102,7 @@ def efectivizar(repo, empleado_repo, audit, instancia_id: UUID, fecha_egreso: da
     # día se fue no tiene sentido. Mismo criterio de orden que la barrera de empresa.
     if empleado.estado == ESTADO_PREINGRESO:
         raise AppError(
-            "Este empleado todavía no ingresó, así que no puede tener una baja. Si el ingreso "
+            "Este colaborador todavía no ingresó, así que no puede tener una baja. Si el ingreso "
             "no se concretó, corregí su ficha en vez de darlo de baja.",
             "EMPLEADO_PREINGRESO", 409,
         )

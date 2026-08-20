@@ -57,9 +57,9 @@ export function HoraModal({ open, asignaciones, onClose, onSave }: Props) {
         </DialogHeader>
         <div className="space-y-4 pt-2">
           <div>
-            <label className={LABEL_CLS}>Empleado / Asignación</label>
+            <label className={LABEL_CLS}>Colaborador / Asignación</label>
             <Select value={asignacionId} onChange={(e) => setAsignacionId(e.target.value)}>
-              <option value="">Seleccioná un empleado</option>
+              <option value="">Seleccioná un colaborador</option>
               {asignaciones.filter((a) => a.activo).map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.empleado_nombre ?? a.empleado_id} — {a.rol}

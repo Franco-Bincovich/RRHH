@@ -46,7 +46,7 @@ function formatVariacion(pct: number): string {
 export function buildKpis(data: DashboardData): KpiCardData[] {
   const x = data.kpis_extra
   return [
-    { title: "Empleados activos", value: String(data.kpis.empleados_activos), icon: Users, description: "Colaboradores vigentes" },
+    { title: "Colaboradores activos", value: String(data.kpis.empleados_activos), icon: Users, description: "Colaboradores vigentes" },
     { title: "Ingresos este mes", value: String(data.kpis.ingresos_mes), icon: UserPlus, description: "Nuevos ingresos del período" },
     { title: "Bajas este mes", value: String(data.kpis.bajas_mes), icon: UserMinus, description: "Egresos del período" },
     { title: "Costo total nómina", value: formatCurrency(data.kpis.costo_nomina), icon: DollarSign, description: "Mensual bruto" },

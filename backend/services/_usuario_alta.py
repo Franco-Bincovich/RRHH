@@ -89,7 +89,7 @@ def crear(repo, audit, data: CrearUsuarioRequest, creado_por: Optional[str]) -> 
             "rol": data.rol, "must_change_password": True,
         })
         if data.empleado_id is not None and not repo.vincular_empleado(str(data.empleado_id), uid):
-            raise AppError("El empleado indicado no existe", "EMPLEADO_NOT_FOUND", 404)
+            raise AppError("El colaborador indicado no existe", "EMPLEADO_NOT_FOUND", 404)
     except Exception as exc:
         _rollback_auth(uid)  # borra auth.users; el CASCADE limpia el perfil si se insertó
         if isinstance(exc, AppError):

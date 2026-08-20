@@ -56,7 +56,7 @@ class IndiceEmpleados:
             return next(iter(ids)), None
         if not ids:
             return None, "sin candidato en el padrón"
-        return None, "más de un empleado con ese nombre"
+        return None, "más de un colaborador con ese nombre"
 
     def nombre_visible(self, empleado_id: str) -> Optional[str]:
         return self._visible.get(str(empleado_id))

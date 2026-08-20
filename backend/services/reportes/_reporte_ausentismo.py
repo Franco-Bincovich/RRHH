@@ -38,7 +38,7 @@ def nota(base: int) -> str:
     Es función y no constante justamente por eso: como constante, el número quedaba tipeado
     dentro del string y podía divergir del que dividía en silencio.
     """
-    return f"Las tasas se calculan sobre una base de {base} días hábiles por mes por empleado."
+    return f"Las tasas se calculan sobre una base de {base} días hábiles por mes por colaborador."
 
 
 def _tasa(dias: int, headcount: int, base_dias: int) -> float:

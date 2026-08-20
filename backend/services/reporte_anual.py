@@ -76,7 +76,7 @@ def generate_anual_consolidado(anio: int, empresa_id: Optional[UUID] = None) -> 
         "_sheets": {
             "Resumen": {
                 "Año": anio,
-                "Empleados activos": total_activos,
+                "Colaboradores activos": total_activos,
                 "Ingresos del año": ingresos,
                 "Egresos del año": egresos,
                 "Variación neta": ingresos - egresos,

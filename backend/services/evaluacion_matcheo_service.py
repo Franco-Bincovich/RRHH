@@ -35,7 +35,7 @@ class ResolutorIdentidad:
         candidatos = [c for c in todos if tx.clave_identidad(c.apellido, c.nombre) == objetivo]
         if not candidatos:
             return ResolucionIdentidad(**base, estado="sin_candidato",
-                                       motivo="ningún empleado con ese nombre en la empresa")
+                                       motivo="ningún colaborador con ese nombre en la empresa")
 
         by_id = {str(c.empleado_id): c for c in todos}
         for c in candidatos:

@@ -129,7 +129,7 @@ describe("el aviso de irreversible está visible", () => {
   it("dice que no se puede editar ni borrar, y a quién avisar", () => {
     const html = _render(<AvisoIrreversible />)
     expect(html).toContain("no se puede editar ni borrar")
-    expect(html).toContain("Recursos Humanos")
+    expect(html).toContain("Capital Humano")
   })
 
   it("muestra los dos límites, tomados del backend y no escritos a mano", () => {

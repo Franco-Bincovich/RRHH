@@ -26,7 +26,7 @@ archivo no puede decir más que la pantalla de la que sale.
 from typing import List
 
 _ROL_LABEL = {
-    "admin_rrhh": "Administrador RRHH",
+    "admin_rrhh": "Administrador Capital Humano",
     "gerencia_lectura": "Gerencia (solo lectura)",
     "mandos_medios": "Mando medio",
 }

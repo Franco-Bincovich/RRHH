@@ -89,8 +89,8 @@ export function AnalisisAreaModal({
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">
                 {res.length === 0
-                  ? "No hay empleados en esta área."
-                  : `${res.length} empleado${res.length !== 1 ? "s" : ""} encontrado${res.length !== 1 ? "s" : ""}`}
+                  ? "No hay colaboradores en esta área."
+                  : `${res.length} colaborador${res.length !== 1 ? "es" : ""} encontrado${res.length !== 1 ? "s" : ""}`}
               </p>
               {res.length > 0 && (
                 <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border">

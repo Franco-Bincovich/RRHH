@@ -69,7 +69,7 @@ def iniciar(repo, templates_repo, empleado_repo, empleado_id: UUID,
     existente = repo.find_instancia_by_empleado(str(empleado_id))
     if existente:
         raise AppError(
-            "El empleado ya tiene un onboarding activo",
+            "El colaborador ya tiene un onboarding activo",
             "ONBOARDING_ALREADY_ACTIVE",
             409,
         )

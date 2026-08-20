@@ -135,7 +135,7 @@ class TestUnaPlantillaConVariablesNoVaADireccionLibre:
             svc.enviar(_pedido_libre("ana@k.com"), EMPRESA, "u1")
 
         assert exc.value.code == "PLANTILLA_CON_VARIABLES" and exc.value.status_code == 422
-        assert "solo se puede enviar a empleados" in exc.value.message
+        assert "solo se puede enviar a colaboradores" in exc.value.message
         # Lo que importa: NO salió ningún mail. Un rechazo después de mandar no sirve de nada.
         assert mailer.envios == []
 

@@ -40,6 +40,71 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+
+## 2026-08-19 · Vocabulario de Capital Humano + el barrido que impide que CLAUDE.md mienta (cierra B4) · commits pendientes
+**Qué cambió:** dos cosas independientes. (1) **Cuatro barridos estructurales nuevos**: dos que
+contrastan los números que CLAUDE.md AFIRMA contra los que el repo TIENE
+(`backend/tests/test_claude_md_no_miente.py` + `frontend/claudeMdNoMiente.test.ts`), y dos que
+vigilan el vocabulario del sistema de diseño §4 (`backend/tests/test_vocabulario.py` +
+`frontend/vocabulario.test.ts`). Al encenderse, el primero encontró **ocho divergencias reales**
+en CLAUDE.md, todas corregidas: la suite del front decía 746 tests en 63 archivos y son 896 en
+75; `migrations/` decía 121 archivos y tiene 119 (121 es el número de la ÚLTIMA, no la
+cantidad); los conteos de `tests/` estaban los tres mal; y el documento afirmaba 52 Y 55 tablas
+en `schema.sql` en dos lugares distintos. También encontró **cuatro barridos que existían y no
+estaban en la lista** de CLAUDE.md (`test_ids_tipados`, `test_requirements_ascii`,
+`loadingSeApaga`, `pageSize`) — la lista pasó de 21 a 29. (2) **El renombre de vocabulario**: se
+dice "Colaboradores" y "Capital Humano" en texto de pantalla, encabezados y nombre de archivo de
+export, y mensajes de error visibles. ~150 textos, front y backend.
+
+**Impacto en infraestructura:** Ninguno para el deploy. **Tres cosas para SABER, no para hacer:**
+
+1. 🔴 **Los ENCABEZADOS de los archivos exportados cambian** (`"Empleado"` → `"Colaborador"` en
+   10 exports, y el export de personas pasa a llamarse `colaboradores.csv/xlsx/pdf` en vez de
+   `empleados.*`). Si algo aguas abajo consume esos archivos por nombre de columna o de archivo
+   —una macro de Excel, un script del cliente— se rompe. **Nada del sistema los consume**: son
+   descargas para personas. Las COLUMNAS de la base, los endpoints y el valor `entidad` de la
+   auditoría **no se tocaron**.
+2. **Dos textos que se PERSISTEN cambian de redacción hacia adelante**: el `motivo` de
+   `empleado_superior_pendiente` ("no hay ningún empleado…" → "…colaborador…"). Las filas ya
+   guardadas conservan el texto viejo; la tabla va a tener las dos formas conviviendo. Es
+   cosmético y no lo lee ningún código, solo la pantalla.
+3. El mensaje canónico del 404 pasa a **"Colaborador no encontrado"** (mismo `code`
+   `EMPLEADO_NOT_FOUND`, mismo status). **El `code` NO cambió**, así que cualquier cliente que
+   discrimine por código sigue funcionando.
+
+**Hallazgo al pasar:** el literal canónico del 404 estaba **duplicado en 8 services** pese a que
+CLAUDE.md dice "no lo dupliques, delegá en `_empleados_utils.empleado_or_404`". Se renombraron
+los 8, pero la duplicación sigue ahí y es exactamente el modo de falla que ese párrafo describe:
+el próximo cambio de redacción vuelve a tocar 8 archivos.
+
+## 2026-08-19 · Navegación reorganizada según el sistema de diseño §4 · commits pendientes
+**Qué cambió:** el sidebar pasa de 6 grupos / 28 items visibles a los **6 grupos del sistema
+de diseño** (Personas · Reclutamiento · Incorporación · Talento y Desarrollo · Gestión ·
+Egresos) con **Administración al final, separada**, y **Dashboard · Reportes · Auditoría fuera
+de los grupos, arriba**. Empleados se renombra a **Colaboradores** y Ausencias a **Ausencias /
+Licencias** (solo texto de pantalla; ni endpoints ni `entidad` de auditoría). **Inventario sale
+del menú** por decisión del documento: la ruta `/inventario`, su página y `Seccion.inventario`
+quedan intactas y alcanzables por URL — es reversible con una línea. Se agregan **7 items
+"Próximamente"**, visibles y deshabilitados, para las pantallas que el documento describe y
+que no existen: Documentación/Legajos, Perfiles de puesto, Próximos Ingresos, Plan de
+desarrollo, Recategorizaciones, Bajas y Carga de horas. **Ninguno lleva href** — un item de
+menú hacia una ruta inexistente es un 404 con forma de navegación. Los grupos cerrados muestran
+el contador de sus items visibles y cada grupo y cada item llevan ícono de trazo. `nav-config.ts`
+se partió: la lógica de visibilidad se fue a `nav-visibilidad.ts`.
+
+**Impacto en infraestructura:** Ninguno. Es frontend puro: cero endpoints nuevos, cero
+migraciones, cero variables de entorno, cero dependencias. **Dos cosas para saber, no para
+hacer:** (1) `/inventario` sigue publicada y servida aunque no haya cómo llegar desde el menú —
+si algún día se quiere cerrar de verdad, eso es backend, no navegación; (2) el item "Carga de
+horas" queda como *Próximamente* porque apunta al link público `/horas`, que sigue apagado por
+`HORAS_PUBLICO_ENABLED=false` — el día que se encienda, ese item necesita decisión de producto
+(el link público no vive dentro del dashboard).
+
+**Test nuevo (barrido estructural):** `components/layout/nav-config.test.ts` ahora **lee el
+árbol de `app/` de verdad** y rojea si un item del menú apunta a una ruta que no existe.
+Verificado en las dos direcciones (item fantasma → rojo; `page.tsx` borrada → rojo). Cubre
+automáticamente al próximo módulo que se agregue al sidebar.
+
 ## 2026-08-19 · Ficha de detalle + el alta puede nacer en preingreso (cierra B3) · commits pendientes
 
 **Qué cambió.** Frontend puro, **cero backend, cero endpoints, cero migraciones**. Dos cosas.

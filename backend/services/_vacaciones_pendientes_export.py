@@ -30,7 +30,7 @@ def construir_filas_export(items: List[VacacionPendienteResponse]) -> List[dict]
     return [
         {
             "Empresa": p.empresa_nombre,
-            "Empleado": p.empleado_nombre,
+            "Colaborador": p.empleado_nombre,
             "Área": p.area_nombre,
             "Período": p.periodo,
             "Días": p.dias,

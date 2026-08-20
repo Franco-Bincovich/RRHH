@@ -58,7 +58,7 @@ function validarPeriodo(periodo: string): string | undefined {
 export function validateVacacion(form: VacacionFormData, requireEmpresa: boolean): VacacionFormErrors {
   const errors: VacacionFormErrors = {}
   if (requireEmpresa && !form.empresa_id) errors.empresa_id = "La empresa es requerida"
-  if (!form.empleado_id) errors.empleado_id = "El empleado es requerido"
+  if (!form.empleado_id) errors.empleado_id = "El colaborador es requerido"
 
   const errPeriodo = validarPeriodo(form.periodo)
   if (errPeriodo) errors.periodo = errPeriodo

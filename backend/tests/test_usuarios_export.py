@@ -157,7 +157,7 @@ class TestLoQueSale:
     def test_el_rol_sale_traducido_y_distinto_por_usuario(self) -> None:
         filas = construir_filas_export(_CATALOGO)
         assert [f["Rol"] for f in filas] == [
-            "Administrador RRHH", "Gerencia (solo lectura)", "Mando medio"]
+            "Administrador Capital Humano", "Gerencia (solo lectura)", "Mando medio"]
 
     def test_un_rol_desconocido_sale_crudo_y_no_vacio(self) -> None:
         """Un rol nuevo sin label es un dato raro, pero borrarlo escondería que existe."""

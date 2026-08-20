@@ -22,7 +22,7 @@ def construir_filas_export(items: List[AusenciaResponse]) -> List[dict]:
     return [
         {
             "Empresa": a.empresa_nombre,
-            "Empleado": a.empleado_nombre,
+            "Colaborador": a.empleado_nombre,
             "Área": a.area_nombre,
             "Tipo": a.tipo_nombre,
             "Fecha desde": _fecha(a.fecha_desde),

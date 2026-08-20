@@ -55,7 +55,7 @@ en la costura que este encabezado ya describía: acá está CÓMO se detecta y D
 allá, QUÉ significa cada constraint para quien carga el alta — que es lo único que crece.
 
 ⚠️ NO ES UN `except Exception` A SECAS. Lo que no es un 23505 se re-lanza tal cual: convertir un
-timeout o un 42703 en "ya existe un empleado con ese email" mandaría a corregir un dato que no
+timeout o un 42703 en "ya existe un colaborador con ese email" mandaría a corregir un dato que no
 tiene nada de malo.
 """
 from contextlib import contextmanager

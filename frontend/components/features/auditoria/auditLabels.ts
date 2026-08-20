@@ -4,7 +4,7 @@
  */
 
 export const ENTIDAD_LABEL: Record<string, string> = {
-  empleado: "Empleado",
+  colaborador: "Colaborador",
   vacacion: "Vacación",
   ausencia: "Ausencia",
   nomina: "Nómina",
@@ -14,9 +14,9 @@ export const ENTIDAD_LABEL: Record<string, string> = {
 }
 
 export const EVENTO_LABEL: Record<string, string> = {
-  alta_empleado: "Alta de empleado",
-  update_empleado: "Modificación de empleado",
-  baja_empleado: "Baja de empleado",
+  alta_empleado: "Alta de colaborador",
+  update_empleado: "Modificación de colaborador",
+  baja_empleado: "Baja de colaborador",
   cancelacion_vacacion: "Cancelación de vacación",
   alta_ausencia: "Alta de ausencia",
   update_ausencia: "Modificación de ausencia",
@@ -100,7 +100,7 @@ const CAMPO_LABEL: Record<string, string> = {
   justificada: "Justificada",
   motivo: "Motivo",
   tipo_id: "Tipo",
-  empleado_id: "Empleado",
+  empleado_id: "Colaborador",
   mes: "Mes",
   anio: "Año",
   monto_bruto: "Monto bruto",

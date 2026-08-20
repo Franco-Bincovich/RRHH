@@ -83,7 +83,7 @@ def validar(plantilla: dict, direcciones: List[str]) -> List[str]:
     """
     if plantilla_usa_variables(plantilla):
         raise AppError(
-            "Esta plantilla usa datos del empleado, así que solo se puede enviar a empleados "
+            "Esta plantilla usa datos del colaborador, así que solo se puede enviar a colaboradores "
             "del sistema. Para mandarla a una dirección suelta, sacale las variables.",
             "PLANTILLA_CON_VARIABLES", 422)
     limpias = normalizar(direcciones)
