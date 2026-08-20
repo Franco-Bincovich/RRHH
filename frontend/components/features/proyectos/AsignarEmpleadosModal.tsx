@@ -47,7 +47,7 @@ export function AsignarEmpleadosModal({ open, proyectoId, yaAsignadosIds, onClos
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle className="text-base">Asignar empleados</DialogTitle></DialogHeader>
         <div className="space-y-4 pt-2">
           <div className="grid grid-cols-2 gap-3">

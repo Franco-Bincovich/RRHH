@@ -51,7 +51,7 @@ export function HoraModal({ open, asignaciones, onClose, onSave }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base">Cargar horas</DialogTitle>
         </DialogHeader>

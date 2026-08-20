@@ -62,6 +62,14 @@ export interface EmpleadoListResponse {
   total_pages: number
 }
 
+/**
+ * Los DOS estados con los que un legajo puede NACER. Espejo del `EstadoAlta` del backend
+ * (`utils/estados_empleado.py`), que es un `Literal["activo", "preingreso"]` — no de
+ * `EstadoEmpleado`, que tiene cinco. `baja` o `licencia` en un alta no son estados iniciales
+ * válidos: se llega a ellos por el flujo de offboarding o por una licencia, no dándose de alta.
+ */
+export type EstadoAlta = "activo" | "preingreso"
+
 export interface EmpleadoCreate {
   empresa_id: string
   nombre: string
@@ -72,6 +80,13 @@ export interface EmpleadoCreate {
   modalidad_trabajo: string
   tipo_contrato: string
   fecha_ingreso: string
+  /**
+   * 🔴 SOLO EN EL ALTA. El pase `preingreso` → `activo` es el endpoint `/activar` (A3), no una
+   * edición de campo: tiene una guarda propia —que la fecha de ingreso ya haya ocurrido— que
+   * un PUT genérico se saltearía. Por eso el modal lo ofrece al crear y no al editar.
+   * Ausente = `"activo"`, que es el default del backend.
+   */
+  estado?: EstadoAlta
   telefono?: string
   fecha_nacimiento?: string
   dni?: string

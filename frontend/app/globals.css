@@ -85,6 +85,27 @@
 }
 
 
+/*
+ * 🔴 EL SHIMMER DEL ESQUELETO DE CARGA — `docs/SISTEMA-DE-DISENO.md` §3: "barras con shimmer de
+ * 1,2s". El `Skeleton` del repo usa `animate-pulse`, que es OTRA cosa: un fundido de opacidad de
+ * 2s, sin dirección. Un shimmer es un brillo que RECORRE la barra, y esa dirección es lo que
+ * comunica "esto está viniendo" en vez de "esto está titilando".
+ *
+ * Se declara acá y no como clase suelta en un componente porque en Tailwind v4 una animación
+ * propia se registra en el tema (`--animate-*`) y ahí queda disponible como `animate-shimmer`,
+ * igual que `animate-pulse`. El gradiente lo pone el componente: el color del brillo depende de
+ * la superficie sobre la que va, y `--border` es el escalón de luminosidad que la paleta ya usa
+ * para separar superficies — en los dos temas.
+ */
+@theme {
+  --animate-shimmer: shimmer 1.2s linear infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

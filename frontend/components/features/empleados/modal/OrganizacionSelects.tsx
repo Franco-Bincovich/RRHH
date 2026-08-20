@@ -57,7 +57,7 @@ export function OrganizacionSelects({
             ))}
           </Select>
           {errors.empresa_id && (
-            <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>
+            <p className="text-[11px] text-destructive" role="alert">{errors.empresa_id}</p>
           )}
         </div>
       )}
@@ -88,7 +88,7 @@ export function OrganizacionSelects({
           ))}
         </Select>
         {errors.area_id && (
-          <p className="text-xs text-destructive" role="alert">{errors.area_id}</p>
+          <p className="text-[11px] text-destructive" role="alert">{errors.area_id}</p>
         )}
       </div>
 

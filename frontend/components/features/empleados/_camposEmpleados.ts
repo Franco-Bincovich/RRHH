@@ -10,6 +10,14 @@ import type { Proyecto } from "@/types/proyecto"
  * justamente esta lista la que crece con cada filtro nuevo, así que dejarla adentro garantizaba
  * volver a pasarse en el próximo.
  *
+ * 🔴 QUÉ ES `avanzado` Y POR QUÉ ESTOS TRES. La fila superior del panel de filtros
+ * (`docs/SISTEMA-DE-DISENO.md` §3) es "buscador, selectores de 30px y un 'Más filtros' para el
+ * resto": el resto son los tres de abajo. El criterio no es "los últimos" sino cuáles usa Capital
+ * Humano todos los días —Empresa, Área y Estado— contra cuáles son recortes puntuales:
+ * **Liderazgo** y **Superior** existen sobre todo para auditar la carga de datos (`es_lider`,
+ * `manager_id`), y **Proyecto** cruza con otro módulo. Los tres siguen a un click y, si vienen
+ * puestos, el panel arranca abierto y además los delata un chip.
+ *
  * Sin estado ni efectos: recibe valores y setters, devuelve la descripción de los controles.
  * El reset de página lo dispara `onFiltroChange` en cada onChange (invariante 4 del bloque B);
  * el search es la excepción, porque su reset viaja con el commit del debounce, en el hook.
@@ -72,11 +80,11 @@ export function construirCampos(a: ArgsCampos): FiltroCampo[] {
       opciones: a.areas.map((ar) => ({ value: ar.id, label: etiquetaArea(ar, a.empresas, Boolean(a.empresaActivaId || a.empresaFiltro)) })) }] : []),
     { tipo: "select" as const, label: "Estado", value: a.estadoFiltro, opcionTodos: "Todos los estados",
       onChange: (v: string) => { a.setEstadoFiltro(v); a.onFiltroChange() }, opciones: ESTADO_OPCIONES },
-    { tipo: "select" as const, label: "Liderazgo", value: a.liderFiltro, opcionTodos: "Todos",
+    { tipo: "select" as const, label: "Liderazgo", value: a.liderFiltro, opcionTodos: "Todos", avanzado: true,
       onChange: (v: string) => { a.setLiderFiltro(v); a.onFiltroChange() }, opciones: LIDER_OPCIONES },
-    { tipo: "select" as const, label: "Superior", value: a.sinManagerFiltro, opcionTodos: "Todos",
+    { tipo: "select" as const, label: "Superior", value: a.sinManagerFiltro, opcionTodos: "Todos", avanzado: true,
       onChange: (v: string) => { a.setSinManagerFiltro(v); a.onFiltroChange() }, opciones: SUPERIOR_OPCIONES },
-    ...(a.proyectos.length > 0 ? [{ tipo: "select" as const, label: "Proyecto", value: a.proyectoFiltro, opcionTodos: "Todos los proyectos",
+    ...(a.proyectos.length > 0 ? [{ tipo: "select" as const, label: "Proyecto", value: a.proyectoFiltro, opcionTodos: "Todos los proyectos", avanzado: true,
       onChange: (v: string) => { a.setProyectoFiltro(v); a.onFiltroChange() },
       opciones: a.proyectos.map((p) => ({ value: p.id, label: p.nombre })) }] : []),
   ]

@@ -92,6 +92,16 @@ const PARES: ReadonlyArray<readonly [string, string]> = [
   ["--sidebar", "--sidebar-foreground"],
   ["--sidebar-primary", "--sidebar-primary-foreground"],
   ["--sidebar-accent", "--sidebar-accent-foreground"],
+  /*
+   * Los tres pares SEMÁNTICOS. Entraron el 19/8/2026, cuando el chip de estado de /empleados dejó
+   * de ser `bg-primary` (relleno azul en cada fila, contra la regla de §3 de que los chips de
+   * filtro son el único azul) y pasó a los washes. Hasta entonces la paleta declaraba ocho tokens
+   * semánticos que **ningún test miraba**: el archivo los contaba para el piso de tokens y no
+   * medía uno solo. El más ajustado es success en claro, 4,73:1.
+   */
+  ["--success-wash", "--success"],
+  ["--warning-wash", "--warning"],
+  ["--danger-wash", "--destructive"],
 ]
 
 /**

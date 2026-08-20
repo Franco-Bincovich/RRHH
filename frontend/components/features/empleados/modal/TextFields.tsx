@@ -38,7 +38,7 @@ export function TextFields({
             aria-required={required}
           />
           {errors[key] && (
-            <p className="text-xs text-destructive" role="alert">{errors[key]}</p>
+            <p className="text-[11px] text-destructive" role="alert">{errors[key]}</p>
           )}
         </div>
       ))}

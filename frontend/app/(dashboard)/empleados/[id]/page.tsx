@@ -2,13 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Pencil, LogOut } from "lucide-react"
-
-import { PageHeader } from "@/components/layout/PageHeader"
 import { ErrorState } from "@/components/ui/ErrorState"
-import { Button } from "@/components/ui/button"
 import { EmpleadoModal } from "@/components/features/empleados/EmpleadoModal"
-import { ActivarEmpleadoButton } from "@/components/features/empleados/ficha/ActivarEmpleadoButton"
+import { AccionesFicha } from "@/components/features/empleados/ficha/AccionesFicha"
+import { BarraIdentidad } from "@/components/features/empleados/ficha/BarraIdentidad"
 import { LoadingSkeleton } from "@/components/features/empleados/ficha/_primitives"
 import { OffboardingModal } from "@/components/features/empleados/ficha/OffboardingModal"
 import { DatosEmpleadoSection } from "@/components/features/empleados/ficha/DatosEmpleadoSection"
@@ -60,57 +57,54 @@ export default function EmpleadoDetailPage() {
 
   return (
     <div>
-      <div className="mb-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="min-h-11 gap-2"
-          onClick={() => router.push("/empleados")}
-        >
-          <ArrowLeft className="size-4" />
-          Volver a Empleados
-        </Button>
-      </div>
-
-      <PageHeader
-        title={`${empleado.nombre} ${empleado.apellido}`}
-        description={empleado.roles?.[0] ?? empleado.cargo}
-        action={
+      <BarraIdentidad
+        empleado={empleado}
+        acciones={
           canWrite ? (
-            <div className="flex gap-2">
-              {/* Solo en `preingreso`: es el único estado desde el que el backend acepta el
-                  pase. Las dos acciones de ciclo son excluyentes por construcción —quien
-                  todavía no entró no se puede dar de baja— así que nunca se ven juntas. */}
-              {empleado.estado === "preingreso" && (
-                <ActivarEmpleadoButton empleado={empleado} onActivado={recargarEmpleado} />
-              )}
-              {empleado.estado === "activo" && (
-                <Button
-                  variant="outline"
-                  className="min-h-11 gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => setOffboardingOpen(true)}
-                >
-                  <LogOut className="size-4" />
-                  Iniciar offboarding
-                </Button>
-              )}
-              <Button className="min-h-11" onClick={() => setEditOpen(true)}>
-                <Pencil />
-                Editar
-              </Button>
-            </div>
+            <AccionesFicha
+              empleado={empleado}
+              onActivado={recargarEmpleado}
+              onOffboarding={() => setOffboardingOpen(true)}
+              onEditar={() => setEditOpen(true)}
+            />
           ) : undefined
         }
       />
 
-      <div className="space-y-4">
-        <DatosEmpleadoSection empleado={empleado} />
-        <AdjuntosSection entidad="empleado" entidadId={id} />
-        <InventarioSection empleadoId={id} />
-        <HistorialSalarialSection empleadoId={id} />
+      {/*
+       * 🔴 TRES COLUMNAS DE PANELES INDEPENDIENTES (§3), y el reparto no es alfabético: cada
+       * columna contesta una pregunta distinta, así que se lee una sola y alcanza.
+       *   1. quién es      → datos personales y laborales (los dos paneles de campos)
+       *   2. qué tiene     → lo que la empresa le dio: documentos, inventario, cesiones
+       *   3. qué le pasó   → su línea de tiempo: sueldo y vacaciones
+       * `items-start` para que cada panel mida lo suyo: sin él, los tres de una fila se estiran
+       * al alto del más largo y quedan con medio panel vacío.
+       */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
+        <div className="flex flex-col gap-4">
+          <DatosEmpleadoSection empleado={empleado} />
+        </div>
+        <div className="flex flex-col gap-4">
+          <AdjuntosSection entidad="empleado" entidadId={id} />
+          <InventarioSection empleadoId={id} />
+          <CesionesSection empleadoId={id} />
+        </div>
+        <div className="flex flex-col gap-4">
+          <HistorialSalarialSection empleadoId={id} />
+          <VacacionesSection empleadoId={id} />
+        </div>
+      </div>
+
+      {/*
+       * 🔴 EL HISTORIAL DE CAMBIOS QUEDA A LO ANCHO, FUERA DE LAS TRES COLUMNAS, y es una
+       * excepción declarada: adentro trae la MISMA tabla de 5 columnas que usa /auditoria más su
+       * paginación, y en un tercio de pantalla eso no entra sin scroll horizontal. No se lo
+       * convirtió al patrón de historial ("de → a") porque `AuditTable` la comparten esta ficha y
+       * la pantalla de auditoría: cambiarla acá sería migrar /auditoria de rebote, que es
+       * exactamente lo que esta tanda no hace.
+       */}
+      <div className="mt-4">
         <HistorialCambiosSection empleadoId={id} />
-        <VacacionesSection empleadoId={id} />
-        <CesionesSection empleadoId={id} />
       </div>
 
       {canWrite && (

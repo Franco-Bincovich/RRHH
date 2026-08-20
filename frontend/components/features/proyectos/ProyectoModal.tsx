@@ -67,7 +67,7 @@ export function ProyectoModal({ open, proyecto, onClose, onSave }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-base">{isEdit ? "Editar proyecto" : "Nuevo proyecto"}</DialogTitle>
         </DialogHeader>

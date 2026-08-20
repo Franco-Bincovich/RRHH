@@ -5,6 +5,7 @@ import { RolesInput } from "@/components/ui/RolesInput"
 import { Select } from "@/components/ui/select"
 import { TextFields } from "./TextFields"
 import { AutocompleteFields } from "./AutocompleteFields"
+import { EstadoAltaField } from "./EstadoAltaField"
 import { OrganizacionSelects } from "./OrganizacionSelects"
 import {
   LABORAL_AUTOCOMPLETE, LABORAL_TEXT_FIELDS, INPUT_DATALIST_CLASS,
@@ -30,6 +31,7 @@ interface Props {
   onRolesChange: (roles: string[]) => void
   onValue: (key: AutocompleteKey) => (value: string) => void
   onLider: (value: boolean) => void
+  onEstadoAlta: (value: FormData["estado"]) => void
 }
 
 /**
@@ -40,7 +42,7 @@ interface Props {
 export function DatosLaboralesFields({
   form, errors, isEdit, empresas, empresasLoading, areas, areasLoading,
   seleccionables, currentEmpleadoId, rolesSugeridos, field, onEmpresaChange,
-  onRolesChange, onValue, onLider,
+  onRolesChange, onValue, onLider, onEstadoAlta,
 }: Props) {
   return (
     <>
@@ -53,7 +55,7 @@ export function DatosLaboralesFields({
           onChange={onRolesChange}
         />
         {errors.roles && (
-          <p className="mt-1.5 text-xs text-destructive" role="alert">{errors.roles}</p>
+          <p className="mt-1.5 text-[11px] text-destructive" role="alert">{errors.roles}</p>
         )}
       </div>
 
@@ -106,6 +108,8 @@ export function DatosLaboralesFields({
       </div>
 
       <TextFields fields={LABORAL_TEXT_FIELDS} form={form} errors={errors} field={field} />
+
+      {!isEdit && <EstadoAltaField value={form.estado} onChange={onEstadoAlta} />}
 
       <AutocompleteFields fields={LABORAL_AUTOCOMPLETE} form={form} onValue={onValue} />
 

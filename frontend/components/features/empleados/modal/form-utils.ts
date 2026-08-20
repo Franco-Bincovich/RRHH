@@ -1,20 +1,79 @@
-import type { Empleado, EmpleadoCreate } from "@/types/empleado"
+import type { Empleado, EmpleadoCreate, EstadoAlta } from "@/types/empleado"
 import type { FormData, FormErrors } from "./_constants"
 
-/** Validación pura del form. Devuelve el mapa de errores (vacío = válido). */
+/**
+ * La fecha de HOY en ISO, **en hora local y no en UTC**.
+ *
+ * 🔴 `new Date().toISOString().slice(0, 10)` es el atajo obvio y está mal acá: `toISOString`
+ * convierte a UTC, y en Argentina (UTC-3) desde las 21:00 devuelve el día SIGUIENTE. O sea que
+ * un alta cargada de noche con fecha de ingreso "mañana" se leería como "hoy" y nacería activa.
+ * Es un bug de una hora por día, que es la peor clase: no se reproduce en la sesión que lo
+ * escribe.
+ */
+export function hoyISO(): string {
+  const d = new Date()
+  const mes = String(d.getMonth() + 1).padStart(2, "0")
+  return `${d.getFullYear()}-${mes}-${String(d.getDate()).padStart(2, "0")}`
+}
+
+/**
+ * Con qué estado NACE un legajo según su fecha de ingreso.
+ *
+ * 🔴 EL DEFAULT NO DEBERÍA OBLIGAR A PENSAR: si la persona todavía no entró, lo correcto es
+ * `preingreso`, y esperar que el usuario se acuerde de cambiarlo es exactamente cómo se llegó al
+ * bug que esto cierra (un alta con fecha futura nacía `activa` y entraba en la dotación del mes
+ * sin que la persona hubiera pisado la oficina). El usuario puede cambiarlo igual: es un default,
+ * no una regla.
+ *
+ * Sin fecha cargada devuelve `"activo"`: es el caso de un formulario recién abierto, y suponer
+ * "todavía no ingresó" antes de que el usuario diga nada sería adivinar al revés.
+ *
+ * ⚠️ EL DEFAULT TIENE QUE PODER PERDERSE, y por eso el hook lleva un flag `estadoTocado` en vez
+ * de derivar el estado en cada render. Si se derivara siempre, un usuario que elige a propósito
+ * "Ya está trabajando" para alguien con fecha futura —caso real: la persona ya firmó y ya trabaja
+ * en otra sede— vería su elección revertida al corregir cualquier cosa de la fecha, y no habría
+ * forma de dar esa alta. Con el flag, la derivación manda hasta que el usuario opina y después
+ * se calla.
+ */
+export function estadoSegunFecha(fechaIngreso: string, hoy = hoyISO()): EstadoAlta {
+  return fechaIngreso && fechaIngreso > hoy ? "preingreso" : "activo"
+}
+
+/**
+ * Validación pura del form. Devuelve el mapa de errores (vacío = válido).
+ *
+ * 🔴 CADA MENSAJE DICE QUÉ HACER, NO QUÉ ESTÁ MAL. Es el segundo nivel de la validación del
+ * patrón de modal de formulario (`docs/SISTEMA-DE-DISENO.md` §3): "mensaje de 11px que dice **qué
+ * corregir**, no 'campo inválido'".
+ *
+ * Hasta el 19/8/2026 seis de los ocho decían la misma frase con distinto sustantivo —"La empresa
+ * es requerida", "El nombre es requerido", "El área es requerida"— y eso **no le agrega nada al
+ * asterisco rojo que el campo ya tiene al lado del label**: el usuario ya sabe que es obligatorio;
+ * lo que no sabe es qué escribir ahí. El peor de todos era "El email no es válido", que es el
+ * ejemplo textual que el sistema de diseño usa para explicar el problema: no dice si falta el
+ * arroba, si sobra un espacio o si el dominio está incompleto.
+ *
+ * Los dos que ya estaban bien —"Agregá al menos un rol" y el de las horas— se dejaron como
+ * estaban: son exactamente lo que la regla pide.
+ *
+ * ⚠️ Hay un test que barre estos textos contra una lista de palabras prohibidas
+ * ("inválido", "requerido", "error"). No es cosmético: son las tres formas de escribir un mensaje
+ * que no ayuda, y sin el barrido el próximo campo nuevo vuelve a la fórmula vieja.
+ */
 export function validate(form: FormData, isEdit: boolean): FormErrors {
   const errors: FormErrors = {}
-  if (!isEdit && !form.empresa_id) errors.empresa_id = "La empresa es requerida"
-  if (!form.nombre.trim()) errors.nombre = "El nombre es requerido"
-  if (!form.apellido.trim()) errors.apellido = "El apellido es requerido"
+  if (!isEdit && !form.empresa_id) errors.empresa_id = "Elegí de qué empresa va a depender el legajo"
+  if (!form.nombre.trim()) errors.nombre = "Escribí el nombre tal como figura en el documento"
+  if (!form.apellido.trim()) errors.apellido = "Escribí el apellido tal como figura en el documento"
   if (!form.email_corporativo.trim()) {
-    errors.email_corporativo = "El email es requerido"
+    // Dice PARA QUÉ se usa: es lo que evita que carguen el personal en vez del corporativo.
+    errors.email_corporativo = "Escribí el email de la empresa: es la casilla a la que el sistema le manda los avisos"
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_corporativo)) {
-    errors.email_corporativo = "El email no es válido"
+    errors.email_corporativo = "Falta el arroba o el dominio — tiene que ser algo como nombre@empresa.com"
   }
-  if (!form.area_id) errors.area_id = "El área es requerida"
+  if (!form.area_id) errors.area_id = "Elegí el área en la que va a trabajar. Si no está en la lista, creala primero en Áreas"
   if (form.roles.length === 0) errors.roles = "Agregá al menos un rol"
-  if (!form.fecha_ingreso) errors.fecha_ingreso = "La fecha de ingreso es requerida"
+  if (!form.fecha_ingreso) errors.fecha_ingreso = "Elegí el día en que la persona empieza a trabajar"
   if (form.horas_contrato.trim() && !/^\d+$/.test(form.horas_contrato.trim())) {
     errors.horas_contrato = "Las horas tienen que ser un número entero"
   }
@@ -25,6 +84,11 @@ export function validate(form: FormData, isEdit: boolean): FormErrors {
 export function toFormData(empleado: Empleado): FormData {
   return {
     empresa_id: "",
+    // 🔴 SIEMPRE "activo", y NO el estado real del empleado. En edición este campo no se
+    // renderiza ni se envía (`buildPayload` no lo incluye), así que el valor es inerte: ponerle
+    // el estado real sugeriría que editarlo hace algo. Un legajo en `baja` o `licencia` ni
+    // siquiera tiene un valor representable acá — `EstadoAlta` son dos, no cinco.
+    estado: "activo",
     nombre: empleado.nombre,
     apellido: empleado.apellido,
     email_corporativo: empleado.email_corporativo,
@@ -66,8 +130,16 @@ export function toFormData(empleado: Empleado): FormData {
   }
 }
 
-/** Arma el payload de la API a partir del form (sin empresa_id; lo agrega el create). */
-export function buildPayload(form: FormData): Omit<EmpleadoCreate, "empresa_id"> {
+/**
+ * Arma el payload de la API a partir del form (sin empresa_id; lo agrega el create).
+ *
+ * 🔴 `estado` NO SALE DE ACÁ, y la omisión es la que sostiene la regla de A3. Este payload lo
+ * usan los DOS caminos —crear y editar—: si el estado viajara desde acá, una edición cualquiera
+ * podría devolver a `activo` a alguien que está en `licencia`, salteándose la guarda de
+ * `/activar` (que exige que la fecha de ingreso ya haya ocurrido). Lo agrega el `create` del
+ * modal, que es el único lugar donde elegir un estado inicial tiene sentido.
+ */
+export function buildPayload(form: FormData): Omit<EmpleadoCreate, "empresa_id" | "estado"> {
   return {
     nombre: form.nombre,
     apellido: form.apellido,

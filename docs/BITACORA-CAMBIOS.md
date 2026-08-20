@@ -40,6 +40,73 @@ entrada, la sesión no terminó.
 - **Dependencias de una URL o dominio concreto** — CORS, callbacks OAuth, webhooks
 
 ---
+## 2026-08-19 · Ficha de detalle + el alta puede nacer en preingreso (cierra B3) · commits pendientes
+
+**Qué cambió.** Frontend puro, **cero backend, cero endpoints, cero migraciones**. Dos cosas.
+(1) 🔴 **El alta de empleado ya puede nacer en `preingreso`**, que el backend soporta desde A3
+(`EmpleadoCreate.estado`, `Literal["activo","preingreso"]`) y el front nunca mandaba: un alta con
+fecha de ingreso futura nacía **activa** y entraba en la dotación del mes sin que la persona
+hubiera entrado. El modal ahora ofrece "Ya está trabajando" / "Todavía no ingresó", con el
+**default derivado de la fecha** (futura → preingreso). En EDICIÓN el campo no se renderiza y el
+`estado` no viaja en el `PUT`: el pase preingreso→activo sigue siendo `/activar`, que tiene su
+guarda propia. (2) El **patrón de ficha de detalle** aplicado a `/empleados/[id]`: migas de pan,
+barra de identidad (monograma de 46px, chip de estado semántico, cuatro datos clave, primaria al
+final), tres columnas de paneles, filas etiqueta-valor de 30px con el valor a la derecha, y el
+historial salarial como **lista "de → a" con chip Vigente** en vez de una lista de 24 meses
+repetidos.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, sin variables de entorno, sin
+dependencias nuevas, sin buckets, sin endpoints, sin cambios de auth ni de CORS. Verificado con
+los tres comandos: `tsc` 0 errores, `npm test` 847 tests en 73 archivos (eran 807 en 69),
+`npm run build` compilado.
+⚠️ **Para Capital Humano, no para infra:** desde este cambio, un alta con fecha futura deja de
+contar en la dotación del mes salvo que se elija explícitamente lo contrario. Es el
+comportamiento correcto, pero cambia el número de altas del mes respecto de lo que venían viendo.
+
+---
+## 2026-08-19 · Modal de formulario + vacío y carga, y el ancho roto de TODOS los modales · commits pendientes
+
+**Qué cambió.** Frontend puro, **cero backend, cero endpoints, cero migraciones**. Tres cosas.
+(1) 🔴 **El ancho de los modales estaba roto en el primitivo**: `CLASES_POPUP` terminaba en
+`sm:max-w-sm` y, como `twMerge` no puede resolver un conflicto entre una clase con variante y una
+sin ella, de 640px para arriba le ganaba a cualquier `max-w-*` que el modal declarara. **34 de los
+47 modales del repo medían 384px sin importar lo que pedían**; los tres que piden `max-w-4xl`
+—importador de nómina CSV, carga de nómina y ficha de evaluado— se veían a **384px en vez de
+896px**. Arreglado en el primitivo y sacados los cinco workarounds locales que lo tapaban.
+(2) El **patrón de modal de formulario** (vidrio de 28px sobre scrim al 35%, 560px, validación en
+dos niveles, aviso de impacto ámbar), opt-in vía `<DialogContent patron="formulario">`, aplicado
+solo al modal de empleado. (3) El **patrón de vacío y carga** en /empleados: la tabla mantiene su
+encabezado con cero resultados, el texto nombra los filtros reales, y el esqueleto usa un shimmer
+de 1,2s con los filtros deshabilitados.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, sin variables de entorno, sin
+dependencias nuevas, sin buckets, sin endpoints, sin cambios de auth ni de CORS. Verificado con
+los tres comandos: `tsc` 0 errores, `npm test` 807 tests en 69 archivos (eran 772 en 65),
+`npm run build` compilado.
+⚠️ **Para QA/testing, no para infra:** el cambio de ancho toca 34 pantallas de modal a la vez. Es
+el arreglo de un bug, no un rediseño —cada modal pasa a medir lo que su autor escribió—, pero
+conviene mirar los tres de 896px antes de mostrárselo a Capital Humano.
+
+---
+## 2026-08-19 · Patrones de filtros y tabla del sistema de diseño, con /empleados de piloto · commits pendientes
+
+**Qué cambió.** Frontend puro, **cero backend, cero endpoints, cero migraciones**. Se construyeron
+los dos patrones de `docs/SISTEMA-DE-DISENO.md` §3 —"Filtros" (panel con chips) y "Tabla con
+paginación"— y se aplicaron **solo a /empleados**, que es la pantalla piloto. Los dos son
+**opt-in**: `<FiltersBar panel>` y `<Table patron="datos">`. Sin esas props, los 8 consumidores de
+`FiltersBar` y los 31 de `table.tsx` renderizan exactamente lo que renderizaban antes — la
+migración de las otras 36 pantallas es de a una y en su propio bloque. De paso, el chip de estado
+de la tabla dejó de ser `bg-primary` (relleno azul en cada fila, contra la regla de que los chips
+de filtro son el único azul de la pantalla) y pasó a los pares semánticos de la paleta, que hasta
+ahora **ningún test medía**: los tres entraron a `contrasteTokens.test.ts` (el más ajustado,
+success en claro, 4,73:1).
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, sin variables de entorno, sin
+dependencias nuevas (los íconos salen de `lucide-react`, que ya estaba), sin buckets, sin
+endpoints, sin cambios de auth ni de CORS. Verificado con los tres comandos: `tsc` 0 errores,
+`npm test` 772 tests en 65 archivos (eran 747 en 63), `npm run build` compilado.
+
+---
 ## 2026-08-19 · Cierre de B2.1 + los primitivos que faltaban (tabs, card, global-error) · commits pendientes
 
 **Qué cambió.** Frontend puro, **cero backend, cero endpoints, cero migraciones**. Dos primitivos

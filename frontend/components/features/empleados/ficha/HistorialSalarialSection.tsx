@@ -2,16 +2,13 @@
 
 import { useEffect, useState } from "react"
 
+import { Historial } from "@/components/ui/Historial"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Section } from "@/components/features/empleados/ficha/_primitives"
+import { cambiosSalariales, resumenSerie } from "@/components/features/empleados/ficha/_cambiosSalariales"
 import { useCanRead } from "@/hooks/useCanWrite"
 import { fetchHistorialSalarial } from "@/services/costos"
 import type { HistorialSalarialItem } from "@/types/costo"
-
-const MESES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-]
 
 /**
  * ¿Corresponde pedir la serie al backend?
@@ -26,11 +23,6 @@ const MESES = [
  */
 export function debeCargar(empleadoId: string, puedeVerCostos: boolean): boolean {
   return Boolean(empleadoId) && puedeVerCostos
-}
-
-function pesos(n: number): string {
-  const abs = Math.abs(Math.round(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
-  return n < 0 ? `-$${abs}` : `$${abs}`
 }
 
 /**
@@ -72,6 +64,8 @@ export function HistorialSalarialSection({ empleadoId }: { empleadoId: string })
 
   if (!puedeVerCostos) return null
 
+  const cambios = cambiosSalariales(items)
+
   return (
     <Section title="Historial salarial">
       <div className="col-span-full">
@@ -89,25 +83,13 @@ export function HistorialSalarialSection({ empleadoId }: { empleadoId: string })
             Todavía no hay sueldos cargados para este empleado.
           </p>
         ) : (
-          <ul className="divide-y text-sm" role="list">
-            {items.map((h) => (
-              <li key={`${h.anio}-${h.mes}`} className="flex flex-wrap justify-between gap-2 py-2">
-                <span className="text-muted-foreground">
-                  {MESES[h.mes - 1]} {h.anio}
-                </span>
-                <span className="flex gap-4">
-                  <span>
-                    <span className="text-muted-foreground">Bruto </span>
-                    <span className="font-medium text-foreground">{pesos(h.monto_bruto)}</span>
-                  </span>
-                  <span>
-                    <span className="text-muted-foreground">Neto </span>
-                    <span className="font-medium text-foreground">{pesos(h.monto_neto)}</span>
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            {/* 🔴 LISTA, NO TABLA (§3): un historial se lee por la fecha y por el salto de un
+                valor a otro, no por columnas. La derivación —qué meses son un cambio real— vive
+                en `_cambiosSalariales.ts`, que es puro y se testea sin renderizar. */}
+            <Historial entradas={cambios} vacio="Todavía no hay sueldos cargados." />
+            <p className="mt-3 text-xs text-muted-foreground">{resumenSerie(items, cambios.length)}</p>
+          </>
         )}
       </div>
     </Section>

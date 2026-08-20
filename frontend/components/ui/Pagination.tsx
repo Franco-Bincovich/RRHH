@@ -43,7 +43,10 @@ export function Pagination({ page, total, pageSize, onPageChange, onPageSizeChan
   return (
     <nav className="mt-4 flex flex-wrap items-center justify-between gap-3" aria-label="Paginación">
       <div className="flex items-center gap-3">
-        <p className="text-sm text-muted-foreground" aria-live="polite">
+        {/* `tabular-nums`: el sistema de diseño pide cifras tabulares en TODOS los números, y el
+            pie es el que más se nota — sin ellas el "1.033–1.042" cambia de ancho al pasar de
+            página y el bloque entero se corre. */}
+        <p className="text-sm text-muted-foreground tabular-nums" aria-live="polite">
           {total === 0
             ? "Sin resultados"
             : `Mostrando ${NUM.format(desde)}–${NUM.format(hasta)} de ${NUM.format(total)}`}

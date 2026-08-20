@@ -1,5 +1,8 @@
 import type { ChangeEvent } from "react"
 
+import type { EstadoAlta } from "@/types/empleado"
+
+
 export type FormData = {
   empresa_id: string
   nombre: string
@@ -10,6 +13,8 @@ export type FormData = {
   modalidad_trabajo: string
   tipo_contrato: string
   fecha_ingreso: string
+  /** Estado de ALTA. Solo se usa al crear; en edición el campo ni se renderiza. */
+  estado: EstadoAlta
   telefono: string
   fecha_nacimiento: string
   dni: string
@@ -45,8 +50,9 @@ export type FormData = {
 
 export type FormErrors = Partial<Record<keyof FormData, string>>
 
-/** Claves de campos de texto (string). Excluye roles (lista) y es_lider (booleano). */
-export type TextKey = Exclude<keyof FormData, "roles" | "es_lider">
+/** Claves de campos de texto (string). Excluye roles (lista), es_lider (booleano) y estado
+ *  (unión cerrada: su control es un select propio, no un input de texto). */
+export type TextKey = Exclude<keyof FormData, "roles" | "es_lider" | "estado">
 /** Claves con autocompletado de texto libre + sugerencias (single-value). */
 export type AutocompleteKey =
   | "tipo_documento" | "ubicacion" | "organismo" | "gerencia" | "sector"
@@ -75,6 +81,7 @@ export const EMPTY: FormData = {
   modalidad_trabajo: "presencial",
   tipo_contrato: "Relación de dependencia",
   fecha_ingreso: "",
+  estado: "activo",
   telefono: "",
   fecha_nacimiento: "",
   dni: "",

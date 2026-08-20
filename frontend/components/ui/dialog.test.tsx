@@ -195,4 +195,36 @@ describe("Barrido: la altura y el scroll del modal los decide el primitivo", () 
     expect(resultado).toContain("[&>[data-slot=dialog-footer]]:shrink-0")
     expect(resultado).toContain("max-w-lg")
   })
+
+  /*
+   * 🔴 ESTE BLOQUE NACIÓ PORQUE EL DE ARRIBA PASABA CON EL ANCHO ROTO.
+   * `twMerge(CLASES_POPUP, "max-w-lg")` contenía `max-w-lg`… y también el `sm:max-w-sm` que el
+   * primitivo traía, que de 640px para arriba le ganaba. O sea: la aserción era cierta y el modal
+   * medía 384px igual. Un `toContain` no alcanza cuando el bug es que sobrevive OTRA clase — hay
+   * que afirmar que la otra NO está.
+   */
+  it("🔴 el ancho por defecto NO lleva variante: si la lleva, twMerge no lo puede pisar", () => {
+    expect(
+      CLASES_POPUP,
+      "El default de ancho tiene que ser `max-w-sm` sin prefijo. Con `sm:max-w-sm`, el " +
+        "`max-w-4xl` del consumidor y el del primitivo caen en grupos distintos de twMerge, " +
+        "sobreviven los dos y gana el del media query: el modal mide 384px sin ningún error.",
+    ).not.toMatch(/\b(sm|md|lg|xl):max-w-/)
+  })
+
+  it("🔴 el ancho que pide el modal es el ÚNICO max-width que queda en pie", () => {
+    const resultado = twMerge(CLASES_POPUP, "max-w-4xl")
+    const anchos = resultado.match(/\S*max-w-\S+/g) ?? []
+    expect(anchos).toEqual(["max-w-4xl"])
+  })
+
+  it("ningún modal necesita ya el workaround `sm:max-w-*`", () => {
+    // Los cinco que lo tenían (dos de proyectos con `sm:max-w-lg`, tres con `sm:max-w-md`) son la
+    // prueba de que alguien chocó el bug y lo arregló en su archivo. Con el primitivo sano, el
+    // workaround vuelve a ser lo que parece: una clase que no hace falta y que esconde el problema.
+    const infractores = usos
+      .filter((u) => /\b(sm|md|lg|xl):max-w-/.test(u.clases))
+      .map((u) => `${u.archivo} → ${u.clases}`)
+    expect(infractores).toEqual([])
+  })
 })

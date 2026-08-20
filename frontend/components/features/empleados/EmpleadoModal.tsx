@@ -1,19 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
-
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { AvisoImpacto } from "@/components/ui/AvisoImpacto"
 import { Button } from "@/components/ui/button"
-import { createEmpleado, updateEmpleado } from "@/services/empleados"
+import { FormErrores } from "@/components/ui/FormErrores"
 import type { Empleado } from "@/types/empleado"
-import { EMPTY, type AutocompleteKey, type FormData, type FormErrors, type TextKey } from "./modal/_constants"
-import { buildPayload, toFormData, validate } from "./modal/form-utils"
+import { hoyISO } from "./modal/form-utils"
+import { useEmpleadoForm } from "./modal/useEmpleadoForm"
 import { useEmpleadoFormData } from "./modal/useEmpleadoFormData"
 import { DatosPersonalesFields } from "./modal/DatosPersonalesFields"
 import { DatosLaboralesFields } from "./modal/DatosLaboralesFields"
@@ -26,71 +26,47 @@ interface EmpleadoModalProps {
 }
 
 export function EmpleadoModal({ open, onClose, onSuccess, empleado }: EmpleadoModalProps) {
-  const isEdit = Boolean(empleado)
-  const [form, setForm]             = useState<FormData>(EMPTY)
-  const [errors, setErrors]         = useState<FormErrors>({})
-  const [submitting, setSubmitting] = useState(false)
-  const [serverError, setServerError] = useState("")
+  const {
+    isEdit, form, errors, submitting, serverError, cantidadErrores,
+    field, onValue, onLider, onRoles, onEstadoAlta, handleEmpresaChange, handleSubmit,
+  } = useEmpleadoForm(open, empleado, onSuccess)
 
   const { empresas, empresasLoading, areas, areasLoading, rolesSugeridos, seleccionables } =
     useEmpleadoFormData(open, isEdit, form.empresa_id, isEdit ? empleado?.empresa_id ?? "" : form.empresa_id)
 
-  // Resetear formulario al abrir/cerrar
-  useEffect(() => {
-    setForm(empleado ? toFormData(empleado) : EMPTY)
-    setErrors({})
-    setServerError("")
-  }, [empleado, open])
-
-  // Setter único: actualiza un campo y limpia su error. El orquestador es el dueño del estado.
-  function setField<K extends keyof FormData>(key: K, value: FormData[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }))
-    if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }))
-  }
-  const field = (key: TextKey) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setField(key, e.target.value)
-  const onValue = (key: AutocompleteKey) => (value: string) => setField(key, value)
-  const onLider = (value: boolean) => setField("es_lider", value)
-  const handleRolesChange = (roles: string[]) => setField("roles", roles)
-
-  function handleEmpresaChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    // Resetear área al cambiar empresa para evitar incoherencias
-    setForm((prev) => ({ ...prev, empresa_id: e.target.value, area_id: "" }))
-    setErrors((prev) => ({ ...prev, empresa_id: undefined, area_id: undefined }))
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const errs = validate(form, isEdit)
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs)
-      return
-    }
-    setSubmitting(true)
-    setServerError("")
-    const base = buildPayload(form)
-    try {
-      if (isEdit && empleado) {
-        await updateEmpleado(empleado.id, base)
-      } else {
-        await createEmpleado({ ...base, empresa_id: form.empresa_id })
-      }
-      onSuccess()
-    } catch {
-      setServerError("Ocurrió un error al guardar. Intentá de nuevo.")
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  /*
+   * 🔴 EL AVISO EXPLICA LA CONSECUENCIA DE LO ELEGIDO, no el problema del formulario. Hasta que
+   * el alta pudo nacer en `preingreso`, este cartel avisaba de un bug ("se crea activa igual");
+   * ahora que el usuario elige, lo que no puede deducir de la pantalla es qué implica cada
+   * opción — si esa persona entra o no en la dotación del mes, que es el número que el directorio
+   * mira. Sólo aparece cuando la fecha es futura: con fecha pasada las dos opciones significan lo
+   * mismo y el cartel sería ruido.
+   */
+  const ingresoFuturo = !isEdit && form.fecha_ingreso > hoyISO()
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-2xl">
+      {/* El ancho lo pone el patrón (560px, §3), no el modal: por eso ya no lleva `max-w-2xl`. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar empleado" : "Nuevo empleado"}</DialogTitle>
+          {/*
+           * 🔴 UNA LÍNEA QUE EXPLICA LA CONSECUENCIA, no lo que el modal es (§3). "Cargá los datos
+           * del empleado" describe el formulario y no le dice nada a nadie; lo que el usuario no
+           * puede saber mirando la pantalla es qué pasa DESPUÉS de apretar Guardar.
+           */}
+          <DialogDescription>
+            {isEdit
+              ? "Los cambios quedan registrados en la auditoría con tu usuario y se ven en la ficha al instante."
+              : "Se crea el legajo y la persona pasa a contar en la dotación de la empresa que elijas."}
+          </DialogDescription>
         </DialogHeader>
 
         <form id="empleado-form" onSubmit={handleSubmit} noValidate className="space-y-5">
+          {/* Primer nivel de la validación: la cuenta, arriba de todo. El segundo nivel —qué
+              corregir— va en cada campo. */}
+          <FormErrores cantidad={cantidadErrores} />
+
           <section>
             <h3 className="mb-3 text-sm font-semibold text-foreground">Información personal</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -113,9 +89,10 @@ export function EmpleadoModal({ open, onClose, onSuccess, empleado }: EmpleadoMo
                 rolesSugeridos={rolesSugeridos}
                 field={field}
                 onEmpresaChange={handleEmpresaChange}
-                onRolesChange={handleRolesChange}
+                onRolesChange={onRoles}
                 onValue={onValue}
                 onLider={onLider}
+                onEstadoAlta={onEstadoAlta}
               />
             </div>
           </section>
@@ -125,10 +102,30 @@ export function EmpleadoModal({ open, onClose, onSuccess, empleado }: EmpleadoMo
           )}
         </form>
 
-        <DialogFooter>
+        <DialogFooter
+          aviso={ingresoFuturo ? (
+            <AvisoImpacto>
+              {form.estado === "preingreso" ? (
+                <>
+                  El legajo queda en <strong className="font-semibold">preingreso</strong>: la
+                  persona <strong className="font-semibold">no cuenta en la dotación</strong> ni
+                  en las altas del mes hasta que alguien confirme el ingreso desde su ficha.
+                </>
+              ) : (
+                <>
+                  La fecha de ingreso todavía no llegó y el legajo se crea{" "}
+                  <strong className="font-semibold">activo</strong>: la persona{" "}
+                  <strong className="font-semibold">cuenta en la dotación desde hoy</strong> y en
+                  las altas de este mes.
+                </>
+              )}
+            </AvisoImpacto>
+          ) : undefined}
+        >
+          {/* Secundario FANTASMA y primario sólido, abajo a la derecha (§3). */}
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             className="min-h-11"
             onClick={onClose}
             disabled={submitting}

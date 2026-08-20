@@ -117,6 +117,36 @@ describe("totales en pantallas paginadas", () => {
     expect(muertas).toEqual([])
   })
 
+  it("🔴 (f) el pie sale de `total`, NUNCA de la cantidad de filas de la página", () => {
+    /*
+     * El `.reduce()` de arriba caza el agregado derivado; esto caza al hermano que el barrido no
+     * veía: pasarle a `<Pagination>` el largo de la página como si fuera el total
+     * (`total={items.length}`). Es el MISMO bug de HorasTab por otra puerta y es todavía más
+     * invisible, porque mientras el listado entre en una página el número es correcto — el pie
+     * dice "Mostrando 1–20 de 20" con 1.042 filas cargadas, la barra muestra una sola página y no
+     * hay ningún error. Se ve recién cuando hay datos de verdad, o sea en producción.
+     *
+     * 🔬 VERIFICADO QUE PUEDE FALLAR: con `total={items.length}` en /empleados este test rojea
+     * nombrando el archivo; con `total={total}` pasa.
+     */
+    const invocaciones = CONSUMIDORES.flatMap((c) =>
+      (sinComentarios(c.src).match(/<Pagination[\s\S]*?\/>/g) ?? []).map((jsx) => ({ rel: c.rel, jsx })),
+    )
+    // Guarda contra el falso verde: si el regex dejara de matchear el JSX, no habría nada que
+    // mirar y el test pasaría en el vacío.
+    expect(invocaciones.length).toBeGreaterThanOrEqual(7)
+
+    const culpables = invocaciones
+      .filter(({ jsx }) => /total=\{[^}]*\.length[^}]*\}/.test(jsx))
+      .map(({ rel }) => rel)
+    expect(culpables).toEqual([])
+
+    // Contracara: el detector reconoce el bug cuando está. Sin esto, un regex roto pasaría las
+    // dos aserciones de arriba.
+    expect(/total=\{[^}]*\.length[^}]*\}/.test("<Pagination total={items.length} />")).toBe(true)
+    expect(/total=\{[^}]*\.length[^}]*\}/.test("<Pagination total={total} />")).toBe(false)
+  })
+
   it("HorasTab lee los totales de la respuesta y no de la página", () => {
     // El caso concreto que originó la regla, fijado además del barrido: si alguien vuelve a
     // derivarlo, el test de arriba dice "hay un reduce" y este dice qué dejó de leerse.

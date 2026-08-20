@@ -57,7 +57,7 @@ export function OffboardingModal({ open, empleadoId, onClose, onSuccess }: Offbo
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Iniciar offboarding</DialogTitle>
         </DialogHeader>

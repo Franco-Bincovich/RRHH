@@ -3,16 +3,33 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { PATRON_DATOS } from "@/components/ui/tablePatron"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+/**
+ * 🔴 `patron="datos"` ES OPT-IN, Y ESO ES EL ALCANCE, NO UNA DUDA. Este primitivo tiene **31
+ * consumidores**: escribir el patrón de tabla del sistema de diseño en las clases base habría
+ * cambiado la densidad, el encabezado y el hover de 31 pantallas de una. Sin `patron`, una tabla
+ * sale exactamente igual que antes — no se le agrega una sola clase.
+ * El qué y el porqué, completos, en `components/ui/tablePatron.ts`.
+ */
+
+function Table({ className, patron, ...props }: React.ComponentProps<"table"> & { patron?: "datos" }) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      /*
+       * 🔴 EL `pr-0.5` ES EL QUE EVITA EL SCROLL HORIZONTAL DEL HOVER, no es un margen estético.
+       * La tabla es `w-full`: una fila desplazada 2px a la derecha termina 2px afuera del
+       * contenedor, y como el contenedor es `overflow-x-auto` eso aparece como una barra de
+       * scroll horizontal que va y viene al pasar el mouse por las filas. Con 2px de canaleta
+       * (0.5 = 2px) la tabla mide 2px menos y el desplazamiento cae justo adentro.
+       */
+      className={cn("relative w-full overflow-x-auto", patron === "datos" && "pr-0.5")}
     >
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        data-patron={patron}
+        className={cn("w-full caption-bottom text-sm", patron === "datos" && PATRON_DATOS, className)}
         {...props}
       />
     </div>
