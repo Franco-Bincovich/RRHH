@@ -54,3 +54,47 @@ describe("(d) el vacío nombra los filtros que lo causaron", () => {
     expect(descripcion).toContain("área Sistemas, estado Baja y liderazgo Solo líderes")
   })
 })
+
+/**
+ * 🔴 EL GÉNERO DEL SUSTANTIVO — la frase concuerda en DOS lugares, no en uno.
+ *
+ * Hasta el 21/8/2026 las dos concordancias estaban en masculino fijo, y sobre siete de las quince
+ * pantallas que usan este helper la frase quedaba mal escrita ("Cuando se cargue **el primero**"
+ * sobre áreas, bajas, ausencias, vacantes, empresas, vacaciones y recategorizaciones; y "Karstec
+ * no tiene áreas **cargados**", que es la MISMA falla en otra rama y no estaba a la vista).
+ *
+ * ⚠️ ¿QUÉ TENDRÍA QUE SER DISTINTO PARA QUE ESTOS TESTS PUEDAN FALLAR? Que la función volviera a
+ * escribir el literal masculino, o que atendiera una sola de las dos ramas. Las dos direcciones
+ * están cubiertas —masculino Y femenino— porque con una sola, una función que devolviera siempre
+ * femenino pasaría igual.
+ */
+describe("el género del sustantivo gobierna las DOS concordancias", () => {
+  it("sin filtros: masculino por default, femenino cuando se lo pide", () => {
+    expect(textoVacio([], "colaboradores").descripcion)
+      .toBe("Cuando se cargue el primero va a aparecer acá.")
+    expect(textoVacio([], "áreas", undefined, "femenino").descripcion)
+      .toBe("Cuando se cargue la primera va a aparecer acá.")
+  })
+
+  it("con el sujeto como único filtro: 'cargados' o 'cargadas', por el MISMO parámetro", () => {
+    // Ésta es la rama que apareció al arreglar la otra. Una sola decisión por pantalla gobierna
+    // las dos, así que no se puede acertar una y errar la otra.
+    expect(textoVacio([chip("Empresa", "Karstec")], "colaboradores", "Empresa").descripcion)
+      .toBe("Karstec no tiene colaboradores cargados.")
+    expect(textoVacio([chip("Empresa", "Karstec")], "áreas", "Empresa", "femenino").descripcion)
+      .toBe("Karstec no tiene áreas cargadas.")
+  })
+
+  it("el género NO toca ninguna de las otras dos frases", () => {
+    // Las ramas "con condiciones" no llevan participio ni ordinal: si el parámetro se colara ahí,
+    // estaría cambiando texto que no tiene nada que concordar.
+    const conCondiciones = textoVacio([chip("Área", "Sistemas")], "áreas", "Empresa", "femenino")
+    expect(conCondiciones.descripcion).toBe("No hay áreas con área Sistemas.")
+    const conSujeto = textoVacio(
+      [chip("Empresa", "Karstec"), chip("Estado", "Baja")], "áreas", "Empresa", "femenino",
+    )
+    expect(conSujeto.descripcion).toBe("Karstec no tiene áreas con estado Baja.")
+    // Y el título tampoco: "Todavía no hay X" no concuerda con nada.
+    expect(textoVacio([], "áreas", undefined, "femenino").titulo).toBe("Todavía no hay áreas")
+  })
+})

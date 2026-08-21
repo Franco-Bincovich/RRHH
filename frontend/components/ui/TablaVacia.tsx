@@ -4,7 +4,7 @@ import { EmptyState } from "@/components/ui/EmptyState"
 import { Button } from "@/components/ui/button"
 import { TableBody, TableCell, TableRow } from "@/components/ui/table"
 import type { ChipFiltro } from "@/components/ui/filtrosChips"
-import { textoVacio } from "@/components/ui/textoVacio"
+import { textoVacio, type GeneroSustantivo } from "@/components/ui/textoVacio"
 
 /**
  * El estado VACÍO **adentro de la tabla** (`docs/SISTEMA-DE-DISENO.md` §3).
@@ -20,18 +20,25 @@ import { textoVacio } from "@/components/ui/textoVacio"
  * chip más a la derecha, que es el que el usuario acaba de poner) o **limpiar todo**. Si no hay
  * filtros, no hay nada que quitar y lo que va es la acción de crear el primero.
  */
-export function TablaVacia({ colSpan, chips, sustantivo, claveSujeto, onLimpiarTodo, accion }: {
+export function TablaVacia({ colSpan, chips, sustantivo, claveSujeto, genero, onLimpiarTodo, accion }: {
   colSpan: number
   chips: ChipFiltro[]
   /** Qué se lista, en plural: "colaboradores". */
   sustantivo: string
   /** Qué chip es el sujeto de la frase. Ver `textoVacio`. */
   claveSujeto?: string
+  /**
+   * El género del `sustantivo`. Se limita a REENVIARLO a `textoVacio`, que es donde está
+   * explicado por qué existe: la frase concuerda en DOS lugares ("se cargue el primero/la
+   * primera" y "no tiene X cargados/cargadas") y una sola decisión gobierna las dos.
+   * Default "masculino": las pantallas que ya concordaban no cambian.
+   */
+  genero?: GeneroSustantivo
   onLimpiarTodo: () => void
   /** La acción de "todavía no hay nada": solo se muestra SIN filtros puestos. */
   accion?: ReactNode
 }) {
-  const { titulo, descripcion } = textoVacio(chips, sustantivo, claveSujeto)
+  const { titulo, descripcion } = textoVacio(chips, sustantivo, claveSujeto, genero)
   const ultimo = chips[chips.length - 1]
 
   return (

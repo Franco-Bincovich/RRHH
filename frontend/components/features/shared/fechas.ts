@@ -37,6 +37,26 @@ function hoyUTC(hoy: Date): number {
 
 const UN_DIA = 86_400_000
 
+/**
+ * Un `Date` llevado a `YYYY-MM-DD` **en hora LOCAL, no en UTC**.
+ *
+ * 🔴 ES EL OTRO LADO DEL MISMO BUG QUE ESTE ARCHIVO YA DOCUMENTA ARRIBA, y el que más caro sale
+ * porque el atajo es más corto: `d.toISOString().slice(0, 10)` convierte a UTC, y en Argentina
+ * (UTC-3) desde las 21:00 devuelve el día SIGUIENTE. Un bug de tres horas por día, que es la peor
+ * clase — no se reproduce en la sesión que lo escribe.
+ *
+ * Lo pagó `ventanaFechas` de la pantalla pública de carga de horas: el `max` del input de fecha
+ * era MAÑANA para quien cargara sus horas de noche, así que el calendario ofrecía un día que el
+ * backend rechaza, y el `min` se corría el mismo día (29 hacia atrás en vez de 30).
+ *
+ * `hoyISO()` de `empleados/modal/form-utils.ts` es esta misma función sin parámetro y delega acá:
+ * era la primera copia y no se dejó una segunda.
+ */
+export function isoLocal(d: Date): string {
+  const mes = String(d.getMonth() + 1).padStart(2, "0")
+  return `${d.getFullYear()}-${mes}-${String(d.getDate()).padStart(2, "0")}`
+}
+
 /** "2026-03-25" → "25/03/2026". Vacío, nulo o ilegible → "—". */
 export function formatFecha(iso: string | null | undefined): string {
   if (!iso) return "—"
