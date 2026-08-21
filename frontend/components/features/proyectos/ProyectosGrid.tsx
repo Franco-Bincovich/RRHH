@@ -10,6 +10,7 @@
 import { useRouter } from "next/navigation"
 import { FolderKanban } from "lucide-react"
 
+import { GrillaTarjetas } from "@/components/ui/GrillaTarjetas"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -88,9 +89,9 @@ interface ProyectosGridProps {
 export function ProyectosGrid({ proyectos, loading, error, canWrite, onEdit, onCrear }: ProyectosGridProps) {
   if (loading) {
     return (
-      <div className="grid animate-pulse grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <GrillaTarjetas className="animate-pulse">
         {[1, 2, 3].map((i) => <div key={i} className="h-60 rounded-xl border bg-muted" />)}
-      </div>
+      </GrillaTarjetas>
     )
   }
   if (error) {
@@ -113,10 +114,10 @@ export function ProyectosGrid({ proyectos, loading, error, canWrite, onEdit, onC
     )
   }
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <GrillaTarjetas>
       {proyectos.map((p) => (
         <ProyectoCard key={p.id} proyecto={p} canWrite={canWrite} onEdit={onEdit} />
       ))}
-    </div>
+    </GrillaTarjetas>
   )
 }

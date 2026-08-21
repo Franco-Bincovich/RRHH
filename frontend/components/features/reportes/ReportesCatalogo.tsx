@@ -1,5 +1,7 @@
 "use client"
 
+import { GrillaTarjetas } from "@/components/ui/GrillaTarjetas"
+
 import { REPORTES_ESTANDAR } from "./catalogo"
 import { ReporteCard } from "./ReporteCard"
 import { useReportesFormData } from "./useReportesFormData"
@@ -15,7 +17,7 @@ export function ReportesCatalogo({
   return (
     <section aria-label="Reportes disponibles">
       <h2 className="mb-4 text-base font-semibold text-foreground">Reportes disponibles</h2>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <GrillaTarjetas>
         {REPORTES_ESTANDAR.map((r) => (
           <ReporteCard
             key={r.id}
@@ -26,7 +28,7 @@ export function ReportesCatalogo({
             onSuccess={onGenerado}
           />
         ))}
-      </div>
+      </GrillaTarjetas>
     </section>
   )
 }

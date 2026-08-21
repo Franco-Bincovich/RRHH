@@ -1,5 +1,6 @@
 "use client"
 
+import { GrillaTarjetas } from "@/components/ui/GrillaTarjetas"
 import { GitBranch } from "lucide-react"
 import { periodoTexto, valorHoraTexto } from "@/components/features/organigrama/contratoAsignacion"
 import { colorByEmpresa, initials, MULTI_PROY, type EmpresaColor } from "@/utils/colorEmpresa"
@@ -116,11 +117,11 @@ export function CardsProyecto({ data }: Props) {
 
   return (
     <div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <GrillaTarjetas>
         {data.proyectos.map((p) => (
           <ProyectoCard key={p.id} proyecto={p} empresasOrden={empresasOrden} />
         ))}
-      </div>
+      </GrillaTarjetas>
       <p className="mt-4 text-xs text-muted-foreground print:hidden">
         Cada proyecto tiene una empresa dueña y puede sumar colaboradoras. La gente se agrupa
         por su empresa de pertenencia. El tag "N proy." marca a quien está en más de un proyecto.
