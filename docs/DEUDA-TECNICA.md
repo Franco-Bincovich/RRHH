@@ -12,6 +12,82 @@
 
 ---
 
+## 0.bis 🔴 LO QUE DEJÓ ABIERTO LA TANDA DE KPIs DEL DASHBOARD (21/8/2026)
+
+Backend puro: los diez KPIs de `SISTEMA-DE-DISENO.md` §6 quedaron calculados. Lo que sigue
+abierto son **tres divergencias entre superficies** y **una tarea de front con fecha**.
+
+| # | Qué | Gravedad · esfuerzo |
+|---|---|---|
+| 1 | ~~**El front lee `kpis.costo_nomina`, que ya no existe.**~~ ✅ **CERRADO el 21/8/2026** con la tanda del dashboard: `services/dashboard.ts` re-sincronizado campo por campo, `formatVariacion` toma `number \| null`, y `_kpisDashboard.test.ts` monta el payload en un Proxy que revienta al leer una clave que el backend no manda. **Lo que NO se cerró es la causa** — ver §0.ter. | ✅ |
+| 2 | **Rotación: el dashboard y el reporte R6 cuentan distinto.** KPI = bajas por `empleados.fecha_egreso`; R6 = filas de `offboarding_instancias` imputadas por `created_at`. El criterio del KPI es el correcto (el import de nómina da de baja sin crear instancia), pero unificar R6 no es cambiar la query: el reporte desagrega por `motivo_egreso`, que vive en la instancia, y el legajo tiene su propio `motivo_baja`. **Decisión de producto.** Hoy invisible: `offboarding_instancias` tiene 0 filas. | 🟠 · M |
+| 3 | **"Total nómina" significa dos cosas.** Dashboard = `costos_nomina.total` (costo laboral). `/costos` (`costo_service.get_dashboard_costos`) = Σ `salario_bruto`. Cada una es defendible sola; comparadas dan números distintos del mismo mes. | 🟠 · S-M |
+| 4 | **La antigüedad se calcula sobre `fecha_ingreso`, no sobre `fecha_ingreso_reconocida`.** La reconocida es mejor respuesta a efectos de convenio pero está en **10/31** (catálogo vivo, 21/8/2026): preferirla mezclaría dos criterios en el mismo promedio según quién la tenga cargada. Disparador para revisarlo: que RRHH la complete. | ⬜ · S |
+
+⚠️ **Y una consecuencia de arquitectura que ya mordió una vez:** `calcular_extras` cablea SEIS
+módulos, cada uno con su propio `supabase_admin`. Un test que la llame y parchee solo el de
+`_dashboard_kpis` deja a los otros cinco pegándole al guard de `_cliente_real_en_tests`, que cae
+en el `_safe` por KPI y aparece en `errores` — el test pasa y el barrido cubre menos de lo que
+dice. Moldes de cómo se resuelve: `_sin_los_otros_kpis` (`tests/test_dashboard_kpis.py`) y la
+lista `MODULOS` de `tests/test_reportes_columnas.py`, que además valida los selects nuevos contra
+`db/schema.sql`.
+
+---
+
+## 0.ter 🔴 EL ESPEJO TS ↔ PYDANTIC NO TIENE TEST — propuesta, con lo que costaría
+
+**El dato que la justifica: cuatro divergencias en un mes, y ninguna la vio `tsc`.**
+
+| # | Qué pasó | Cómo se descubrió |
+|---|---|---|
+| 1 | `candidatos.estado` | a mano |
+| 2 | `fecha_egreso` / `motivo_baja` | a mano |
+| 3 | `kpis.costo_nomina` — el backend borró el campo, el front lo siguió declarando y pintando | a mano, un día después |
+| 4 | **`kpis_extra.errores` — existe en el backend desde la Sesión 5 y el front NUNCA lo declaró.** El fail-safe por KPI devuelve el vacío del campo y lo anota ahí; sin leerlo, **un KPI caído se pinta como un cero medido**. | 21/8/2026, al sincronizar campo por campo |
+
+🔴 **El 4 es el que muestra el tamaño real del problema:** no es "el backend cambió y el front
+quedó viejo" —eso se nota— sino **un campo que nunca se copió**, que no rompe nada, que no
+aparece en ningún diff, y que estuvo mintiendo en pantalla desde que nació.
+
+**`tsc` no puede verlo, y no es una limitación que se pueda ajustar:** la interfaz de
+`services/*.ts` es una AFIRMACIÓN del front sobre lo que llega, no una lectura del contrato. Si
+la afirmación es falsa, TypeScript verifica el código contra la mentira y da todo por bueno.
+
+### La propuesta — `tests/test_espejo_schemas_ts.py` (backend, pytest)
+
+Molde exacto: **`tests/test_espejo_permisos.py`**, que ya hace esto mismo con `permisos.ts` ↔
+`permisos.py` y funciona desde hace meses. Mecánica:
+
+1. **Lado Pydantic: gratis y exacto.** `Modelo.model_fields` da nombres, anotación y si tiene
+   default. Es lo que ya hace `tests/test_ids_tipados.py`.
+2. **Lado TS: un parser de línea, no un AST.** Las interfaces de `services/*.ts` son planas y
+   con un campo por línea; alcanza con leer `export interface X {` … `}` y partir cada línea en
+   `nombre` / `tipo`. Va en un helper `tests/_interfaces_ts.py` (~40 líneas, límite 200).
+3. **Una tabla de PARES declarada a mano, una sola vez**, porque los nombres difieren
+   (`KPIResponse` ↔ `KPIDashboard`). Cada entrada lleva archivo + interfaz + modelo.
+4. **Se comparan DOS cosas y ninguna más:** el conjunto de nombres **en las dos direcciones**
+   (de más y de menos), y la **nulabilidad** (`Optional[X]` / default `None` ↔ `| null` o `?`).
+   Los tipos profundos (int vs number, listas anidadas) **no**: los cuatro casos reales fueron
+   campo ausente o nulabilidad, y comparar tipos exige un mapa de equivalencias que se vuelve
+   otra cosa que mantener.
+5. **Guardas contra el falso verde**, las de siempre: mínimo de pares y de campos; y una
+   interfaz que el parser NO pueda encontrar es **ROJO, nunca salteo** — el modo de falla que
+   este repo ya pagó cuatro veces este mes es justamente el control que deja de matchear y pasa.
+
+**Costo:** ~120-150 líneas de test + ~40 de helper. **2-3 h** incluyendo declarar los pares.
+Arrancaría por los tres espejos que ya mordieron (`dashboard`, `empleado`, `candidato`) y crece
+de a uno; no hace falta declarar los ~30 de una.
+
+**Riesgo asumido:** el parser es sobre texto. Un campo escrito en una línea rara, un `extends` o
+un genérico lo dejan ciego — por eso la guarda del punto 5 convierte "no pude parsear" en rojo.
+
+**El endgame, que NO es esto:** generar los tipos del front desde el OpenAPI que FastAPI ya
+publica (`openapi-typescript`). Ahí el espejo deja de existir en vez de vigilarse. Cuesta una
+dependencia, un paso de build y tocar todos los `services/*.ts`, así que es tarea propia — pero
+es la que hay que hacer, y este barrido es el puente hasta entonces.
+
+---
+
 ## 0. 🔴 CIERRE DEL BLOQUE A (19/8/2026) — la lista con la que arranca el frontend
 
 El bloque A (backend) cerró con A3.3. El frontend arranca de acá: todo lo que sigue es backend

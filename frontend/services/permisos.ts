@@ -54,12 +54,30 @@ export function getRol(): UserRol | null {
  */
 const RUTA_SECCION: Readonly<Record<string, Seccion>> = {
   empleados: "empleados",
+  // Los que todavía no entraron son legajos: mismo gate que /empleados. La pantalla lista
+  // `estado=preingreso` y su única escritura es `POST /api/empleados/{id}/activar`, que el
+  // backend gatea con Seccion.EMPLEADOS + WRITE.
+  "proximos-ingresos": "empleados",
+  // Los que se fueron gatean con OFFBOARDING y no con EMPLEADOS: el dato de la baja pertenece
+  // al proceso de egreso, es el mismo permiso con el que el ítem entra al sidebar, y así quien
+  // puede ver el padrón no ve automáticamente quién se fue ni por qué.
+  bajas: "offboarding",
   areas: "areas",
   ausencias: "ausencias",
   vacaciones: "vacaciones",
   equipo: "vacaciones",  // "Mi equipo": mismo gate que vacaciones (mandos_medios lo tiene)
   vacantes: "vacantes",
   candidatos: "candidatos",
+  // El catálogo de plantillas de búsqueda. 🔴 Es el ÚNICO listado que NO se acota por
+  // empresa —ninguna ruta del backend lee `X-Empresa-Id`, el catálogo es del grupo—, pero
+  // eso no lo exime del GATE: sin esta entrada `seccionDeRuta` devuelve null y el AuthGuard
+  // lee ese null como "pasá". Global no es lo mismo que público.
+  "perfiles-puesto": "perfiles_puesto",
+  // La planilla de cambios de rol/seniority/categoría. El HISTORIAL de la ficha gatea con
+  // esta misma sección aunque se muestre bajo /empleados: el permiso lo decide de QUÉ es
+  // el dato, no en qué pantalla se ve. Es el criterio que el backend ya aplica en
+  // `recategorizaciones_empleado.py`.
+  recategorizaciones: "recategorizaciones",
   onboarding: "onboarding",
   offboarding: "offboarding",
   costos: "costos",
@@ -105,13 +123,17 @@ const RUTAS_ORDENADAS: ReadonlyArray<{ ruta: string; seccion: Seccion }> = [
   { ruta: "/proyectos", seccion: "proyectos" },
   { ruta: "/empresas", seccion: "empresa" },
   { ruta: "/empleados", seccion: "empleados" },
+  { ruta: "/proximos-ingresos", seccion: "empleados" },
   { ruta: "/organigrama", seccion: "organigrama" },
   { ruta: "/vacantes", seccion: "vacantes" },
   { ruta: "/candidatos", seccion: "candidatos" },
+  { ruta: "/perfiles-puesto", seccion: "perfiles_puesto" },
   { ruta: "/vacaciones", seccion: "vacaciones" },
   { ruta: "/ausencias", seccion: "ausencias" },
+  { ruta: "/recategorizaciones", seccion: "recategorizaciones" },
   { ruta: "/onboarding", seccion: "onboarding" },
   { ruta: "/offboarding", seccion: "offboarding" },
+  { ruta: "/bajas", seccion: "offboarding" },
   { ruta: "/costos", seccion: "costos" },
   { ruta: "/sucesion", seccion: "sucesion" },
   { ruta: "/capacitaciones", seccion: "capacitaciones" },

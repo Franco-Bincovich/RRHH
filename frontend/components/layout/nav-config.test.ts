@@ -78,7 +78,13 @@ describe("(a) todo ítem del menú apunta a una ruta que existe en app/", () => 
 describe("(b) los ítems sin pantalla no son navegables", () => {
   it("hay ítems marcados proximamente", () => {
     // Guarda: si el marcado desapareciera, las dos aserciones de abajo pasarían sin mirar nada.
-    expect(PROXIMAMENTE.length).toBeGreaterThanOrEqual(5)
+    //
+    // ⚠️ EL PISO BAJA A MEDIDA QUE LAS PANTALLAS SE CONSTRUYEN, y bajarlo es parte de terminar
+    // una: 7 → 5 (próximos ingresos y bajas, 20/8/2026) → 4 (perfiles de puesto) → 3
+    // (recategorizaciones). Quedan Documentación/Legajos, Plan de desarrollo y Carga de horas.
+    // Lo que la guarda protege no es un número alto: es que el marcado siga EXISTIENDO, porque
+    // el día que no quede ninguno hay que borrar este bloque, no dejarlo pasando en el vacío.
+    expect(PROXIMAMENTE.length).toBeGreaterThanOrEqual(3)
   })
 
   it.each(PROXIMAMENTE)("$label no lleva href", (item) => {

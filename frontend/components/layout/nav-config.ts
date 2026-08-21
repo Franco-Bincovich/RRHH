@@ -85,15 +85,16 @@ export const NAV_GROUPS: ReadonlyArray<NavGroupDef> = [
   { label: "Reclutamiento", icon: Search, items: [
     { label: "Vacantes", href: "/vacantes", icon: Briefcase, seccion: "vacantes" },
     { label: "Candidatos", href: "/candidatos", icon: UserSearch, seccion: "candidatos" },
-    // Sin pantalla: existen la tabla (mig 113), el service del backend y Seccion.perfiles_puesto,
-    // pero cero frontend — ni ruta, ni service, ni entrada en RUTA_SECCION.
-    { label: "Perfiles de puesto", icon: IdCard, seccion: "perfiles_puesto", proximamente: true },
+    // El catálogo de plantillas de búsqueda (mig 113/116). Tarjetas, no lista: sistema de
+    // diseño §5. 🔴 Es del GRUPO — el selector de empresa del sidebar no lo filtra, y la
+    // pantalla lo dice en el encabezado porque es lo contrario a lo que hace el resto.
+    { label: "Perfiles de puesto", href: "/perfiles-puesto", icon: IdCard, seccion: "perfiles_puesto" },
   ] },
   { label: "Incorporación", icon: LogIn, items: [
     { label: "Onboarding", href: "/onboarding", icon: UserPlus, seccion: "onboarding" },
-    // Sin pantalla: el estado `preingreso` y POST /empleados/{id}/activar existen (bloque A2/A3),
-    // pero no hay vista que liste a los que todavía no entraron.
-    { label: "Próximos Ingresos", icon: CalendarPlus, seccion: "empleados", proximamente: true },
+    // Los legajos en `preingreso`, ordenados por fecha de ingreso: quién entra primero. El
+    // botón "Confirmar ingreso" de cada fila es POST /empleados/{id}/activar (bloque A2/A3).
+    { label: "Próximos Ingresos", href: "/proximos-ingresos", icon: CalendarPlus, seccion: "empleados" },
   ] },
   { label: "Talento y Desarrollo", icon: Sparkles, items: [
     { label: "Objetivos", href: "/objetivos", icon: Target, seccion: "objetivos" },
@@ -107,9 +108,11 @@ export const NAV_GROUPS: ReadonlyArray<NavGroupDef> = [
   { label: "Gestión", icon: ClipboardList, items: [
     { label: "Ausencias / Licencias", href: "/ausencias", icon: CalendarX2, seccion: "ausencias" },
     { label: "Vacaciones", href: "/vacaciones", icon: Umbrella, seccion: "vacaciones" },
-    // Sin pantalla: tabla + service del backend (mig 113/117) y Seccion.recategorizaciones, sin
-    // frontend. Ojo con lo que promete: no hay flujo de aprobación (sistema de diseño §7).
-    { label: "Recategorizaciones", icon: ArrowUpNarrowWide, seccion: "recategorizaciones", proximamente: true },
+    // La planilla de cambios de rol, seniority o categoría (mig 113/117), más su historial en la
+    // ficha del colaborador. 🔴 OJO CON LO QUE PROMETE, y la pantalla ya lo respeta: NO hay flujo
+    // de aprobación ni impacto porcentual (§7). Es registro puro —se carga y queda registrado— y
+    // el impacto es un MONTO en pesos, que además se oculta sin permiso de costos.
+    { label: "Recategorizaciones", href: "/recategorizaciones", icon: ArrowUpNarrowWide, seccion: "recategorizaciones" },
     // Vivía dentro de /configuracion. Se sacó a ruta propia el 7/8/2026: desde ahí ahora se
     // MANDAN mails, y eso es operación recurrente, no configuración. La `seccion` sigue siendo
     // "configuracion" a propósito — es el permiso que el backend ya exige; ver la página.
@@ -121,8 +124,10 @@ export const NAV_GROUPS: ReadonlyArray<NavGroupDef> = [
   ] },
   { label: "Egresos", icon: LogOut, items: [
     { label: "Offboarding", href: "/offboarding", icon: UserMinus, seccion: "offboarding" },
-    // Sin pantalla: el dato está en empleados.estado, pero no hay vista de bajas.
-    { label: "Bajas", icon: UserX, seccion: "offboarding", proximamente: true },
+    // Los legajos en `baja`, del más reciente al más viejo, con motivo y antigüedad al egreso.
+    // Es de SOLO LECTURA: dar de baja se hace efectivizando un offboarding (el ítem de arriba)
+    // o importando la nómina con `Fecha Baja`.
+    { label: "Bajas", href: "/bajas", icon: UserX, seccion: "offboarding" },
   ] },
 ]
 

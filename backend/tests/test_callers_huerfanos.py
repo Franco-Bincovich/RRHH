@@ -57,18 +57,6 @@ _MAILS = ("🔴 PENDIENTE, NO INTENCIONAL. `POST /api/plantillas/enviar` YA se c
 _PARA_TESTS = ("existe PARA el test estructural, por diseño, y su docstring lo dice. No tiene "
                "caller de producción y no debe tenerlo.")
 
-_RECAT = ("el backend de recategorizaciones se construyó primero y el front es la sesión "
-          "siguiente. DISPARADOR: sale de esta lista cuando exista "
-          "frontend/app/(dashboard)/recategorizaciones/ con su services/recategorizaciones.ts, "
-          "y la ruta anidada cuando la ficha del empleado tenga su octava sección. Si para "
-          "entonces sigue acá, el módulo quedó publicado e inalcanzable.")
-
-_PERFILES = ("el backend de perfiles de puesto se construyó primero y el front es la sesión "
-             "siguiente. DISPARADOR: sale de esta lista cuando exista "
-             "frontend/app/(dashboard)/perfiles-puesto/ con su services/perfilesPuesto.ts. Si "
-             "para entonces sigue acá, el módulo quedó publicado e inalcanzable — el caso "
-             "POST /api/plantillas/enviar.")
-
 # ── Símbolos sin caller declarados ────────────────────────────────────────────
 # Cada entrada lleva su razón: si alguien agrega una acá sin justificarla, se ve en el diff.
 
@@ -136,14 +124,11 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
         "wrapper `fetchCliente` se borró el 2026-08-10 tras nacer sin caller; este barrido no "
         "lo vio porque `updateCliente`/`deleteCliente` escriben el MISMO literal de path.",
 
-    # 🔴 PERFILES DE PUESTO — las 6 rutas del módulo, declaradas porque el BACKEND se construyó
-    # primero y el front es la sesión siguiente. NO es "completitud REST": es una feature a
-    # medio cablear, y por eso lleva un DISPARADOR explícito en vez de una razón permanente.
-    # SALEN DE ESTA LISTA cuando exista `frontend/app/(dashboard)/perfiles-puesto/` con su
-    # `services/perfilesPuesto.ts`. Si para entonces siguen acá, el módulo quedó publicado e
-    # inalcanzable — exactamente el caso `POST /api/plantillas/enviar`.
-    # El propio barrido lo va a pedir: `test_las_excepciones_siguen_sin_caller` da rojo cuando
-    # algo declarado empieza a tener caller.
+    # ✅ PERFILES DE PUESTO YA NO ESTÁ ACÁ (20/8/2026). Sus 7 rutas estuvieron declaradas con
+    # DISPARADOR —"salen cuando exista frontend/app/(dashboard)/perfiles-puesto/ con su
+    # services/perfilesPuesto.ts"— y el disparador se cumplió: la pantalla existe, con sus
+    # tarjetas, su formulario construido contra /campos y su export. Seis salieron por tener
+    # caller; la séptima quedó, con OTRA razón, unas líneas más abajo.
     # 🔴 OBJETIVOS / catálogos — mismo caso y mismo disparador que perfiles y recategorizaciones:
     # el backend de la feature 2.4 se construyó primero (sesión 1 de 3) y el front es la sesión 3.
     # NO es completitud REST: este endpoint tiene un consumidor concreto y planificado —el
@@ -161,15 +146,18 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
         "sesión 2 de 3; lo consume la barra de filtros que se construye en la sesión 3 del "
         "front. SALE DE ESTA LISTA junto con /campos, con el mismo disparador.",
 
-    # 🔴 RECATEGORIZACIONES — mismo caso y mismo disparador que perfiles: el backend se
-    # construyó primero. Las 6 rutas, incluida la anidada bajo el empleado que alimenta la
-    # octava sección de la ficha.
-    ("GET", "/api/recategorizaciones"): _RECAT,
-    ("POST", "/api/recategorizaciones"): _RECAT,
-    ("GET", "/api/recategorizaciones/exportar"): _RECAT,
-    ("GET", "/api/recategorizaciones/{id}"): _RECAT,
-    ("PUT", "/api/recategorizaciones/{id}"): _RECAT,
-    ("GET", "/api/empleados/{empleado_id}/recategorizaciones"): _RECAT,
+    # ✅ RECATEGORIZACIONES YA NO ESTÁ ACÁ (20/8/2026). Sus 6 rutas estuvieron declaradas con
+    # DISPARADOR —"salen cuando exista frontend/app/(dashboard)/recategorizaciones/ con su
+    # services/recategorizaciones.ts, y la ruta anidada cuando la ficha tenga su octava
+    # sección"— y las DOS condiciones se cumplieron: existe la planilla y existe el panel de la
+    # ficha. Cinco salieron por tener caller; la sexta quedó, con otra razón, más abajo.
+    ("GET", "/api/recategorizaciones/{id}"):
+        "completitud REST: el LISTADO devuelve la fila entera —incluidos los seis campos de la "
+        "cadena de valores anteriores—, así que el modal de edición recibe el objeto que la "
+        "pantalla ya tiene y pedirlo de vuelta sería una ida a la red por nada. Es el MISMO caso "
+        "que /api/clientes/{id}, /api/eventos/{id} y /api/perfiles-puesto/{id}, y por eso "
+        "services/recategorizaciones.ts nace SIN su fetch por id. 🔴 Es la única de las 6 del "
+        "módulo que sobrevivió al cableado del front (20/8/2026).",
 
     # ✅ `GET /api/eventos/pendientes` YA NO ESTÁ ACÁ: su "sesión 2" llegó (A6, 19/8/2026) y la
     # tarjeta del dashboard consume `GET /api/dashboard/atencion`, que devuelve los eventos
@@ -186,13 +174,13 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     # (tablas vacías, campos del padrón sin cargar). El dashboard quedó con los dos paneles y con
     # una decisión de producto anotada en docs/DEUDA-TECNICA.md §8-quinquies.
 
-    ("GET", "/api/perfiles-puesto"): _PERFILES,
-    ("GET", "/api/perfiles-puesto/campos"): _PERFILES,
-    ("GET", "/api/perfiles-puesto/exportar"): _PERFILES,
-    ("GET", "/api/perfiles-puesto/{id}"): _PERFILES,
-    ("POST", "/api/perfiles-puesto"): _PERFILES,
-    ("PUT", "/api/perfiles-puesto/{id}"): _PERFILES,
-    ("DELETE", "/api/perfiles-puesto/{id}"): _PERFILES,
+    ("GET", "/api/perfiles-puesto/{id}"):
+        "completitud REST: el LISTADO devuelve el perfil entero —los 12 campos, no una "
+        "proyección—, así que el modal de edición recibe el objeto que la pantalla ya tiene y "
+        "pedir la fila de vuelta sería una ida a la red por nada. Es el MISMO caso que "
+        "/api/clientes/{id} y /api/eventos/{id}, y por eso services/perfilesPuesto.ts nace SIN "
+        "su `fetchPerfil` en vez de con un wrapper que nadie llama. 🔴 Esta entrada es la única "
+        "de las 7 del módulo que sobrevivió al cableado del front (20/8/2026).",
 
     # Acá vivían las 19 rutas de la familia `ev_*`, declaradas porque los routers seguían
     # montados sin UI que los llamara. Se BORRARON el 2026-08-11 (bloque J5a) junto con sus

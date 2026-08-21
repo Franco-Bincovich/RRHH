@@ -59,6 +59,13 @@ RRHH es el repositorio interno de **HR Karstec**: plataforma de gestión del cic
 - ⚠️ El `python3` del sistema en la Mac puede tener una versión vieja de `supabase` que rompe el import. Para correr tests, crear venv 3.12 con `requirements.txt` + `requirements-dev.txt`.
 - ⚠️ **En Windows el venv usable es `backend/venv/`** (`backend/.venv/` es un resto de la Mac, tiene `bin/` y no `Scripts/`). Si `venv` fue creado sin `requirements-dev.txt`, la suite falla con **33 errores que NO son del código**: sin `pytest-asyncio` los tests async "no están soportados nativamente" y sin `python-docx` revientan los de export. **Instalar los dos requirements antes de creer un rojo.**
 - ⚠️ **Al correr mutation checks, `__pycache__` puede quedar viciado**: el arnés escribe y restaura el archivo tan rápido que Python reusa el bytecode mutado. **Si un fallo no se explica leyendo el código, borrar `__pycache__` y reintentar antes de diagnosticar nada.**
+- 🔴 **PowerShell: `... | Select-Object -First N` MATA el proceso de arriba.** Cuando llega a N,
+  cierra el pipeline y el productor recibe un broken pipe. **Un `finally` que iba a restaurar algo
+  NO CORRE.** Pasó el 21/8/2026 filtrando la salida de un mutation check: el arnés murió con la
+  mutación aplicada y dos archivos de producción quedaron mutados en el árbol, en verde y sin
+  aviso — el peor resultado posible de un control cuya única regla es dejar todo como estaba.
+  **Un proceso que muta archivos se redirige a un archivo (`> salida.txt 2>&1`) y se filtra
+  DESPUÉS** (`Select-String -Path`), nunca con un `Select-Object -First` colgado del pipe.
 - PowerShell: sin `&&` (usar `;`). Paths con paréntesis o corchetes entre comillas, y **`Get-Content -LiteralPath`** — sin `-LiteralPath`, las rutas con `[id]` se interpretan como glob y el archivo "no existe" (subestima cualquier conteo de líneas del front).
 
 ---
@@ -281,7 +288,7 @@ backend/
 │                          router NUEVO exige dividirlo primero (ver "Líneas" más abajo).
 ├── config/settings.py   ← única fuente de config y env (Settings() se instancia en import)
 ├── routers/             ← 81 archivos (límite 80 líneas cada uno)
-├── services/            ← 232 archivos de lógica de negocio (258 con submódulos: export/ 8,
+├── services/            ← 235 archivos de lógica de negocio (261 con submódulos: export/ 8,
 │                          mailer/ 6, reportes/ 12) (límite 150)
 │   ├── _empleado_scope.py     ← barrera de empresa/ownership sobre el empleado target (Fase 2)
 │   ├── _adjunto_padres.py     ← resolver de la entidad padre de un adjunto (Fase 2)
@@ -290,6 +297,11 @@ backend/
 │   ├── _vacaciones_write.py   ← create de vacaciones, simétrico con _ausencias_write (B4)
 │   ├── _costos_write.py       ← write path de costos, extraído por límite
 │   ├── _limite_export.py      ← LIMITE_FILAS_EXPORT + verificar_limite_export (B7)
+│   ├── _dashboard_kpis.py     ← la COSTURA de los KPIs escalares (el _safe por KPI), no la
+│   │                          calculadora: cada KPI vive en su módulo y se cablea acá
+│   ├── _dashboard_masa_salarial.py ← LA masa salarial (era DOS, con fórmulas distintas)
+│   ├── _dashboard_operacion.py     ← recategorizaciones del mes · rotación 12 meses
+│   ├── _dashboard_antiguedad.py    ← antigüedad promedio Y mediana de la dotación
 │   ├── _oauth_state.py        ← nonces del flujo OAuth, sin nada de Google (A4)
 │   ├── _google_oauth.py       ← lo específico de Google (A4)
 │   ├── _offboarding_entrevista.py ← entrevista de salida (C3)
@@ -336,7 +348,7 @@ backend/
 │                          viven en migracionAWS/). 🔴 121 es el NÚMERO de la última, no la cantidad.
 ├── ruff.toml            ← config de ruff (reemplazó pyproject.toml, por Vercel)
 ├── pytest.ini           ← config de pytest (asyncio_mode=auto, testpaths=tests)
-└── tests/               ← 219 archivos .py: 199 `test_*.py` + 20 helpers `_*.py` (exentos del
+└── tests/               ← 223 archivos .py: 203 `test_*.py` + 20 helpers `_*.py` (exentos del
                             límite de 200 los primeros, NO los segundos — ver "Líneas")
 ```
 
@@ -715,12 +727,34 @@ Costos/otros: masa salarial, presupuesto vs real (desvío + % ejecución), capac
 
 Todos: filtro período + empresa + área (empresa/área del FORM). El área se filtra por join a empleados donde la tabla no tiene `area_id`. `anual_consolidado` no lleva área (transversal por diseño). El motor `build_export` es genérico.
 
-### KPIs de dashboard (9)
-Ausencias activas hoy, % ausentismo del mes (base de días hábiles configurable, nota visible con el valor usado), masa salarial + variación vs mes anterior, distribución por seniority/modalidad, cumpleaños/aniversarios del mes, y los 4 previos. El dashboard RESPETA el sidebar de empresa (es vista).
+### KPIs de dashboard — los DIEZ de `docs/SISTEMA-DE-DISENO.md` §6 (backend completo, 21/8/2026)
+*Operación:* colaboradores activos · búsquedas abiertas (el campo se llama `vacantes_activas`) ·
+**ingresos próximos 30 días** · ausencias en curso · **recategorizaciones del mes** ·
+**rotación 12 meses**. *Indicadores del período:* **masa salarial del mes** (una sola, ver abajo) ·
+% ausentismo del mes (base de días hábiles configurable, con nota visible) · **antigüedad
+promedio** (y la mediana al lado) · **headcount por empresa**. Se conservan además, fuera de los
+diez: ingresos del mes, bajas del mes, onboardings activos, distribución por
+seniority/modalidad y cumpleaños/aniversarios. El dashboard RESPETA el sidebar de empresa (es vista).
+🔴 **NO existen y no se pueden mostrar** (§7 y el modelo): "vacaciones sin resolver"
+(`solicitudes_vacaciones` no tiene estado de aprobación) y "próximos eventos" como panel propio
+(hay `/eventos` y el panel de atención ya muestra los manuales).
+
+**Las tres decisiones de esa tanda, con su porqué en el código:**
+1. **Había DOS masas salariales en la misma pantalla** — "Costo total nómina" (Σ `salario_bruto`) y
+   "Masa salarial" (Σ `total`), las dos en $0 mientras `costos_nomina` esté vacía. Sobrevivió
+   **`total`** (el costo laboral, que es lo que "masa salarial" significa en RRHH y lo que ya mide
+   el reporte R5); la otra card **se borró**, no se renombró. Ver `services/_dashboard_masa_salarial.py`.
+2. **"Sin base de comparación" dejó de ser "+0%"** — `masa_salarial_variacion_pct` es
+   `Optional[float]` y vale `None` cuando el mes anterior no tiene nada cargado. Antes decía
+   `0.0`, o sea que la pantalla AFIRMABA que la masa no cambió sobre un dato inexistente.
+3. **La rotación se cuenta por `empleados.fecha_egreso`**, no por `offboarding_instancias`: el
+   import de nómina da de baja sin crear instancia. ⚠️ Queda declarado que el **reporte R6 cuenta
+   distinto** — ver Deuda técnica.
 
 ### Estructura
 - `services/reportes/` — un submódulo por familia (`_reporte_dotacion` 124, `_reporte_costos` 128, `_reporte_vacaciones` 125, `_reporte_seleccion` 96, `_reporte_ausentismo` 82, `_reporte_movimientos` 63, `_reporte_auditoria` 60, `_reporte_capacitacion` 58, `_reporte_distribucion` 49) + `reporte_generators.py` como dispatcher/re-export (**27 líneas**) + `_common.py` (evita el ciclo dispatcher↔submódulos).
-- `services/_kpi_helpers.py` / `_dashboard_kpis.py` — **cálculos compartidos entre KPIs y reportes** (base de días hábiles, que desde la mig 085 sale de `parametros_empresa`; distribución con "Sin especificar"). Un solo lugar, no duplicar.
+- `services/_dashboard_kpis.py` — **la COSTURA de los KPIs escalares, no la calculadora**: envuelve cada uno en su `_safe` y arma una respuesta. Los cálculos viven en módulos propios (`_dashboard_masa_salarial`, `_dashboard_operacion`, `_dashboard_antiguedad`, `_dashboard_headcount`, `_dashboard_atencion_calculadas`) o **se reusan de los reportes** (base de días hábiles —que desde la mig 085 sale de `parametros_empresa`—, distribución con "Sin especificar", masa salarial vía R5). Un solo lugar, no duplicar. ⚠️ **`_kpi_helpers.py` NO EXISTE**: este renglón lo nombraba desde antes de agosto y no hay ningún archivo con ese nombre (verificado el 21/8/2026). Lo que describía es lo de arriba.
+  > 🔴 **Consecuencia para los tests, ya pagada una vez:** `calcular_extras` toca SEIS módulos y cada uno importa su propio `supabase_admin`, así que parchear el de `_dashboard_kpis` **ya no lo aísla**. Un test que lo llame tiene que neutralizar los KPIs que no está mirando (molde: `_sin_los_otros_kpis` en `tests/test_dashboard_kpis.py`) o sumar los módulos a su fixture (`MODULOS` de `tests/test_reportes_columnas.py`). Sin eso, cada módulo suelto pega contra el guard de `_cliente_real_en_tests`, cae en su `_safe` y aparece en `errores` — verde por fuera, ruido adentro.
 - Front: `components/features/reportes/` (catálogo + card + selectores) y `components/features/dashboard/`. `reportes/page.tsx` quedó en **35 líneas**.
 - El reporte adhoc con IA (`reporte_adhoc.py`, `claude-sonnet-4-6`) está OCULTO del catálogo (no borrado — patrón AIPanel). Reactivable en una línea. Su endpoint lleva rate limit propio (20/hora): cada request cuesta plata.
 
@@ -879,7 +913,7 @@ compilación real de Tailwind/Turbopack** — directivas mal ubicadas, imports d
 cliente, CSS que no resuelve.
 
 `next dev` con Turbopack transpila sin type-check → un error de tipo pasa desapercibido en
-desarrollo pero **`next build` falla**. `vitest` cubre 896 tests en 75 archivos, pero **la mayor
+desarrollo pero **`next build` falla**. `vitest` cubre 1071 tests en 89 archivos, pero **la mayor
 parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Si aparece un error en
 cualquiera de los tres, es tuyo.**
 
@@ -934,6 +968,33 @@ Hay **tres módulos apagados a propósito**. En los tres el código está **ente
 
 ### 🔴 Bugs / riesgos ACTIVOS
 
+- 🔴 **`services/dashboard.ts` ES UN ESPEJO MANUAL Y NO TIENE TEST — es la deuda que dejó la
+  tanda del dashboard.** Se re-sincronizó campo por campo el 21/8/2026 (ver Resueltos), pero
+  nada impide que vuelva a divergir: `tsc` valida el front contra sí mismo, no contra el
+  contrato. **Tres veces en agosto** pasó algo por acá: `candidatos.estado`, el par
+  `fecha_egreso`/`motivo_baja`, y `kpis.costo_nomina`. Y una cuarta que nadie había notado:
+  **`kpis_extra.errores` existía en el backend desde la Sesión 5 y el front NUNCA lo declaró**,
+  así que un KPI CAÍDO se pintaba como un CERO MEDIDO durante meses. La propuesta de barrido
+  (espejo TS ↔ Pydantic por introspección, ~120 líneas) está en `docs/DEUDA-TECNICA.md` §0.ter.
+
+- 🔴 **LA ROTACIÓN SE CUENTA DISTINTO EN DOS SUPERFICIES (21/8/2026).** El KPI del dashboard
+  (`_dashboard_operacion.rotacion_12m`) cuenta bajas por **`empleados.fecha_egreso`**; el reporte
+  R6 (`reportes/_reporte_dotacion.generate_rotacion`) las cuenta por filas de
+  **`offboarding_instancias`** y las imputa por `created_at`. El KPI es el criterio correcto —el
+  import de nómina da de baja **sin crear instancia**, así que R6 no ve esa vía—, pero unificar
+  R6 **no es sólo cambiar la query**: el reporte desagrega por `motivo_egreso`, que vive en la
+  instancia, mientras el legajo tiene su propio `motivo_baja`. Es una decisión de producto y va
+  en su tanda. Hoy no se nota: `offboarding_instancias` tiene **0 filas**. Es exactamente la
+  forma en que la masa salarial duplicada pasó meses invisible.
+
+- 🟠 **"Total nómina" significa dos cosas según la pantalla.** El dashboard dice
+  `costos_nomina.total` (costo laboral) y `/costos` dice Σ `salario_bruto`
+  (`costo_service.get_dashboard_costos` → `DashboardCostosResponse.total_nomina`). Las dos
+  lecturas son defendibles por separado —la de /costos es el total de la planilla que se está
+  mirando, que lista bruto y neto por persona— pero un usuario que compare las dos pantallas del
+  mismo mes va a ver números distintos. Decidir si /costos muestra las dos columnas o cambia de
+  etiqueta; no se tocó en la tanda del 21/8 para no meter una decisión de producto de rebote.
+
 - 🔴 **`migrations/094_recrear_triggers_empresa.sql` quedó desincronizada de la 112, y eso ROMPE EL REBUILD.** Declara **9** triggers `trg_emp_*`; el noveno es `trg_emp_sucesion` **sobre `sucesion_posiciones`, tabla que la 112 dropeó**. Producción tiene **8** (contado el 12/8). Un replay de `schema.sql` (55 tablas, contadas hoy) seguido de la 094 **aborta**: `DROP TRIGGER IF EXISTS x ON tabla` falla igual si la que no existe es la TABLA. **Es la misma mina que J5a ya desactivó en la 077** y a la 094 no se le hizo. Fix: sacar las líneas 82-85 y el comentario de verificación que dice "debe devolver 9".
   > 🔑 **Y no es un archivo prescindible:** `fn_misma_empresa()` y sus triggers son la **única** defensa a nivel base contra el cruce de empresas por referencia, y **no están en `schema.sql`** (que no trae funciones ni triggers). De los 12 pares (columna → tabla padre) que vigilan, **cero tienen FK compuesta que los respalde** — verificado contra el catálogo el 12/8, y eso que el modelo usa ese patrón en otras 22 FKs.
 
@@ -946,6 +1007,13 @@ Hay **tres módulos apagados a propósito**. En los tres el código está **ente
 - **`_postgrest_schema` cubre los generadores de reportes, no todo el repo** — toda query con `select` anidado fuera de ese barrido sigue siendo punto ciego. Verificar en producción tras el deploy.
 
 ### ✅ Resueltos (verificados uno por uno — NO reabrir)
+- ✅ **El front leía `kpis.costo_nomina`, que el backend ya no manda — RESUELTO (21/8/2026).**
+  `services/dashboard.ts` se re-sincronizó **campo por campo** contra `schemas/dashboard.py`:
+  se borró `costo_nomina`, `masa_salarial_variacion_pct` pasó a `number | null`, y entraron los
+  7 campos de §6, `headcount_por_empresa` y **`errores`**, que faltaba desde la Sesión 5.
+  Lo cubre `_kpisDashboard.test.ts`, que arma el payload dentro de un **Proxy que revienta al
+  leer una clave que el backend no manda** — verificado por mutación con la regresión exacta
+  (declarar el campo en la interfaz Y leerlo): rojea aunque `tsc` esté contento.
 - ✅ **El import de costos ya audita — RESUELTO (E1).** Emite **UN evento por lote** (`importacion_costos`, entidad `nomina`) desde `services/nomina_import_service.py`. El `confirmar` era el único de los tres imports **sin capa de service** (router → repo directo, con el armado de filas y el conteo en el handler): se creó el service y el router bajó de 70 a **57** líneas.
   > ⚠️ **Corrección de lo que decía esta misma entrada: el molde NO era `payload_carga_nomina`.** Ese payload es de **UNA FILA** —recibe un `NominaResponse` individual y difea contra el `prior`—, así que copiarlo habría dado **un evento por fila**, exactamente lo que la regla propia del repo prohíbe. Su único caller es la carga manual (`_costos_write.py:48`) y ahí está bien. El molde real era **`payload_importacion_nomina`** (`services/_audit_payloads_import.py`), que ya resolvía lo que este caso comparte: **`costos_nomina` no persiste un lote con id propio**, así que el `registro_id` es un `uuid4()` de **EVENTO**, no de recurso. Evaluaciones tampoco servía de molde para eso: ahí el lote **sí** es una fila real con id.
   > 🔴 **`empresa_id` VA SETEADA acá, al revés que en el hermano de empleados.** Ese lote crea gente en varias empresas (las deriva del archivo) y por eso va con `None`; este recibe una empresa explícita en el body. Copiarle el `None` habría dejado el evento fuera del filtro por empresa de `/auditoria`.
@@ -1042,10 +1110,11 @@ contra el catálogo el 12/8/2026).
 - **"Compatibilidad con una posición"** (sucesión): feature nunca construida, no deuda técnica. El ranking es por assessment genérico. Cuando RRHH la reclame, definir qué significa compatibilidad antes de improvisar.
 
 ### Tests
-- **Backend: 4115 passed** en **199 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 219 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 20/8/2026, al cerrar las dos vías de bajas incompletas. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
-  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → **4115** (el cliente real bloqueado bajo tests). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
-- **Front: `npm test` (= `vitest run`) — 896 tests en 75 archivos, verdes.** *(Mac, 19/8/2026, al cerrar B4. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Backend: 4155 passed** en **203 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 223 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 21/8/2026, al cerrar los KPIs que faltaban del dashboard. Los CUATRO archivos nuevos son uno por módulo nuevo —masa salarial, operación, antigüedad y headcount—, que es el criterio del repo: un archivo de test cubre UN módulo. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
+  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → 4115 (el cliente real bloqueado bajo tests) → 4120 (`motivo_baja` sale por la API, el hermano de `fecha_egreso`) → **4155** (los KPIs de §6 + la masa salarial deduplicada). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
+- **Front: `npm test` (= `vitest run`) — 1071 tests en 89 archivos, verdes.** *(Windows, 21/8/2026, al cerrar el dashboard de §6 — los dos archivos nuevos son el catálogo de los diez KPIs y la card con su fondo semántico. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
   > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
+  > 🔴 **Y APARECIÓ UN CUARTO ROJO DE WINDOWS, DE LA MISMA FAMILIA, arreglado el 20/8/2026.** `claudeMdNoMiente.test.ts` lanzaba el hijo con `execFileSync("node_modules/.bin/vitest")`, que **en Windows es un script de shell SIN extensión**: `ENOENT`. O sea que el barrido que existe para que estos números no mientan estaba **rojo en la Lenovo y verde en la Mac**, y por eso el front venía declarando 896/75 con 941/79 medidos. Ahora se lanza con `process.execPath` + `node_modules/vitest/vitest.mjs`. 🔑 **La regla que deja: un test que lanza un proceso usa el ejecutable de node que ya está corriendo, nunca un lanzador de `.bin/`.**
 - **Son 29 barridos estructurales conocidos** (20 backend + 9 front), renumerados el 19/8/2026 —
   la lista anterior tenía dos numeraciones distintas conviviendo (1–11 y 12–15 fuera de orden) y
   le faltaban 3 barridos que ya existían. **Cada uno cubre automáticamente lo que se agregue

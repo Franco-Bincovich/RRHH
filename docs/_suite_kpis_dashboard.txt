@@ -1,0 +1,39 @@
+Suite del backend — tanda "KPIs que faltaban del dashboard" (21/8/2026)
+========================================================================
+Comando: venv\Scripts\python.exe -m pytest -q  (desde backend/, Windows/PowerShell)
+
+ANTES   4120 passed, 1 skipped, 0 failed
+DESPUÉS 4155 passed, 1 skipped, 0 failed   (77.16s)
+        → +35 tests, +4 archivos de test (uno por módulo nuevo).
+
+⚠️ CÓMO SE OBTUVO EL "ANTES", porque la corrida salió contaminada y no se oculta:
+la corrida de baseline se lanzó en background y midió mientras yo ya estaba escribiendo el
+primer archivo nuevo (`services/_dashboard_masa_salarial.py`). Reportó:
+
+    2 failed, 4118 passed, 1 skipped   (67.74s)
+
+Los 2 rojos eran EXACTAMENTE los dos anclajes de `test_claude_md_no_miente` que cuentan
+archivos de `services/` — y los cuentan con `glob()` EN EL MOMENTO DE CORRER, así que el
+archivo que apareció a mitad de corrida los rompió a los dos. 4118 + 2 = 4120 tests
+colectados, que es además el número que CLAUDE.md declaraba y que ese mismo barrido validaba
+en verde antes de esta sesión. De ahí sale el "antes": 4120 passed, 0 failed.
+
+Mutation check — 13 mutaciones, TODAS cazadas (ninguna quedó en verde)
+======================================================================
+El arnés aplica una mutación, corre el archivo de test que debería cazarla y restaura el
+archivo en un `finally`. Borra `__pycache__` antes de cada corrida (sin eso Python reusa el
+bytecode viejo y el resultado no significa nada).
+
+(a)  antigüedad · la mediana se calcula como promedio ............ 2 failed
+(a2) antigüedad · sin el filtro de estado ........................ 3 failed
+(b)  rotación · la ventana pasa de 12 meses a 10 años ............ 2 failed
+(b2) rotación · sin el eq(estado, baja) .......................... 2 failed
+(b3) rotación · sin techo en hoy (cuenta la baja programada) ..... 2 failed
+(c)  recategorizaciones · el rango pierde el techo del mes ....... 3 failed
+(c2) recategorizaciones · lee len(items) en vez del total ........ 3 failed
+(d)  ingresos próximos · el KPI usa la ventana del panel (7 días)  3 failed
+(d2) ingresos próximos · sin filtro de estado .................... 6 failed
+(e)  headcount por empresa · el lookup filtra por empresas activas 1 failed
+(e2) headcount por empresa · cuenta a todos, no solo a los activos 3 failed
+(f)  variación · sin base de comparación vuelve a decir 0.0 ...... 3 failed
+(f2) masa salarial · vuelve a sumar salario_bruto en vez de total  6 failed

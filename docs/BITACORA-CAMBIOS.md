@@ -41,6 +41,174 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-21 · El dashboard con los diez KPIs de §6 (front) · commits pendientes
+**Qué cambió:** frontend puro sobre el `GET /api/dashboard` que la tanda anterior dejó completo.
+Tres cosas, en tres commits.
+
+1. **Se arregló un espejo roto que `tsc` no veía.** `services/dashboard.ts` es un espejo MANUAL de
+   `backend/schemas/dashboard.py`, y el backend había borrado `KPIResponse.costo_nomina`: el front
+   lo seguía declarando y pintando como card. Se re-sincronizó **campo por campo**: se borró ese
+   campo, `masa_salarial_variacion_pct` pasó a `number | null`, y entraron los 7 campos nuevos de
+   §6, `headcount_por_empresa` y **`errores`** — este último existía en el backend desde la Sesión
+   5 y el front **nunca lo declaró**, así que un KPI que el fail-safe daba por caído se venía
+   pintando como un cero medido.
+2. **La grilla plana de 9 cards pasó a los DOS bloques de §6** (Operación 6 / Indicadores del
+   período 4), con el catálogo y el orden en un módulo propio.
+3. **El fondo semántico de §6** ("el que requiere acción se despega con el fondo, no con un número
+   en color") y el tratamiento de los datos que no existen: variación sin base, masa salarial sin
+   cargar y KPI caído muestran texto o guion, nunca un cero.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, env vars, dependencias, buckets ni
+endpoints; no se agregó ninguna llamada nueva (los diez KPIs viajan en la misma respuesta que ya
+se pedía). `npm run build` compila y no cambia el peso de ninguna ruta de forma apreciable.
+
+**🟢 Esto CIERRA el desfasaje que la entrada anterior declaraba como condicionante de deploy:**
+backend y front vuelven a estar sincronizados y se pueden deployar en cualquier orden.
+
+**Lo que queda abierto y es de código, no de infra:** el espejo TS ↔ Pydantic sigue sin test.
+Cuatro divergencias en agosto, ninguna vista por `tsc`. La propuesta de barrido —con su costo—
+quedó escrita en `docs/DEUDA-TECNICA.md` §0.ter.
+
+---
+
+## 2026-08-21 · Los KPIs que faltaban del dashboard, y la masa salarial que estaba DOS veces · commits pendientes
+**Qué cambió:** backend puro, sin frontend. Tres cosas, en tres commits.
+
+1. **La masa salarial estaba duplicada en la misma pantalla, con dos fórmulas distintas.**
+   "Costo total nómina" sumaba `costos_nomina.salario_bruto` y "Masa salarial" sumaba
+   `costos_nomina.total` (columna GENERADA: bruto + cargas + bonos + otros). Con la tabla en 0
+   filas las dos decían $0 y nadie lo notaba; el día que RRHH cargue el primer período iban a
+   mostrar dos números distintos uno al lado del otro. **Sobrevive `total`** —el costo laboral,
+   que es lo que "masa salarial" significa en RRHH y lo que ya mide el reporte R5— y el campo
+   `KPIResponse.costo_nomina` **se borró** (no se renombró). Junto con eso,
+   `masa_salarial_variacion_pct` pasó a `Optional[float]`: `None` = **no hay base de
+   comparación**, que hasta hoy se reportaba como `0.0` y la pantalla lo pintaba como
+   "+0% vs mes anterior" — una afirmación falsa sobre un dato inexistente.
+2. **Los cuatro KPIs de §6 que no existían:** ingresos próximos 30 días (reusa el predicado del
+   panel "Requiere tu atención", con otra ventana), recategorizaciones del mes (por el repo, que
+   ya paginaba y filtraba por rango), antigüedad promedio **y mediana**, y headcount por empresa.
+3. **Rotación 12 meses**, contada por `empleados.fecha_egreso`.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno nuevas, sin
+dependencias, sin buckets, sin endpoints nuevos (todo viaja por el `GET /api/dashboard` que ya
+existía), sin cambios de auth y sin procesos fuera del request. Los KPIs nuevos suman **cuatro
+counts y una lectura de `fecha_ingreso` de los activos** al request del dashboard; todas son
+queries con filtro de empresa e índice, y el request sigue siendo uno solo.
+
+**🔴 Lo que SÍ condiciona el deploy, y no es de infraestructura sino de orden:** el front todavía
+lee `kpis.costo_nomina`, que ya no viene, y su interfaz TypeScript es un espejo manual (así que
+`tsc` no lo detecta). **Si este backend sale antes que la sesión de front, la card "Costo total
+nómina" queda mostrando un valor vacío.** No rompe la pantalla; se ve mal.
+
+**Dos divergencias declaradas, no resueltas** (ambas anotadas en CLAUDE.md y `DEUDA-TECNICA.md`):
+el reporte R6 sigue contando la rotación por `offboarding_instancias`, y `/costos` sigue llamando
+"total nómina" a la suma de `salario_bruto`.
+
+---
+
+## 2026-08-21 · Recategorizaciones: la planilla y su historial en la ficha · commits pendientes
+**Qué cambió:** frontend puro sobre los 6 endpoints de recategorizaciones, que estaban publicados
+y **no los llamaba nadie**. Dos superficies: la **planilla** (`/recategorizaciones`) con los tres
+filtros reales del backend —colaborador, fecha desde, fecha hasta—, los pares "de → a" de rol,
+seniority y categoría, export y alta/edición por modal; y el **historial en la ficha** del
+colaborador, que reusa el primitivo `components/ui/Historial` (mismo "de → a" y mismo chip
+"Vigente" que el historial salarial). 🔴 **Sin acción de borrar en ninguna de las tres
+superficies**, porque el backend no publica DELETE: borrar rompería la cadena de `*_anterior`.
+🔴 **El aviso de fecha retroactiva** avisa, en ámbar y en el momento, que una fecha anterior a la
+última recategorización registra el histórico pero NO pisa el legajo. Front: 980/82 →
+**1041 tests en 87 archivos**.
+
+**Impacto en infraestructura:**
+
+1. **Migraciones, variables de entorno, buckets, dependencias, auth: sin cambios.** Cero backend
+   nuevo; lo único que se tocó del backend es `tests/test_callers_huerfanos.py`, para sacar las
+   5 excepciones que ya tienen caller.
+2. **Endpoints: ninguno nuevo, pero 5 que estaban muertos ahora se usan de verdad.**
+   `GET /api/recategorizaciones`, `/exportar`, `POST`, `PUT /{id}` y la ruta anidada
+   `GET /api/empleados/{id}/recategorizaciones` pasan de cero tráfico a tráfico real. **Nada
+   público sin auth**: las 6 siguen gateadas por `Seccion.RECATEGORIZACIONES`.
+3. ⚠️ **`/exportar` entra al rate limit compartido de export** (100/hora por usuario,
+   `scope="export"`), que esta ruta nunca había consumido.
+4. ⚠️ **La ruta anidada del historial tiene DOS consumidores, no uno**: el panel de la ficha y el
+   MODAL de alta —que la usa para saber cuál es la última recategorización de esa persona y poder
+   avisar si la fecha elegida es retroactiva—. O sea que se pide una vez por apertura de modal y
+   por cambio de colaborador, además de una vez por ficha abierta. Es una lista plana sin paginar
+   (una o dos filas por persona por año), pero conviene saberlo antes de mirar un log de accesos.
+5. 🔴 **Un dato de CONTRATO que hay que tener presente al portar a asyncpg:** `impacto_salarial`
+   es `Decimal` en Pydantic y **viaja como STRING en el JSON**, no como número (verificado:
+   `Decimal("150000.50")` → `"150000.50"`). El front lo tipa `string` y lo parsea al formatear. Si
+   el día del cutover el driver nuevo lo serializara como number, el tipo del front deja de
+   coincidir — es el mismo tipo de mina que los UUID nativos de asyncpg.
+
+## 2026-08-20 · La pantalla de Perfiles de puesto (front sobre backend ya publicado) · commits pendientes
+**Qué cambió:** frontend puro sobre los 7 endpoints de `/api/perfiles-puesto`, que estaban
+publicados desde el bloque de backend y **no los llamaba nadie**. La pantalla es de TARJETAS y no
+de tabla (sistema de diseño §5), con los dos filtros que el backend tiene y ni uno más (`search`
+e `incluir_inactivos`), export en los cuatro formatos, alta/edición por modal, baja LÓGICA con
+confirmación y reactivación sin confirmación. 🔴 **El formulario se construye contra
+`GET /api/perfiles-puesto/campos`**, no contra una lista escrita en el front: labels, textos de
+ayuda, orden de los campos y los tres vocabularios cerrados salen del backend, así que un campo
+nuevo allá aparece acá sin tocar el front. Se extrajeron dos primitivos de UI
+(`GrillaTarjetas`, `NotaInfo`) y se migraron los 4 call sites que ya copiaban la grilla a mano.
+Front: 941/79 → **980 tests en 82 archivos**.
+
+**Impacto en infraestructura:**
+
+1. **Migraciones, variables de entorno, buckets, dependencias, auth: sin cambios.** Cero backend
+   nuevo; lo único que se tocó del backend es `tests/test_callers_huerfanos.py`, para sacar las
+   6 excepciones que ya tienen caller.
+2. **Endpoints: ninguno nuevo, pero 6 que estaban muertos ahora se usan de verdad.**
+   `GET /api/perfiles-puesto`, `/campos`, `/exportar`, `POST`, `PUT /{id}` y `DELETE /{id}` pasan
+   de cero tráfico a tráfico real. **Nada público sin auth**: las 7 rutas siguen gateadas por
+   `Seccion.PERFILES_PUESTO`.
+3. ⚠️ **`/exportar` entra al rate limit de export** (100/hora por usuario, `scope="export"`), que
+   hasta ahora esta ruta nunca había consumido. No cambia nada de infra; se anota porque el
+   contador es compartido entre los 28 exports del sistema.
+4. 🔴 **CORS/DOMINIO: esta pantalla NO manda `X-Empresa-Id` en ninguna de sus 6 llamadas**, a
+   diferencia de casi todas las demás. Es correcto —el catálogo es del grupo (migración 113)— y
+   se anota porque cualquier regla de proxy o de WAF que asuma que ese header viaja siempre
+   rompería justo acá.
+5. 🔴 **Para el dev de infra y para producto, el límite que la pantalla declara en voz alta:**
+   `vacantes.perfil_puesto_id` existe en la base con su FK y su índice, y en **cero schemas
+   Pydantic y cero frontend**. El puente perfil → vacante NO existe: un perfil cargado hoy sirve
+   para tener el aviso escrito en un solo lugar y copiarlo a mano. La pantalla lo dice arriba del
+   listado (`AVISO_SIN_PUENTE_VACANTE`) para que nadie cargue veinte perfiles esperando otra cosa.
+
+## 2026-08-20 · Las dos pantallas del ciclo de vida: /proximos-ingresos y /bajas · commits pendientes
+**Qué cambió:** frontend, dos pantallas nuevas sobre endpoints que ya existían. **`/proximos-ingresos`**
+lista `estado=preingreso` ordenado por `fecha_ingreso ASC`, con la cuenta de días que faltan
+(calculada en el front, no pide backend) y el botón **Confirmar ingreso en la fila**, que llama al
+ya publicado `POST /api/empleados/{id}/activar` y muestra el mensaje del backend tal cual.
+**`/bajas`** lista `estado=baja` ordenado por `fecha_egreso DESC`, con motivo y antigüedad al
+egreso; es de solo lectura. Las dos entran a `RUTA_SECCION`/`RUTAS_ORDENADAS` (`empleados` y
+`offboarding` respectivamente) y los dos ítems del sidebar dejaron de ser `proximamente`.
+🔴 **Un cambio de BACKEND que no estaba previsto:** `empleados.motivo_baja` existía en la base y
+la escribían los dos caminos de baja, pero **no salía por la API** — `EmpleadoResponse` no la
+declaraba, así que Pydantic la descartaba en silencio y la columna "Motivo" de la pantalla no
+tenía dato. Se agregó el campo (`schemas/empleado_out.py`) y su cobertura en
+`tests/test_empleado_fecha_egreso.py`. Es el mismo caso que `fecha_egreso` la sesión pasada.
+También se arregló `frontend/claudeMdNoMiente.test.ts`, que en Windows daba **ENOENT** al lanzar
+`node_modules/.bin/vitest` (script de shell sin extensión) y por eso el barrido de "CLAUDE.md no
+miente" estaba apagado en la Lenovo. Backend: 4115 → **4120 passed**. Front: 896/75 → **941/79**.
+
+**Impacto en infraestructura:**
+
+1. **Migraciones: ninguna.** `motivo_baja` es una columna que YA existe en producción; lo que
+   cambió es que ahora se serializa. No hay DDL.
+2. **Endpoints: ninguno nuevo.** Las dos pantallas consumen `GET /api/empleados` (con los
+   parámetros `estado` y `orden` que la sesión anterior ya publicó) y `POST
+   /api/empleados/{id}/activar`. **Nada público sin auth.**
+3. **Variables de entorno, buckets, dependencias, auth, CORS: sin cambios.**
+4. ⚠️ **Cambia la FORMA de `EmpleadoResponse`**: un campo más (`motivo_baja`) en TODA lectura de
+   empleado — listado, ficha, export y dashboard. Es aditivo y opcional, así que ningún consumidor
+   se rompe, pero el payload del listado crece un campo por fila. Al portar a asyncpg, el mapper
+   nuevo tiene que traerla igual que a `fecha_egreso`.
+5. 🔴 **Para el día del cutover, un límite CONOCIDO y declarado:** `/bajas` ordena por
+   `fecha_egreso DESC` y postgrest **no puede expresar `NULLS LAST`**, así que una baja sin fecha
+   sale ARRIBA de todo. Está pineado con un test y comentado en la pantalla. **En RDS con SQL
+   directo eso se arregla con un `NULLS LAST` en el ORDER BY** — es una de las cosas que mejoran
+   solas al salir de PostgREST, y conviene hacerlo en el mismo movimiento.
+
 ## 2026-08-20 · El cliente real de Supabase no puede correr bajo tests + el tipo del PUT en el front · commits pendientes
 **Qué cambió:** un commit con dos arreglos. (1) **`integrations/_cliente_real_en_tests.py`**: bajo
 pytest (o `APP_ENV=test`), invocar el cliente REAL de Supabase levanta un `RuntimeError` que
