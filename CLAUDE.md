@@ -913,7 +913,7 @@ compilación real de Tailwind/Turbopack** — directivas mal ubicadas, imports d
 cliente, CSS que no resuelve.
 
 `next dev` con Turbopack transpila sin type-check → un error de tipo pasa desapercibido en
-desarrollo pero **`next build` falla**. `vitest` cubre 1071 tests en 89 archivos, pero **la mayor
+desarrollo pero **`next build` falla**. `vitest` cubre 1451 tests en 123 archivos, pero **la mayor
 parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Si aparece un error en
 cualquiera de los tres, es tuyo.**
 
@@ -1054,16 +1054,31 @@ Hay **tres módulos apagados a propósito**. En los tres el código está **ente
 > ⚠️ **Esta lista se mueve todas las semanas: es una FOTO, no un inventario estable.** La forma de reconstruirla es medir, no leerla — `Get-ChildItem ... | ForEach-Object { (Get-Content -LiteralPath $_.FullName).Count }` sobre `routers/`, `services/` y `repositories/`. La versión anterior nombraba `evaluacion_repo`, `nomina_repo`, `vacantes.py` y `vacaciones.py`, que desde entonces bajaron o subieron.
 > ⚠️ **`gmail_service.py` ya NO está en el techo** (150 → **122**): el manejo del token se fue a `_google_token.py`, compartido con el envío. Quedó solo con la recepción de mails de candidatos.
 
-**Frontend — 28 archivos > 150** (sin contar `.test.*`; **26 propios**, los otros 2 son primitivos de shadcn), y **2 hooks > 80**. Remedido el 12/8:
-`costos/page.tsx` **624** · `vacantes/[id]/page.tsx` **451** · `onboarding/page.tsx` 413 ·
-`ImportarNominaCSVModal.tsx` 377 · `offboarding/page.tsx` 311 · `NominaModal.tsx` 287 ·
-`evaluacion/[token]/page.tsx` 258 · `VacanteModal.tsx` 251 · `AIPanel.tsx` 249 ·
-`assessment/page.tsx` 233 · `empresas/[id]/page.tsx` 230 · `EmpresaModal.tsx` 226 ·
-`CampanaModal.tsx` 208 · `EmpresaAreasTab.tsx` 206 · `vacantes/page.tsx` 178 · +11 más entre 152 y 201.
-- **Hooks sobre 80:** `useFiltrosVacaciones.ts` **95** · `useFiltrosAsignacionesCap.ts` **89** (los dos viven en `components/features/`, no en `hooks/`). Molde para cortarlos: `useOpcionesAusencias` (partir la carga de opciones del estado del filtro).
-- ⬜ **No cuentan como deuda:** `dropdown-menu.tsx` 268 y `dialog.tsx` **221** son primitivos generados de shadcn/ui.
-- ✅ Ya cortados: `configuracion/page.tsx` (390 → **81**) · `onboarding/templates/[id]/page.tsx` (412 → **136**) · `onboarding/templates/page.tsx` (290 → **120**) · **`areas/page.tsx` (261 → 128)**.
-> Los dos objetivos grandes siguen siendo `costos/page.tsx` (624) y `vacantes/[id]/page.tsx` (577) — copiar el corte de `components/features/sucesion/` (855 → 85).
+**Frontend — 12 archivos > 150** (sin contar `.test.*`; **11 propios**, el otro es un primitivo de
+shadcn), y **CERO hooks > 80**. 🔴 **REMEDIDO EL 21/8/2026 sobre los 650 archivos del front, al
+cerrar el bloque B.** Venía de 28 el 12/8; los 16 que salieron los cortaron las tandas del bloque
+B, una pantalla por vez. Los 11 que quedan, de mayor a menor:
+`ImportarNominaCSVModal.tsx` **377** · `NominaModal.tsx` 284 · `AIPanel.tsx` 249 ·
+`EmpresaAreasTab.tsx` 206 · `CapacitacionModal.tsx` 189 · `OnboardingChecklist.tsx` 186 ·
+`AsignacionModal.tsx` 185 · `CandidatoModal.tsx` 181 · `ArbolProyecto.tsx` 170 ·
+`ItemModal.tsx` 160 · `MapaVacaciones.tsx` 152.
+- 🔑 **Los dos objetivos grandes ya no son páginas: son MODALES.** `costos/page.tsx` (624) y
+  `vacantes/[id]/page.tsx` (452) se cortaron; lo que queda arriba de 180 son cuatro modales de
+  formulario (`ImportarNominaCSVModal`, `NominaModal`, `CapacitacionModal`, `AsignacionModal`) y
+  el panel de IA. El molde para cortarlos NO es el de las páginas (sacar secciones a componentes)
+  sino el de `AreaModal`/`ClienteModal`: los campos a un `*FormFields.tsx` y la validación a un
+  `_*.ts` puro, que además es lo único que se puede testear sin jsdom.
+- ⬜ **No cuenta como deuda:** `dropdown-menu.tsx` 268, primitivo generado de shadcn/ui.
+  (`dialog.tsx` bajó de 221 y ya no aparece.)
+- ✅ Ya cortados a lo largo del bloque B: `sucesion/` (855 → 85) · `costos/page.tsx` (624 → …) ·
+  `vacantes/[id]/page.tsx` (452 → **133**, en seis piezas) · `onboarding/templates/[id]/page.tsx`
+  (412 → 110) · `configuracion/page.tsx` (390 → 81) · `onboarding/templates/page.tsx` (290 → 120) ·
+  `areas/page.tsx` (261 → 128) · `evaluacion/[token]/page.tsx` (258 → **146**) ·
+  `empresas/[id]/page.tsx` (219 → **124**) · `login/page.tsx` (201 → **42**) ·
+  `assessment/[id]/page.tsx` (193 → 98).
+- ✅ **Los dos hooks que estaban sobre 80 ya no lo están.** La lista vieja nombraba
+  `useFiltrosVacaciones.ts` (95) y `useFiltrosAsignacionesCap.ts` (89); medidos hoy, ninguno pasa
+  el límite. El hook nuevo del bloque B, `useSesionHoras.ts`, quedó en 70.
 
 **Cortes ya identificados (para no re-diagnosticar):**
 - `objetivos.py` e `inventario_items.py` (79) → al dividirlos, **agregarles `shared_limit("30/hour", scope="export")`**; hay un test que lo recuerda.
@@ -1112,10 +1127,10 @@ contra el catálogo el 12/8/2026).
 ### Tests
 - **Backend: 4155 passed** en **203 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 223 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 21/8/2026, al cerrar los KPIs que faltaban del dashboard. Los CUATRO archivos nuevos son uno por módulo nuevo —masa salarial, operación, antigüedad y headcount—, que es el criterio del repo: un archivo de test cubre UN módulo. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
   > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → 4115 (el cliente real bloqueado bajo tests) → 4120 (`motivo_baja` sale por la API, el hermano de `fecha_egreso`) → **4155** (los KPIs de §6 + la masa salarial deduplicada). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
-- **Front: `npm test` (= `vitest run`) — 1071 tests en 89 archivos, verdes.** *(Windows, 21/8/2026, al cerrar el dashboard de §6 — los dos archivos nuevos son el catálogo de los diez KPIs y la card con su fondo semántico. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Front: `npm test` (= `vitest run`) — 1451 tests en 123 archivos, verdes.** *(Windows, 21/8/2026, al cerrar el bloque B con las CUATRO pantallas de afuera de `(dashboard)` —/login, /horas, /evaluacion/[token] y /cambiar-password—. El archivo nuevo es uno solo, `app/pantallasPublicas.test.tsx`, y cubre a las cuatro juntas: son la unidad de esa tanda y comparten los mismos cuatro ejes (estados compartidos, mensajes por campo, touch targets de 44px y el bug de huso). La tanda anterior dejó 1425 en 122, al cerrar el patrón de ficha en las CINCO pantallas que faltaban —/vacantes/[id], /proyectos/[id], /empresas/[id], /assessment/[id] y /onboarding/templates/[id]— más el barrido de paginación. Los seis archivos nuevos son uno por ficha (`barra<Entidad>.test.tsx`, junto a la barra que prueban) y `components/ui/barridoPaginacion.test.ts`. La tanda anterior dejó 1360 en 116, al propagar los patrones del bloque B3 a las NUEVE pantallas que quedaban: /objetivos, /onboarding, /onboarding/templates, /offboarding, /horas-por-cliente, /procesos, /organigrama, /sucesion y /assessment. Con esta tanda el bloque B3 cubre el front entero. Los nueve archivos nuevos son uno por pantalla, que es el criterio del repo: un archivo de test cubre UNA pantalla — por eso /onboarding y /onboarding/templates tienen uno cada una aunque compartan carpeta. Las tandas anteriores dejaron 1271 en 107 (/auditoria, /eventos, /costos, /inventario, /capacitaciones, /evaluaciones, /comunicacion), 1187 en 100 (/areas, /clientes, /empresas, /usuarios, /periodos, /proyectos) y 1128 en 94 (/ausencias, /vacaciones, /candidatos, /vacantes, /equipo); antes de eso, 1071 en 89 al cerrar el dashboard de §6. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
   > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
   > 🔴 **Y APARECIÓ UN CUARTO ROJO DE WINDOWS, DE LA MISMA FAMILIA, arreglado el 20/8/2026.** `claudeMdNoMiente.test.ts` lanzaba el hijo con `execFileSync("node_modules/.bin/vitest")`, que **en Windows es un script de shell SIN extensión**: `ENOENT`. O sea que el barrido que existe para que estos números no mientan estaba **rojo en la Lenovo y verde en la Mac**, y por eso el front venía declarando 896/75 con 941/79 medidos. Ahora se lanza con `process.execPath` + `node_modules/vitest/vitest.mjs`. 🔑 **La regla que deja: un test que lanza un proceso usa el ejecutable de node que ya está corriendo, nunca un lanzador de `.bin/`.**
-- **Son 29 barridos estructurales conocidos** (20 backend + 9 front), renumerados el 19/8/2026 —
+- **Son 31 barridos estructurales conocidos** (20 backend + 11 front), renumerados el 19/8/2026 —
   la lista anterior tenía dos numeraciones distintas conviviendo (1–11 y 12–15 fuera de orden) y
   le faltaban 3 barridos que ya existían. **Cada uno cubre automáticamente lo que se agregue
   después, y todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una
@@ -1145,6 +1160,36 @@ contra el catálogo el 12/8/2026).
   27. 🔴 **`frontend/claudeMdNoMiente.test.ts`** (B4) — la mitad de front del anterior. El TOTAL de tests del front no se puede contar leyendo el código (`it.each` sobre 30 elementos son 30 tests, no uno), así que lo mide corriendo `vitest list`, que colecta sin ejecutar.
   28. **`tests/test_vocabulario.py`** (B4) — ningún `message` de `AppError` ni encabezado de export dice "Empleado" o "Recursos Humanos". Por AST y sobre **dos superficies con destino conocido en pantalla**: el primer argumento de `AppError` y las claves de dict de `services/_*_export.py`. Docstrings, `description=` de OpenAPI y `select()` de PostgREST quedan afuera a propósito — mirarlos marcaría `empleados!inner(...)`, que es una relación de la base.
   29. **`frontend/vocabulario.test.ts`** (B4) — hermano del anterior en el front. 🔑 Distingue texto de identificador mirando SOLO literales que parezcan prosa (con espacio, o palabra sola capitalizada) y texto JSX, y enmascarando `${...}` y `{{...}}` antes de buscar: sin eso empujaría a renombrar `nombre_empleado`, que es una variable REAL de plantilla de mail definida por la allowlist del backend.
+  30. 🔴 **`frontend/components/ui/barridoPaginacion.test.ts`** — **toda pantalla que pinta
+      `<Table patron="datos">` sobre datos que llegaron con `total` monta `<Pagination>`.** El eje
+      está DADO VUELTA respecto del obvio y por eso funciona: preguntar "quién pide páginas y no
+      dibuja la barra" obliga a declarar cada combobox y cada buscador que manda `page_size` sin
+      ser un listado —una excepción nueva por control nuevo, para siempre—; preguntar **quién
+      RENDERIZA la tabla de datos** deja afuera a los selectores por construcción. Medido al
+      escribirlo: 27 tablas, **una sola excepción** (`objetivos/ListView`, el único listado del
+      sistema que no pagina, con su disparador de salida escrito en la entrada). La unidad de
+      pantalla es la tabla MÁS todos sus importadores transitivos —la tabla, su tab y su
+      `page.tsx`— y los `.test.*` quedan fuera del grafo: si entraran, el `*Patron.test.tsx` de
+      cada pantalla le "montaría" su propia paginación y el barrido no podría marcar a nadie.
+      🔑 **Enmascara los comentarios**: cinco pantallas (empresas, equipo, clientes, usuarios,
+      assessment) explican EN PROSA que ahí no hay `total` del backend, y un barrido por texto
+      plano las marcaría a las cinco — con la salida "natural" de borrarles la explicación. Hay
+      un quinto test que fija que la prosa no cuente. Tres guardas de mínimo (≥300 archivos, ≥20
+      tablas, ≥12 unidades ya paginadas: esta última es la única que ve un grafo de imports roto).
+  31. 🔴 **`frontend/app/pantallasPublicas.test.tsx`** — las CUATRO pantallas de afuera de
+      `(dashboard)`: `/login`, `/horas`, `/evaluacion/[token]` y `/cambiar-password`. Son las
+      únicas que ve alguien de afuera del equipo, y eran las únicas donde **ninguno de los tres
+      estados compartidos (`EmptyState`, `ErrorState`, `Skeleton`) había cruzado la frontera**.
+      Cuatro ejes: (a) las cuatro dibujan su carga con el `Skeleton` compartido —se RENDERIZAN de
+      verdad; sin jsdom el `useEffect` no corre, así que lo que sale es el estado inicial, que es
+      justo el de carga— y ninguna vuelve a escribir su propio spinner, su propia caja roja ni un
+      `emerald-`/`amber-` a mano; (b) los mensajes por campo dicen QUÉ CORREGIR, con una lista de
+      genéricos prohibidos; (c) **todo `<button>`, `<input>` y `<select>` del markup real mide
+      44px**, recorriendo los tags y sus clases, no una lista escrita a mano; (d) ningún archivo
+      usa `new Date(iso).toLocaleDateString` ni `toISOString().slice(0,10)`. 🔑 Enmascara los
+      comentarios: tres archivos de `/horas` explican EN PROSA por qué no usan esos patrones, y un
+      barrido por texto plano empujaría a borrar justo esas explicaciones. Guardas de mínimo: ≥18
+      archivos públicos y ≥30 controles medidos.
 
   > ⚠️ **Esta lista es una FOTO, compilada por grep del marcador "BARRIDO ESTRUCTURAL" + memoria
   > de sesión, no una re-auditoría exhaustiva de cada archivo.** Puede faltar alguno con un

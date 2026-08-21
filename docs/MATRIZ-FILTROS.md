@@ -1,6 +1,6 @@
 # Matriz de filtros — inventario de la superficie de corte
 
-**Fecha del relevamiento:** 27/7/2026 · **Método:** verificado contra el código, archivo:línea. No contra `CLAUDE.md`.
+**Fecha del relevamiento:** 27/7/2026, con actualizaciones al cierre de cada tanda (la última, **21/8/2026**, al terminar el bloque B3) · **Método:** verificado contra el código, archivo:línea. No contra `CLAUDE.md`.
 
 **Qué es:** el inventario completo de qué filtros existen hoy en cada módulo, en cuál de las
 cuatro capas (repo → service → router → UI) vive cada uno, y si el export los acepta. Es la
@@ -50,8 +50,8 @@ concentra 13.
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `vacaciones_repo.py:22` | `vacaciones_service.py:47` | header | `useFiltrosVacaciones.ts:61` | ✅ |
-| área | *no llega al repo* † | `vacaciones_service.py:51` | `vacaciones.py:31` `area_id` | `useFiltrosVacaciones.ts:60+` | ✅ `:44` |
+| empresa | `vacaciones_repo.py:22` | `vacaciones_service.py:47` | header | `_camposVacaciones.ts` | ✅ |
+| área | *no llega al repo* † | `vacaciones_service.py:51` | `vacaciones.py:31` `area_id` | `_camposVacaciones.ts` | ✅ `:44` |
 | empleado | `vacaciones_repo.py:24` (`.in_`) † | `vacaciones_service.py:51` | `vacaciones.py:32` `empleado_id` | ✅ | ✅ |
 | estado | `_vacaciones_utils.py:9` `aplicar_filtro_estado` | `vacaciones_service.py:53` | `vacaciones.py:33` `estado` | ✅ | ✅ |
 
@@ -63,8 +63,8 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `ausencias_repo.py:49` | `ausencias_service.py:39` | header | `useFiltrosAusencias.ts:58` | ✅ |
-| área | *vía empleado_ids* † | `ausencias_service.py:41` | `ausencias.py:27` `area_id` | `useFiltrosAusencias.ts:61` | ✅ `:39` |
+| empresa | `ausencias_repo.py:49` | `ausencias_service.py:39` | header | `_camposAusencias.ts` | ✅ |
+| área | *vía empleado_ids* † | `ausencias_service.py:41` | `ausencias.py:27` `area_id` | `_camposAusencias.ts` | ✅ `:39` |
 | empleado | `ausencias_repo.py:51` (`.in_`) † | `ausencias_service.py:41` | `ausencias.py:28` `empleado_id` | ✅ | ✅ |
 | tipo | `ausencias_repo.py:53` | ✅ | `ausencias.py:29` `tipo_id` | ✅ | ✅ |
 
@@ -84,8 +84,8 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 | empresa | `asignacion_repo.py:32` | `asignacion_service.py:31` | header | `AsignacionesTab.tsx:106` | ✅ |
 | área | `asignacion_repo.py:22-27` (subquery a empleados) | ✅ | `asignaciones_capacitacion.py:24` | `AsignacionesTab.tsx:112` | ✅ |
 | estado | `asignacion_repo.py:38` | ✅ | `:23` `estado` | `AsignacionesTab.tsx:117` | ✅ |
-| empleado | `asignacion_repo.py:34` | ✅ | `:21` `empleado_id` | `useFiltrosAsignacionesCap.ts` | ✅ |
-| capacitación | `asignacion_repo.py:36` | ✅ | `:22` `capacitacion_id` | `useFiltrosAsignacionesCap.ts` | ✅ |
+| empleado | `asignacion_repo.py:34` | ✅ | `:21` `empleado_id` | `_camposCapacitaciones.ts` (avanzado) | ✅ |
+| capacitación | `asignacion_repo.py:36` | ✅ | `:22` `capacitacion_id` | `_camposCapacitaciones.ts` (avanzado) | ✅ |
 
 > 🔴 **EL FILTRO POR ÁREA ESCONDE LAS FILAS DE NOMBRE LIBRE, Y NO LO AVISA.** Desde la migración
 > 116 una asignación puede no tener empleado (`nombre_libre`). El filtro por área resuelve primero
@@ -106,9 +106,9 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `inventario_asignaciones_repo.py` | `inventario_asignaciones_service.py` | header | `useFiltrosAsignacionesInv.ts` | ✅ |
-| empleado | `inventario_asignaciones_repo.py` | ✅ | `inventario_asignaciones.py` | `useFiltrosAsignacionesInv.ts` | ✅ |
-| área | `_area_scope.py::empleados_de_area` | ✅ | `inventario_asignaciones.py` `area_id` | `useFiltrosAsignacionesInv.ts` | ✅ |
+| empresa | `inventario_asignaciones_repo.py` | `inventario_asignaciones_service.py` | header | `_camposInventario.ts` | ✅ |
+| empleado | `inventario_asignaciones_repo.py` | ✅ | `inventario_asignaciones.py` | `_camposInventario.ts` (avanzado) | ✅ |
+| área | `_scope_filtros.py::empleados_de_area` | ✅ | `inventario_asignaciones.py` `area_id` | `_camposInventario.ts` | ✅ |
 
 > El área hereda la semántica de VIGENCIA del listado (`fecha_devolucion IS NULL`): son los
 > ítems que esa área tiene HOY en su poder. **No se agregó a ÍTEMS a propósito**: un ítem sin
@@ -118,21 +118,40 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `objetivo_repo.py:47` | `objetivo_service.py:29` | header | `objetivos/page.tsx:90` | ✅ |
-| estado | `objetivo_repo.py:48` | ✅ | `objetivos.py:30` | `objetivos/page.tsx:95` | ✅ `:50` |
-| responsable | `objetivo_repo.py:49` | ✅ | `objetivos.py:31` | `objetivos/page.tsx:108` | ✅ |
-| prioridad | `objetivo_repo.py:50` | ✅ | `objetivos.py:32` | `objetivos/page.tsx:101` | ✅ |
+| empresa | `objetivo_repo.py:47` | `objetivo_service.py:29` | header | `_camposObjetivos.ts` | ✅ |
+| estado | `objetivo_repo.py:48` | ✅ | `objetivos.py:30` | `_camposObjetivos.ts` | ✅ `:50` |
+| responsable | `objetivo_repo.py:49` | ✅ | `objetivos.py:31` | `_camposObjetivos.ts` (avanzado) | ✅ |
+| prioridad | `objetivo_repo.py:50` | ✅ | `objetivos.py:32` | `_camposObjetivos.ts` | ✅ |
 
 > Módulo **completo y coherente en las 4 capas**. Es el mejor ejemplo del repo junto con auditoría.
 > `responsable_id` apunta a `users`, no a `empleados` (limitación de modelo ya documentada).
+>
+> ⚠️ **`ObjetivosFiltros.tsx` YA NO EXISTE** (21/8/2026): era una barra propia de cuatro `<Select>`
+> sueltos y su propio encabezado decía que migrarla a `FiltersBar` "es un rediseño del filtro, no
+> una división". Ese rediseño es este. Los cuatro filtros siguen ahí, ahora en `<FiltersBar panel>`
+> con chips; **Responsable quedó detrás de "Más filtros"** (es el recorte a UNA persona, mismo
+> criterio que Colaborador en ausencias, vacaciones e inventario).
+>
+> 🔴 **Y es el único listado del sistema que NO PAGINA**: el backend devuelve el árbol entero. El
+> front igual se escribió contra el wrapper —el pie lee `total`, nunca `objetivos.length`—, así que
+> el día que el repo pagine no cambia una línea de la UI. El pie dice **objetivos principales**
+> (raíces), que no es la cantidad de filas: la tabla aplana raíces + subobjetivos.
 
 ### Proyectos
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `proyectos_repo.py` | `proyectos_service.py` | header | `useFiltrosProyectos.ts` | ❌ sin export |
-| estado | `proyectos_repo.py` | ✅ | `proyectos.py` | `useFiltrosProyectos.ts` | — |
-| área † | `_area_scope.py::proyecto_ids_con_area` | ✅ | `proyectos.py` `area_id` | `useFiltrosProyectos.ts` | — |
+| empresa | `proyectos_repo.py` | `proyectos_service.py` | header | `_camposProyectos.ts` | ✅ (header) |
+| estado | `proyectos_repo.py` | ✅ | `proyectos.py:31` | `_camposProyectos.ts` | ✅ |
+| área † | `_scope_filtros.py::proyecto_ids_con_area` | ✅ | `proyectos.py:32` `area_id` | `_camposProyectos.ts` ‡ | ✅ |
+
+‡ **Área es el único filtro AVANZADO de la pantalla** (queda detrás de "Más filtros" desde el
+21/8/2026): la pregunta diaria de proyectos es del estado y del alcance, y el área es el recorte a
+otra entidad. Empresa y Estado quedan a la vista.
+
+⚠️ Las tres filas decían "sin export" o "—": las tres **sí** viajan al export desde
+`exportarProyectos`, que usa `queryProyectos` —la misma traducción que el listado— y manda la
+empresa por el header `X-Empresa-Id`, igual que la lectura.
 
 † **`proyectos` NO tiene columna de área.** El filtro significa *"proyectos con al menos un
 empleado asignado de esa área"*, contando asignaciones **activas e inactivas**. Dos
@@ -202,20 +221,26 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| sector | *en Python* | `evaluacion_reportes_service.py:41` | `evaluaciones_resultados.py:58` | `useFiltrosEvaluadosResultados.ts:22` | ✅ `:68` |
-| perfil | *en Python* | ✅ | `:58` | `:26` | ✅ |
-| con_nota | *en Python* | ✅ | `:59` | `:30` | ✅ |
+| sector | *en Python* | `evaluacion_reportes_service.py:41` | `evaluaciones_resultados.py:58` | `_camposEvaluados.ts` | ✅ `:68` |
+| perfil | *en Python* | ✅ | `:58` | `_camposEvaluados.ts` | ✅ |
+| con_nota | *en Python* | ✅ | `:59` | `_camposEvaluados.ts` | ✅ |
 
-> 🔴 **Desde B4 el panel tiene filtros de los DOS tipos.** `proyecto_id` es **server-side**
-> (resolver quién trabaja en el proyecto necesita la base) y obliga a re-traer al cambiarlo;
-> `sector`/`perfil`/`con_nota` siguen aplicándose sobre el array ya traído. Está anotado en el
-> hook y en el panel. La duplicación de abajo sigue vigente y ahora convive con un filtro que
-> NO puede duplicarse — cuando se unifique, el corte natural es llevar los tres al backend.
+> ✅ **LOS CUATRO FILTROS SON SERVER-SIDE, y estas dos notas decían lo contrario.** Afirmaban que
+> `sector`/`perfil`/`con_nota` "siguen aplicándose sobre el array ya traído" y que "el listado
+> filtra CLIENT-side y el export server-side. Dos implementaciones de la misma regla". **Ya no.**
+> El propio panel lo dice desde el 15/8/2026: *"Los CUATRO filtros son server-side: cualquiera
+> obliga a re-traer. Hasta el 15/8/2026 sólo `proyecto_id` estaba acá y los otros tres se
+> aplicaban sobre el array"* — y el `useEffect` los lleva a las dependencias del fetch. El hook
+> ya ni ve los datos. La duplicación que estas notas describían **está cerrada**; se corrigieron
+> el 21/8/2026, que es cuando alguien volvió a leerlas.
 >
-> 🔴 **El listado filtra CLIENT-side y el export server-side.** `useFiltrosEvaluadosResultados.ts:35-40`
-> aplica los tres filtros con un `useMemo` sobre el array ya traído; el export manda los mismos
-> valores como `Query`. Dos implementaciones de la misma regla. Aceptable al volumen actual
-> (~30 filas por lote) pero es duplicación con riesgo de divergencia.
+> ⚠️ Y era una divergencia peligrosa, no cosmética: de "filtra en el cliente" se deduce que los
+> chips de esa pantalla **mentirían** (el export vería más filas que la pantalla), y por esa
+> regla no habría que ponerle chips. Con los cuatro en el backend, el panel de chips es correcto
+> y es lo que se cableó.
+>
+> ⚠️ `proyecto_id` es el único filtro **avanzado** de esa barra (detrás de "Más filtros"): cruza
+> con otro módulo, mismo criterio que en /empleados, /vacaciones y /ausencias.
 > El listado de **lotes** (`evaluaciones_resultados.py:25`) no tiene ningún filtro.
 
 ### ~~Evaluaciones — instancias (`ev_*`)~~ — ✅ EL MÓDULO YA NO EXISTE
@@ -294,26 +319,42 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `area_repo.py:43` | ✅ | `areas.py:31` `empresa_id` (**Query**, no header) | ✅ | ❌ sin export |
-| búsqueda | ❌ | ❌ | ❌ | `areas/page.tsx:63` **client-side** | — |
+| empresa | `area_repo.py:43` | ✅ | `areas.py:36` `empresa_id` (**Query**, no header) | sidebar (`useAreas.ts`) | ✅ |
+| búsqueda | ✅ | ✅ | `areas.py:37` `search` | `_camposAreas.ts` | ✅ |
 
-> Único módulo donde `empresa_id` es `Query` y no header. La búsqueda por nombre existe solo en
-> el cliente, sobre el array ya traído.
+> 🔴 **ESTAS DOS FILAS DECÍAN LO CONTRARIO Y QUEDARON VIEJAS DOS VECES.** Decían que la búsqueda
+> era **client-side** y que la empresa **no tenía export**. Las dos cosas dejaron de ser ciertas:
+> el buscador pasó al servidor el **15/8/2026** (ver el encabezado de `useAreas.ts`, que explica
+> por qué: con paginación el filtro local no ve las filas de la página 3, y el export salía con
+> las 58 áreas cuando la pantalla mostraba 3) y `exportarAreas` manda `empresa_id` **y** `search`
+> por `queryAreas`, la misma traducción que usa el listado.
+>
+> Lo que sí sigue siendo cierto: **es el único módulo donde `empresa_id` viaja como Query y no
+> como header**. Y por eso **no hay un select de Empresa en el panel de filtros**: ese valor lo
+> manda el selector del sidebar (`getEmpresaActivaId()` en `useAreas`), y un control propio sería
+> una segunda fuente para el mismo dato.
 
 ### Vacantes
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
-| empresa | `vacante_repo.py:32` | `vacante_service.py` | header | `vacantes/page.tsx:128` | ❌ sin export |
-| estado | `vacante_repo.py:32` | ✅ | `vacantes.py:25` | `vacantes/page.tsx:140` | — |
+| empresa | `vacante_repo.py:32` | `vacante_service.py` | header | `_camposVacantes.ts` | ❌ sin export |
+| estado | `vacante_repo.py:32` | ✅ | `vacantes.py:25` | `_camposVacantes.ts` | — |
 
 ### Candidatos
 
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
 | empresa | `candidato_repo.py:44` | `candidato_service.py:65` | header | — | ✅ |
-| sin_vacante | `candidato_repo.py:47` (`.is_`) | ✅ | `candidatos.py:38,48` | `candidatos/page.tsx` | ✅ |
-| clasificación | `candidato_repo.py:52` (`.eq` / `.is_`) | ✅ | `candidatos.py:39,48` | `candidatos/page.tsx` | ✅ |
+| sin_vacante | `candidato_repo.py:47` (`.is_`) | ✅ | `candidatos.py:38,48` | `_camposCandidatos.ts` ‡ | ✅ |
+| clasificación | `candidato_repo.py:52` (`.eq` / `.is_`) | ✅ | `candidatos.py:39,48` | `_camposCandidatos.ts` | ✅ |
+
+
+‡ **`sin_vacante` dejó de ser un checkbox el 21/8/2026 y pasó a ser un select** (`Asignación ·
+Sin búsqueda asignada`). El patrón de filtros deriva los CHIPS de los controles y no tiene tipo
+checkbox: con el tilde, ese filtro quedaba activo **sin chip**, y la pantalla mostraba 4 de 31
+candidatos sin decir por qué. Sigue siendo el mismo `sin_vacante: bool` del backend, y sigue
+siendo BINARIO — `false` significa "todas", no "solo las que tienen búsqueda".
 
 > ✅ **Export y los dos filtros al día (fases 5-6 y screening).** Listado y export comparten el
 > traductor `queryCandidatos` (`services/candidatos.ts`), que es lo que hace estructuralmente
@@ -332,13 +373,27 @@ puede tener gente de B — acotar devolvería cero en silencio). La semántica c
 | Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
 |---|---|---|---|---|---|
 | empresa | `audit_repo.py:79` | `audit_service.py:72` | header | — | ✅ |
-| usuario | `audit_repo.py:81` | ✅ | `auditoria.py:29,55` | `AuditFilters.tsx:45` | ✅ |
-| entidad | `audit_repo.py:83` | ✅ | `auditoria.py:30,56` | `AuditFilters.tsx:25` | ✅ |
-| evento | `audit_repo.py:87` | ✅ | `auditoria.py:31,57` | `AuditFilters.tsx:35` | ✅ |
-| registro_id | `audit_repo.py:85` | ✅ | `auditoria.py:32,58` | ❌ **PARCIAL** | ✅ |
-| fecha_desde | `audit_repo.py:89` (`.gte`) | ✅ | `auditoria.py:33,59` | `AuditFilters.tsx:55` | ✅ |
-| fecha_hasta | `audit_repo.py:91` (`.lte`) | ✅ | `auditoria.py:34,60` | `AuditFilters.tsx:60` | ✅ |
+| usuario | `audit_repo.py:81` | ✅ | `auditoria.py:31,58` | `_camposAuditoria.ts` (avanzado) | ✅ |
+| entidad | `audit_repo.py:83` | ✅ | `auditoria.py:32,59` | `_camposAuditoria.ts` | ✅ |
+| evento | `audit_repo.py:87` | ✅ | `auditoria.py:33,60` | `_camposAuditoria.ts` | ✅ |
+| registro_id | `audit_repo.py:85` | ✅ | `auditoria.py:34,61` | ❌ **PARCIAL** † | ✅ |
+| fecha_desde | `audit_repo.py:89` (`.gte`) | ✅ | `auditoria.py:35,62` | `_camposAuditoria.ts` ‡ | ✅ |
+| fecha_hasta | `audit_repo.py:91` (`.lte`) | ✅ | `auditoria.py:36,63` | `_camposAuditoria.ts` ‡ | ✅ |
 
+† **`registro_id` no tiene control en la barra de /auditoria — pero SÍ está cableado en otro lado**:
+la sección "Historial de cambios" de la ficha de un empleado lo manda fijo
+(`HistorialCambiosSection.tsx`, con `entidad: "empleado"`). O sea que no es un filtro muerto: es un
+filtro sin control PROPIO, y el lugar natural para dárselo es un link desde cada ficha.
+
+‡ **Desde el 21/8/2026 son UN solo control `daterange`**, no dos campos `date` sueltos: emiten el
+mismo par al backend y cuentan como UN filtro activo en el contador de chips.
+
+> ⚠️ **`AuditFilters.tsx` YA NO EXISTE** (21/8/2026): la barra propia más rica del repo se
+> reemplazó por `<FiltersBar panel>` sin perder un solo filtro. Con ella se fue una constante
+> `FIELD_CLASS` byte-idéntica a la fórmula de altura del `<Select>`, que su propio comentario
+> describía como "dos lugares con un solo valor". Las referencias de esta tabla apuntan ahora a
+> `components/features/auditoria/_camposAuditoria.ts`.
+>
 > El módulo con más filtros del repo. ✅ **Export agregado (bloque C):**
 > `GET /api/auditoria/exportar` acepta **los seis**, con la misma función de query que el
 > listado (`queryAuditoria` en `services/auditoria.ts`). `registro_id` sigue siendo PARCIAL en
@@ -476,13 +531,27 @@ Otros consumidores de la capa base (`ids_empleados_visibles`), sin filtros de li
 
 ### `FiltersBar` vs barra propia
 
-| | Módulos |
+> 🟢 **ESTA COMPARACIÓN SE CERRÓ EL 21/8/2026: YA NO QUEDA NINGUNA BARRA PROPIA.** Las cuatro
+> tandas del bloque B3 migraron las 27 pantallas con filtros a `<FiltersBar panel>` y borraron las
+> dos barras propias que quedaban (`AuditFilters.tsx` y `ObjetivosFiltros.tsx`). Se conserva la
+> tabla como registro de qué había antes.
+
+| | Módulos (foto del 27/7/2026, ya superada) |
 |---|---|
 | **Usan `FiltersBar`** (4) | empleados, vacaciones, ausencias, evaluaciones/resultados |
 | **Barra propia** (9+) | objetivos, vacantes, proyectos, capacitaciones ×2, inventario ×2, áreas, auditoría |
 
-La barra propia **duplica literalmente el mismo `FIELD_CLASS`** (`AuditFilters.tsx:11-13`,
-`ItemsTab.tsx`, `objetivos/page.tsx`, …). Es copia-pega de estilo, no una necesidad de diseño.
+La barra propia **duplicaba literalmente el mismo `FIELD_CLASS`** (`AuditFilters.tsx:11-13`,
+`ItemsTab.tsx`, `objetivos/page.tsx`, …). Era copia-pega de estilo, no una necesidad de diseño.
+
+**Las pantallas que hoy NO tienen barra de filtros, y por qué** (ninguna es deuda):
+- **Sin Query que ofrecer** — el endpoint devuelve la lista entera y no acepta un solo filtro:
+  onboarding, onboarding/templates, offboarding, procesos, assessment (×2), comunicación/plantillas,
+  sucesión/planes.
+- **Filtro OBLIGATORIO sin default, que por eso NO lleva chip** — quitarlo no deja la pantalla sin
+  filtrar, deja la consulta rota: el período de costos y de horas-por-cliente (`mes`/`anio` son
+  `Query(...)` sin default), el lote de evaluaciones, y el selector de proyecto de organigrama
+  (elige QUÉ árbol se dibuja, que no es lo mismo que recortar un listado).
 
 ### `useFiltros<Modulo>` vs estado suelto
 
@@ -490,6 +559,12 @@ La barra propia **duplica literalmente el mismo `FIELD_CLASS`** (`AuditFilters.t
 |---|---|
 | **Hook dedicado** (4) | `useFiltrosEmpleados` (72) · `useFiltrosVacaciones` (76) · `useFiltrosAusencias` (74) · `useFiltrosEvaluadosResultados` (44) |
 | **Estado suelto en la página/tab** (9+) | objetivos, vacantes, proyectos, ItemsTab, AsignacionesTab ×2, CatalogoTab, áreas, auditoría |
+
+> ⚠️ **También es una foto del 27/7.** El bloque B3 no unificó el hook —el estado sigue viviendo
+> en cada página— pero sí sacó de ahí **la construcción de los campos**, que es la parte que se
+> duplicaba: hoy cada módulo tiene su `_campos<Modulo>.ts`, una función pura sin JSX que un test
+> puede ejercitar sin DOM. Los chips salen de ahí, así que su etiqueta no puede divergir del
+> selector. Unificar el hook sigue pendiente y sigue siendo barato.
 
 Los tres primeros hooks son **casi idénticos**: los tres cargan empresas y áreas, los tres
 manejan `empresaActivaId`, los tres arman `campos: FiltroCampo[]`. Hay ~40 líneas repetidas

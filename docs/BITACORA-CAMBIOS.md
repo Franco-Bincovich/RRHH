@@ -41,6 +41,243 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-21 · Las cuatro pantallas de afuera de (dashboard) — cierra el bloque B · commits pendientes
+**Qué cambió:** frontend puro. **Cero backend, cero endpoints nuevos, cero migraciones, cero
+dependencias, cero variables de entorno.** `/login`, `/horas`, `/evaluacion/[token]` y
+`/cambiar-password` —las únicas cuatro pantallas que ve gente de afuera del equipo de Capital
+Humano— pasaron a usar los tres estados compartidos (`Skeleton`, `ErrorState`, `EmptyState`), la
+validación en dos niveles donde hay mensajes por campo, y los pares semánticos de la paleta en vez
+de verdes y ámbares escritos a mano.
+
+**Lo único que un dev de infra necesita saber, en orden:**
+
+1. 🔴 **UN BUG DE HUSO HORARIO ARREGLADO EN LA CARGA DE HORAS.** `ventanaFechas` armaba el `min`/
+   `max` del calendario con `toISOString().slice(0, 10)`, que convierte a UTC: en Argentina, **a
+   partir de las 21:00 el calendario ofrecía MAÑANA** y el backend rechazaba esa fecha sin que la
+   pantalla pudiera explicar por qué. La ventana de 30 días además se corría a 29. La cuenta pasó
+   a `shared/fechas.ts::isoLocal`, que es la que ya usaba el alta de empleados.
+2. 🔴 **`components/ui/input.tsx` MIDE 44px HASTA EL BREAKPOINT `md`, Y ESO AFECTA A TODO EL
+   FRONT.** Es la misma regla que `select.tsx` ya tenía escrita —el comentario de ese archivo
+   llama a `input.tsx` "el primitivo hermano y el que marca la convención"— y que a `input.tsx`
+   le faltaba: en un teléfono, dos controles hermanos del mismo formulario medían 32px y 44px. De
+   `md` para arriba nada cambia (sigue en 32px). **Afecta a los ~39 consumidores del primitivo en
+   pantallas chicas**, que es el efecto buscado: es el touch target mínimo.
+3. **`HORAS_PUBLICO_ENABLED` no se tocó.** El módulo sigue apagado: el router no se monta y las
+   rutas siguen fuera de `PUBLIC_ROUTES`. La pantalla se reestiló igual.
+4. **Nada de esto cambia una sola llamada al backend.** El conjunto de endpoints que las cuatro
+   pantallas consumen es exactamente el mismo de antes.
+
+**Impacto en infraestructura:** Ninguno.
+
+---
+
+## 2026-08-21 · El patrón de ficha en las cinco que faltaban + el barrido de paginación · commits pendientes
+**Qué cambió:** frontend puro. **Cero backend, cero endpoints nuevos, cero migraciones, cero
+dependencias, cero variables de entorno.** Dos cosas:
+
+1. **Un barrido estructural nuevo**, `frontend/components/ui/barridoPaginacion.test.ts`: toda
+   pantalla que pinta `<Table patron="datos">` sobre datos que llegaron con `total` tiene que
+   montar `<Pagination>`. Nace con **una sola excepción declarada** (el tablero de objetivos, el
+   único listado del sistema cuyo backend no pagina) y con su contracara, que la mata sola el día
+   que objetivos pagine. Es el barrido nº 30 del repo.
+2. **El patrón "Ficha de detalle" (§3) en las cinco pantallas que faltaban**: `/vacantes/[id]`,
+   `/proyectos/[id]`, `/empresas/[id]`, `/assessment/[id]` y `/onboarding/templates/[id]`. La
+   forma de la barra se extrajo a `components/ui/FichaIdentidad.tsx` y los campos de panel a
+   `components/ui/fichaPanel.tsx`, compartidos ahora por las seis fichas; la barra de `/empleados`
+   pasó a delegar en el primitivo en vez de tener su propia copia.
+
+**Lo único que un dev de infra necesita saber de esto:** `app/(dashboard)/vacantes/[id]/page.tsx`
+era **el archivo más grande del front (452 líneas, límite 150)** y se partió en seis. Ninguna de
+las piezas cambia una llamada al backend: el conjunto de endpoints que la ficha consume es
+exactamente el mismo de antes.
+
+**Impacto en infraestructura:** Ninguno.
+
+---
+
+## 2026-08-21 · B3 en las nueve pantallas que quedaban — el bloque cierra el front entero · commits pendientes
+**Qué cambió:** frontend puro, cero backend, cero endpoints nuevos, cero migraciones. Los patrones
+del bloque B3 (barra de filtros con chips · tabla con esqueleto de la misma grilla · vacío que
+mantiene el encabezado y nombra el filtro real · error con reintento) sobre `/objetivos`,
+`/onboarding`, `/onboarding/templates`, `/offboarding`, `/horas-por-cliente`, `/procesos`,
+`/organigrama`, `/sucesion` y `/assessment`. **Con esta tanda el bloque cubre todas las pantallas
+del front.** Lo que hay que saber, en orden:
+
+1. 🟢 **EL BUG DE `/capacitaciones` NO ESTÁ EN NINGUNA OTRA PANTALLA.** Se barrió el front entero
+   —41 pantallas, siguiendo los imports de cada `page.tsx`— buscando el mismo caso: pedir paginado
+   al backend y no renderizar la barra. **Quedaron 4 candidatos y los 4 son legítimos**: son
+   SELECTORES (el combobox de empleados, los destinatarios de un mail), que traen una página a
+   propósito y buscan contra el backend. Un `<Pagination>` ahí no tendría sentido. La tanda anterior
+   cerró el único caso real.
+2. 🔴 **`/assessment` tenía SIETE `useState` y un `useEffect` DESPUÉS de un `return null`
+   incondicional**, tapados con `// eslint-disable-next-line no-unreachable`. Eran hooks que no
+   corrían nunca y que cambiarían de orden el día que alguien sacara el return: reactivar el módulo
+   era una línea que rompía las reglas de hooks sin avisar. Ahora usa el mismo apagado documentado
+   que /sucesion (`useState(false)` + contenido en un componente aparte, que además no se monta, así
+   que la pantalla apagada ya no dispara sus dos llamadas al backend antes de redirigir).
+   **⚠️ SIGUE APAGADA: se reestiló, no se encendió.** Igual /sucesion. Hay un test por pantalla que
+   lo fija.
+3. **`/offboarding` reintentaba con `window.location.reload()`**: para arreglar UN fetch fallido
+   recargaba la app entera, perdiendo el modo del sidebar, el scroll y cualquier modal abierto. La
+   carga salió del efecto de `useOffboardings` (`recargar`) y el `ErrorState` la llama.
+4. **`/horas-por-cliente` pedía el período con dos `<Input type="number">`**: había que tipear "3"
+   para ver marzo y nada impedía escribir 13. Pasa a usar el `PeriodSelector` de /costos, que se
+   mudó a `components/features/shared/` (el de costos quedó como re-export de 7 líneas).
+   ⚠️ **El período NO lleva chip**, igual que en /costos: `mes` y `anio` son `Query(...)` sin
+   default, así que "quitar el filtro" no deja la pantalla sin filtrar, deja la consulta rota.
+5. **Colores crudos de Tailwind → paleta semántica** en /procesos (los puntitos de estado eran
+   `bg-blue-500`/`bg-green-500`/`bg-red-500`) y en /sucesion (las tres zonas del 9-box, los tres
+   niveles y la barra de readiness, todos `emerald-*`/`amber-*`/`rose-*` con su variante `dark:`
+   escrita a mano). Esos pares quedaban FUERA del barrido de contraste WCAG y de cualquier ajuste
+   posterior de la paleta. 🔴 **Los 26 hex de `utils/colorEmpresa.ts` (/organigrama) NO se tocaron
+   y hay un test que lo fija**: son IDENTIDAD —un color por empresa, sin orden ni significado—, no
+   estado en una escala mal→bien.
+6. **Cuatro archivos que estaban sobre su límite bajaron, y ninguno subió.**
+   `app/(dashboard)/onboarding/page.tsx` **396 → 135** (5 extracciones: el modal de alta, las
+   etiquetas, la lista, las acciones y el hook de detalle) · `assessment/page.tsx` **227 → 134**
+   (las dos tablas + la grilla) · `CampanaModal.tsx` **202 → 111** (los campos + el hook de
+   opciones + los tipos) · `NineBox.tsx` **198 → 143** (la definición de la grilla).
+   `AnalisisAreaModal.tsx` se partió (108 + 66) porque el patrón lo habría dejado en 158.
+7. **Nueve tests nuevos, uno por pantalla**, más el barrido de paginación de arriba. Verificado por
+   mutación en /objetivos: cambiar el contador del pie de `total` a `objetivos.length` pone en rojo
+   dos de sus aserciones. Suite del front: **1271 → 1360 tests en 116 archivos**, verde.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, sin variables de entorno, sin
+dependencias nuevas, sin buckets, sin endpoints. `ASSESSMENT_ENABLED` sigue en `false` y el módulo
+sigue desmontado del lado del backend: nada de esta tanda lo toca.
+
+---
+
+## 2026-08-21 · El género de textoVacio() + B3 en las siete pantallas de operación (front) · commits pendientes
+**Qué cambió:** frontend puro, cero backend, cero endpoints nuevos. Dos cosas.
+
+**1. Un cambio al PATRÓN, en su propio commit y antes que nada.** `textoVacio()` escribía sus dos
+concordancias en masculino fijo, y sobre **siete de las quince pantallas** que usan el helper la
+frase quedaba mal: *"Cuando se cargue **el primero**"* sobre áreas, bajas, ausencias, vacantes,
+empresas, vacaciones y recategorizaciones. Al arreglarlo apareció **una segunda concordancia en la
+misma función y en otra rama** —*"Karstec no tiene áreas **cargados**"*— que nadie había visto.
+Se arregló con UN parámetro (`genero: "masculino" | "femenino"`, default masculino) que gobierna
+las dos, así que no se puede acertar una y errar la otra; las ocho pantallas que ya concordaban no
+cambiaron una línea. Verificado por mutación en las dos ramas.
+
+**2. Los patrones del bloque B en `/auditoria`, `/eventos`, `/costos`, `/inventario`,
+`/capacitaciones`, `/evaluaciones` y `/comunicacion`.** Lo que hay que saber, en orden:
+
+1. 🔴 **`/capacitaciones` → Asignaciones PAGINABA SIN BARRA.** La pestaña llevaba `page` y `total`
+   y pedía de a 20 al backend, pero **nunca renderizaba `<Pagination>`** (el import estaba puesto y
+   sin usar): con más de 20 asignaciones cargadas, **las filas 21+ eran inalcanzables desde la UI**
+   y no había ninguna señal de que existieran. Es el bug más grave de la tanda y hoy tiene barra y
+   un test que la pinea.
+2. **`/inventario` (las dos pestañas) y `/costos` dibujaban el pie SOBRE el esqueleto**, con el
+   total del pedido anterior. Arreglado. En `/auditoria` y `/eventos` la protección venía de un
+   `return` temprano que el patrón elimina, así que la guarda pasó a ser explícita.
+3. **`AuditFilters.tsx` se borró.** Era la barra de filtros propia más rica del repo y cargaba una
+   constante `FIELD_CLASS` **byte-idéntica** a la fórmula de altura del `<Select>`, con un
+   comentario que decía que eran "dos lugares con un solo valor". Sus cinco controles pasaron a
+   `<FiltersBar panel>` sin perder ninguno; "Desde"/"Hasta" se unificaron en un `daterange`.
+4. **CUATRO badges azules** (`variant="default"` = `bg-primary`) pasaron a pares semánticos —
+   "Del equipo" en eventos, "Disponible" en inventario, "Obligatoria: Sí" y "Completado" en
+   formación—, y con ellos se re-semantizaron otros seis que no eran azules pero tampoco decían
+   nada (gris contra gris). Y **DOS controles que no producían chip** —el botón "Ver resueltos"
+   de eventos y el checkbox "Solo activos" del catálogo de formación— pasaron a select.
+5. **`/comunicacion` → Plantillas dejó de ser una lista de filas y es una GRILLA DE TARJETAS**
+   (§5), con lo que se fue el `Accordion.Root` de un solo ítem que el propio código ya declaraba
+   redundante y pendiente.
+6. 🔴 **`/evaluaciones` decía "ciclo" en tres lugares visibles** —el selector, el subtítulo y el
+   vacío— y §7 dice explícitamente que el sistema **importa resultados, no los corre**. Se cambió
+   por "período importado" y hay un test que impide que la palabra vuelva.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno, sin
+dependencias, sin buckets, sin endpoints nuevos ni cambios de auth. Se borró
+`frontend/components/features/auditoria/AuditFilters.tsx` (sin más consumidores) y se partieron
+cinco archivos que quedaban sobre su límite de líneas.
+
+⚠️ **Lo único con potencial de sorprender a un usuario:** desaparecieron dos botones que
+alternaban —"Ver resueltos" en `/eventos` y el checkbox "Solo activos" del catálogo de
+formación—; ahora son selects dentro del panel de filtros, con las mismas dos posiciones y el
+mismo parámetro del backend. El cambio es para que esos filtros produzcan chip: con el botón
+quedaban activos sin ninguna señal en el panel.
+
+---
+
+## 2026-08-21 · Los patrones del bloque B3 en las seis pantallas de catálogo (front) · commits pendientes
+**Qué cambió:** frontend puro, cero backend, cero endpoints nuevos. Se propagaron a `/areas`,
+`/clientes`, `/empresas`, `/usuarios`, `/periodos` y `/proyectos` los mismos patrones opt-in de la
+tanda anterior: panel de filtros con chips, `<Table patron="datos">`, el vacío que conserva el
+encabezado, el esqueleto con la grilla exacta y el modal de formulario con validación en dos
+niveles. Ningún patrón se modificó.
+
+Lo que un deploy tiene que saber, en orden de importancia:
+
+1. **Sólo DOS de las seis tienen filtros de verdad** (`/areas`: `search`; `/proyectos`: `estado` +
+   `area_id`). `/clientes` tiene uno solo (`incluir_inactivos`) y **`/empresas`, `/usuarios` y
+   `/periodos` no aceptan un solo Query**: no tienen chips ni pie, y eso es correcto, no una
+   feature faltante. **Cuatro de las seis tampoco paginan** — el backend devuelve la lista entera.
+2. **`/proyectos` dibujaba el pie de paginación SOBRE el esqueleto**, con el `total` del pedido
+   anterior, porque su condición no tenía guarda de carga. Arreglado. Es el mismo caso que apareció
+   en /vacantes la tanda pasada. El pie además pasa a mostrarse siempre que haya filas, acá y en
+   `/areas` (era `total > PAGE_SIZE` en las dos).
+3. **Siete badges azules pasaron a pares semánticos** (`--success-*`, `--warning-*`, `--danger-*`):
+   "Activo" en clientes, "Activa" en empresas, "Cerrado" en períodos y los cuatro estados de
+   proyectos. `bg-primary` queda reservado al chip de filtro. No se tocó `badge.tsx`.
+4. **Las tres pantallas GLOBALES ahora lo dicen en pantalla** — `/clientes`, `/empresas` y
+   `/usuarios` no se recortan por el selector de empresa del sidebar, y hasta ahora eso no estaba
+   escrito en ningún lado visible. El texto vive en `_avisoGlobal.ts` / `_avisos.ts` de cada
+   módulo y va en el subtítulo del encabezado, igual que en `/perfiles-puesto`.
+5. **Dos comentarios del código afirmaban lo contrario de lo que el código hace**, y se
+   corrigieron: `services/clientes.ts` decía que el backend toma la empresa del header
+   `X-Empresa-Id` (**no la toma**: el catálogo es global desde las migraciones 108/109), y
+   `useFiltrosProyectos` decía que ese listado no pagina (**sí pagina**).
+6. **Deuda de líneas saldada de paso:** `EmpresaModal.tsx` estaba en 226/150 desde antes de esta
+   tanda —figura en CLAUDE.md— y se partió en tres (`empresaForm.ts` + `EmpresaFormFields.tsx` +
+   el orquestador). `ProyectosGrid.tsx` se partió en `ProyectoCard.tsx` + la grilla.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno, sin
+dependencias, sin buckets, sin endpoints nuevos ni cambios de auth.
+`frontend/components/features/vacantes/VacantesFiltros.tsx` ya se había borrado en la tanda
+anterior; en ésta no se borró ningún archivo, sólo se partieron dos.
+
+⚠️ **Lo único con potencial de sorprender a un usuario:** en `/clientes`, el botón que alternaba
+"Ver bajas"/"Ocultar bajas" desapareció — ahora es un select "Estado" dentro del panel de filtros,
+con las mismas dos posiciones y el mismo `incluir_inactivos` del backend. El cambio es para que ese
+filtro produzca chip: con el botón quedaba activo sin ninguna señal en el panel.
+
+---
+
+## 2026-08-21 · Los patrones del bloque B3 en cinco pantallas más (front) · commits pendientes
+**Qué cambió:** frontend puro, cero backend, cero endpoints nuevos. Se propagaron a `/ausencias`,
+`/vacaciones`, `/candidatos`, `/vacantes` y `/equipo` los patrones opt-in que la pantalla piloto
+(`/empleados`) ya usaba: el panel de filtros con chips (`<FiltersBar panel>`), la tabla de datos
+(`<Table patron="datos">`), el vacío que conserva el encabezado (`TablaVacia` + `textoVacio`), el
+esqueleto con la grilla exacta y el modal de formulario con validación en dos niveles. Ningún
+patrón se modificó: son los mismos archivos de `components/ui/`.
+
+Tres cambios de COMPORTAMIENTO visibles, además del aspecto:
+1. **El pie de paginación ahora aparece siempre que haya filas**, no sólo con más de una página
+   (era `total > PAGE_SIZE` en ausencias, vacaciones, candidatos, vacantes y en la sección de días
+   pendientes). Es lo que dice cuántos resultados dio el filtro, que es el número que importa justo
+   cuando hay un filtro puesto.
+2. **En /candidatos, "sin búsqueda asignada" dejó de ser un checkbox y pasó a ser un select.** El
+   patrón deriva los chips de los controles y no tiene tipo checkbox, así que ese filtro quedaba
+   activo SIN chip: la pantalla mostraba 4 de 31 candidatos y el único indicio era una casilla
+   tildada fuera del panel. El filtro sigue siendo el mismo `sin_vacante: bool` del backend.
+3. **Seis badges azules pasaron a pares semánticos** (`--success-*`, `--warning-*`, `--danger-*`):
+   `planificada` en vacaciones, `en_proceso` en vacantes, las dos entrevistas del pipeline en la
+   tarjeta de candidato y el "Principal" de la imagen de una vacante. `bg-primary` queda reservado
+   al chip de filtro. No se tocó `badge.tsx`: eso propagaba a sus 49 consumidores.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno, sin
+dependencias, sin buckets, sin endpoints nuevos ni cambios de auth. `frontend/components/features/
+vacantes/VacantesFiltros.tsx` se borró (sus dos selects los reemplaza `<FiltersBar>`); no tenía
+más consumidores que su propia página.
+
+⚠️ **Lo único que un deploy tiene que saber:** `GET /api/equipo` sigue sin aceptar ningún Query y
+sin paginar, así que `/equipo` es la única de las cinco sin filtros ni pie — no le faltan, no los
+tiene el endpoint. Si algún día se le agregan, hay un test que hay que dar vuelta
+(`components/features/equipo/equipoPatron.test.tsx`).
+
+---
+
 ## 2026-08-21 · El dashboard con los diez KPIs de §6 (front) · commits pendientes
 **Qué cambió:** frontend puro sobre el `GET /api/dashboard` que la tanda anterior dejó completo.
 Tres cosas, en tres commits.
