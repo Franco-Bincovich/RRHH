@@ -64,6 +64,17 @@ MODULOS = [
     "services.reportes._reporte_vacaciones",
     "services._dashboard_headcount",
     "services._dashboard_kpis",
+    # 🔴 Los cuatro KPIs que faltaban de §6 (21/8/2026). `calcular_extras` dejó de tener todas
+    # sus queries adentro: cada KPI nuevo vive en su módulo y trae su propio `supabase_admin`,
+    # así que sin estas entradas `TestKPIsNoSeTraganElError` los ve fallar contra la base real
+    # y —peor— sus selects no los validaría nadie contra `db/schema.sql`.
+    "services._dashboard_antiguedad",
+    "services._dashboard_atencion_calculadas",
+    "services._dashboard_operacion",
+    # Las recategorizaciones del mes no tienen query propia: van por su repo, que además resuelve
+    # los tres nombres en otro módulo. Los dos entran, por la misma razón que `audit_repo`.
+    "repositories._recategorizacion_row",
+    "repositories.recategorizacion_repo",
 ]
 
 MES, ANIO = 7, 2026

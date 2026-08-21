@@ -78,7 +78,7 @@ _EMPLEADOS = (
 )
 
 _KPIS_EN_CERO = KPIResponse(empleados_activos=0, ingresos_mes=0, bajas_mes=0,
-                            costo_nomina=0.0, onboardings_activos=0, vacantes_activas=0)
+                            onboardings_activos=0, vacantes_activas=0)
 
 
 class _Q:

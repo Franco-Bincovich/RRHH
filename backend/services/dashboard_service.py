@@ -11,13 +11,13 @@ from uuid import UUID
 from integrations.supabase_client import supabase_admin
 from schemas.dashboard import AlertaResponse, DashboardResponse, KPIResponse
 from services._dashboard_alertas import generar_alertas
-from services._dashboard_headcount import calcular_headcount
+from services._dashboard_headcount import calcular_headcount, calcular_headcount_empresa
 from services._dashboard_kpis import calcular_extras
 from utils.estados_empleado import ESTADO_PREINGRESO
 from utils.logger import logger
 
 _KPIS_VACIOS = KPIResponse(empleados_activos=0, ingresos_mes=0, bajas_mes=0,
-                           costo_nomina=0.0, onboardings_activos=0, vacantes_activas=0)
+                           onboardings_activos=0, vacantes_activas=0)
 
 
 def _safe(fn, default, seccion: str):
@@ -42,12 +42,22 @@ class DashboardService:
         hoy = date.today()
         kpis = _safe(lambda: self._calcular_kpis(hoy, empresa_id), _KPIS_VACIOS, "kpis")
         headcount = _safe(lambda: calcular_headcount(empresa_id), [], "headcount")
+        por_empresa = _safe(lambda: calcular_headcount_empresa(empresa_id), [], "headcount_empresa")
         alertas = _safe(lambda: self._generar_alertas(kpis, empresa_id), [], "alertas")
         extra = calcular_extras(hoy, empresa_id)  # fail-safe por KPI internamente
-        return DashboardResponse(kpis=kpis, headcount_por_area=headcount, alertas=alertas, kpis_extra=extra)
+        return DashboardResponse(kpis=kpis, headcount_por_area=headcount,
+                                 headcount_por_empresa=por_empresa, alertas=alertas,
+                                 kpis_extra=extra)
 
     def _calcular_kpis(self, hoy: date, empresa_id: Optional[UUID] = None) -> KPIResponse:
-        """Calcula los 6 KPIs principales filtrando por empresa_id."""
+        """Calcula los 5 KPIs principales filtrando por empresa_id.
+
+        🔴 ERAN 6: `costo_nomina` (Σ `costos_nomina.salario_bruto`) se borró el 21/8/2026 porque
+        la misma pantalla mostraba además "Masa salarial" (Σ `costos_nomina.total`) — dos cards,
+        dos fórmulas, la misma tabla, y las dos en $0 mientras `costos_nomina` esté vacía. Cuál
+        sobrevive y por qué está en `services/_dashboard_masa_salarial.py`. No se renombró la
+        card perdedora: se sacó.
+        """
         anio, mes = hoy.year, hoy.month
         ini = date(anio, mes, 1).isoformat()
         fin = date(anio, mes, calendar.monthrange(anio, mes)[1]).isoformat()
@@ -99,12 +109,6 @@ class DashboardService:
             bajas_q = bajas_q.eq("empresa_id", eid)
         bajas_mes = bajas_q.execute().count or 0
 
-        costos_q = db.table("costos_nomina").select("salario_bruto").eq("anio", anio).eq("mes", mes)
-        if eid:
-            costos_q = costos_q.eq("empresa_id", eid)
-        costos_res = costos_q.execute()
-        costo_nomina = float(sum(r.get("salario_bruto") or 0 for r in costos_res.data))
-
         onboardings_activos = _count("onboarding_instancias", estado="en_progreso")
 
         vacantes_q = db.table("vacantes").select("id", count="exact").neq("estado", "cerrada")
@@ -116,7 +120,6 @@ class DashboardService:
             empleados_activos=empleados_activos,
             ingresos_mes=ingresos_mes,
             bajas_mes=bajas_mes,
-            costo_nomina=costo_nomina,
             onboardings_activos=onboardings_activos,
             vacantes_activas=vacantes_activas,
         )

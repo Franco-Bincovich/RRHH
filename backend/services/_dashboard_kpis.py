@@ -1,13 +1,17 @@
 """
-calcular_extras: los 5 KPIs de Sesión 5 del dashboard (23/26/27/28/30). Reusan los cálculos de
-los reportes (ausentismo/costos/distribución) — no duplican ni la base de días hábiles (que
-desde la migración 085 sale de parametros_empresa, no de una constante) ni la lógica de
-distribución.
+`calcular_extras`: el ARMADOR de los KPIs escalares del dashboard, con fail-safe por KPI. Reusan
+los cálculos de los reportes (ausentismo/costos/distribución) — no duplican ni la base de días
+hábiles (que desde la migración 085 sale de parametros_empresa, no de una constante) ni la
+lógica de distribución.
 Filtra por empresa_id del contexto (header X-Empresa-Id: el dashboard es vista, respeta el sidebar).
 
-`calcular_headcount` vivía acá y se mudó a `_dashboard_headcount` al pasarse este archivo de
-su límite: son dos cosas distintas (5 escalares con fail-safe compartido vs una lista por área
-que dashboard_service pide por separado).
+🔴 ESTE ARCHIVO ES LA COSTURA, NO LA CALCULADORA. Cada vez que se pasó de su límite se sacó de
+acá un CÁLCULO, nunca la costura: `calcular_headcount` se fue a `_dashboard_headcount`, y en la
+tanda del 21/8/2026 —la de los KPIs que faltaban de `docs/SISTEMA-DE-DISENO.md` §6— se fueron
+`_masa_salarial` a `_dashboard_masa_salarial` (con el porqué de cuál de las dos sobrevivía) y
+nacieron `_dashboard_operacion` y `_dashboard_antiguedad`. Lo que queda acá es lo que solo esta
+función puede hacer: envolver cada KPI en su `_safe` y armar UNA respuesta.
+Corolario para el próximo KPI: se escribe en un módulo propio y se cablea acá con una línea.
 """
 import calendar
 from datetime import date
@@ -16,14 +20,13 @@ from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
 from schemas.dashboard import DistribItem, KPIsExtraResponse, PersonaFecha
+from services._dashboard_antiguedad import antiguedad
+from services._dashboard_atencion_calculadas import contar_ingresos_proximos
+from services._dashboard_masa_salarial import masa_salarial
+from services._dashboard_operacion import recategorizaciones_mes, rotacion_12m
 from services.reportes._reporte_ausentismo import _tasa, base_dias_habiles, nota
-from services.reportes._reporte_costos import generate_costos
 from services.reportes._reporte_distribucion import generate_distribucion
 from utils.logger import logger
-
-
-def _mes_anterior(anio: int, mes: int) -> Tuple[int, int]:
-    return (anio - 1, 12) if mes == 1 else (anio, mes - 1)
 
 
 def _ausencias_activas_hoy(hoy: date, eid: Optional[str]) -> int:
@@ -77,15 +80,6 @@ def _cumple_aniversario(hoy: date, eid: Optional[str]) -> Tuple[List[PersonaFech
     return sorted(cumples, key=lambda p: p.fecha), sorted(aniversarios, key=lambda p: p.fecha)
 
 
-def _masa_salarial(anio: int, mes: int, empresa_id: Optional[UUID]) -> Tuple[float, float, float]:
-    """Masa salarial del mes actual vs anterior + variación % (KPI 27). Reusa generate_costos (R5)."""
-    pa, pm = _mes_anterior(anio, mes)
-    actual = float(generate_costos(mes, anio, empresa_id)["total_nomina"])
-    anterior = float(generate_costos(pm, pa, empresa_id)["total_nomina"])
-    variacion = round((actual - anterior) / anterior * 100, 2) if anterior else 0.0
-    return round(actual, 2), round(anterior, 2), variacion
-
-
 def _distribucion(empresa_id: Optional[UUID]) -> Tuple[List[DistribItem], List[DistribItem]]:
     """Distribución por seniority/modalidad (KPI 28). Reusa generate_distribucion (R4)."""
     d = generate_distribucion(empresa_id)
@@ -112,7 +106,12 @@ def calcular_extras(hoy: date, empresa_id: Optional[UUID] = None) -> KPIsExtraRe
     # entero queda en 0 y sin nota, y aparece en `errores`. Un fallback al viejo 22 mostraría
     # una tasa calculada con una base que quizás ya nadie configuró.
     aus_pct, aus_nota = _safe(lambda: _ausentismo(anio, mes, eid, empresa_id), (0.0, ""), "ausentismo_mes")
-    masa = _safe(lambda: _masa_salarial(anio, mes, empresa_id), (0.0, 0.0, 0.0), "masa_salarial")
+    # 🔴 El default del fallo es `(0.0, 0.0, None)`, con `None` en la variación y no `0.0`: si el
+    # KPI no se pudo calcular, mucho menos se sabe cuánto varió. Un `0.0` acá volvería a afirmar
+    # "no cambió" — el mismo bug que la tanda del 21/8 vino a cerrar, reintroducido por el default.
+    masa = _safe(lambda: masa_salarial(anio, mes, empresa_id), (0.0, 0.0, None), "masa_salarial")
+    rotacion = _safe(lambda: rotacion_12m(hoy, empresa_id), (0, 0.0), "rotacion_12m")
+    antig = _safe(lambda: antiguedad(hoy, empresa_id), (0.0, 0.0), "antiguedad")
     seniority, modalidad = _safe(lambda: _distribucion(empresa_id), ([], []), "distribucion")
     cumples, aniversarios = _safe(lambda: _cumple_aniversario(hoy, eid), ([], []), "cumpleanos_aniversarios")
 
@@ -123,6 +122,14 @@ def calcular_extras(hoy: date, empresa_id: Optional[UUID] = None) -> KPIsExtraRe
         masa_salarial_actual=masa[0],
         masa_salarial_anterior=masa[1],
         masa_salarial_variacion_pct=masa[2],
+        ingresos_proximos_30=_safe(lambda: contar_ingresos_proximos(empresa_id, hoy), 0,
+                                   "ingresos_proximos_30"),
+        recategorizaciones_mes=_safe(lambda: recategorizaciones_mes(anio, mes, empresa_id), 0,
+                                     "recategorizaciones_mes"),
+        rotacion_12m_bajas=rotacion[0],
+        rotacion_12m_pct=rotacion[1],
+        antiguedad_promedio_anios=antig[0],
+        antiguedad_mediana_anios=antig[1],
         distribucion_seniority=seniority,
         distribucion_modalidad=modalidad,
         cumpleanos_mes=cumples,

@@ -88,9 +88,24 @@ def test_costos_embed_nombra_la_fk_y_no_es_ambiguo(monkeypatch):
 
 
 # ── Resiliencia por KPI en calcular_extras ────────────────────────────────────────
+#
+# 🔴 `_neutrales` no es decoración: desde el corte del 21/8/2026 `calcular_extras` cablea SEIS
+# módulos, cada uno con su propio `supabase_admin`. Sin neutralizar los que el test no está
+# mirando, cada uno intenta hablar con la base real, cae en su `_safe` y aparece en `errores` —
+# y el test que afirma `errores == ["ausentismo_mes"]` estaría midiendo el ruido, no el fail-safe.
+
+def _neutrales(monkeypatch):
+    """Los KPIs que este test no afirma, en su valor vacío y sin tocar la base."""
+    monkeypatch.setattr(dk, "masa_salarial", lambda *a, **k: (0.0, 0.0, None))
+    monkeypatch.setattr(dk, "contar_ingresos_proximos", lambda *a, **k: 0)
+    monkeypatch.setattr(dk, "recategorizaciones_mes", lambda *a, **k: 0)
+    monkeypatch.setattr(dk, "rotacion_12m", lambda *a, **k: (0, 0.0))
+    monkeypatch.setattr(dk, "antiguedad", lambda *a, **k: (0.0, 0.0))
+
 
 def test_calcular_extras_un_kpi_roto_no_tumba_el_resto(monkeypatch):
-    monkeypatch.setattr(dk, "generate_costos", _boom)  # masa salarial revienta
+    _neutrales(monkeypatch)
+    monkeypatch.setattr(dk, "masa_salarial", _boom)  # masa salarial revienta
     monkeypatch.setattr(dk, "generate_distribucion", lambda *a, **k: {"por_seniority": [], "por_modalidad": []})
     monkeypatch.setattr(dk, "supabase_admin", _FakeDB())
     monkeypatch.setattr(dk, "base_dias_habiles", lambda empresa_id=None: 22)
@@ -109,7 +124,7 @@ def test_si_la_configuracion_no_se_puede_leer_solo_cae_el_ausentismo(monkeypatch
     mostraría una tasa calculada con una base que quizás ya nadie configuró, que es peor que
     no mostrar nada. La tasa y la nota caen juntas porque salen del mismo cálculo.
     """
-    monkeypatch.setattr(dk, "generate_costos", lambda *a, **k: {"total_nomina": 0})
+    _neutrales(monkeypatch)
     monkeypatch.setattr(dk, "generate_distribucion", lambda *a, **k: {"por_seniority": [], "por_modalidad": []})
     monkeypatch.setattr(dk, "supabase_admin", _FakeDB())
     monkeypatch.setattr(dk, "base_dias_habiles", _boom)
@@ -126,6 +141,7 @@ def test_get_dashboard_seccion_caida_devuelve_200_con_el_resto(monkeypatch):
     monkeypatch.setattr(svc, "_calcular_kpis", _boom)            # la sección de KPIs base revienta
     monkeypatch.setattr(svc, "_generar_alertas", lambda *a, **k: [])
     monkeypatch.setattr(ds, "calcular_headcount", lambda *a, **k: [])
+    monkeypatch.setattr(ds, "calcular_headcount_empresa", lambda *a, **k: [])
     fake_extra = KPIsExtraResponse(
         ausencias_activas_hoy=3, ausentismo_mes_pct=0.0, ausentismo_nota="x",
         masa_salarial_actual=0.0, masa_salarial_anterior=0.0, masa_salarial_variacion_pct=0.0,

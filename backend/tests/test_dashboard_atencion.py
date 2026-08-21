@@ -79,6 +79,9 @@ def _padron() -> list:
         _empleado("Pedro", "EnPrueba", "activo", _dias(-88)),              # prueba: fin en +2
         _empleado("Vera", "Antigua", "activo", _dias(-300)),               # prueba: contraste
         _empleado("Boris", "DeOtraEmpresa", "preingreso", _dias(3), OTRA_EMPRESA),  # (f)
+        # Solo para el KPI de 30 días: fuera de LAS DOS ventanas. En el panel no cambia nada
+        # (ya estaba afuera a los 7), y sin él "30 días" y "sin ventana" darían el mismo número.
+        _empleado("Ulises", "Lejanisimo", "preingreso", _dias(45)),
     ]
 
 
@@ -164,6 +167,38 @@ class TestIngresosProximos:
         assert ingreso["origen"] == "calculada"
         assert ingreso["creado_por_nombre"] is None
         assert ingreso["evento_id"] is None, "una calculada no tiene fila que resolver"
+
+
+class TestElKPIDeIngresosProximos:
+    """El KPI "Ingresos próximos 30 días" (§6) — `contar_ingresos_proximos`.
+
+    🔴 Vive en este archivo y no en uno del dashboard porque comparte MÓDULO y PREDICADO con el
+    panel de arriba: son la misma query con otra ventana (`_preingresos_hasta`). Probarlo aparte
+    con su propio padrón dejaría que las dos ventanas se separaran sin que ningún test lo viera,
+    que es exactamente lo que el módulo se ocupa de impedir.
+
+    El padrón discrimina en los tres ejes: +3 y +30 adentro, +45 afuera (la ventana), Iris activa
+    con ingreso HOY afuera (el estado) y Boris en la otra empresa (la barrera).
+    """
+
+    def test_cuenta_los_de_30_dias_y_no_a_los_que_ya_entraron(self, almacen) -> None:
+        """El test (d) de la sesión.
+
+        Para que falle: perder el `eq(estado, 'preingreso')` —entraría Iris, que YA entró, y
+        también los cuatro activos del padrón—, o ensanchar la ventana (entraría Ulises).
+        """
+        assert calc_mod.contar_ingresos_proximos(EMPRESA, _HOY) == 2
+
+    def test_la_ventana_del_KPI_es_MAS_ANCHA_que_la_del_panel(self, almacen) -> None:
+        """El contraste: Franco (+30) está afuera del panel y adentro del KPI. Si alguien
+        cableara el KPI a `VENTANA_DIAS`, los dos números se igualarían y esto rojea."""
+        panel = len(calc_mod.ingresos_proximos(EMPRESA, _HOY))
+        assert calc_mod.contar_ingresos_proximos(EMPRESA, _HOY) > panel == 1
+
+    def test_respeta_la_empresa_del_sidebar(self, almacen) -> None:
+        """Boris es preingreso a +3 en la otra empresa: suma en consolidado, no en EMPRESA."""
+        assert calc_mod.contar_ingresos_proximos(None, _HOY) == 3
+        assert calc_mod.contar_ingresos_proximos(OTRA_EMPRESA, _HOY) == 1
 
 
 # ─── Fin de período de prueba ────────────────────────────────────────────────

@@ -113,11 +113,12 @@ def _igual(actual, esperado) -> bool:
 
 
 class _Q:
-    """Query encadenable. `eq`/`is_`/`lte`/`in_`/`or_`/`order`/`range` filtran DE VERDAD."""
+    """Query encadenable. `eq`/`neq`/`is_`/`lte`/`in_`/`or_`/`order`/`range` filtran DE VERDAD."""
 
     def __init__(self, almacen: "Almacen", tabla: str) -> None:
         self._a, self._t = almacen, tabla
         self._eq: List[tuple] = []
+        self._neq: List[tuple] = []
         self._nulos: List[str] = []
         self._cmp: List[tuple] = []
         self._in: Optional[tuple] = None
@@ -134,6 +135,13 @@ class _Q:
 
     def eq(self, c, v) -> "_Q":
         self._eq.append((c, v))
+        return self
+
+    def neq(self, c, v) -> "_Q":
+        """⚠️ PostgREST descarta además las filas con NULL en esa columna (NULL != x no es TRUE).
+        Acá no se modela porque las columnas que el repo compara con `neq` son NOT NULL; si
+        alguna deja de serlo, este doble se vuelve más permisivo que la base."""
+        self._neq.append((c, v))
         return self
 
     def is_(self, c, _v) -> "_Q":
@@ -203,6 +211,8 @@ class _Q:
 
     def _match(self, f: dict) -> bool:
         if not all(_igual(f.get(c), v) for c, v in self._eq):
+            return False
+        if any(_igual(f.get(c), v) for c, v in self._neq):
             return False
         if any(f.get(c) is not None for c in self._nulos):
             return False

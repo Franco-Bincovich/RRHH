@@ -30,6 +30,14 @@ from services.configuracion_service import ConfiguracionService
 # propósito: dos números distintos serían dos definiciones de "próximo" en el mismo panel.
 VENTANA_DIAS = 7
 
+# 🔴 La ventana del KPI "Ingresos próximos 30 días" (`docs/SISTEMA-DE-DISENO.md` §6) es OTRA, y
+# tiene que serlo: el PANEL avisa de lo que hay que hacer esta semana y el KPI mide el caudal del
+# mes. Lo que NO puede ser otra es la definición de "ingreso próximo" —qué filas son— y por eso
+# las dos ventanas cuelgan de la misma query (`_q_ingresos_proximos`) en vez de tener cada una la
+# suya: dos queries que filtren "preingresos por fecha" pueden separarse en el próximo cambio de
+# criterio, y ahí el panel y el KPI empiezan a contar gente distinta sin que nadie lo note.
+VENTANA_KPI_DIAS = 30
+
 # Espejo del CHECK `parametros_empresa_periodo_prueba_check` (periodo <= 730). Molde
 # `_eventos_pendientes.TECHO_DIAS`: el recorte de la query es EXACTO, no una heurística — ningún
 # empleado con `fecha_ingreso` anterior a hoy-730 puede tener el fin de prueba por delante ni
@@ -46,13 +54,43 @@ def _con_empresa(q, empresa_id: Optional[UUID]):
     return q.eq("empresa_id", str(empresa_id)) if empresa_id else q
 
 
+def _preingresos_hasta(q, empresa_id: Optional[UUID], hoy: date, dias: int):
+    """EL PREDICADO de "ingreso próximo", en un solo lugar: `estado = 'preingreso'` y
+    `fecha_ingreso` hasta hoy+`dias`. Sin piso de fecha (el porqué está en el encabezado).
+
+    Lo usan el panel (7 días, con nombres) y el KPI del dashboard (30 días, solo el conteo). Lo
+    único que cambia entre los dos es la ventana y la proyección.
+
+    ⚠️ Recibe la query YA PROYECTADA en vez de armar el `select()` acá: cada uso necesita
+    columnas distintas, y un `select()` construido con una variable deja de ser legible para
+    `tests/test_selects_repos.py`, que valida las columnas contra `db/schema.sql` por AST.
+    """
+    return _con_empresa(
+        q.eq("estado", "preingreso").lte("fecha_ingreso", str(hoy + timedelta(days=dias))),
+        empresa_id)
+
+
+def contar_ingresos_proximos(empresa_id: Optional[UUID], hoy: date,
+                             dias: int = VENTANA_KPI_DIAS) -> int:
+    """KPI "Ingresos próximos 30 días" (§6): cuántos preingresos entran dentro de la ventana.
+
+    🔴 Cuenta `preingreso`, no "fecha_ingreso futura", y esa es la diferencia con "Ingresos este
+    mes" (`dashboard_service`, que cuenta por FECHA a quien YA entró). Acá quien ya entró está en
+    `activo` y queda afuera solo. Quien debía entrar y sigue en `preingreso` SÍ cuenta, igual que
+    en el panel: no entró, así que su ingreso sigue pendiente.
+
+    Va por `count="exact"` y no por `len(ingresos_proximos(...))`: el KPI es un número, y armar
+    las alertas para tirarlas trae nombres y fechas de gente al pedo.
+    """
+    q = supabase_admin.table("empleados").select("id", count="exact")
+    return _preingresos_hasta(q, empresa_id, hoy, dias).execute().count or 0
+
+
 def ingresos_proximos(empresa_id: Optional[UUID], hoy: date) -> List[AlertaAtencion]:
     """Preingresos (A2/A4.2) con `fecha_ingreso` hasta hoy+7. Sin piso: ver el encabezado."""
-    q = _con_empresa(
-        supabase_admin.table("empleados").select("id, nombre, apellido, fecha_ingreso")
-        .eq("estado", "preingreso")
-        .lte("fecha_ingreso", str(hoy + timedelta(days=VENTANA_DIAS))),
-        empresa_id)
+    q = _preingresos_hasta(
+        supabase_admin.table("empleados").select("id, nombre, apellido, fecha_ingreso"),
+        empresa_id, hoy, VENTANA_DIAS)
     alertas = []
     for e in q.execute().data or []:
         fecha = date.fromisoformat(e["fecha_ingreso"])

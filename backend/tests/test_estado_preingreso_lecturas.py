@@ -58,15 +58,20 @@ _DECLARADAS: dict = {
     ("repositories/sucesion_repo.py", "eq", "activo"): (1, _A),
     ("repositories/sucesion_repo.py", "in_", "ESTADOS_EN_PLANTILLA"): (1, _PLANTILLA),
     ("services/_dashboard_alertas.py", "eq", "activo"): (1, _A),
-    # A6: el panel "Requiere tu atención". El `eq preingreso` es la PRIMERA lectura del repo que
-    # busca preingresos A PROPÓSITO (las demás los excluyen): la alerta de ingresos próximos.
-    # El `eq activo` es el universo del fin de período de prueba — un preingreso no está en
-    # prueba todavía, una baja ya no.
-    ("services/_dashboard_atencion_calculadas.py", "eq", "preingreso"):
-        (1, "¿el ingreso está por ocurrir? — la alerta se apaga cuando el pase a activo ocurre"),
+    # A6: el panel "Requiere tu atención". El `eq activo` es el universo del fin de período de
+    # prueba — un preingreso no está en prueba todavía, una baja ya no. ⚠️ El `eq preingreso` de
+    # este mismo archivo bajó a `_INDETERMINADAS` el 21/8/2026 sin cambiar de criterio: se movió
+    # a un helper que recibe la query armada, así que la cadena ya no llega hasta el `.table()`.
     ("services/_dashboard_atencion_calculadas.py", "eq", "activo"): (1, _A),
-    ("services/_dashboard_headcount.py", "eq", "activo"): (1, _A),
+    # DOS repartos de activos en el mismo archivo desde el 21/8/2026: por área y por empresa.
+    ("services/_dashboard_headcount.py", "eq", "activo"): (2, _A),
     ("services/_dashboard_kpis.py", "eq", "activo"): (2, _A),
+    # KPIs de §6 (21/8/2026). El `activo` de operación es el DENOMINADOR de la tasa de rotación
+    # (mismo rol que el de `_reporte_dotacion.generate_rotacion`); el de antigüedad es la
+    # dotación cuya antigüedad se promedia.
+    ("services/_dashboard_antiguedad.py", "eq", "activo"): (1, _A),
+    ("services/_dashboard_operacion.py", "eq", "activo"): (1, _A),
+    ("services/_dashboard_operacion.py", "eq", "baja"): (1, _BAJA),
     ("services/_reporte_anual_metricas.py", "eq", "activo"): (1, _A),
     ("services/dashboard_service.py", "kwarg", "activo"): (1, _A),
     ("services/dashboard_service.py", "neq", "ESTADO_PREINGRESO"): (1, _ALTA),
@@ -90,6 +95,10 @@ _INDETERMINADAS: dict = {
     # Recibe la query por parámetro (`filtro_estado(q, estado)`) → la cadena no llega al .table().
     ("repositories/_empleado_row.py", "neq", "ESTADO_PREINGRESO"): (1, "empleados"),
     ("repositories/_empleado_row.py", "eq", "estado"): (1, "empleados"),
+    # Ídem: `_preingresos_hasta(q, ...)` recibe la query YA proyectada, porque el panel (7 días,
+    # con nombres) y el KPI de §6 (30 días, solo el count) comparten predicado y no proyección.
+    # Es la ÚNICA lectura del repo que busca preingresos a propósito; las demás los excluyen.
+    ("services/_dashboard_atencion_calculadas.py", "eq", "preingreso"): (1, "empleados"),
     # Todo lo de abajo es de OTRA tabla: ruido conocido, no empleados.
     ("repositories/_objetivo_filtros.py", "eq", "<expr>"): (1, "objetivos"),
     ("repositories/asignacion_repo.py", "eq", "estado"): (1, "empleado_capacitacion"),
@@ -192,14 +201,18 @@ class TestLosCriteriosSiguenSiendoLosQueSon:
     """Ancla SEMÁNTICA, no de conteo: qué pregunta hace cada grupo. Un cambio de criterio que
     conservara la cantidad de comparaciones pasaría los tests de arriba y rojearía acá."""
 
-    def test_el_grupo_a_son_dieciseis_y_preguntan_por_activo(self) -> None:
+    def test_el_grupo_a_son_diecinueve_y_preguntan_por_activo(self) -> None:
         """Los 15 originales quedaron correctos GRATIS con la migración 120 (un preingreso no es
         'activo'); que siguieran siendo 15 era lo que decía que nadie los "arregló" de más.
-        El 16.º es de A6 (19/8/2026): el universo del fin de período de prueba en
-        `_dashboard_atencion_calculadas.py` — nació DESPUÉS de la 120, con el criterio ya
-        correcto, no es un retoque de los quince."""
+
+        Los CUATRO que se sumaron después nacieron con el criterio ya correcto y ninguno es un
+        retoque de los quince: el 16.º es de A6 (19/8/2026, el universo del fin de período de
+        prueba) y los otros tres son los KPIs de §6 del 21/8/2026 — el segundo reparto de
+        `_dashboard_headcount` (por empresa), el denominador de la tasa de rotación y la dotación
+        cuya antigüedad se promedia. El número sube cuando se agregan lecturas nuevas; lo que
+        este test vigila es que sigan preguntando `= 'activo'` y no otra cosa."""
         grupo_a = sum(c for (_f, _m, v), (c, cr) in _DECLARADAS.items() if cr is _A)
-        assert grupo_a == 16
+        assert grupo_a == 19
         assert all(v == "activo" for (_f, _m, v), (_c, cr) in _DECLARADAS.items() if cr is _A)
 
     def test_los_dos_sitios_de_plantilla_usan_la_constante_compartida(self) -> None:

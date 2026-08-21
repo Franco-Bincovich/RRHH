@@ -80,6 +80,23 @@ class _FakeDB:
 _HOY = date(2026, 3, 15)
 
 
+def _sin_los_otros_kpis(monkeypatch) -> None:
+    """Neutraliza los KPIs que este archivo NO está mirando.
+
+    🔴 Hace falta desde el 21/8/2026 y es una consecuencia real del corte: `calcular_extras`
+    cablea seis módulos y cada uno tiene su propio `supabase_admin`, así que parchear el de
+    `_dashboard_kpis` ya no aísla la función. Lo que se stubea acá es lo que el test no afirma;
+    lo que afirma no se stubea nunca. Cada uno tiene su archivo de test propio:
+    `test_dashboard_masa_salarial.py`, `test_dashboard_operacion.py`,
+    `test_dashboard_antiguedad.py` y `test_dashboard_atencion.py`.
+    """
+    monkeypatch.setattr(dk, "masa_salarial", lambda *a, **k: (0.0, 0.0, None))
+    monkeypatch.setattr(dk, "contar_ingresos_proximos", lambda *a, **k: 0)
+    monkeypatch.setattr(dk, "recategorizaciones_mes", lambda *a, **k: 0)
+    monkeypatch.setattr(dk, "rotacion_12m", lambda *a, **k: (0, 0.0))
+    monkeypatch.setattr(dk, "antiguedad", lambda *a, **k: (0.0, 0.0))
+
+
 # ── KPI 23 — ausencias activas hoy ────────────────────────────────────────────────
 
 def test_ausencias_activas_hoy_cruza(monkeypatch):
@@ -143,26 +160,22 @@ def test_cambiar_la_base_mueve_la_tasa_Y_la_nota_juntas(monkeypatch):
     assert pct == 50.0 and "11 días hábiles" in nota
 
 
-# ── KPI 27 — masa salarial mes actual vs anterior + variación ─────────────────────
-
-def test_masa_salarial_variacion(monkeypatch):
-    # generate_costos devuelve total_nomina; parcheamos para no depender de su query interna.
-    def _fake_costos(mes, anio, empresa_id=None, area_id=None):
-        return {"total_nomina": 1200.0 if mes == 3 else 1000.0}
-
-    monkeypatch.setattr(dk, "generate_costos", _fake_costos)
-    monkeypatch.setattr(dk, "generate_distribucion", lambda *a, **k: {"por_seniority": [], "por_modalidad": []})
-    monkeypatch.setattr(dk, "supabase_admin", _FakeDB({}))
-    r = dk.calcular_extras(_HOY, None)
-    assert r.masa_salarial_actual == 1200.0 and r.masa_salarial_anterior == 1000.0
-    assert r.masa_salarial_variacion_pct == 20.0  # (1200-1000)/1000*100
+# ── KPI 27 — masa salarial ────────────────────────────────────────────────────────
+#
+# 🔴 SE MUDÓ ENTERO a `tests/test_dashboard_masa_salarial.py`, junto con el código: el cálculo
+# ahora vive en `services/_dashboard_masa_salarial.py`, que además carga la decisión de qué
+# columna es la masa salarial y la de "sin base de comparación no es 0 %". El test que estaba
+# acá (`test_masa_salarial_variacion`) es hoy `test_con_base_calcula_la_variacion_real` allá.
+# No se borró de la cobertura: se movió, que es lo que este repo hace con los tests cuyo módulo
+# se parte. Lo que este archivo sigue cubriendo del KPI es el CABLEADO (que `calcular_extras`
+# lo llame y lo envuelva en su `_safe`), en `test_dashboard_embed_resiliencia.py`.
 
 
 # ── KPI 28 — distribución con nulos en "Sin especificar" ──────────────────────────
 
 def test_distribucion_nulos_sin_especificar(monkeypatch):
     # Reusa la lógica real de _reporte_distribucion (que agrupa nulos en "Sin especificar").
-    monkeypatch.setattr(dk, "generate_costos", lambda *a, **k: {"total_nomina": 0.0})
+    _sin_los_otros_kpis(monkeypatch)
     monkeypatch.setattr(dk, "supabase_admin", _FakeDB({}))
     import services.reportes._reporte_distribucion as rd
     monkeypatch.setattr(rd, "supabase_admin", _FakeDB({
@@ -199,7 +212,7 @@ def test_el_KPI_y_el_reporte_R4_cuentan_IGUAL(monkeypatch):
         {"estado": "activo", "seniority": None, "tipo_contrato": None, "turno": None},
         {"estado": "activo", "seniority": "  ", "tipo_contrato": None, "turno": None},
     ]
-    monkeypatch.setattr(dk, "generate_costos", lambda *a, **k: {"total_nomina": 0.0})
+    _sin_los_otros_kpis(monkeypatch)
     monkeypatch.setattr(dk, "supabase_admin", _FakeDB({}))
     monkeypatch.setattr(rd, "supabase_admin", _FakeDB({"empleados": filas}))
 
