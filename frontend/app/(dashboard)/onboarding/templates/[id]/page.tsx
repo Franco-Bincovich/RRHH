@@ -1,16 +1,16 @@
 "use client"
 
 import { useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { useParams } from "next/navigation"
 import { toast } from "sonner"
 
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { ErrorState } from "@/components/ui/ErrorState"
-import { InlineEdit } from "@/components/features/onboarding/InlineEdit"
+import { Skeleton } from "@/components/ui/skeleton"
 import { SemanaSection } from "@/components/features/onboarding/SemanaSection"
 import { useTemplateDetalle } from "@/components/features/onboarding/useTemplateDetalle"
 import { VisibilidadToggle } from "@/components/features/onboarding/VisibilidadToggle"
+import { BarraTemplate } from "@/components/features/onboarding/ficha/BarraTemplate"
 import { SEMANAS, type Semana } from "@/components/features/onboarding/_templates_ui"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import { useUserId } from "@/hooks/useUserId"
@@ -18,7 +18,6 @@ import type { TemplateTarea } from "@/types/onboarding"
 
 export default function TemplateDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const router = useRouter()
   const canWrite = useCanWrite()
   const userId = useUserId()
   const {
@@ -42,13 +41,13 @@ export default function TemplateDetailPage() {
   }
 
   if (loading) {
+    // El esqueleto tiene la grilla exacta (§3): la barra de identidad y las cuatro semanas.
     return (
-      <div className="space-y-4">
-        <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />
-        <div className="h-4 w-72 animate-pulse rounded-lg bg-muted" />
-        {[1, 2].map((i) => (
-          <div key={i} className="h-32 animate-pulse rounded-xl bg-muted" />
-        ))}
+      <div>
+        <Skeleton shimmer className="mb-4 h-[118px] w-full rounded-xl" />
+        <div className="space-y-6">
+          {SEMANAS.map((s) => <Skeleton key={s} shimmer className="h-32 w-full rounded-xl" />)}
+        </div>
       </div>
     )
   }
@@ -59,49 +58,24 @@ export default function TemplateDetailPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <button
-          type="button"
-          onClick={() => router.push("/onboarding/templates")}
-          className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-        >
-          <ArrowLeft className="size-4" />
-          Volver a templates
-        </button>
-
-        <InlineEdit
-          value={template.nombre}
-          onSave={(v) => guardarCampo("nombre", v)}
-          className="text-2xl font-semibold tracking-tight text-foreground"
-          placeholder="Nombre del template"
-          canEdit={canWrite}
-        />
-        <div className="mt-1">
-          <InlineEdit
-            value={template.descripcion ?? ""}
-            onSave={(v) => guardarCampo("descripcion", v)}
-            className="text-sm text-muted-foreground"
-            multiline
-            placeholder="Agregar descripción…"
-            canEdit={canWrite}
+      {/* La ÚNICA acción de esta ficha es cambiar la visibilidad, así que es la primaria y va
+          última por construcción (§3). El chip de al lado del título dice el mismo estado y eso
+          es a propósito — el porqué está en `BarraTemplate`. */}
+      <BarraTemplate
+        template={template}
+        canWrite={canWrite}
+        onGuardarCampo={guardarCampo}
+        acciones={canWrite ? (
+          <VisibilidadToggle
+            templateId={id}
+            esPublica={template.es_publica}
+            // Sin autor la puede cambiar cualquiera (regla de huérfanas). userId null =
+            // todavía no montó: no se habilita hasta saber quién sos.
+            puedeCambiar={template.created_by === null || (userId !== null && template.created_by === userId)}
+            onCambiada={marcarVisibilidad}
           />
-        </div>
-        <div className="mt-2 flex items-center gap-3">
-          <p className="text-xs text-muted-foreground">
-            {template.tareas_total} tarea{template.tareas_total !== 1 ? "s" : ""} en total
-          </p>
-          {canWrite && (
-            <VisibilidadToggle
-              templateId={id}
-              esPublica={template.es_publica}
-              // Sin autor la puede cambiar cualquiera (regla de huérfanas). userId null =
-              // todavía no montó: no se habilita hasta saber quién sos.
-              puedeCambiar={template.created_by === null || (userId !== null && template.created_by === userId)}
-              onCambiada={marcarVisibilidad}
-            />
-          )}
-        </div>
-      </div>
+        ) : undefined}
+      />
 
       <div className="space-y-6">
         {SEMANAS.map((semana) => (

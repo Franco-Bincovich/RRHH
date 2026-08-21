@@ -1,19 +1,18 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Building2, Pencil, Upload } from "lucide-react"
+import { ArrowLeft, Pencil } from "lucide-react"
 
-import { PageHeader } from "@/components/layout/PageHeader"
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import { EmpresaModal } from "@/components/features/empresas/EmpresaModal"
 import { EmpresaAreasTab } from "@/components/features/empresas/EmpresaAreasTab"
-import { fetchEmpresa, uploadLogo } from "@/services/empresas"
+import { BarraEmpresa } from "@/components/features/empresas/ficha/BarraEmpresa"
+import { LogoPanel } from "@/components/features/empresas/ficha/LogoPanel"
+import { fetchEmpresa } from "@/services/empresas"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Empresa } from "@/types/empresa"
 
@@ -35,15 +34,12 @@ export default function EmpresaDetailPage() {
   const [error, setError] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>("info")
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [uploadingLogo, setUploadingLogo] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function load() {
     setLoading(true)
     setError(false)
     try {
-      const data = await fetchEmpresa(id)
-      setEmpresa(data)
+      setEmpresa(await fetchEmpresa(id))
     } catch {
       setError(true)
     } finally {
@@ -53,31 +49,14 @@ export default function EmpresaDetailPage() {
 
   useEffect(() => { void load() }, [id])
 
-  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !empresa) return
-    setUploadingLogo(true)
-    try {
-      const updated = await uploadLogo(empresa.id, file)
-      setEmpresa(updated)
-    } catch {
-      // error silencioso — usuario puede reintentar
-    } finally {
-      setUploadingLogo(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
-    }
-  }
-
+  // El esqueleto tiene la forma que la pantalla va a tener con datos (§3): la barra de identidad,
+  // las solapas y el panel. Antes eran cinco rectángulos de 8px que no se parecían a nada.
   if (loading) {
     return (
       <div>
-        <Skeleton className="mb-6 h-8 w-48" />
-        <Skeleton className="mb-4 h-10 w-64" />
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-8 w-full rounded" />
-          ))}
-        </div>
+        <Skeleton shimmer className="mb-4 h-[118px] w-full rounded-xl" />
+        <Skeleton shimmer className="mb-6 h-10 w-64 rounded-lg" />
+        <Skeleton shimmer className="h-48 w-full max-w-md rounded-xl" />
       </div>
     )
   }
@@ -95,31 +74,18 @@ export default function EmpresaDetailPage() {
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <button
-        onClick={() => router.push("/empresas")}
-        className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="size-4" />
-        Empresas
-      </button>
-
-      <PageHeader
-        title={empresa.nombre}
-        description={empresa.razon_social ?? undefined}
-        action={
-          <div className="flex items-center gap-2">
-            <Badge variant={empresa.activa ? "default" : "secondary"}>
-              {empresa.activa ? "Activa" : "Inactiva"}
-            </Badge>
-            {canWrite && (
-              <Button className="min-h-11" onClick={() => setEditModalOpen(true)}>
-                <Pencil className="mr-1 size-4" />
-                Editar
-              </Button>
-            )}
-          </div>
-        }
+      {/* La ÚNICA acción de la ficha es editar, así que es la primaria y va última por
+          construcción (§3). Subir el logo NO subió acá a propósito: es la acción de un panel
+          —cambia una sola cosa de ese panel— y en la barra se leería con el mismo peso que
+          "Editar", que abre el formulario entero. */}
+      <BarraEmpresa
+        empresa={empresa}
+        acciones={canWrite ? (
+          <Button className="min-h-11 gap-2" onClick={() => setEditModalOpen(true)}>
+            <Pencil className="size-4" />
+            Editar
+          </Button>
+        ) : undefined}
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -135,63 +101,13 @@ export default function EmpresaDetailPage() {
           </Tab>
         </TabList>
 
-      {/* Tab: Información */}
-      <TabPanel value="info">
-        <div className="max-w-2xl space-y-6">
-          {/* Logo */}
-          <div className="flex items-center gap-4">
-            <div className="flex size-20 items-center justify-center rounded-xl border bg-muted overflow-hidden shrink-0">
-              {empresa.logo_url ? (
-                <img
-                  src={empresa.logo_url}
-                  alt={`Logo de ${empresa.nombre}`}
-                  className="size-full object-contain"
-                />
-              ) : (
-                <Building2 className="size-8 text-muted-foreground" />
-              )}
-            </div>
-            <div>
-              <p className="text-sm font-medium mb-1">Logo</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleLogoChange}
-              />
-              {canWrite && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-h-9"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingLogo}
-                >
-                  <Upload className="mr-1.5 size-3.5" />
-                  {uploadingLogo ? "Subiendo..." : empresa.logo_url ? "Cambiar logo" : "Subir logo"}
-                </Button>
-              )}
-            </div>
+        <TabPanel value="info">
+          <div className="max-w-md">
+            <LogoPanel empresa={empresa} canWrite={canWrite} onCambiado={setEmpresa} />
           </div>
+        </TabPanel>
 
-          <Separator />
-
-          {/* Datos */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="CUIT" value={empresa.cuit} />
-            <Field label="Razón social" value={empresa.razon_social} />
-            <Field label="Email" value={empresa.email} />
-            <Field label="Teléfono" value={empresa.telefono} />
-          </div>
-          {empresa.direccion && (
-            <Field label="Dirección" value={empresa.direccion} />
-          )}
-        </div>
-      </TabPanel>
-
-      {/* Tab: Áreas */}
-      <TabPanel value="areas"><EmpresaAreasTab empresaId={empresa.id} canWrite={canWrite} /></TabPanel>
+        <TabPanel value="areas"><EmpresaAreasTab empresaId={empresa.id} canWrite={canWrite} /></TabPanel>
       </Tabs>
 
       <EmpresaModal
@@ -203,17 +119,6 @@ export default function EmpresaDetailPage() {
         }}
         empresa={empresa}
       />
-    </div>
-  )
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-      <p className="text-sm font-medium">
-        {value ?? <span className="italic text-muted-foreground/60">—</span>}
-      </p>
     </div>
   )
 }
