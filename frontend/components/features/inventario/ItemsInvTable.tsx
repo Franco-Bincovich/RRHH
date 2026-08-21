@@ -1,38 +1,29 @@
 "use client"
 
 /**
- * Tabla del catálogo de ítems de inventario: presentacional. Cubre los cuatro estados del
- * listado (cargando / error / vacío / datos) y no sabe nada de filtros ni de fetch — extraída
- * de ItemsTab, que estaba en 152 contra un límite de 150.
+ * Tabla del catálogo de ítems de inventario: presentacional. Dueña de los cuatro estados del
+ * listado (cargando / error / vacío / datos) y sin saber nada de filtros ni de fetch.
  *
  * Molde: AsignacionesInvTable.tsx, la tabla de la pestaña hermana.
  *
  * `deletingId` entra por prop y no es estado propio: el borrado lo dispara y lo reintenta el
  * orquestador, que es quien tiene el service y el toast de error.
  */
-import { AlertCircle, History, Pencil, Trash2 } from "lucide-react"
+import { History, Pencil, Trash2 } from "lucide-react"
+import type { ReactNode } from "react"
 
-import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
+import { TablaVacia } from "@/components/ui/TablaVacia"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import type { ChipFiltro } from "@/components/ui/filtrosChips"
+import { Encabezado, FilasEsqueleto } from "@/components/ui/grillaTabla"
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import type { InventarioItem } from "@/types/inventario"
 
-const ESTADO_BADGE: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  disponible: "default", asignado: "secondary", en_reparacion: "outline", baja: "destructive",
-}
-const ESTADO_LABEL: Record<string, string> = {
-  disponible: "Disponible", asignado: "Asignado", en_reparacion: "En reparación", baja: "Baja",
-}
-
-function Skeleton5() {
-  return <div className="space-y-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} className="h-12 w-full rounded-lg"/>)}</div>
-}
+import { COLUMNAS_ITEMS, ESTADO_ITEM_ESTILO, ESTADO_ITEM_LABEL } from "./_grillaInventario"
 
 function formatDate(s: string) {
-  const [y,m,d] = s.split("-"); return `${d}/${m}/${y}`
+  const [y, m, d] = s.split("-"); return `${d}/${m}/${y}`
 }
 
 interface ItemsInvTableProps {
@@ -46,62 +37,85 @@ interface ItemsInvTableProps {
   onHistorial: (item: InventarioItem) => void
   onEditar: (item: InventarioItem) => void
   onEliminar: (id: string) => void
+  /** Los filtros activos, para explicar el vacío con sus valores reales y ofrecer quitarlos. */
+  chips: ChipFiltro[]
+  onLimpiarTodo: () => void
+  /** Qué ofrecer cuando NO hay filtros y tampoco datos: el alta. `undefined` sin permiso. */
+  accionVacio?: ReactNode
 }
+
+const ACCION_CLASS =
+  "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
 
 export function ItemsInvTable({
   items, loading, error, canWrite, mostrarEmpresa, deletingId,
-  onReload, onHistorial, onEditar, onEliminar,
+  onReload, onHistorial, onEditar, onEliminar, chips, onLimpiarTodo, accionVacio,
 }: ItemsInvTableProps) {
-  if (loading) return <Skeleton5 />
+  const columnas = COLUMNAS_ITEMS.filter((c) => c.clave !== "empresa" || mostrarEmpresa)
+
+  // El error sí reemplaza la tabla: no se sabe qué columnas tiene lo que no llegó.
   if (error) return <ErrorState action={onReload} />
-  if (items.length === 0) {
-    return (
-      <EmptyState icon={<AlertCircle />} title="Sin ítems" description="No hay ítems de inventario para los filtros seleccionados." />
-    )
-  }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Nombre</TableHead>
-          <TableHead>Tipo</TableHead>
-          <TableHead>N° Serie</TableHead>
-          <TableHead>Estado</TableHead>
-          {mostrarEmpresa && <TableHead>Empresa</TableHead>}
-          <TableHead>Asignado a</TableHead>
-          <TableHead>Alta</TableHead>
-          <TableHead />
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {items.map((item) => (
-          <TableRow key={item.id}>
-            <TableCell className="font-medium">{item.nombre}</TableCell>
-            <TableCell className="text-muted-foreground">{item.tipo}</TableCell>
-            <TableCell className="text-muted-foreground">{item.numero_serie ?? "—"}</TableCell>
-            <TableCell>
-              <Badge variant={ESTADO_BADGE[item.estado] ?? "outline"}>{ESTADO_LABEL[item.estado] ?? item.estado}</Badge>
-            </TableCell>
-            {mostrarEmpresa && <TableCell className="text-muted-foreground">{item.empresa_nombre ?? "—"}</TableCell>}
-            <TableCell className="text-muted-foreground">{item.asignado_a ?? "—"}</TableCell>
-            <TableCell className="text-muted-foreground">{formatDate(item.fecha_alta)}</TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => onHistorial(item)} aria-label="Historial"><History className="size-3.5" /></Button>
-                {canWrite && (
-                  <>
-                    <Button variant="ghost" size="sm" onClick={() => onEditar(item)} aria-label="Editar"><Pencil className="size-3.5" /></Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={deletingId === item.id} onClick={() => onEliminar(item.id)} aria-label="Eliminar">
-                      {deletingId === item.id ? "..." : <Trash2 className="size-3.5" />}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
+    <Table patron="datos">
+      <Encabezado columnas={columnas} />
+      {loading ? (
+        <FilasEsqueleto columnas={columnas} />
+      ) : items.length === 0 ? (
+        /* Sin `claveSujeto`: el sujeto de la frase sería la EMPRESA, y acá la empresa es un chip
+           más —no el sujeto de "X no tiene ítems"—, porque el ítem pertenece al inventario y no a
+           una persona. La frase arranca impersonal: "No hay ítems con…". */
+        <TablaVacia
+          colSpan={columnas.length}
+          chips={chips}
+          sustantivo="ítems"
+          onLimpiarTodo={onLimpiarTodo}
+          accion={accionVacio}
+        />
+      ) : (
+        <TableBody>
+          {items.map((item) => (
+            <TableRow key={item.id} className="group">
+              <TableCell className="font-medium">{item.nombre}</TableCell>
+              <TableCell className="text-muted-foreground">{item.tipo}</TableCell>
+              <TableCell className="text-muted-foreground">{item.numero_serie ?? "—"}</TableCell>
+              <TableCell>
+                {/* El estilo sale de `_grillaInventario`: ninguno de los cuatro es azul. */}
+                <Badge variant="outline" className={ESTADO_ITEM_ESTILO[item.estado] ?? ""}>
+                  {ESTADO_ITEM_LABEL[item.estado] ?? item.estado}
+                </Badge>
+              </TableCell>
+              {mostrarEmpresa && <TableCell className="text-muted-foreground">{item.empresa_nombre ?? "—"}</TableCell>}
+              <TableCell className="text-muted-foreground">{item.asignado_a ?? "—"}</TableCell>
+              <TableCell className="text-muted-foreground tabular-nums">{formatDate(item.fecha_alta)}</TableCell>
+              <TableCell>
+                {/* 🔴 SIEMPRE VISIBLES, sólo cambian de color al apuntar (§3). El historial va
+                    incluso sin permiso de escritura: es una LECTURA, y la sección la tiene todo
+                    el que llega a esta pestaña. */}
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => onHistorial(item)} aria-label={`Historial de ${item.nombre}`}
+                    className={`${ACCION_CLASS} group-hover:text-primary`}>
+                    <History className="size-4" aria-hidden="true" />
+                  </button>
+                  {canWrite && (
+                    <>
+                      <button type="button" onClick={() => onEditar(item)} aria-label={`Editar ${item.nombre}`}
+                        className={`${ACCION_CLASS} group-hover:text-primary`}>
+                        <Pencil className="size-4" aria-hidden="true" />
+                      </button>
+                      <button type="button" onClick={() => onEliminar(item.id)} disabled={deletingId === item.id}
+                        aria-label={`Eliminar ${item.nombre}`}
+                        className={`${ACCION_CLASS} group-hover:text-destructive`}>
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      )}
     </Table>
   )
 }

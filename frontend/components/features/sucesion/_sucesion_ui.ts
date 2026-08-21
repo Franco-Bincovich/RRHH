@@ -27,16 +27,32 @@ export function toEmpleadoCelda(e: EmpleadoMapa): EmpleadoCelda {
 
 // ─── Clases ───────────────────────────────────────────────────────────────────
 
-// Clase del badge de nivel (potencial/desempeño). El <span> que la usa vive en
-// AnalisisAreaModal, su único consumidor: acá no entra JSX.
+/*
+ * 🔴 LOS COLORES SALEN DE LA PALETA SEMÁNTICA, NO DE LA ESCALA CRUDA DE TAILWIND.
+ *
+ * Acá decía `bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 …`: seis valores escritos a
+ * mano por nivel, elegidos de la escala de Tailwind y no de la paleta del sistema. Eso tiene dos
+ * consecuencias que no son estéticas:
+ *   · el contraste de esos pares NO lo mide `app/contrasteTokens.test.ts`, que barre los diez
+ *     pares fondo/texto de la paleta en los dos temas. Un `emerald-800` sobre `emerald-100` puede
+ *     quedar por debajo del mínimo WCAG y nadie se entera.
+ *   · un ajuste de la paleta —el del 19/8 subió tres pares— deja estos colores donde estaban, así
+ *     que "verde" empieza a significar dos verdes distintos según la pantalla.
+ *
+ * ⚠️ NO es el caso de los 26 hex de `colorEmpresa` en /organigrama: aquéllos son IDENTIDAD (cada
+ * empresa su color, sin orden ni significado) y por eso se dejan como están. Estos tres son
+ * ESTADO en una escala mal→bien, que es exactamente lo que el par danger/warning/success nombra.
+ */
 export const NIVEL_BADGE_CLASS: Record<string, string> = {
-  alto: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
-  medio: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  bajo: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+  alto: "bg-success-wash text-success",
+  medio: "bg-warning-wash text-warning",
+  bajo: "bg-danger-wash text-destructive",
 }
 
+// La barra de readiness es un relleno sólido, no un par fondo/texto: usa el color fuerte de cada
+// tramo. El corte en 70/40 no se tocó — es la definición del módulo, no una decisión de color.
 export function readinessBarColor(pct: number): string {
-  if (pct >= 70) return "bg-emerald-500"
-  if (pct >= 40) return "bg-amber-500"
-  return "bg-rose-500"
+  if (pct >= 70) return "bg-success"
+  if (pct >= 40) return "bg-warning"
+  return "bg-destructive"
 }

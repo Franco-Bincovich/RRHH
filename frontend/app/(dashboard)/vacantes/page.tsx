@@ -2,23 +2,20 @@
 
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Briefcase } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
+import { Button } from "@/components/ui/button"
+import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { Pagination } from "@/components/ui/Pagination"
-import { EmptyState } from "@/components/ui/EmptyState"
-import { ErrorState } from "@/components/ui/ErrorState"
 import { VacanteModal } from "@/components/features/vacantes/VacanteModal"
 import { VacantesTable } from "@/components/features/vacantes/VacantesTable"
-import { VacantesFiltros, VacantesTableSkeleton } from "@/components/features/vacantes/VacantesFiltros"
+import { useFiltrosVacantes } from "@/components/features/vacantes/useFiltrosVacantes"
 import { MailsPendientes } from "@/components/features/vacantes/MailsPendientes"
 import { VacantesAcciones } from "@/components/features/vacantes/VacantesAcciones"
 import { fetchVacantes } from "@/services/vacantes"
-import { fetchEmpresas } from "@/services/empresas"
-import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { EstadoVacante, Vacante } from "@/types/vacantes"
-import type { Empresa } from "@/types/empresa"
 
 const PAGE_SIZE = 20
 
@@ -26,56 +23,38 @@ export default function VacantesPage() {
   const router = useRouter()
   const canWrite = useCanWrite()
 
-  // empresa activa del topbar — estable durante la sesión (recarga al cambiar)
-  const [empresaActivaId, setEmpresaActivaIdLocal] = useState<string | null>(null)
-
   const [vacantes, setVacantes] = useState<Vacante[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [estadoFilter, setEstadoFilterRaw] = useState<EstadoVacante | "">("")
   const [modalOpen, setModalOpen] = useState(false)
 
-  // filtro de empresa en columna (solo activo cuando topbar = "Todas")
-  const [empresaFiltro, setEmpresaFiltroRaw] = useState("")
-  // 🔴 Cambiar un filtro vuelve a la página 1 (invariante 4 del bloque B): filtrar parado en
-  // la 7 pediría una página que el resultado nuevo no tiene y la grilla saldría vacía.
-  const setEstadoFilter = (v: EstadoVacante | "") => { setPage(1); setEstadoFilterRaw(v) }
-  const setEmpresaFiltro = (v: string) => { setPage(1); setEmpresaFiltroRaw(v) }
-  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  // 🔴 Cambiar un filtro vuelve a la página 1 (invariante 4 del bloque B): filtrar parado en la 7
+  // pediría una página que el resultado nuevo no tiene y la grilla saldría vacía.
+  const { empresaActivaId, empresaOverride, estadoFiltro, campos } =
+    useFiltrosVacantes(() => setPage(1))
 
-  useEffect(() => {
-    const id = getEmpresaActivaId()
-    setEmpresaActivaIdLocal(id)
-    if (!id) {
-      fetchEmpresas()
-        .then((res) => setEmpresas(res.items.filter((e) => e.activa)))
-        .catch(() => {})
-    }
-  }, [])
+  const chips = chipsDeCampos(campos)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(false)
     try {
-      // si topbar = "Todas" y hay filtro de columna activo, pasar override
-      const empresaOverride = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
-      const data = await fetchVacantes(estadoFilter || undefined, empresaOverride, page, PAGE_SIZE)
+      const data = await fetchVacantes(estadoFiltro || undefined, empresaOverride, page, PAGE_SIZE)
       setVacantes(data.items)
+      // El total sale del wrapper del backend, NUNCA de `data.items.length`.
       setTotal(data.total)
     } catch {
       setError(true)
     } finally {
       setLoading(false)
     }
-  }, [estadoFilter, empresaActivaId, empresaFiltro, page])
+  }, [estadoFiltro, empresaOverride, page])
 
   useEffect(() => {
     load()
   }, [load])
-
-  const mostrarFiltroEmpresa = !empresaActivaId && empresas.length > 0
 
   return (
     <div>
@@ -88,39 +67,41 @@ export default function VacantesPage() {
             // `total > 0` y no `vacantes.length > 0`: en la página 2 el largo de la página no
             // dice si hay algo que exportar — lo dice el total del filtro.
             hayFilas={!loading && !error && total > 0}
-            canWrite={canWrite} estadoFiltro={estadoFilter} empresaFiltro={empresaFiltro}
+            canWrite={canWrite}
+            estadoFiltro={(estadoFiltro || "") as EstadoVacante | ""}
+            empresaFiltro={empresaOverride ?? ""}
             onNueva={() => setModalOpen(true)}
           />
         }
       />
 
-      <VacantesFiltros
-        mostrarEmpresa={mostrarFiltroEmpresa} empresas={empresas}
-        empresaFiltro={empresaFiltro} onEmpresa={setEmpresaFiltro}
-        estadoFiltro={estadoFilter} onEstado={setEstadoFilter}
+      {/* `panel`: la forma completa del patrón de filtros (caja propia y los chips de la fila
+          inferior). Reemplaza a `VacantesFiltros`, que eran dos `<Select>` sueltos sin chips.
+          Sin "Más filtros": con dos filtros —y uno solo fuera del modo consolidado— esconder uno
+          atrás de un botón no compra nada. Ver `_camposVacantes.ts`. */}
+      <FiltersBar campos={campos} panel disabled={loading} />
+
+      <VacantesTable
+        vacantes={vacantes}
+        loading={loading}
+        error={error}
+        mostrarEmpresa={!empresaActivaId}
+        onRetry={load}
+        onAbrir={(id) => router.push(`/vacantes/${id}`)}
+        chips={chips}
+        onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
+        accionVacio={canWrite ? (
+          <Button className="min-h-11" onClick={() => setModalOpen(true)}>Crear la primera</Button>
+        ) : undefined}
       />
 
-      {loading && <VacantesTableSkeleton />}
-
-      {!loading && error && <ErrorState action={load} />}
-
-      {!loading && !error && vacantes.length === 0 && (
-        <EmptyState
-          icon={<Briefcase />}
-          title="Sin resultados"
-          description="No hay vacantes que coincidan con el filtro seleccionado."
-        />
-      )}
-
+      {/*
+       * 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS, no sólo cuando hay más de una página. Antes aparecía
+       * con `total > PAGE_SIZE` y además SIN esperar a que terminara la carga, así que la barra
+       * se dibujaba sobre el esqueleto con el total del pedido anterior. El total que muestra es
+       * el TOTAL FILTRADO del backend, no `vacantes.length`.
+       */}
       {!loading && !error && vacantes.length > 0 && (
-        <VacantesTable
-          vacantes={vacantes}
-          mostrarEmpresa={!empresaActivaId}
-          onAbrir={(id) => router.push(`/vacantes/${id}`)}
-        />
-      )}
-
-      {total > PAGE_SIZE && (
         <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
       )}
 

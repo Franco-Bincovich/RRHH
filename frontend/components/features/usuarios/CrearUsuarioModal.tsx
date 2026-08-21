@@ -5,11 +5,14 @@ import { useEffect, useState } from "react"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { FormErrores } from "@/components/ui/FormErrores"
+import { AVISO_PASSWORD_UNICA } from "@/components/features/usuarios/_avisos"
 import { EmpleadoLiderSelect } from "@/components/features/usuarios/EmpleadoLiderSelect"
 import { SelectField, TextField } from "@/components/features/usuarios/_fields"
 import { useEmpleadosPorRol } from "@/hooks/useEmpleadosPorRol"
@@ -96,13 +99,21 @@ export function CrearUsuarioModal({ open, onClose, onCreated }: CrearUsuarioModa
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-lg">
+      {/* El ancho (560px) y los campos de 34px los pone el patrón, no el modal: por eso ya no
+          lleva `max-w-lg`. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle>Crear usuario</DialogTitle>
+          {/* La línea que explica la CONSECUENCIA (§3). El texto y su porqué viven en
+              `_avisos.ts`: es una afirmación sobre el sistema, no una decoración del modal. */}
+          <DialogDescription>{AVISO_PASSWORD_UNICA}</DialogDescription>
         </DialogHeader>
 
         <form id="crear-usuario-form" onSubmit={handleSubmit} noValidate>
           <div className="flex flex-col gap-4 py-2">
+            {/* El PRIMER nivel de la validación es la CUENTA, no la lista de campos: el "qué
+                corrijo" lo contesta el segundo nivel, en cada campo. */}
+            <FormErrores cantidad={Object.values(errors).filter(Boolean).length} />
             <div className="grid grid-cols-2 gap-4">
               <TextField id="nombre" label="Nombre" value={form.nombre} onChange={field("nombre")} error={errors.nombre} />
               <TextField id="apellido" label="Apellido" value={form.apellido} onChange={field("apellido")} error={errors.apellido} />

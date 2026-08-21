@@ -1,11 +1,14 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { FileDown } from "lucide-react"
+import { FileDown, Network } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/ui/EmptyState"
+import { ErrorState } from "@/components/ui/ErrorState"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ArbolEmpresa } from "@/components/features/organigrama/ArbolEmpresa"
 import { ArbolProyecto, type ArbolProyectoRef } from "@/components/features/organigrama/ArbolProyecto"
 import { CardsProyecto } from "@/components/features/organigrama/CardsProyecto"
@@ -23,12 +26,17 @@ const TABS: { id: Vista; label: string; visible: boolean }[] = [
 ]
 const TABS_VISIBLES = TABS.filter((t) => t.visible)
 
+/**
+ * El esqueleto tiene la FORMA del organigrama —una raíz y sus hijos— y no una pila de barras: así
+ * la pantalla no cambia de forma cuando llegan los datos. Usa el shimmer de 1,2s que pide §3, no
+ * el `animate-pulse` de 2s.
+ */
 function OrgSkeleton() {
   return (
-    <div className="flex flex-col items-center gap-4 pt-6 animate-pulse">
-      <div className="h-12 w-40 rounded-xl bg-muted" />
+    <div className="flex flex-col items-center gap-4 pt-6">
+      <Skeleton shimmer className="h-12 w-40 rounded-xl" />
       <div className="flex gap-6">
-        {[1, 2, 3].map((i) => <div key={i} className="h-28 w-40 rounded-xl bg-muted" />)}
+        {[1, 2, 3].map((i) => <Skeleton key={i} shimmer className="h-28 w-40 rounded-xl" />)}
       </div>
     </div>
   )
@@ -42,8 +50,8 @@ export default function OrganigramaPage() {
   const arbolRef                  = useRef<ArbolProyectoRef>(null)
 
   // Carga idempotente de los proyectos (compartida por árbol y cards): fetch una sola vez.
-  const cargarProyectos = useCallback(async () => {
-    if (orgData) return
+  const cargarProyectos = useCallback(async (forzar = false) => {
+    if (orgData && !forzar) return
     setLoading(true); setError(null)
     try { setOrgData(await fetchOrgProyectos()) }
     catch { setError("No se pudieron cargar los proyectos.") }
@@ -103,7 +111,21 @@ export default function OrganigramaPage() {
             dos vistas comparten. Duplicarlos adentro de cada panel los haría divergir. */}
         {mostrarProyectos && loading && <OrgSkeleton />}
         {mostrarProyectos && !loading && error && (
-          <p className="py-10 text-center text-sm text-destructive">{error}</p>
+          <ErrorState description={error} action={() => void cargarProyectos(true)} />
+        )}
+        {/*
+         * 🔴 EL VACÍO LLEVA COPY PROPIO, y no `textoVacio`: acá "vacío" no es un dato que falte
+         * cargar en ESTA pantalla. El organigrama por proyecto se DERIVA de las asignaciones —
+         * `proyecto_asignaciones`—, así que sin proyectos con gente asignada no hay árbol que
+         * dibujar, y el lugar donde eso se arregla es /proyectos, no acá. Decir "cuando se cargue
+         * el primero va a aparecer acá" mandaría a buscar un alta que esta pantalla no tiene.
+         */}
+        {mostrarProyectos && !loading && !error && orgData && orgData.proyectos.length === 0 && (
+          <EmptyState
+            icon={<Network />}
+            title="Todavía no hay nada que dibujar"
+            description="El organigrama por proyecto se arma con las asignaciones: aparece en cuanto un proyecto tenga colaboradores asignados, desde la pantalla de Proyectos."
+          />
         )}
 
         <TabPanel value="proyecto-arbol">

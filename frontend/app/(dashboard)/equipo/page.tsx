@@ -1,29 +1,26 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { UsersRound } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { EmptyState } from "@/components/ui/EmptyState"
-import { ErrorState } from "@/components/ui/ErrorState"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
+import { EquipoTable } from "@/components/features/equipo/EquipoTable"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { exportarEquipo, fetchEquipo } from "@/services/equipo"
 import type { EquipoMiembro } from "@/types/equipo"
 
-function TableSkeleton() {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton key={i} className="h-12 w-full rounded-lg" />
-      ))}
-    </div>
-  )
-}
-
+/**
+ * "Mi equipo": el roster de ownership de quien está mirando.
+ *
+ * ⚠️ ES LA ÚNICA PANTALLA DE ESTA TANDA SIN FILTROS NI PIE, y no le faltan: `GET /api/equipo` no
+ * acepta un solo Query y devuelve la lista entera —"sin paginación: lista corta", dice su
+ * router—, así que no hay chips que mostrar ni `total` del backend que poner en un pie. Lo que sí
+ * toma del patrón es la tabla: `patron="datos"`, los anchos declarados, el esqueleto con la misma
+ * grilla y el vacío adentro de la tabla. Ver `EquipoTable`.
+ *
+ * 🔴 `miembros.length` COMO CONTEO ES CORRECTO **ACÁ Y SÓLO ACÁ**: el endpoint devuelve TODO, así
+ * que el largo del array ES el total. En cualquier listado paginado ese mismo `.length` es el bug
+ * que ya apareció tres veces en el repo (`paginacionTotales.test.ts`).
+ */
 export default function EquipoPage() {
   const [miembros, setMiembros] = useState<EquipoMiembro[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,38 +52,7 @@ export default function EquipoPage() {
         action={<ExportMenu onExport={exportarEquipo} />}
       />
 
-      {loading && <TableSkeleton />}
-
-      {!loading && error && <ErrorState action={load} />}
-
-      {!loading && !error && miembros.length === 0 && (
-        <EmptyState
-          icon={<UsersRound />}
-          title="Todavía no tenés colaboradores a cargo"
-          description="Cuando se te asignen personas como responsable directo, van a aparecer acá."
-        />
-      )}
-
-      {!loading && !error && miembros.length > 0 && (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Apellido</TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Empresa</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {miembros.map((m) => (
-              <TableRow key={m.id}>
-                <TableCell className="font-medium">{m.apellido}</TableCell>
-                <TableCell>{m.nombre}</TableCell>
-                <TableCell className="text-muted-foreground">{m.empresa ?? "—"}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+      <EquipoTable items={miembros} loading={loading} error={error} onRetry={load} />
     </div>
   )
 }

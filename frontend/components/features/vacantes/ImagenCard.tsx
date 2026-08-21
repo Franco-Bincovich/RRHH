@@ -33,7 +33,11 @@ export function ImagenCard({ adjunto, url, canWrite, busy, onMarcarPrincipal, on
           <Skeleton className="size-full" />
         )}
         {esPrincipal && (
-          <Badge className="absolute left-2 top-2 gap-1">
+          /* 🔴 NO ES AZUL: un `<Badge>` sin variante es `bg-primary`, el relleno que el patrón
+             reserva al chip de filtro (§3). Va con el par de éxito, que además se lee sobre
+             cualquier foto — el azul del sistema no tiene contraste garantizado contra una
+             imagen arbitraria. */
+          <Badge variant="outline" className="absolute left-2 top-2 gap-1 bg-success-wash text-success border-success-line">
             <Star className="size-3 fill-current" /> Principal
           </Badge>
         )}

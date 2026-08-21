@@ -7,8 +7,9 @@ import { PageHeader } from "@/components/layout/PageHeader"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Input } from "@/components/ui/input"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { PeriodSelector } from "@/components/features/shared/PeriodSelector"
+import { MESES_LARGOS } from "@/components/features/costos/formatos"
 import { KPIsHorasPanel } from "@/components/features/horasCliente/KPIsHorasPanel"
 import { ClientesColapsables } from "@/components/features/horasCliente/ClientesColapsables"
 import { DetalleEmpleadoModal } from "@/components/features/horasCliente/DetalleEmpleadoModal"
@@ -43,43 +44,31 @@ export default function HorasPorClientePage() {
   )
   useEffect(() => { void load() }, [load])
 
+  /*
+   * 🔴 EL PERÍODO NO VA EN UN PANEL DE CHIPS, Y ES UNA DECISIÓN. `mes` y `anio` son `Query(...)`
+   * **sin default** en `/api/horas-cliente`: un chip promete que el filtro se puede quitar y acá
+   * quitarlo no deja la pantalla sin filtrar, deja la consulta rota. Mismo caso que /costos, y
+   * desde el 21/8/2026 el MISMO control — antes eran dos `<Input type="number">`, o sea que había
+   * que tipear "3" para ver marzo y nada impedía escribir 13.
+   */
   const filtrosUI = (
     <div className="flex items-center gap-2">
-      <Input type="number" min={1} max={12} value={mes} className="w-20"
-             aria-label="Mes" onChange={(e) => setMes(Number(e.target.value))} />
-      <Input type="number" min={2000} max={2100} value={anio} className="w-24"
-             aria-label="Año" onChange={(e) => setAnio(Number(e.target.value))} />
+      <PeriodSelector mes={mes} anio={anio} onChangeMes={setMes} onChangeAnio={setAnio} />
       {/* El MISMO filtro que el listado: el archivo no puede traer filas que no se ven. */}
       <ExportMenu onExport={(formato) => exportarHorasPorCliente(formato, filtros)} />
     </div>
   )
 
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Horas por cliente" description="Cargando..." />
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-lg" />
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !datos) {
-    return (
-      <div>
-        <PageHeader title="Horas por cliente" />
-        <ErrorState description={error ?? "No se pudieron cargar las horas."} action={load} />
-      </div>
-    )
-  }
-
   return (
     <div>
+      {/* 🔴 EL ENCABEZADO Y EL SELECTOR DE PERÍODO SE RENDERIZAN SIEMPRE. Antes había dos `return`
+          tempranos —uno de carga y otro de error— que se llevaban la pantalla entera: mientras
+          cargaba desaparecían el título, el aviso y el propio control con el que se elige el mes,
+          justo cuando el usuario está esperando el resultado de haberlo movido. */}
       <PageHeader title="Horas por cliente"
-                  description={`${datos.kpis.horas_totales} horas cargadas`}
+                  description={loading || !datos
+                    ? `${MESES_LARGOS[mes - 1]} ${anio}`
+                    : `${datos.kpis.horas_totales} horas cargadas · ${MESES_LARGOS[mes - 1]} ${anio}`}
                   action={filtrosUI} />
       {/* 🔴 En todas las demás pantallas el selector de empresa del sidebar filtra; acá no.
           Sin decirlo, un operador que cambia de empresa y ve el mismo número cree que se
@@ -89,15 +78,30 @@ export default function HorasPorClientePage() {
         empresa del menú no cambia estos números. Abrí un cliente para ver cuántas horas puso
         cada empresa.
       </p>
-      <KPIsHorasPanel kpis={datos.kpis} />
-      {datos.clientes.length === 0 ? (
-        <EmptyState icon={<Clock />} title="Sin cargas en el período"
-                    description="Nadie cargó horas en el mes seleccionado." />
+      {loading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} shimmer className="h-12 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : error || !datos ? (
+        <ErrorState description={error ?? "No se pudieron cargar las horas."} action={load} />
       ) : (
-        <ClientesColapsables
-          clientes={datos.clientes}
-          onVerDetalle={(id, nombre) => setDetalle({ id, nombre })}
-        />
+        <>
+          <KPIsHorasPanel kpis={datos.kpis} />
+          {datos.clientes.length === 0 ? (
+            /* Copy propio con el VALOR REAL del filtro, que es lo que el patrón busca aunque acá
+               no haya chips de dónde sacarlo: nombrar el período convierte la pantalla vacía en
+               la respuesta a la pregunta que trajo hasta acá. */
+            <EmptyState icon={<Clock />} title="Sin cargas en el período"
+                        description={`Nadie cargó horas en ${MESES_LARGOS[mes - 1]} ${anio}.`} />
+          ) : (
+            <ClientesColapsables
+              clientes={datos.clientes}
+              onVerDetalle={(id, nombre) => setDetalle({ id, nombre })}
+            />
+          )}
+        </>
       )}
       <DetalleEmpleadoModal
         empleadoId={detalle?.id ?? null}

@@ -13,8 +13,15 @@ export interface ClientesFiltros {
  * lo que hace estructuralmente imposible que un filtro quede en una sola de las dos puntas —
  * y con él, que el archivo traiga más filas de las que se ven en pantalla.
  *
- * ⚠️ El filtro de EMPRESA no viaja acá: el backend lo toma del header `X-Empresa-Id` (es una
- * VISTA, la manda el selector del sidebar). Por eso el export tampoco lo lleva como param.
+ * 🔴 NO HAY FILTRO DE EMPRESA, NI ACÁ NI EN EL HEADER, y este comentario decía lo contrario:
+ * afirmaba que "el backend lo toma del header `X-Empresa-Id`". **No lo toma.** El catálogo es
+ * GLOBAL desde las migraciones 108/109 —se borró `clientes.empresa_id` y el índice único de
+ * nombre pasó a ser de todo el sistema—, y `routers/clientes.py` lo dice explícito: "Sin
+ * `X-Empresa-Id`: el catálogo es GLOBAL y el selector del sidebar no lo acota". El efecto
+ * observable era el mismo (el export no lleva el param), pero el motivo escrito era falso, y de
+ * ese motivo se deduce mal la próxima decisión: alguien que lo lea va a creer que basta con
+ * cambiar de empresa en el sidebar para ver otro catálogo. La pantalla lo avisa en su subtítulo
+ * (`_avisoGlobal.ts`).
  */
 function queryClientes(f: ClientesFiltros): Record<string, string | undefined> {
   return { incluir_inactivos: f.incluirInactivos ? "true" : undefined }

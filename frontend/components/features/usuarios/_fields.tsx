@@ -44,10 +44,24 @@ interface PasswordFieldProps {
   error?: string
   autoComplete?: string
   disabled?: boolean
+  placeholder?: string
 }
 
-/** Campo de contraseña con mostrar/ocultar y error inline. Reusado en el form de cambio. */
-export function PasswordField({ id, label, value, onChange, error, autoComplete, disabled }: PasswordFieldProps) {
+/**
+ * Campo de contraseña con mostrar/ocultar y error inline. Lo usan el form de cambio de contraseña
+ * y el de `/login` — que hasta esta tanda tenía su propia copia del campo, del ojo y del
+ * `aria-label` de mostrar/ocultar, con el mismo markup escrito dos veces.
+ *
+ * 🔴 EL BOTÓN DEL OJO MIDE 44px Y ANTES MEDÍA 16. Era un `<button>` sin caja, del tamaño del
+ * ícono, centrado con `-translate-y-1/2`: en un teléfono es un blanco de 16px al lado del borde
+ * de la pantalla. Ahora ocupa el alto completo del campo y 44px de ancho (`inset-y-0 w-11`), sin
+ * mover el ícono de lugar. El `pr-11` del input es lo que evita que el texto de la contraseña
+ * pase por debajo.
+ *
+ * `tabIndex={-1}` se conserva: mostrar la contraseña no es un paso del formulario y meterlo en el
+ * recorrido del tabulador obliga a saltarlo en cada campo.
+ */
+export function PasswordField({ id, label, value, onChange, error, autoComplete, disabled, placeholder }: PasswordFieldProps) {
   const [show, setShow] = useState(false)
   return (
     <div className="space-y-1.5">
@@ -60,9 +74,10 @@ export function PasswordField({ id, label, value, onChange, error, autoComplete,
           onChange={onChange}
           autoComplete={autoComplete}
           disabled={disabled}
+          placeholder={placeholder}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? `${id}-error` : undefined}
-          className="min-h-[2.75rem] pr-10"
+          className="min-h-[2.75rem] pr-11"
         />
         <button
           type="button"
@@ -70,7 +85,7 @@ export function PasswordField({ id, label, value, onChange, error, autoComplete,
           disabled={disabled}
           tabIndex={-1}
           aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none"
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
         >
           {show ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
         </button>

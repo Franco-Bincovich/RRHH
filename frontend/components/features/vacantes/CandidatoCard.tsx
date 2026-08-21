@@ -13,12 +13,21 @@ const ETAPA_LABELS: Record<EtapaPipeline, string> = {
   oferta: "Oferta",
 }
 
-const ETAPA_VARIANTS: Record<EtapaPipeline, "default" | "secondary" | "outline"> = {
-  postulado: "outline",
-  assessment: "secondary",
-  entrevista_rrhh: "default",
-  entrevista_tecnica: "default",
-  oferta: "secondary",
+/**
+ * 🔴 NINGUNA ETAPA ES AZUL, y ese es el cambio. Las dos entrevistas venían con
+ * `variant="default"`, o sea `bg-primary`: un relleno azul en la tarjeta de cada candidato,
+ * compitiendo con el único relleno azul que el patrón permite en una pantalla — el chip de filtro
+ * (`docs/SISTEMA-DE-DISENO.md` §3). El pipeline es un EMBUDO y la escala lo sigue: contorno al
+ * entrar, gris a medida que avanza y el par de éxito solo en `oferta`, que es el único hito que
+ * esta tarjeta celebra. Los pares salen de la paleta, medidos en los dos temas por
+ * `app/contrasteTokens.test.ts`.
+ */
+const ETAPA_ESTILOS: Record<EtapaPipeline, string> = {
+  postulado: "",
+  assessment: "bg-secondary text-secondary-foreground border-border",
+  entrevista_rrhh: "bg-secondary text-secondary-foreground border-border",
+  entrevista_tecnica: "bg-secondary text-secondary-foreground border-border",
+  oferta: "bg-success-wash text-success border-success-line",
 }
 
 export interface CandidatoCardProps {
@@ -73,7 +82,7 @@ export function CandidatoCard({ nombre, cargoAnterior, fechaAplicacion, etapa, c
         )}
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-2">
-        <Badge variant={ETAPA_VARIANTS[etapa]}>{ETAPA_LABELS[etapa]}</Badge>
+        <Badge variant="outline" className={ETAPA_ESTILOS[etapa]}>{ETAPA_LABELS[etapa]}</Badge>
         <span className="whitespace-nowrap text-xs text-muted-foreground">{fechaAplicacion}</span>
       </div>
     </div>

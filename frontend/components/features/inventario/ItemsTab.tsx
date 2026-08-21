@@ -3,13 +3,16 @@
 import { useState } from "react"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
+
 import { Button } from "@/components/ui/button"
+import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
+import { Pagination } from "@/components/ui/Pagination"
 import { ItemModal } from "@/components/features/inventario/ItemModal"
 import { ItemsInvTable } from "@/components/features/inventario/ItemsInvTable"
 import { HistorialModal } from "@/components/features/inventario/HistorialModal"
 import { useFiltrosItemsInv } from "@/components/features/inventario/useFiltrosItemsInv"
-import { Pagination } from "@/components/ui/Pagination"
-import { Select } from "@/components/ui/select"
+import { useListadoItemsInv } from "@/components/features/inventario/useListadoItemsInv"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { deleteItem, exportarInventarioItems } from "@/services/inventario"
 import type { InventarioItem } from "@/types/inventario"
@@ -21,15 +24,13 @@ const PAGE_SIZE = 20
 
 export function ItemsTab({ canWrite }: { canWrite: boolean }) {
   const [page, setPage] = useState(1)
-  const {
-    empresaActivaId, empresas, empresaFiltro, cambiarEmpresa,
-    estadoFiltro, setEstadoFiltro, areaFiltro, setAreaFiltro, opcionesArea,
-    items, loading, error, load, filtros, total,
-  } = useFiltrosItemsInv(page, PAGE_SIZE)
   // 🔴 TODO cambio de filtro vuelve a la página 1 (invariante 4 del bloque B). Sin esto, filtrar
   // parado en la página 7 pide una página que el resultado nuevo no tiene y la tabla sale vacía
   // sobre un filtro que sí tiene filas — se lee como "no hay nada", no como "estás en la 7".
-  const filtrar = <T,>(fn: (v: T) => void) => (v: T) => { setPage(1); fn(v) }
+  const { empresaActivaId, campos, filtros } = useFiltrosItemsInv(() => setPage(1))
+  const { items, loading, error, total, load } = useListadoItemsInv(filtros, page, PAGE_SIZE)
+  const chips = chipsDeCampos(campos)
+
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<InventarioItem | null>(null)
   const [historialItem, setHistorialItem] = useState<InventarioItem | null>(null)
@@ -41,34 +42,21 @@ export function ItemsTab({ canWrite }: { canWrite: boolean }) {
   }
 
   const mostrarEmpresa = !empresaActivaId
+  const nuevoBtn = (
+    <Button className="min-h-11" onClick={() => { setEditing(null); setModalOpen(true) }}>
+      <Plus className="size-4" /> Nuevo ítem
+    </Button>
+  )
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          {mostrarEmpresa && empresas.length > 0 && (
-            <Select size="sm" className="w-auto" value={empresaFiltro} onChange={(e) => filtrar(cambiarEmpresa)(e.target.value)} aria-label="Filtrar por empresa">
-              <option value="">Todas las empresas</option>
-              {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-            </Select>
-          )}
-          {opcionesArea.length > 0 && (
-            <Select size="sm" className="w-auto" value={areaFiltro} onChange={(e) => filtrar(setAreaFiltro)(e.target.value)} aria-label="Filtrar por área">
-              <option value="">Todas las áreas</option>
-              {opcionesArea.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
-            </Select>
-          )}
-          <Select size="sm" className="w-auto" value={estadoFiltro} onChange={(e) => filtrar(setEstadoFiltro)(e.target.value)} aria-label="Filtrar por estado">
-            <option value="">Todos los estados</option>
-            <option value="disponible">Disponible</option>
-            <option value="asignado">Asignado</option>
-            <option value="en_reparacion">En reparación</option>
-            <option value="baja">Baja</option>
-          </Select>
-        </div>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        {/* `panel`: la forma completa del patrón de filtros. Reemplaza a los tres `<Select>`
+            sueltos que esta pestaña dibujaba a mano, y que quedaban activos SIN chip. */}
+        <div className="min-w-[18rem] flex-1"><FiltersBar campos={campos} panel disabled={loading} /></div>
         <div className="flex gap-2">
           <ExportMenu onExport={(f) => exportarInventarioItems(f, filtros)} />
-          {canWrite && <Button className="min-h-11" onClick={() => { setEditing(null); setModalOpen(true) }}><Plus className="size-4" /> Nuevo ítem</Button>}
+          {canWrite && nuevoBtn}
         </div>
       </div>
 
@@ -78,9 +66,15 @@ export function ItemsTab({ canWrite }: { canWrite: boolean }) {
         onHistorial={setHistorialItem}
         onEditar={(item) => { setEditing(item); setModalOpen(true) }}
         onEliminar={handleDelete}
+        chips={chips}
+        onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
+        accionVacio={canWrite ? nuevoBtn : undefined}
       />
 
-      {total > PAGE_SIZE && (
+      {/* 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS (era `total > PAGE_SIZE`) y sólo después de cargar:
+          sin la guarda, la barra queda mostrando el total del pedido ANTERIOR sobre el esqueleto.
+          El total es el del backend, no `items.length`. */}
+      {!loading && !error && items.length > 0 && (
         <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
       )}
 

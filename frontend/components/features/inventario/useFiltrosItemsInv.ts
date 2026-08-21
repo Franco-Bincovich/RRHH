@@ -1,34 +1,34 @@
 "use client"
 
 /**
- * Estado de los filtros del catálogo de ítems (empresa, área y estado) + la carga del listado.
- * Extraído de ItemsTab, que estaba en 152 contra un límite de 150.
+ * Estado de los filtros del catálogo de ítems (empresa, área y estado) y las opciones que los
+ * llenan. Extraído de ItemsTab, que estaba en 152 contra un límite de 150.
  *
- * Molde: useFiltrosAsignacionesInv.ts. Difiere en dos cosas, las dos a propósito: acá NO se
- * arma el array de `FiltroCampo` para <FiltersBar> —esta pestaña renderiza sus `<select>` a
- * mano y cambiarlos sería tocar la UI— y sí se lleva el listado, para que ItemsTab quede como
- * orquestador.
+ * ⚠️ ACÁ DECÍA que esta pestaña "renderiza sus `<select>` a mano y cambiarlos sería tocar la UI",
+ * y por eso no armaba `FiltroCampo`. **Eso dejó de ser cierto el 21/8/2026**: al migrar la
+ * pantalla al patrón del bloque B, los tres `<select>` sueltos pasaron a `<FiltersBar panel>` y
+ * los campos se arman en `_camposInventario.ts` —igual que en la pestaña hermana— para que
+ * produzcan CHIPS y para que un test los pueda ejercitar sin DOM.
+ *
+ * ⚠️ Y LA CARGA DEL LISTADO SE FUE a `useListadoItemsInv`: con los campos adentro, este archivo
+ * pasaba de 80 líneas, que es el límite de un hook. El corte es el mismo que ya tienen ausencias
+ * y vacaciones — acá vive "qué está elegido", allá "qué llegó".
  *
  * `filtros` es UN solo objeto que consumen el listado Y el export: si se suma un filtro le
  * llega a los dos, que es la invariante del Bloque B.
  */
-import { useCallback, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 
-import { etiquetaArea } from "@/components/features/shared/filtros"
+import { construirCamposItems } from "@/components/features/inventario/_camposInventario"
 import { fetchAreas } from "@/services/areas"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
-import { fetchItems, type ItemsFiltros } from "@/services/inventario"
+import type { ItemsFiltros } from "@/services/inventario"
 import type { Area } from "@/types/area"
 import type { Empresa } from "@/types/empresa"
-import type { InventarioItem } from "@/types/inventario"
 
-export function useFiltrosItemsInv(page = 1, pageSize = 20) {
+export function useFiltrosItemsInv(onFiltroChange: () => void) {
   const [empresaActivaId] = useState<string | null>(getEmpresaActivaId)
-  const [items, setItems] = useState<InventarioItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
-  const [total, setTotal] = useState(0)
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [empresaFiltro, setEmpresaFiltro] = useState("")
   const [estadoFiltro, setEstadoFiltro] = useState("")
@@ -48,17 +48,13 @@ export function useFiltrosItemsInv(page = 1, pageSize = 20) {
     fetchAreas(empresaId || undefined).then(setAreas).catch(() => setAreas([]))
   }, [empresaId])
 
-  const load = useCallback(async () => {
-    setLoading(true); setError(false)
-    try {
-      const override = !empresaActivaId && empresaFiltro ? empresaFiltro : undefined
-      const data = await fetchItems({ empresaIdOverride: override, estado: estadoFiltro || undefined, areaId: areaFiltro || undefined }, page, pageSize)
-      setItems(data.items); setTotal(data.total)
-    } catch { setError(true) }
-    finally { setLoading(false) }
-  }, [empresaActivaId, empresaFiltro, estadoFiltro, areaFiltro, page, pageSize])
+  /** Al cambiar de empresa el área elegida deja de existir: se limpia, como en asignaciones. */
+  const cambiarEmpresa = (v: string) => { setEmpresaFiltro(v); setAreaFiltro("") }
 
-  useEffect(() => { load() }, [load])
+  const campos = construirCamposItems({
+    empresaActivaId, empresas, empresaFiltro, cambiarEmpresa,
+    estadoFiltro, setEstadoFiltro, areas, areaFiltro, setAreaFiltro, onFiltroChange,
+  })
 
   const filtros: ItemsFiltros = {
     empresaIdOverride: !empresaActivaId && empresaFiltro ? empresaFiltro : undefined,
@@ -66,14 +62,5 @@ export function useFiltrosItemsInv(page = 1, pageSize = 20) {
     areaId: areaFiltro || undefined,
   }
 
-  /** Al cambiar de empresa el área elegida deja de existir: se limpia, como en asignaciones. */
-  const cambiarEmpresa = (v: string) => { setEmpresaFiltro(v); setAreaFiltro("") }
-
-  const opcionesArea = areas.map((a) => ({ value: a.id, label: etiquetaArea(a, empresas, Boolean(empresaId)) }))
-
-  return {
-    empresaActivaId, empresas, empresaFiltro, cambiarEmpresa,
-    estadoFiltro, setEstadoFiltro, areaFiltro, setAreaFiltro, opcionesArea,
-    items, loading, error, load, filtros, total,
-  }
+  return { empresaActivaId, campos, filtros }
 }

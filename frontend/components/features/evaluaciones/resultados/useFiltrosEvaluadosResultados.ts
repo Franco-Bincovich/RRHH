@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { fetchProyectos } from "@/services/proyectos"
 import type { Proyecto } from "@/types/proyecto"
 
-import type { FiltroCampo } from "@/components/ui/FiltersBar"
+import { construirCamposEvaluados } from "@/components/features/evaluaciones/resultados/_camposEvaluados"
 
 /**
  * Filtros del listado de evaluados. LOS CUATRO SON SERVER-SIDE.
@@ -18,6 +18,10 @@ import type { FiltroCampo } from "@/components/ui/FiltersBar"
  *
  * Ahora el hook no ve datos. Sólo produce `campos` (la UI) y `filtros` (lo que viaja), y el
  * panel se los pasa al backend en el listado Y en el export, por el mismo traductor.
+ *
+ * ⚠️ El ARMADO de los campos se mudó a `_camposEvaluados.ts` al migrar la pantalla al patrón del
+ * bloque B: es lo único que un test puede ejercitar sin DOM, y ahí vive la decisión de qué filtro
+ * queda detrás de "Más filtros".
  *
  * @param sectores opciones del desplegable, del LOTE ENTERO — vienen en la respuesta, no de la
  *   página. Derivarlas de lo visible dejaría fuera del desplegable a los sectores que no
@@ -36,33 +40,10 @@ export function useFiltrosEvaluadosResultados(sectores: string[], onFiltroChange
     fetchProyectos().then((r) => setProyectos(r.items)).catch(() => setProyectos([]))
   }, [])
 
-  /** Un solo lugar donde "setear un filtro" implica volver a la página 1. */
-  function cambiar(set: (v: string) => void) {
-    return (v: string) => {
-      set(v)
-      onFiltroChange()
-    }
-  }
-
-  const campos: FiltroCampo[] = [
-    {
-      tipo: "select", label: "Sector", value: sector, onChange: cambiar(setSector),
-      opciones: sectores.map((s) => ({ value: s, label: s })),
-    },
-    {
-      tipo: "select", label: "Perfil", value: perfil, onChange: cambiar(setPerfil),
-      opciones: [{ value: "lider", label: "Líder" }, { value: "general", label: "General" }],
-    },
-    {
-      tipo: "select", label: "Nota final", value: conNota, onChange: cambiar(setConNota),
-      opciones: [{ value: "si", label: "Con nota" }, { value: "no", label: "Sin nota" }],
-    },
-    ...(proyectos.length > 0 ? [{
-      tipo: "select" as const, label: "Proyecto", value: proyecto, onChange: cambiar(setProyecto),
-      opcionTodos: "Todos los proyectos",
-      opciones: proyectos.map((p) => ({ value: p.id, label: p.nombre })),
-    }] : []),
-  ]
+  const campos = construirCamposEvaluados({
+    sectores, sector, setSector, perfil, setPerfil, conNota, setConNota,
+    proyectos, proyecto, setProyecto, onFiltroChange,
+  })
 
   return {
     campos,

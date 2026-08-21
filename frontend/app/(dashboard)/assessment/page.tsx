@@ -1,108 +1,100 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { CampanaModal } from "@/components/features/assessment/CampanaModal"
-import { EmptyState } from "@/components/ui/EmptyState"
-import { ErrorState } from "@/components/ui/ErrorState"
-import { Badge } from "@/components/ui/badge"
+import { CampanasTabla } from "@/components/features/assessment/CampanasTabla"
+import { ResultadosTabla } from "@/components/features/assessment/ResultadosTabla"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { fetchCampanas, fetchResultados } from "@/services/assessment"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Campana, Resultado } from "@/types/assessment"
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const TIPO_LABEL: Record<string, string> = {
-  completo:   "Completo",
-  conductual: "Conductual",
-  cognitivo:  "Cognitivo",
-}
-
-const ESTADO_VARIANT: Record<string, "default" | "secondary"> = {
-  activa:   "default",
-  cerrada:  "secondary",
-  borrador: "secondary",
-  archivada: "secondary",
-}
-
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" })
-}
-
-// ─── Skeleton rows ────────────────────────────────────────────────────────────
-
-function TableSkeleton({ cols, rows = 4 }: { cols: number; rows?: number }) {
-  return (
-    <>
-      {Array.from({ length: rows }).map((_, i) => (
-        <TableRow key={i}>
-          {Array.from({ length: cols }).map((_, j) => (
-            <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-          ))}
-        </TableRow>
-      ))}
-    </>
-  )
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function AssessmentPage() {
   const router = useRouter()
+  /*
+   * 🔴 MÓDULO DESACTIVADO A PROPÓSITO (no es un bug): redirige a /dashboard y no renderiza nada.
+   * Para reactivarlo: `useState(true)` acá. El backend además lo gatea con `ASSESSMENT_ENABLED`,
+   * que por default está en `false` y hace que el router ni se monte — encender el front solo no
+   * alcanza y no expone nada.
+   *
+   * ⚠️ ES `useState` Y NO UN `const` CON LITERAL, y eso no es estilo: TS colapsa `const x = false`
+   * al tipo literal `false`, marca el cuerpo de abajo inalcanzable, pierde el narrowing y
+   * `next build` falla. Está escrito igual en /sucesion y en assessment/[id].
+   *
+   * ⚠️ Y REEMPLAZA A UN `return null` SUELTO con `// eslint-disable-next-line no-unreachable`
+   * encima. Aquello dejaba SIETE `useState` y un `useEffect` después de un return incondicional:
+   * hooks que no corren nunca, en un orden que cambiaría el día que alguien saque el return.
+   * Reactivar así era una línea que rompía las reglas de hooks sin que nadie lo viera venir.
+   */
+  const [moduloActivo] = useState(false)
 
-  // HIDDEN — módulo desactivado temporalmente; redirige sin renderizar el resto
-  useEffect(() => { router.replace("/dashboard") }, [router])
-  return null
+  useEffect(() => {
+    if (!moduloActivo) router.replace("/dashboard")
+  }, [router, moduloActivo])
 
-  // eslint-disable-next-line no-unreachable
+  if (!moduloActivo) return null
+
+  return <AssessmentContenido />
+}
+
+/*
+ * El contenido vive en un componente aparte por el mismo motivo que en /sucesion: sus dos cargas
+ * se disparan al montar, así que si estuvieran en el cuerpo de arriba la pantalla desactivada
+ * pegaría dos llamadas al backend antes de redirigir. Acá directamente no se monta.
+ */
+function AssessmentContenido() {
+  const router = useRouter()
   const [empresaActivaId] = useState<string | null>(() => getEmpresaActivaId())
-
-  const [campanas, setCampanas]   = useState<Campana[]>([])
+  const [campanas, setCampanas] = useState<Campana[]>([])
   const [resultados, setResultados] = useState<Resultado[]>([])
-  const [loadingC, setLoadingC]   = useState(true)
-  const [loadingR, setLoadingR]   = useState(true)
-  const [errorC, setErrorC]       = useState(false)
-  const [errorR, setErrorR]       = useState(false)
+  const [loadingC, setLoadingC] = useState(true)
+  const [loadingR, setLoadingR] = useState(true)
+  const [errorC, setErrorC] = useState(false)
+  const [errorR, setErrorR] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
 
   const mostrarEmpresa = !empresaActivaId
 
-  useEffect(() => {
-    fetchCampanas()
-      .then(setCampanas)
-      .catch(() => setErrorC(true))
-      .finally(() => setLoadingC(false))
-    fetchResultados()
-      .then(setResultados)
-      .catch(() => setErrorR(true))
-      .finally(() => setLoadingR(false))
+  // Las dos cargas salen del efecto para que cada `ErrorState` pueda volver a disparar SU tab:
+  // reintentar campañas no tiene por qué recargar resultados, que quizás llegaron bien. Antes el
+  // reintento era una cadena de promesas escrita entera adentro del JSX de cada tab.
+  const cargarCampanas = useCallback(() => {
+    setLoadingC(true); setErrorC(false)
+    fetchCampanas().then(setCampanas).catch(() => setErrorC(true)).finally(() => setLoadingC(false))
   }, [])
+
+  const cargarResultados = useCallback(() => {
+    setLoadingR(true); setErrorR(false)
+    fetchResultados().then(setResultados).catch(() => setErrorR(true)).finally(() => setLoadingR(false))
+  }, [])
+
+  useEffect(() => { cargarCampanas(); cargarResultados() }, [cargarCampanas, cargarResultados])
+
+  const nuevaCampana = (
+    <Button className="min-h-11" onClick={() => setModalOpen(true)}>
+      <Plus />
+      Nueva campaña
+    </Button>
+  )
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Assessment Engine"
-        description="Campañas de evaluación y resultados del modelo AREAS"
-        action={
-          <Button className="min-h-11" onClick={() => setModalOpen(true)}>
-            <Plus />
-            Nueva campaña
-          </Button>
+        /* El conteo sale del largo de la lista y NO de un `total` del backend porque acá no hay
+           wrapper paginado: el endpoint devuelve el array entero. Es el único caso en que
+           `length` es el total, y está declarado para que no se lea como el bug de siempre. */
+        description={
+          loadingC
+            ? "Campañas de evaluación y resultados del modelo AREAS"
+            : `${campanas.length} campaña${campanas.length !== 1 ? "s" : ""} · resultados del modelo AREAS`
         }
+        action={nuevaCampana}
       />
 
       <CampanaModal
@@ -117,109 +109,26 @@ export default function AssessmentPage() {
           <Tab value="resultados">Resultados</Tab>
         </TabList>
 
-        {/* ── Tab 1: Campañas ───────────────────────────────────────────── */}
         <TabPanel value="campanias">
-          {errorC ? (
-            <ErrorState action={() => { setErrorC(false); setLoadingC(true); fetchCampanas().then(setCampanas).catch(() => setErrorC(true)).finally(() => setLoadingC(false)) }} />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  {mostrarEmpresa && <TableHead>Empresa</TableHead>}
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Creada</TableHead>
-                  <TableHead className="text-right">Links</TableHead>
-                  <TableHead className="text-right">Completados</TableHead>
-                  <TableHead>Estado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loadingC ? (
-                  <TableSkeleton cols={mostrarEmpresa ? 7 : 6} />
-                ) : campanas.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={mostrarEmpresa ? 7 : 6}>
-                      <EmptyState icon={<Plus />} title="Sin campañas" description="Creá la primera campaña de assessment." />
-                    </TableCell>
-                  </TableRow>
-                ) : campanas.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-medium">{c.nombre}</TableCell>
-                    {mostrarEmpresa && (
-                      <TableCell className="text-muted-foreground">{c.empresa_nombre ?? "—"}</TableCell>
-                    )}
-                    <TableCell className="text-muted-foreground">{TIPO_LABEL[c.tipo] ?? c.tipo}</TableCell>
-                    <TableCell className="text-muted-foreground">{fmtDate(c.created_at)}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">{c.links_enviados}</TableCell>
-                    <TableCell className="text-right">
-                      <span className={c.completados === c.links_enviados && c.links_enviados > 0 ? "text-emerald-600 dark:text-emerald-400 font-medium" : ""}>
-                        {c.completados}
-                      </span>
-                      <span className="text-muted-foreground">/{c.links_enviados}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={ESTADO_VARIANT[c.estado] ?? "secondary"} className="capitalize">
-                        {c.estado}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <CampanasTabla
+            campanas={campanas}
+            loading={loadingC}
+            error={errorC}
+            onReintentar={cargarCampanas}
+            mostrarEmpresa={mostrarEmpresa}
+            accionVacio={nuevaCampana}
+          />
         </TabPanel>
 
-        {/* ── Tab 2: Resultados ─────────────────────────────────────────── */}
         <TabPanel value="resultados">
-          {errorR ? (
-            <ErrorState action={() => { setErrorR(false); setLoadingR(true); fetchResultados().then(setResultados).catch(() => setErrorR(true)).finally(() => setLoadingR(false)) }} />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Evaluado</TableHead>
-                  {mostrarEmpresa && <TableHead>Empresa</TableHead>}
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Perfil dominante</TableHead>
-                  <TableHead className="text-right">Score</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loadingR ? (
-                  <TableSkeleton cols={mostrarEmpresa ? 6 : 5} />
-                ) : resultados.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={mostrarEmpresa ? 6 : 5}>
-                      <EmptyState icon={<Plus />} title="Sin resultados" description="Todavía no hay evaluaciones completadas." />
-                    </TableCell>
-                  </TableRow>
-                ) : resultados.map((r) => (
-                  <TableRow
-                    key={r.id}
-                    className="cursor-pointer"
-                    onClick={() => router.push(`/assessment/${r.id}`)}
-                  >
-                    <TableCell className="font-medium">{r.evaluado_nombre}</TableCell>
-                    {mostrarEmpresa && (
-                      <TableCell className="text-muted-foreground">{r.empresa_nombre ?? "—"}</TableCell>
-                    )}
-                    <TableCell className="text-muted-foreground">{TIPO_LABEL[r.tipo] ?? r.tipo}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {r.fecha_completado ? fmtDate(r.fecha_completado) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      {r.perfil_dominante ? <Badge variant="outline">{r.perfil_dominante}</Badge> : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {r.score_general ?? "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <ResultadosTabla
+            resultados={resultados}
+            loading={loadingR}
+            error={errorR}
+            onReintentar={cargarResultados}
+            mostrarEmpresa={mostrarEmpresa}
+            onAbrir={(id) => router.push(`/assessment/${id}`)}
+          />
         </TabPanel>
       </Tabs>
     </div>

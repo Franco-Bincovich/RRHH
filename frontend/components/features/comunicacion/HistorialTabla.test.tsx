@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
 import { ERROR_HISTORIAL, HistorialTabla, VACIO_HISTORIAL } from "./HistorialTabla"
+import type { ChipFiltro } from "@/components/ui/filtrosChips"
 import type { MailEnviado } from "@/types/plantillas"
 
 /**
@@ -42,12 +43,22 @@ const FALLIDO: MailEnviado = {
   created_at: "2026-08-07T13:05:00+00:00",
 }
 
+/*
+ * ⚠️ `filtrado: boolean` PASÓ A SER `chips: ChipFiltro[]` al migrar la tabla al patrón del bloque
+ * B, y es el mismo dato con más información: antes la tabla sólo sabía SI había filtros puestos,
+ * ahora sabe CUÁLES, y el vacío puede nombrarlos ("No hay mails con estado No entregados") en vez
+ * de decir "ningún mail coincide con el filtro". Los tests de abajo pasan un chip de verdad donde
+ * antes pasaban `true`.
+ */
+const CHIP = (etiqueta: string, valor: string): ChipFiltro =>
+  ({ clave: etiqueta, etiqueta, valor, quitar: () => {} })
+
 function render(props: Partial<Parameters<typeof HistorialTabla>[0]> = {}): string {
   const html = renderToStaticMarkup(
     <HistorialTabla
       items={props.items ?? []} cargando={props.cargando ?? false}
-      error={props.error ?? false} filtrado={props.filtrado ?? false}
-      onReintentar={() => {}}
+      error={props.error ?? false} chips={props.chips ?? []}
+      onLimpiarTodo={() => {}} onReintentar={() => {}}
     />,
   )
   expect(html.length, "la tabla no renderizó nada: toda aserción de abajo sería vacua")
@@ -95,15 +106,27 @@ describe("los tres estados son distinguibles", () => {
 })
 
 describe("el vacío distingue «no hay nada» de «no hay nada con este filtro»", () => {
-  it("con filtros puestos, el mensaje habla del filtro", () => {
-    const html = render({ items: [], filtrado: true })
+  it("con filtros puestos, el mensaje NOMBRA el filtro que dejó la tabla en cero", () => {
+    const html = render({ items: [], chips: [CHIP("Estado", "No entregados")] })
 
-    expect(html).toContain("Ningún mail coincide con el filtro")
+    // Antes decía "Ningún mail coincide con el filtro": verdadero y sin decir cuál.
+    expect(html).toContain("No hay mails con estado No entregados.")
     expect(html).not.toContain(VACIO_HISTORIAL)
+    // Y ofrece la salida del patrón: quitar el filtro que se acaba de poner.
+    expect(html).toContain("Quitar estado: No entregados")
   })
 
   it("sin filtros, habla de que no se envió nada — la salida del usuario es otra", () => {
-    expect(render({ items: [], filtrado: false })).toContain(VACIO_HISTORIAL)
+    const html = render({ items: [], chips: [] })
+    expect(html).toContain(VACIO_HISTORIAL)
+    // 🔴 Y NO usa el genérico del patrón: nadie "carga" un mail enviado, lo produce el sistema.
+    expect(html).not.toContain("Cuando se cargue el primero")
+  })
+
+  it("el encabezado sigue puesto en los tres estados: la tabla no cambia de forma", () => {
+    for (const props of [{ items: [] }, { items: [ENVIADO] }, { cargando: true }]) {
+      expect(render(props)).toContain("<thead")
+    }
   })
 })
 

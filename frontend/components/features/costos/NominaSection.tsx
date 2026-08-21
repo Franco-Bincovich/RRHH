@@ -6,13 +6,12 @@ import { EmptyState } from "@/components/ui/EmptyState"
 import { Card } from "@/components/ui/card"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Encabezado, FilasEsqueleto } from "@/components/ui/grillaTabla"
 import { Pagination } from "@/components/ui/Pagination"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { COLUMNAS_NOMINA } from "@/components/features/costos/_grillaNomina"
+import { EditarNominaModal } from "@/components/features/costos/EditarNominaModal"
 import { MESES_LARGOS, pesos } from "@/components/features/costos/formatos"
 import { useEdicionNomina } from "@/components/features/costos/useEdicionNomina"
 import { PAGE_SIZE, useNominaLista } from "@/components/features/costos/useNominaLista"
@@ -31,6 +30,19 @@ import { exportarNomina } from "@/services/costos"
  *
  * El contador del encabezado usa `total` (del backend) y NO `filas.length`: en la página 2 el
  * largo de la página no dice cuántos registros tiene el mes.
+ *
+ * ═════════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 EL VACÍO ACÁ NO ES `TablaVacia`, Y NO ES UN OLVIDO.
+ * ═════════════════════════════════════════════════════════════════════════════════════════
+ * `TablaVacia` arma su texto con los CHIPS del panel de filtros, y esta pantalla no tiene panel:
+ * su único filtro es el PERÍODO, que el backend exige (`mes` y `anio` son `Query(...)` sin
+ * default) y que por eso no puede ser un chip — un chip promete "esto se puede quitar", y acá
+ * quitarlo rompe la consulta. El porqué completo está en el encabezado de `costos/page.tsx`.
+ *
+ * Lo que sí se conserva es lo que el patrón busca: el texto nombra el VALOR REAL del filtro ("No
+ * hay nómina cargada para Marzo 2026"), que es exactamente lo que `textoVacio` hace con los
+ * chips, y la ESTRUCTURA —fila con `colSpan`, `data-vacio` y el encabezado intacto— es la del
+ * patrón.
  */
 interface Props {
   mes: number
@@ -46,6 +58,10 @@ export function NominaSection({ mes, anio, canWrite, mostrarEmpresa, onGuardado 
   // Al guardar hay que recargar LAS DOS cosas: esta lista y el dashboard de arriba, que es
   // otra consulta. Refrescar solo una deja la tabla y los KPIs diciendo números distintos.
   const ed = useEdicionNomina(mes, anio, async () => { await n.load(); onGuardado() })
+
+  const columnas = COLUMNAS_NOMINA
+    .filter((c) => c.clave !== "empresa" || mostrarEmpresa)
+    .filter((c) => c.clave !== "acciones" || canWrite)
 
   return (
     <Card as="section" aria-label="Detalle de nómina">
@@ -63,87 +79,66 @@ export function NominaSection({ mes, anio, canWrite, mostrarEmpresa, onGuardado 
         )}
       </div>
 
-      {n.loading ? (
-        <Skeleton className="h-40 rounded-lg" />
-      ) : n.error ? (
+      {n.error ? (
         <ErrorState description="No se pudo cargar el detalle de nómina." action={n.load} />
-      ) : n.total === 0 ? (
-        <EmptyState
-          icon={<Users />}
-          title="Sin registros"
-          description={`No hay nómina cargada para ${MESES_LARGOS[mes - 1]} ${anio}.`}
-        />
       ) : (
         <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Colaborador</TableHead>
-                {mostrarEmpresa && <TableHead>Empresa</TableHead>}
-                <TableHead>Área</TableHead>
-                <TableHead className="text-right">Monto bruto</TableHead>
-                <TableHead className="text-right">Monto neto</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {n.filas.map((f) => (
-                <TableRow key={f.id}>
-                  <TableCell className="font-medium">{f.empleado_nombre}</TableCell>
-                  {mostrarEmpresa && (
-                    <TableCell className="text-muted-foreground">{f.empresa_nombre ?? "—"}</TableCell>
-                  )}
-                  <TableCell className="text-muted-foreground">{f.area_nombre}</TableCell>
-                  <TableCell className="text-right">{pesos(f.monto_bruto)}</TableCell>
-                  <TableCell className="text-right">{pesos(f.monto_neto)}</TableCell>
-                  <TableCell className="text-right">
-                    {canWrite && (
-                      <Button variant="ghost" size="sm" className="min-h-9 gap-1"
-                        onClick={() => ed.open(f)}>
-                        <Pencil className="size-3.5" />
-                        Editar
-                      </Button>
-                    )}
+          <Table patron="datos">
+            <Encabezado columnas={columnas} />
+            {n.loading ? (
+              <FilasEsqueleto columnas={columnas} />
+            ) : n.filas.length === 0 ? (
+              <TableBody>
+                <TableRow data-vacio="" className="hover:bg-transparent">
+                  <TableCell colSpan={columnas.length} className="h-auto whitespace-normal p-0">
+                    <EmptyState
+                      icon={<Users />}
+                      title="Sin registros"
+                      description={`No hay nómina cargada para ${MESES_LARGOS[mes - 1]} ${anio}.`}
+                    />
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
+              </TableBody>
+            ) : (
+              <TableBody>
+                {n.filas.map((f) => (
+                  <TableRow key={f.id} className="group">
+                    <TableCell className="font-medium">{f.empleado_nombre}</TableCell>
+                    {mostrarEmpresa && (
+                      <TableCell className="text-muted-foreground">{f.empresa_nombre ?? "—"}</TableCell>
+                    )}
+                    <TableCell className="text-muted-foreground">{f.area_nombre}</TableCell>
+                    <TableCell className="text-right tabular-nums">{pesos(f.monto_bruto)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{pesos(f.monto_neto)}</TableCell>
+                    {canWrite && (
+                      <TableCell className="text-right">
+                        {/* Siempre visible, sólo cambia de color al apuntar la fila (§3). */}
+                        <button
+                          type="button"
+                          onClick={() => ed.open(f)}
+                          aria-label={`Editar la nómina de ${f.empleado_nombre}`}
+                          className="ml-auto flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors group-hover:text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                        >
+                          <Pencil className="size-4" aria-hidden="true" />
+                        </button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            )}
           </Table>
 
-          {n.total > PAGE_SIZE && (
+          {/* 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS (era `n.total > PAGE_SIZE`) y sólo después de
+              cargar: sin la guarda, al cambiar de mes la barra queda mostrando el total del
+              período ANTERIOR sobre el esqueleto. El total es el del backend, no `filas.length`. */}
+          {!n.loading && n.filas.length > 0 && (
             <Pagination page={n.page} total={n.total} pageSize={PAGE_SIZE} onPageChange={n.setPage} />
           )}
         </>
       )}
 
-      <Dialog open={ed.item !== null} onOpenChange={(open) => { if (!open) ed.setItem(null) }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar nómina — {ed.item?.empleado_nombre}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-bruto">Monto bruto</Label>
-              <Input id="edit-bruto" type="number" min={0} value={ed.bruto}
-                onChange={(e) => ed.setBruto(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-neto">Monto neto</Label>
-              <Input id="edit-neto" type="number" min={0} value={ed.neto}
-                onChange={(e) => ed.setNeto(e.target.value)} />
-            </div>
-            {ed.error && <p className="text-sm text-destructive">{ed.error}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => ed.setItem(null)} disabled={ed.saving}>
-              Cancelar
-            </Button>
-            <Button onClick={ed.save} disabled={ed.saving}>
-              {ed.saving ? "Guardando…" : "Guardar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditarNominaModal ed={ed} />
     </Card>
   )
 }

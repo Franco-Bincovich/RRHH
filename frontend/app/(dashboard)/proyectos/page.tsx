@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { Button } from "@/components/ui/button"
 import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { Pagination } from "@/components/ui/Pagination"
 import { cargarProyectos } from "@/components/features/proyectos/cargarProyectos"
 import { ProyectoModal } from "@/components/features/proyectos/ProyectoModal"
@@ -33,6 +34,8 @@ export default function ProyectosPage() {
   // un filtro que sí tiene proyectos.
   const { filtros, campos } = useFiltrosProyectos(() => setPage(1))
 
+  const chips = chipsDeCampos(campos)
+
   // La carga vive en cargarProyectos: apaga el loading en un finally y se testea sin renderizar
   // (vitest corre sin jsdom, así que acá adentro no habría forma de verificarlo).
   const load = useCallback(async () => {
@@ -53,7 +56,14 @@ export default function ProyectosPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
-        <PageHeader title="Proyectos" description="Gestión de proyectos y costeo por horas" />
+        <PageHeader
+          title="Proyectos"
+          /* El conteo sale de `total` (el del filtro entero, del backend) y no de
+             `proyectos.length`: con paginación el largo del array es 20 en cualquier padrón. */
+          description={loading && total === 0
+            ? "Gestión de proyectos y costeo por horas"
+            : `${total} proyecto${total !== 1 ? "s" : ""} · gestión y costeo por horas`}
+        />
         <div className="flex shrink-0 items-center gap-2">
           {/* Los MISMOS `filtros` que alimentan el listado: el archivo no puede traer filas que
               la pantalla no esté mostrando. Exportar es LECTURA, así que no va detrás de canWrite. */}
@@ -67,15 +77,35 @@ export default function ProyectosPage() {
         </div>
       </div>
 
-      <FiltersBar campos={campos} />
+      {/* `panel`: la forma completa del patrón de filtros (caja propia, "Más filtros" y los chips
+          de la fila inferior). Detrás de "Más filtros" queda sólo Área, que es el recorte a otra
+          entidad — el porqué está en `_camposProyectos.ts`. `disabled` durante la carga: los
+          controles quedan a la vista con sus chips pero no se pueden tocar (§3). */}
+      <FiltersBar campos={campos} panel disabled={loading} />
 
       <ProyectosGrid
         proyectos={proyectos} loading={loading} error={error} canWrite={canWrite}
         onEdit={(p) => { setEditing(p); setModalOpen(true) }}
-        onCrear={() => { setEditing(null); setModalOpen(true) }}
+        onRetry={load}
+        chips={chips}
+        onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
+        accionVacio={canWrite ? (
+          <Button className="min-h-11" onClick={() => { setEditing(null); setModalOpen(true) }}>
+            Crear el primero
+          </Button>
+        ) : undefined}
       />
 
-      {total > PAGE_SIZE && (
+      {/*
+       * 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS, no sólo cuando hay más de una página (era
+       * `total > PAGE_SIZE`): es lo que dice cuántos resultados dio el filtro.
+       * 🔴 Y VA DETRÁS DE `!loading && !error`, QUE ES EL BUG QUE ESTA PANTALLA TENÍA: sin esa
+       * guarda la barra se dibujaba SOBRE el esqueleto, con el `total` del pedido ANTERIOR — o
+       * sea, mientras cargaba el resultado de un filtro nuevo, el pie seguía afirmando el conteo
+       * del filtro viejo. Es el mismo caso que apareció en /vacantes.
+       * El total que muestra es el TOTAL FILTRADO del backend, no `proyectos.length`.
+       */}
+      {!loading && !error && proyectos.length > 0 && (
         <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
       )}
 

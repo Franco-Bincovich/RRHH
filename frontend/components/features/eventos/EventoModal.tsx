@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react"
 
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
+import { FormErrores } from "@/components/ui/FormErrores"
 import { Button } from "@/components/ui/button"
 import { CamposEvento } from "@/components/features/eventos/CamposEvento"
 import { mensajeDeError } from "@/components/features/eventos/erroresEvento"
@@ -85,11 +86,16 @@ export function EventoModal({ open, onClose, onSuccess, evento }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-md">
+      {/* El ancho (560px) y los campos de 34px los pone el patrón, no el modal: por eso ya no
+          lleva `max-w-md`. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar evento" : "Nuevo evento"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          {/* El PRIMER nivel de la validación es la CUENTA, no la lista de campos: el "qué
+              corrijo" lo contesta el segundo nivel, en cada campo (`CamposEvento`). */}
+          <FormErrores cantidad={Object.values(errores).filter(Boolean).length} />
           <CamposEvento form={form} errores={errores} onCampo={campo} />
           {serverError && <p className="text-sm text-destructive">{serverError}</p>}
           <DialogFooter>

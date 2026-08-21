@@ -3,9 +3,10 @@
 import { useState, useEffect, useMemo } from "react"
 
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { FormErrores } from "@/components/ui/FormErrores"
 import { createVacacion, fetchSaldoVacaciones } from "@/services/vacaciones"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { getRol } from "@/services/permisos"
@@ -96,13 +97,27 @@ export function VacacionesModal({ open, onClose, onSuccess }: VacacionesModalPro
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-lg">
+      {/* El ancho (560px) y los campos de 34px los pone el patrón, no el modal: por eso ya no
+          lleva `max-w-lg`. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle>{form.pendiente ? "Registrar días pendientes" : "Registrar vacaciones"}</DialogTitle>
+          {/* 🔴 UNA LÍNEA QUE EXPLICA LA CONSECUENCIA, no lo que el modal es (§3). Las dos formas
+              del mismo modal escriben en TABLAS distintas y descuentan saldo distinto, y eso es
+              justo lo que el usuario no puede deducir mirando los campos. */}
+          <DialogDescription>
+            {form.pendiente
+              ? "Se registran días de un período que no se tomaron. No llevan fechas: nadie faltó ningún día."
+              : "Se descuentan del saldo del período y la persona figura de vacaciones en esas fechas."}
+          </DialogDescription>
         </DialogHeader>
 
         <form id="vacaciones-form" onSubmit={handleSubmit} noValidate>
           <div className="flex flex-col gap-4 py-2">
+            {/* El PRIMER nivel de la validación es la CUENTA, no la lista de campos: el "qué
+                corrijo" lo contesta el segundo nivel, en cada campo. */}
+            <FormErrores cantidad={Object.values(errors).filter(Boolean).length} />
+
             <SeleccionEmpleado
               isMando={isMando}
               empresaId={form.empresa_id}

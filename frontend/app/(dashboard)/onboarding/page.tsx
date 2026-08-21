@@ -1,249 +1,44 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { ChevronRight, Plus, Settings2, UserCheck, X } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
+import { Plus, UserCheck } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { Badge } from "@/components/ui/badge"
+import { ErrorState } from "@/components/ui/ErrorState"
+import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/EmptyState"
-import { Select } from "@/components/ui/select"
+import { IniciarOnboardingModal } from "@/components/features/onboarding/IniciarOnboardingModal"
+import { Button } from "@/components/ui/button"
+import { OnboardingAcciones } from "@/components/features/onboarding/OnboardingAcciones"
+import { useOnboardingDetalle } from "@/components/features/onboarding/useOnboardingDetalle"
+import { OnboardingList } from "@/components/features/onboarding/OnboardingList"
 import { OnboardingChecklist } from "@/components/features/onboarding/OnboardingChecklist"
-import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
-import { ExportMenu } from "@/components/features/export/ExportMenu"
-import { exportarOnboardings, fetchOnboardingEmpleado, fetchOnboardings, fetchTemplates, iniciarOnboarding } from "@/services/onboarding"
+import { fetchOnboardings } from "@/services/onboarding"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
-import type { Empleado } from "@/types/empleado"
-import type { OnboardingDetalle, OnboardingInstancia, OnboardingTemplate } from "@/types/onboarding"
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function semanaLabel(inst: OnboardingInstancia): string {
-  if (inst.progreso >= 100) return "Completado"
-  if (inst.tareas_total === 0) return "Semana 1"
-  const semanasCompletadas = Math.floor(inst.tareas_completadas / (inst.tareas_total / 4))
-  return `Semana ${Math.min(semanasCompletadas + 1, 4)}`
-}
-
-// ─── IniciarModal ──────────────────────────────────────────────────────────────
-
-interface IniciarModalProps {
-  activos: OnboardingInstancia[]
-  onClose: () => void
-  onSuccess: (instancia: OnboardingInstancia) => void
-}
-
-function IniciarModal({ activos, onClose, onSuccess }: IniciarModalProps) {
-  const [templates, setTemplates] = useState<OnboardingTemplate[]>([])
-  // 🔴 El empleado se guarda ENTERO, no solo su id: la lista de la que antes se lo recuperaba
-  // (`empleados.find`) ya no existe —el combobox busca contra el backend— y `empresa_id` es lo
-  // que filtra los templates. Con solo el id, ese filtro se caería a "todos los templates".
-  const [selected, setSelected] = useState<Empleado | null>(null)
-  const [selectedTemplateId, setSelectedTemplateId] = useState("")
-  const [iniciando, setIniciando] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const selectedId = selected?.id ?? ""
-
-  useEffect(() => {
-    fetchTemplates().then(setTemplates).catch(() => setError("No se pudieron cargar los datos"))
-  }, [])
-
-  // Quienes ya tienen uno en curso no se pueden elegir: el backend los rechaza con 409.
-  const yaTienen = activos.map((o) => o.empleado_id)
-
-  // Filtra templates para mostrar solo los de la misma empresa que el empleado elegido
-  const filteredTemplates =
-    selected?.empresa_id
-      ? templates.filter((t) => t.empresa_id === selected.empresa_id)
-      : templates
-
-  useEffect(() => {
-    if (filteredTemplates.length > 0) {
-      setSelectedTemplateId(filteredTemplates[0].id)
-    } else {
-      setSelectedTemplateId("")
-    }
-  }, [selectedId])
-
-  async function handleIniciar() {
-    if (!selectedId || iniciando) return
-    setIniciando(true)
-    setError(null)
-    try {
-      const instancia = await iniciarOnboarding(selectedId, selectedTemplateId || undefined)
-      onSuccess(instancia)
-    } catch {
-      setError("No se pudo iniciar el onboarding. Verificá que el colaborador no tenga uno activo.")
-      setIniciando(false)
-    }
-  }
-
-  return (
-    <>
-      <div
-        className="fixed inset-0 z-50 bg-black/40"
-        aria-hidden="true"
-        onClick={onClose}
-      />
-
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-iniciar-title"
-        className="fixed inset-x-4 top-1/2 z-50 -translate-y-1/2 rounded-2xl bg-background p-6 shadow-2xl ring-1 ring-border sm:inset-auto sm:left-1/2 sm:w-[26rem] sm:-translate-x-1/2"
-      >
-        {/* Header */}
-        <div className="mb-5 flex items-center justify-between gap-2">
-          <h2
-            id="modal-iniciar-title"
-            className="text-base font-semibold text-foreground"
-          >
-            Iniciar onboarding
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
-
-        {/* Selects */}
-        <div className="space-y-4">
-          <div>
-            <label
-              htmlFor="emp-select"
-              className="mb-1.5 block text-sm font-medium text-foreground"
-            >
-              Colaborador
-            </label>
-
-            {/*
-              El cartel "Todos los colaboradores activos ya tienen un onboarding en curso" se fue con
-              la lista precargada: con búsqueda contra el backend nadie tiene el padrón entero en
-              memoria, así que esa afirmación no se puede sostener. El combobox dice lo que sí
-              sabe — "sin resultados para lo que buscaste" —, que además era el mensaje correcto
-              en el caso frecuente (alguien que no aparecía por estar fuera de los primeros 100).
-            */}
-            <EmpleadoCombobox
-              id="emp-select"
-              value={selectedId}
-              excluirIds={yaTienen}
-              onChange={setSelected}
-            />
-          </div>
-
-          {selectedId && (
-            <div>
-              <label
-                htmlFor="tmpl-select"
-                className="mb-1.5 block text-sm font-medium text-foreground"
-              >
-                Template
-              </label>
-              {filteredTemplates.length > 0 ? (
-                <Select
-                  id="tmpl-select"
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
-                >
-                  {filteredTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.nombre}
-                    </option>
-                  ))}
-                </Select>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  No hay templates configurados para la empresa de este empleado.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <p className="mt-3 text-sm text-destructive">{error}</p>
-        )}
-
-        {/* Actions */}
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleIniciar}
-            disabled={!selectedId || !selectedTemplateId || iniciando}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          >
-            {iniciando ? "Iniciando…" : "Iniciar"}
-          </button>
-        </div>
-      </div>
-    </>
-  )
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
+import type { OnboardingInstancia } from "@/types/onboarding"
 
 export default function OnboardingPage() {
   const canWrite = useCanWrite()
   const [onboardings, setOnboardings] = useState<OnboardingInstancia[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [detalle, setDetalle] = useState<OnboardingDetalle | null>(null)
-  const [loadingDetalle, setLoadingDetalle] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [empresaActivaId] = useState<string | null>(() => getEmpresaActivaId())
+  const { detalle, setDetalle, loadingDetalle, handleSelect, handleTareaToggled } =
+    useOnboardingDetalle(setOnboardings)
 
-  useEffect(() => {
+  // El reintento del `ErrorState` necesita poder volver a disparar la carga, así que la función
+  // sale del efecto y vive acá.
+  const cargarOnboardings = useCallback(() => {
+    setLoading(true); setError(null)
     fetchOnboardings()
       .then(setOnboardings)
       .catch(() => setError("No se pudieron cargar los onboardings"))
       .finally(() => setLoading(false))
   }, [])
 
-  async function handleSelect(empleadoId: string) {
-    if (detalle?.empleado_id === empleadoId) {
-      setDetalle(null)
-      return
-    }
-    setLoadingDetalle(true)
-    try {
-      const d = await fetchOnboardingEmpleado(empleadoId)
-      setDetalle(d)
-    } catch {
-      // Silently fail — no bloquea la lista
-    } finally {
-      setLoadingDetalle(false)
-    }
-  }
-
-  function handleTareaToggled(tareaId: string, completada: boolean) {
-    if (!detalle) return
-    const updatedTareas = detalle.tareas.map((t) =>
-      t.tarea_id === tareaId ? { ...t, completada } : t,
-    )
-    const done = updatedTareas.filter((t) => t.completada).length
-    const total = updatedTareas.length
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0
-    setDetalle({ ...detalle, tareas: updatedTareas, progreso: pct, tareas_completadas: done })
-    setOnboardings((prev) =>
-      prev.map((o) =>
-        o.empleado_id === detalle.empleado_id
-          ? { ...o, progreso: pct, tareas_completadas: done }
-          : o,
-      ),
-    )
-  }
+  useEffect(() => { cargarOnboardings() }, [cargarOnboardings])
 
   function handleOnboardingIniciado(instancia: OnboardingInstancia) {
     setOnboardings((prev) => [instancia, ...prev])
@@ -252,116 +47,60 @@ export default function OnboardingPage() {
 
   // mostrar columna empresa solo cuando el topbar está en "Todas"
   const mostrarEmpresa = !empresaActivaId
-
-  // ─── Loading skeleton ────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Onboarding" description="Cargando..." />
-        <ul className="space-y-3" role="list">
-          {[1, 2, 3].map((i) => (
-            <li key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
-          ))}
-        </ul>
-      </div>
-    )
-  }
-
-  // ─── Error state ─────────────────────────────────────────────────────────────
-
-  if (error) {
-    return (
-      <div>
-        <PageHeader title="Onboarding" description="Error al cargar" />
-        <p className="text-sm text-destructive">{error}</p>
-      </div>
-    )
-  }
+  const iniciarBtn = (
+    <Button className="min-h-11 gap-1.5" onClick={() => setModalOpen(true)}>
+      <Plus className="size-4" />
+      <span className="hidden sm:inline">Iniciar onboarding</span>
+    </Button>
+  )
 
   // ─── Main render ─────────────────────────────────────────────────────────────
 
   return (
     <div>
-      {/* Header + acciones */}
+      {/* 🔴 EL ENCABEZADO Y SUS ACCIONES SE RENDERIZAN SIEMPRE. Acá vivían dos `return` tempranos
+          —uno de carga y otro de error— que se llevaban la pantalla entera: durante la carga
+          desaparecían el título, el export y el acceso a los templates, y la pantalla cambiaba de
+          forma dos veces seguidas. Ahora sólo cambia el CONTENIDO.
+          `onboardings.length` como conteo es correcto ACÁ Y SÓLO ACÁ: `GET /api/onboarding` no
+          pagina y devuelve todo, así que el largo del array ES el total. */}
       <div className="relative">
         <PageHeader
           title="Onboarding"
-          description={`${onboardings.length} colaboradores en proceso`}
+          description={loading ? "Cargando..." : `${onboardings.length} colaboradores en proceso`}
         />
-        <div className="absolute right-0 top-0 flex items-center gap-2">
-          {/* Exportar es LECTURA: no va detrás de canWrite. */}
-          <ExportMenu onExport={exportarOnboardings} />
-          <Link
-            href="/onboarding/templates"
-            className="flex min-h-10 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Settings2 className="size-4" />
-            <span className="hidden sm:inline">Gestionar templates</span>
-          </Link>
-          {canWrite && (
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="flex min-h-10 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Plus className="size-4" />
-              <span className="hidden sm:inline">Iniciar onboarding</span>
-            </button>
-          )}
-        </div>
+        <OnboardingAcciones canWrite={canWrite} iniciarBtn={iniciarBtn} />
       </div>
 
-      {onboardings.length === 0 ? (
-        <EmptyState
-          icon={<UserCheck />}
-          title="Sin procesos activos"
-          description="No hay colaboradores en proceso de onboarding actualmente."
-        />
-      ) : (
+      {loading ? (
         <ul className="space-y-3" role="list">
-          {onboardings.map((inst) => (
-            <li key={inst.id}>
-              <button
-                type="button"
-                onClick={() => handleSelect(inst.empleado_id)}
-                disabled={loadingDetalle}
-                className="w-full rounded-xl border bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground">{inst.empleado_nombre}</p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">
-                      {inst.empleado_cargo ?? "—"} · {inst.empleado_area ?? "—"}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {mostrarEmpresa && inst.empresa_nombre && (
-                      <Badge variant="outline" className="text-xs">
-                        {inst.empresa_nombre}
-                      </Badge>
-                    )}
-                    <Badge variant="secondary">{semanaLabel(inst)}</Badge>
-                    <ChevronRight className="size-4 text-muted-foreground" />
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Inicio: {inst.fecha_inicio}</span>
-                    <span className="font-medium text-foreground">{inst.progreso}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all duration-300"
-                      style={{ width: `${inst.progreso}%` }}
-                    />
-                  </div>
-                </div>
-              </button>
-            </li>
+          {[1, 2, 3].map((i) => (
+            <li key={i}><Skeleton shimmer className="h-24 w-full rounded-xl" /></li>
           ))}
         </ul>
+      ) : error ? (
+        <ErrorState description={error} action={cargarOnboardings} />
+      ) : onboardings.length === 0 ? (
+        /*
+         * 🔴 COPY PROPIO, y el motivo es el mismo que en offboarding: **vacío no es una carencia**.
+         * Un cero acá significa que nadie está entrando esta semana, no que falte cargar un dato —
+         * y el onboarding no se "carga": se INICIA eligiendo un template y una persona, con el
+         * botón de arriba. La frase genérica de `textoVacio` ("cuando se cargue el primero va a
+         * aparecer acá") mandaría a buscar un alta que no tiene ese nombre.
+         */
+        <EmptyState
+          icon={<UserCheck />}
+          title="No hay ningún ingreso en curso"
+          description="Cuando inicies un onboarding, el proceso aparece acá con su checklist semana por semana."
+          action={canWrite ? iniciarBtn : undefined}
+        />
+      ) : (
+        <OnboardingList
+          onboardings={onboardings}
+          mostrarEmpresa={mostrarEmpresa}
+          deshabilitado={loadingDetalle}
+          onAbrir={handleSelect}
+        />
       )}
 
       {/* Backdrop del checklist */}
@@ -385,7 +124,7 @@ export default function OnboardingPage() {
 
       {/* Modal iniciar onboarding */}
       {modalOpen && (
-        <IniciarModal
+        <IniciarOnboardingModal
           activos={onboardings}
           onClose={() => setModalOpen(false)}
           onSuccess={handleOnboardingIniciado}

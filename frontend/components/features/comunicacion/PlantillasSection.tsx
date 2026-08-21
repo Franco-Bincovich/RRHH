@@ -1,16 +1,17 @@
 "use client"
 
 import { useState } from "react"
-import { Mail, Pencil, Plus, Send } from "lucide-react"
+import { Mail, Plus } from "lucide-react"
 
-// ConfigSection sigue viviendo en `features/configuracion/`: es la shell plegable COMPARTIDA
-// (la usan también las cards del dashboard), no una pieza de este módulo.
-import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
 import { EnviarPlantillaModal } from "@/components/features/comunicacion/EnviarPlantillaModal"
+import { PlantillaCard } from "@/components/features/comunicacion/PlantillaCard"
 import { PlantillaModal } from "@/components/features/comunicacion/PlantillaModal"
 import { usePlantillas } from "@/components/features/comunicacion/usePlantillas"
-import { Badge } from "@/components/ui/badge"
+import { EmptyState } from "@/components/ui/EmptyState"
+import { GrillaTarjetas } from "@/components/ui/GrillaTarjetas"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { Plantilla } from "@/types/plantillas"
 
 /**
@@ -20,22 +21,27 @@ import type { Plantilla } from "@/types/plantillas"
  * está en el historial de git y era razonable con lo que había: "es el ABM de un texto que se
  * toca dos veces al año, no justifica una pantalla ni una entrada en el sidebar". Lo que lo
  * invalidó no fue una discusión de diseño: fue que desde acá ahora se MANDAN MAILS a la gente
- * (botón "Enviar" por fila). Eso es una acción operativa recurrente, con historial propio y con
+ * (botón "Enviar" por tarjeta). Eso es una acción operativa recurrente, con historial propio y con
  * consecuencias hacia afuera de la empresa — deja de ser configuración.
  *
- * Se mudó TAL CUAL: sigue usando `ConfigSection` (la shell plegable compartida), que en la
- * pestaña se monta bajo un `Accordion.Root` propio. Que un acordeón de un solo ítem adentro de
- * una pestaña sea redundante es cierto y quedó pendiente a propósito: mezclar la mudanza con un
- * rediseño hace que el diff no se pueda revisar.
+ * ═════════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 AHORA SON TARJETAS, Y SE FUE EL ACORDEÓN.
+ * ═════════════════════════════════════════════════════════════════════════════════════════
+ * `docs/SISTEMA-DE-DISENO.md` §5 nombra a comunicación junto a perfiles de puesto y reportes:
+ * "cada plantilla de mail guardada, una tarjeta". Hasta el 21/8/2026 esto era una lista de filas
+ * envuelta en `ConfigSection` —la shell plegable de /configuracion—, y **este mismo archivo ya
+ * anotaba que el acordeón sobraba**: "un acordeón de un solo ítem adentro de una pestaña es
+ * redundante y quedó pendiente a propósito; mezclar la mudanza con un rediseño hace que el diff
+ * no se pueda revisar". Ése era el diff que faltaba, y es éste.
+ *
+ * ⚠️ NO HAY FILTROS NI PIE, y no faltan: `GET /api/plantillas` no acepta un solo Query y devuelve
+ * la lista entera. Sin filtros no hay chips que mostrar y sin `page` no hay pie que armar —
+ * ponerle chips a una pantalla que no filtra sería inventar filtros que el backend no puede
+ * honrar.
  *
  * `editable=false` (gerencia_lectura) muestra las plantillas en SOLO LECTURA, con el mismo
  * criterio que las reglas: el texto con el que la empresa se comunica es información, y quien
- * puede leer todos los reportes debería poder verlo. Lo que se oculta es el botón de editar.
- *
- * 🔴 ENVIAR VA DETRÁS DEL MISMO `editable` QUE EDITAR, y no de un gate propio: el backend gatea
- * `POST /api/plantillas/enviar` con WRITE sobre configuración —la misma dependencia que el PUT—,
- * o sea que solo `admin_rrhh` puede. Un botón visible para `gerencia_lectura` daría 403 al
- * apretarlo, que es peor que no estar.
+ * puede leer todos los reportes debería poder verlo. Lo que se oculta son las dos acciones.
  */
 export function PlantillasSection({ editable }: { editable: boolean }) {
   const { items, contextos, loading, recargar } = usePlantillas()
@@ -44,55 +50,59 @@ export function PlantillasSection({ editable }: { editable: boolean }) {
   const [enviando, setEnviando] = useState<Plantilla | null>(null)
 
   const open = nueva || abierta !== null
+  const nuevaBtn = (
+    <Button variant="outline" className="min-h-11 gap-1.5" onClick={() => setNueva(true)}>
+      <Plus className="size-4" />
+      Nueva plantilla
+    </Button>
+  )
 
   return (
     <>
-      <ConfigSection
-        value="plantillas"
-        icon={<Mail className="size-4" />}
-        title="Plantillas de mail"
-        description="El texto de los mails que el sistema envía. Podés usar variables como el nombre del colaborador."
-        badge={items.length > 0 && <Badge variant="secondary" className="ml-auto">{items.length}</Badge>}
-      >
-        {loading ? (
-          <div className="h-9 animate-pulse rounded-md bg-muted" />
-        ) : (
-          <div className="space-y-2">
-            {items.length === 0 && (
-              <p className="text-sm text-muted-foreground">Todavía no hay plantillas cargadas.</p>
-            )}
-            {items.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{p.clave}</p>
-                  <p className="truncate text-xs text-muted-foreground">{p.asunto}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {p.es_global && <Badge variant="outline">General</Badge>}
-                  {editable && (
-                    <>
-                      <Button variant="ghost" size="sm" aria-label={`Enviar ${p.clave}`}
-                              onClick={() => setEnviando(p)}>
-                        <Send className="size-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" aria-label={`Editar ${p.clave}`}
-                              onClick={() => setAbierta(p)}>
-                        <Pencil className="size-4" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
-            {editable && (
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setNueva(true)}>
-                <Plus className="size-4" />
-                Nueva plantilla
-              </Button>
-            )}
-          </div>
-        )}
-      </ConfigSection>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-xl text-sm text-muted-foreground">
+          El texto de los mails que el sistema envía. Podés usar variables como el nombre del
+          colaborador.
+        </p>
+        {editable && nuevaBtn}
+      </div>
+
+      {loading ? (
+        /* El esqueleto son TARJETAS del mismo alto que las reales, con el shimmer de 1,2s que
+           pide §3: así la pantalla no cambia de forma cuando llegan los datos. */
+        <GrillaTarjetas>
+          {[1, 2, 3].map((i) => <Skeleton key={i} shimmer className="h-28 rounded-xl" />)}
+        </GrillaTarjetas>
+      ) : items.length === 0 ? (
+        /*
+         * 🔴 COPY PROPIO, no `textoVacio`. Esta pantalla no tiene filtros, así que el helper sólo
+         * podría dar su rama genérica —"Cuando se cargue la primera va a aparecer acá"—, y acá esa
+         * frase se queda corta en lo único que importa: sin plantillas **el sistema no manda
+         * ningún mail**. Eso no es "todavía no hay datos", es una capacidad apagada, y decirlo es
+         * lo que hace que alguien cargue la primera. Para `gerencia_lectura`, que no puede
+         * crearlas, la frase sigue siendo cierta y no le pide nada.
+         */
+        <Card padding="sm">
+          <EmptyState
+            icon={<Mail />}
+            title="Todavía no hay plantillas cargadas"
+            description="Mientras no haya ninguna, el sistema no tiene con qué escribirle a la gente: los envíos de esta pantalla salen de una plantilla."
+            action={editable ? nuevaBtn : undefined}
+          />
+        </Card>
+      ) : (
+        <GrillaTarjetas>
+          {items.map((p) => (
+            <PlantillaCard
+              key={p.id}
+              plantilla={p}
+              editable={editable}
+              onEditar={setAbierta}
+              onEnviar={setEnviando}
+            />
+          ))}
+        </GrillaTarjetas>
+      )}
 
       <PlantillaModal
         open={open}

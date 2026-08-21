@@ -22,8 +22,22 @@ export function useSucesionData() {
   const [errorMapa, setErrorMapa]         = useState<string | null>(null)
   const [errorPlanes, setErrorPlanes]     = useState<string | null>(null)
 
+  // Las dos recargas salen del efecto para que el `ErrorState` de cada tab pueda volver a
+  // disparar SU carga: reintentar el mapa no tiene por qué recargar los planes, que quizás ya
+  // llegaron bien. El `setError(null)` va adentro, si no el reintento arranca mostrando el error
+  // anterior hasta que la respuesta vuelva.
+  const recargarMapa = useCallback(() => {
+    setLoadingMapa(true)
+    setErrorMapa(null)
+    fetchMapaTalento()
+      .then(setRawEmpleados)
+      .catch(() => setErrorMapa("No se pudo cargar el mapa de talento."))
+      .finally(() => setLoadingMapa(false))
+  }, [])
+
   const recargarPlanes = useCallback(() => {
     setLoadingPlanes(true)
+    setErrorPlanes(null)
     fetchPlanesCarrera()
       .then(setPlanes)
       .catch(() => setErrorPlanes("No se pudo cargar los planes de carrera."))
@@ -31,20 +45,16 @@ export function useSucesionData() {
   }, [])
 
   useEffect(() => {
-    fetchMapaTalento()
-      .then(setRawEmpleados)
-      .catch(() => setErrorMapa("No se pudo cargar el mapa de talento."))
-      .finally(() => setLoadingMapa(false))
-
+    recargarMapa()
     recargarPlanes()
 
     fetchAreas().then(setAreas).catch(() => setAreas([]))
-  }, [recargarPlanes])
+  }, [recargarMapa, recargarPlanes])
 
   return {
     rawEmpleados, planes, setPlanes, areas,
     selectedArea, setSelectedArea,
     loadingMapa, loadingPlanes, errorMapa, errorPlanes,
-    recargarPlanes,
+    recargarMapa, recargarPlanes,
   }
 }

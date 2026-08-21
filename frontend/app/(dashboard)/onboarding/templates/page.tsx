@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
+import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { NuevoTemplateModal } from "@/components/features/onboarding/NuevoTemplateModal"
 import { TemplatesList } from "@/components/features/onboarding/TemplatesList"
@@ -29,7 +30,8 @@ export default function TemplatesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [aEliminar, setAEliminar] = useState<OnboardingTemplate | null>(null)
 
-  useEffect(() => {
+  const cargar = useCallback(() => {
+    setLoading(true); setError(null)
     const tasks: Promise<unknown>[] = [
       fetchTemplates().then(setTemplates),
     ]
@@ -38,10 +40,12 @@ export default function TemplatesPage() {
         fetchEmpresas().then((res) => setEmpresas(res.items.filter((e) => e.activa))).catch(() => {}),
       )
     }
-    Promise.all(tasks)
+    void Promise.all(tasks)
       .catch(() => setError("No se pudieron cargar los templates"))
       .finally(() => setLoading(false))
   }, [empresaActivaId])
+
+  useEffect(() => { cargar() }, [cargar])
 
   async function confirmarEliminar() {
     if (!aEliminar) return
@@ -67,6 +71,13 @@ export default function TemplatesPage() {
       ? undefined
       : `${templates.length} template${templates.length !== 1 ? "s" : ""} configurado${templates.length !== 1 ? "s" : ""}`
 
+  const nuevoBtn = (
+    <Button className="min-h-11 gap-1.5" onClick={() => setModalOpen(true)}>
+      <Plus className="size-4" />
+      <span className="hidden sm:inline">Nuevo template</span>
+    </Button>
+  )
+
   return (
     <div>
       <div className="relative">
@@ -75,16 +86,11 @@ export default function TemplatesPage() {
           {/* El archivo trae las MISMAS plantillas que la lista: mismo endpoint de origen y
               mismo recorte por visibilidad, que el backend resuelve con el token. */}
           {listo && templates.length > 0 && <ExportMenu onExport={exportarTemplates} />}
-          {canWrite && listo && (
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="flex min-h-10 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Plus className="size-4" />
-              <span className="hidden sm:inline">Nuevo template</span>
-            </button>
-          )}
+          {/* ⚠️ ERA UN `<button>` A MANO con `bg-primary`, su propio `hover:` y su propio
+              `focus-visible:` — o sea, una copia del botón primario que el repo ya tiene, con la
+              mitad de los estados y con 40px de alto en vez de los 44 que el repo usa para todo
+              control táctil. Ahora sale del primitivo. */}
+          {canWrite && listo && nuevoBtn}
         </div>
       </div>
 
@@ -97,6 +103,8 @@ export default function TemplatesPage() {
         deletingId={deletingId}
         onAbrir={(id) => router.push(`/onboarding/templates/${id}`)}
         onEliminar={setAEliminar}
+        onReintentar={cargar}
+        accionVacio={canWrite ? nuevoBtn : undefined}
       />
 
       <ConfirmDialog

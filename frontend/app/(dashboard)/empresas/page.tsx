@@ -1,21 +1,32 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Building2, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { EmptyState } from "@/components/ui/EmptyState"
-import { ErrorState } from "@/components/ui/ErrorState"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { EmpresaModal } from "@/components/features/empresas/EmpresaModal"
 import { EmpresasTable } from "@/components/features/empresas/EmpresasTable"
+import { AVISO_CATALOGO_GLOBAL } from "@/components/features/empresas/_avisoGlobal"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { exportarEmpresas, fetchEmpresas, toggleEmpresaActiva } from "@/services/empresas"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Empresa } from "@/types/empresa"
 
+/**
+ * El listado de empresas del grupo.
+ *
+ * 🔴 NO TIENE FILTROS NI PIE, y no le faltan: `GET /api/empresas` no acepta un solo Query y
+ * devuelve la lista entera. Sin filtros no hay chips que mostrar y sin `page`/`total` del backend
+ * no hay pie que armar — ponerle chips a una pantalla que no filtra sería inventar filtros que el
+ * backend no puede honrar. Lo que sí toma del patrón es la tabla: `patron="datos"`, los anchos
+ * declarados, el esqueleto con la misma grilla y el vacío adentro de la tabla.
+ *
+ * 🔴 Y EL SELECTOR DE EMPRESA DEL SIDEBAR NO LA ACOTA: acá la empresa ES el recurso. Como es lo
+ * contrario a lo que hace el resto del producto, la pantalla lo dice en el subtítulo
+ * (`_avisoGlobal.ts`).
+ */
 export default function EmpresasPage() {
   const canWrite = useCanWrite()
   const [empresas, setEmpresas] = useState<Empresa[]>([])
@@ -62,72 +73,49 @@ export default function EmpresasPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Empresas" description="Cargando..." />
-        <div className="space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-lg" />
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div>
-        <PageHeader title="Empresas" />
-        <ErrorState description="No se pudieron cargar las empresas." action={load} />
-      </div>
-    )
-  }
+  const crearBtn = (
+    <Button className="min-h-11" onClick={openCreate}>
+      <Plus />
+      Nueva empresa
+    </Button>
+  )
 
   return (
     <div>
       <PageHeader
         title="Empresas"
-        description={`${empresas.length} empresa${empresas.length !== 1 ? "s" : ""}`}
+        /* El conteo y, pegado, la advertencia de que el sidebar no filtra acá. Va en el
+           SUBTÍTULO porque describe lo que la pantalla ES — misma regla que en clientes.
+           `empresas.length` como conteo es correcto ACÁ Y SÓLO ACÁ: el endpoint devuelve todo,
+           así que el largo del array ES el total. En un listado paginado ese mismo `.length` es
+           el bug que `paginacionTotales.test.ts` persigue. */
+        description={
+          loading
+            ? "Cargando..."
+            : `${empresas.length} empresa${empresas.length !== 1 ? "s" : ""} · ${AVISO_CATALOGO_GLOBAL}`
+        }
         action={
           <div className="flex items-center gap-2">
             {/* El archivo sale del MISMO listado que la tabla y esta pantalla no tiene
                 filtros: trae exactamente las empresas que se ven, activas e inactivas.
                 Disponible también para gerencia_lectura — exportar es una lectura. */}
-            {empresas.length > 0 && <ExportMenu onExport={exportarEmpresas} />}
-            {canWrite && (
-              <Button className="min-h-11" onClick={openCreate}>
-                <Plus />
-                Nueva empresa
-              </Button>
-            )}
+            {!loading && !error && empresas.length > 0 && <ExportMenu onExport={exportarEmpresas} />}
+            {canWrite && crearBtn}
           </div>
         }
       />
 
-      {empresas.length === 0 ? (
-        <EmptyState
-          icon={<Building2 />}
-          title="Sin empresas"
-          description="Todavía no hay empresas registradas. Creá la primera."
-          action={
-            canWrite ? (
-              <Button className="min-h-11" onClick={openCreate}>
-                <Plus />
-                Nueva empresa
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <EmpresasTable
-          empresas={empresas}
-          canWrite={canWrite}
-          onEdit={openEdit}
-          onToggle={handleToggle}
-          togglingId={togglingId}
-        />
-      )}
+      <EmpresasTable
+        empresas={empresas}
+        loading={loading}
+        error={error}
+        canWrite={canWrite}
+        onRetry={load}
+        onEdit={openEdit}
+        onToggle={handleToggle}
+        togglingId={togglingId}
+        accionVacio={canWrite ? crearBtn : undefined}
+      />
 
       <EmpresaModal
         open={modalOpen}

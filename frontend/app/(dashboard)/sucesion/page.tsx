@@ -67,6 +67,7 @@ function SucesionContenido() {
             onSelectArea={datos.setSelectedArea}
             loading={datos.loadingMapa}
             error={datos.errorMapa}
+            onReintentar={datos.recargarMapa}
             onAnalizar={() => setAnalisisOpen(true)}
           />
         </TabPanel>
@@ -77,6 +78,7 @@ function SucesionContenido() {
             planes={datos.planes}
             loading={datos.loadingPlanes}
             error={datos.errorPlanes}
+            onReintentar={datos.recargarPlanes}
             mostrarEmpresa={!empresaActivaId}
             canWrite={canWrite}
             onNuevoPlan={() => setPlanOpen(true)}

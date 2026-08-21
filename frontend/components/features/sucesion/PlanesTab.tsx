@@ -3,19 +3,24 @@
 import { ArrowRight, CheckSquare, ChevronRight, Plus, TrendingUp } from "lucide-react"
 
 import { EmptyState } from "@/components/ui/EmptyState"
+import { ErrorState } from "@/components/ui/ErrorState"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { readinessBarColor } from "./_sucesion_ui"
 import type { PlanCarrera } from "@/types/sucesion"
 
+// El esqueleto conserva las tres líneas de la fila real —nombre, trayecto y barra de readiness—
+// para que al llegar los datos nada se mueva de lugar. `shimmer` en vez del `animate-pulse` de 2s,
+// que late más lento que el resto del sistema.
 function PlanesSkeleton() {
   return (
     <ul className="divide-y divide-border">
       {Array.from({ length: 3 }).map((_, i) => (
-        <li key={i} className="animate-pulse py-4 space-y-2">
-          <div className="h-4 w-40 rounded bg-muted" />
-          <div className="h-3 w-56 rounded bg-muted" />
-          <div className="h-1.5 w-full rounded-full bg-muted" />
+        <li key={i} className="py-4 space-y-2">
+          <Skeleton shimmer className="h-4 w-40" />
+          <Skeleton shimmer className="h-3 w-56" />
+          <Skeleton shimmer className="h-1.5 w-full rounded-full" />
         </li>
       ))}
     </ul>
@@ -23,11 +28,12 @@ function PlanesSkeleton() {
 }
 
 export function PlanesTab({
-  planes, loading, error, mostrarEmpresa, canWrite, onNuevoPlan, onVerDetalle,
+  planes, loading, error, onReintentar, mostrarEmpresa, canWrite, onNuevoPlan, onVerDetalle,
 }: {
   planes: PlanCarrera[]
   loading: boolean
   error: string | null
+  onReintentar: () => void
   mostrarEmpresa: boolean
   canWrite: boolean
   onNuevoPlan: () => void
@@ -51,14 +57,23 @@ export function PlanesTab({
       </div>
 
       {loading && <PlanesSkeleton />}
+      {/* 🔴 EL ERROR ES `ErrorState`, NO UN `EmptyState` CON TÍTULO DE ERROR. No es lo mismo "no
+          hay planes" que "no sabemos si hay planes": el primero es un dato, el segundo es una
+          falla, y hasta esta tanda las dos se dibujaban con el mismo cartel gris y sin salida.
+          `ErrorState` trae el reintento, que es lo único accionable de los dos casos. */}
       {!loading && error && (
-        <EmptyState icon={<TrendingUp />} title="Error al cargar los planes" description={error} />
+        <ErrorState title="No se pudieron cargar los planes" description={error} action={onReintentar} />
       )}
       {!loading && !error && planes.length === 0 && (
         <EmptyState
           icon={<TrendingUp />}
-          title="Sin planes de carrera"
-          description="Todavía no hay planes de carrera activos registrados."
+          title="Todavía no hay planes de carrera"
+          /* Copy propio en vez del genérico de `textoVacio`: esta lista no tiene filtros, así que
+             la rama genérica sólo podría decir "cuando se cargue el primero va a aparecer acá" y
+             ahí se pierde lo único que importa —qué es un plan y para qué sirve tener uno—. Para
+             `gerencia_lectura`, que no puede crearlos, la frase sigue siendo cierta y no le pide
+             nada; el botón de alta ya está arriba y sólo con permiso. */
+          description="Un plan de carrera es el trayecto de una persona de su cargo actual a uno objetivo, con hitos y un porcentaje de readiness. Sin ninguno cargado, el seguimiento de desarrollo vive fuera del sistema."
         />
       )}
       {!loading && !error && planes.length > 0 && (

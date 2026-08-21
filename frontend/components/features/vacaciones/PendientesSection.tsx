@@ -113,7 +113,10 @@ export function PendientesSection({ showEmpresa, refreshKey }: PendientesSection
         />
       )}
 
-      {!loading && !error && total > PAGE_SIZE && (
+      {/* El pie va SIEMPRE que haya filas, no sólo con más de una página (§3): es lo que dice
+          cuántos registros hay, y ese número es el que importa cuando el saldo no cierra. El
+          total es el del backend, no `items.length`. */}
+      {!loading && !error && items.length > 0 && (
         <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
       )}
     </section>

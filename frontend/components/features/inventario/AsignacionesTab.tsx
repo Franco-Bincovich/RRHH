@@ -5,6 +5,7 @@ import { Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { Pagination } from "@/components/ui/Pagination"
 import { AsignacionesInvTable } from "@/components/features/inventario/AsignacionesInvTable"
 import { AsignarModal } from "@/components/features/inventario/AsignarModal"
@@ -28,11 +29,13 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
   // parado en la 7 pediría una página que el resultado nuevo no tiene y la tabla saldría
   // vacía sobre un filtro que sí tiene filas.
   const { empresaActivaId, filtros, campos } = useFiltrosAsignacionesInv(() => setPage(1))
+  const chips = chipsDeCampos(campos)
 
   const load = useCallback(async () => {
     setLoading(true); setError(false)
     try {
       const data = await fetchAsignaciones(filtros, page, PAGE_SIZE)
+      // El total sale del wrapper del backend, NUNCA de `data.items.length`.
       setAsignaciones(data.items); setTotal(data.total)
     } catch { setError(true) }
     finally { setLoading(false) }
@@ -43,9 +46,11 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <FiltersBar campos={campos} />
-        <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        {/* `panel`: la forma completa del patrón de filtros (caja propia, "Más filtros" y los
+            chips de la fila inferior). Antes era la barra simple, sin chips. */}
+        <div className="min-w-[18rem] flex-1"><FiltersBar campos={campos} panel disabled={loading} /></div>
+        <div className="flex gap-2">
           <ExportMenu onExport={(f) => exportarInventarioAsignaciones(f, filtros)} />
           {canWrite && (
             <Button className="min-h-11" onClick={() => setAsignarModal(true)}>
@@ -58,9 +63,17 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
       <AsignacionesInvTable
         asignaciones={asignaciones} loading={loading} error={error} canWrite={canWrite}
         mostrarEmpresa={!empresaActivaId} onReload={load} onDevolver={setDevolviendo}
+        chips={chips}
+        onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
+        accionVacio={canWrite ? (
+          <Button className="min-h-11" onClick={() => setAsignarModal(true)}>Asignar el primero</Button>
+        ) : undefined}
       />
 
-      {total > PAGE_SIZE && (
+      {/* 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS (era `total > PAGE_SIZE`) y sólo después de cargar:
+          sin la guarda, la barra queda mostrando el total del pedido ANTERIOR sobre el esqueleto.
+          El total es el del backend, no `asignaciones.length`. */}
+      {!loading && !error && asignaciones.length > 0 && (
         <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
       )}
 

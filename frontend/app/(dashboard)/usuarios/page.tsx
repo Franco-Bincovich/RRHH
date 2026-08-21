@@ -2,16 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Users } from "lucide-react"
+import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { EmptyState } from "@/components/ui/EmptyState"
-import { ErrorState } from "@/components/ui/ErrorState"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { UsuariosTable } from "@/components/features/usuarios/UsuariosTable"
+import { AVISO_CATALOGO_GLOBAL } from "@/components/features/usuarios/_avisos"
 import { CrearUsuarioModal } from "@/components/features/usuarios/CrearUsuarioModal"
 import { PasswordRevealModal } from "@/components/features/usuarios/PasswordRevealModal"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
@@ -92,33 +90,35 @@ export default function UsuariosPage() {
     <div>
       <PageHeader
         title="Usuarios"
-        description={loading ? "Cargando..." : `${usuarios.length} usuario${usuarios.length !== 1 ? "s" : ""}`}
-        action={!loading && !error && usuarios.length > 0 ? (
+        /* El conteo y, pegado, el aviso de que esta pantalla no se recorta por empresa. Va en el
+           SUBTÍTULO porque describe lo que la pantalla ES — misma regla que en clientes.
+           `usuarios.length` como conteo es correcto ACÁ Y SÓLO ACÁ: el endpoint devuelve todo,
+           así que el largo del array ES el total. En un listado paginado ese mismo `.length` es
+           el bug que `paginacionTotales.test.ts` persigue. */
+        description={
+          loading
+            ? "Cargando..."
+            : `${usuarios.length} usuario${usuarios.length !== 1 ? "s" : ""} · ${AVISO_CATALOGO_GLOBAL}`
+        }
+        action={
           // El archivo sale del MISMO listado que la tabla y esta pantalla no tiene filtros:
           // trae exactamente lo que se ve. Sin filas no se ofrece exportar.
           <div className="flex items-center gap-2">
-            <ExportMenu onExport={exportarUsuarios} />
+            {!loading && !error && usuarios.length > 0 && <ExportMenu onExport={exportarUsuarios} />}
             {crearBtn}
           </div>
-        ) : undefined}
+        }
       />
 
-      {loading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
-        </div>
-      ) : error ? (
-        <ErrorState description="No se pudieron cargar los usuarios." action={load} />
-      ) : usuarios.length === 0 ? (
-        <EmptyState
-          icon={<Users />}
-          title="Sin usuarios"
-          description="Todavía no hay usuarios del sistema. Creá el primero."
-          action={crearBtn}
-        />
-      ) : (
-        <UsuariosTable usuarios={usuarios} onDelete={setAEliminar} deletingId={deletingId} />
-      )}
+      <UsuariosTable
+        usuarios={usuarios}
+        loading={loading}
+        error={error}
+        onRetry={load}
+        onDelete={setAEliminar}
+        deletingId={deletingId}
+        accionVacio={crearBtn}
+      />
 
       <CrearUsuarioModal
         open={modalOpen}

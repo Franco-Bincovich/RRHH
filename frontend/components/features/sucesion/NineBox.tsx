@@ -5,68 +5,13 @@ import { useState } from "react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
 
-// ─── Public types ─────────────────────────────────────────────────────────────
+// La grilla y sus colores viven aparte: ver el 🔴 del encabezado de ese archivo.
+import { CELDAS, ZONE_BG, ZONE_TEXT, initials, type EmpleadoCelda, type Zone } from "./_nineBoxGrilla"
 
-export interface EmpleadoCelda {
-  id: string
-  nombre: string
-  cargo: string
-  area: string
-  /** 0 = Alto potencial (top), 2 = Bajo potencial (bottom) */
-  fila: 0 | 1 | 2
-  /** 0 = Bajo desempeño (left), 2 = Alto desempeño (right) */
-  columna: 0 | 1 | 2
-}
-
-// ─── Internal types & constants ───────────────────────────────────────────────
-
-type Zone = "verde" | "amarillo" | "rojo"
-
-interface Celda {
-  fila: 0 | 1 | 2
-  columna: 0 | 1 | 2
-  nombre: string
-  zone: Zone
-}
-
-// Ordered row-by-row, left-to-right — matches CSS grid placement order
-const CELDAS: Celda[] = [
-  { fila: 0, columna: 0, nombre: "Enigma",        zone: "amarillo" },
-  { fila: 0, columna: 1, nombre: "Alto Potencial", zone: "verde"   },
-  { fila: 0, columna: 2, nombre: "Estrella",       zone: "verde"   },
-  { fila: 1, columna: 0, nombre: "A Desarrollar",  zone: "rojo"    },
-  { fila: 1, columna: 1, nombre: "Sólido",         zone: "amarillo"},
-  { fila: 1, columna: 2, nombre: "Referente",      zone: "verde"   },
-  { fila: 2, columna: 0, nombre: "Riesgo",         zone: "rojo"    },
-  { fila: 2, columna: 1, nombre: "Consistente",    zone: "rojo"    },
-  { fila: 2, columna: 2, nombre: "Efectivo",       zone: "amarillo"},
-]
-
-const ZONE_BG: Record<Zone, string> = {
-  verde:
-    "bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800/60",
-  amarillo:
-    "bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800/60",
-  rojo:
-    "bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-800/60",
-}
-
-const ZONE_TEXT: Record<Zone, string> = {
-  verde:    "text-emerald-700 dark:text-emerald-400",
-  amarillo: "text-amber-700 dark:text-amber-400",
-  rojo:     "text-rose-700 dark:text-rose-400",
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function initials(nombre: string): string {
-  return nombre
-    .split(" ")
-    .slice(0, 2)
-    .map((p) => p[0] ?? "")
-    .join("")
-    .toUpperCase()
-}
+// `EmpleadoCelda` se mudó con la grilla —es la forma del DATO que cada casillero recibe, no del
+// componente— y se re-exporta desde acá para que los dos importadores que ya existían
+// (`_sucesion_ui.ts` y `MapaTalentoTab.tsx`) no tengan que cambiar de origen.
+export type { EmpleadoCelda } from "./_nineBoxGrilla"
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
+import { Button } from "@/components/ui/button"
 import { ClientesTabla } from "@/components/features/clientes/ClientesTabla"
 import type { Cliente } from "@/types/cliente"
 
@@ -19,9 +20,11 @@ import type { Cliente } from "@/types/cliente"
  * (validarNombre, mensajeDeError).
  *
  * **2. Los botones se OMITEN, no se deshabilitan — y por eso se afirma sobre el texto y no
- * sobre "disabled".** El `Button` de shadcn trae la clase `disabled:pointer-events-none` en su
- * markup SIEMPRE, con o sin la prop: `expect(html).not.toContain("disabled")` es una aserción
- * que NO PUEDE FALLAR NUNCA. La prueba está abajo, en `test_la_trampa_del_disabled`.
+ * sobre "disabled".** Con el `Button` de shadcn la razón era que trae `disabled:pointer-events-none`
+ * en su markup SIEMPRE, con o sin la prop. Desde la migración al patrón del bloque B las acciones
+ * son `<button>` planos que NO traen ninguna variante `disabled:`, así que ahora la razón es la
+ * contraria y lleva al mismo lugar: `not.toContain("disabled")` pasaría con el gate borrado. Las
+ * dos mitades están abajo, en "la trampa del disabled".
  *
  * **3. Las dos direcciones.** Con `canWrite: true` los botones TIENEN que estar. Sin ese
  * contraste, "no aparecen" pasaría con un componente que no renderiza filas.
@@ -33,9 +36,19 @@ const ACTIVO: Cliente = {
 }
 const BAJA: Cliente = { ...ACTIVO, id: "c2", nombre: "Globex", activo: false }
 
+/*
+ * ⚠️ LOS PROPS NUEVOS SON DEL PATRÓN DEL BLOQUE B, no de este test: al migrar la pantalla, la
+ * tabla pasó a ser dueña de sus tres estados (carga, error, vacío), que antes tenía la página.
+ * Acá se le pasan los valores del camino con datos —sin carga, sin error, sin filtros— para que
+ * lo que estos tests miran siga siendo exactamente lo mismo: el gate de escritura y el estado.
+ */
 function render(clientes: Cliente[], canWrite: boolean): string {
   const html = renderToStaticMarkup(
-    <ClientesTabla clientes={clientes} canWrite={canWrite} onEdit={() => {}} onDelete={() => {}} />,
+    <ClientesTabla
+      clientes={clientes} canWrite={canWrite} loading={false} error={null}
+      onRetry={() => {}} onEdit={() => {}} onDelete={() => {}}
+      chips={[]} onLimpiarTodo={() => {}}
+    />,
   )
   // 🔴 GUARDA: sin esto, un componente que renderiza "" pasaría todas las aserciones negativas.
   expect(html.length).toBeGreaterThan(50)
@@ -59,11 +72,29 @@ describe("ClientesTabla — gate de escritura", () => {
   })
 
   it("la trampa del disabled: afirmarlo no probaría nada", () => {
-    // El markup de shadcn trae la clase `disabled:` con y sin la prop. Este test existe para
-    // dejar constancia de por qué las aserciones de arriba miran el TEXTO del aria-label y no
-    // la palabra "disabled": si alguien "mejora" el gate a `disabled={!canWrite}`, esta
-    // aserción seguiría pasando y el botón seguiría clickeable para gerencia_lectura.
-    expect(render([ACTIVO], true)).toContain("disabled:")
+    /*
+     * 🔴 ESTE TEST CAMBIÓ DE FORMA AL MIGRAR LA TABLA AL PATRÓN DEL BLOQUE B, y el cambio hay que
+     * leerlo entero antes de tocarlo.
+     *
+     * Decía `expect(render([ACTIVO], true)).toContain("disabled:")`, y su punto era: el `Button`
+     * de shadcn escribe la clase `disabled:pointer-events-none` en el markup SIEMPRE, con o sin
+     * la prop, así que `not.toContain("disabled")` es una aserción que NO PUEDE FALLAR NUNCA —
+     * por eso los tests de arriba miran el TEXTO del aria-label.
+     *
+     * Las acciones de esta tabla ya no son `Button` de shadcn: son `<button>` planos con las
+     * clases del patrón (siempre visibles, cambian de color al apuntar), y esas clases no
+     * incluyen ninguna variante `disabled:`. O sea que la trampa **ya no está en este markup**.
+     *
+     * El test no se borra: se parte en las dos mitades que ahora son verdad, porque la conclusión
+     * —mirar el aria-label y no la palabra "disabled"— sigue siendo la correcta y ahora lo es por
+     * un motivo distinto. La primera mitad conserva la demostración de la trampa sobre el
+     * componente que la produce; la segunda fija que esta tabla ya no la tiene.
+     */
+    // 1. La trampa sigue existiendo donde nació: shadcn emite `disabled:` sin que nadie lo pida.
+    expect(renderToStaticMarkup(<Button>Cualquiera</Button>)).toContain("disabled:")
+    // 2. Y esta tabla ya no emite ninguna, así que un `not.toContain("disabled")` acá pasaría
+    //    igual con el gate borrado — por eso las aserciones de arriba miran el aria-label.
+    expect(render([ACTIVO], true)).not.toContain("disabled:")
   })
 })
 

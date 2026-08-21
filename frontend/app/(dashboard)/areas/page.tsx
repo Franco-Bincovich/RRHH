@@ -1,15 +1,14 @@
 "use client"
 
-import { Plus, Search, Layers } from "lucide-react"
+import { Plus } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { EmptyState } from "@/components/ui/EmptyState"
-import { ErrorState } from "@/components/ui/ErrorState"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { AreaModal } from "@/components/features/areas/AreaModal"
 import { AreasTabla } from "@/components/features/areas/AreasTabla"
+import { construirCampos } from "@/components/features/areas/_camposAreas"
 import { PAGE_SIZE, useAreas } from "@/components/features/areas/useAreas"
 import { useAreasAcciones } from "@/components/features/areas/useAreasAcciones"
 import { AreaEliminarDialog } from "@/components/features/areas/AreaEliminarDialog"
@@ -31,47 +30,24 @@ export default function AreasPage() {
     handleDelete, openCreate, openEdit, onModalSuccess,
   } = useAreasAcciones(load)
 
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Áreas" description="Cargando..." />
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-lg" />
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div>
-        <PageHeader title="Áreas" />
-        <ErrorState
-          description="No se pudieron cargar las áreas."
-          action={load}
-        />
-      </div>
-    )
-  }
+  const campos = construirCampos({ search, setSearch })
+  const chips = chipsDeCampos(campos)
 
   return (
     <div>
       <PageHeader
         title="Áreas"
-        // `total` y no `areas.length`: `areas` es una página, y con búsqueda el total es el
-        // del filtro. Leer el largo diría 20 sobre 58, y 3 sobre 3 al buscar.
-        description={`${total} área${total !== 1 ? "s" : ""}`}
+        /* 🔴 EL CONTEO SALE DE `total` Y NO DE `areas.length`: `areas` es UNA PÁGINA, y con
+           búsqueda el total es el del filtro. Leer el largo diría 20 sobre 58, y 3 sobre 3 al
+           buscar. Sólo la primerísima carga no tiene número que mostrar. */
+        description={loading && total === 0 ? "Cargando..." : `${total} área${total !== 1 ? "s" : ""}`}
         action={
           <div className="flex items-center gap-2">
-            {/* El MISMO filtro de empresa que el listado. ⚠️ El buscador de abajo es
-                CLIENT-SIDE, así que el archivo trae todas las áreas de la empresa, no las que
-                el buscador deja a la vista. Con 12 áreas es tolerable; el día que crezca, ese
-                `search` tiene que pasar al backend (regla del bloque B). */}
+            {/* 🔴 El MISMO `buscado` que filtra la pantalla, y la MISMA empresa del sidebar.
+                Antes el buscador era local y el archivo salía con todo: buscabas 3 áreas y
+                exportabas 58. (Ese buscador es server-side desde el 15/8/2026 — ver `useAreas`;
+                el comentario que decía lo contrario acá quedó viejo y se corrigió.) */}
             <ExportMenu
-              // 🔴 El MISMO `buscado` que filtra la pantalla. Antes el buscador era local y el
-              // archivo salía con todo: buscabas 3 áreas y exportabas 58.
               onExport={(formato) => exportarAreas(formato, getEmpresaActivaId() ?? undefined, buscado || undefined)}
             />
             {canWrite && (
@@ -84,44 +60,38 @@ export default function AreasPage() {
         }
       />
 
-      <div className="mb-4">
-        <div className="relative max-w-sm">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nombre..."
-            className="pl-8"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </div>
+      {/* `panel`: la forma completa del patrón de filtros (caja propia y los chips de la fila
+          inferior). Un solo control, así que no hay "Más filtros" — ver `_camposAreas.ts`.
+          `disabled` durante la carga: el control queda A LA VISTA con su chip pero no se puede
+          tocar (§3); vaciarlo le sacaría al usuario justo el filtro cuyo resultado espera. */}
+      <FiltersBar campos={campos} panel disabled={loading} />
 
-      {total === 0 ? (
-        <EmptyState
-          icon={<Layers />}
-          title={search ? "Sin resultados" : "Sin áreas"}
-          description={
-            search
-              ? "No hay áreas que coincidan con la búsqueda."
-              : "Todavía no hay áreas registradas. Creá la primera."
-          }
-          action={
-            !search && canWrite ? (
-              <Button className="min-h-11" onClick={openCreate}>
-                <Plus />
-                Nueva área
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <>
-          <AreasTabla areas={areas} canWrite={canWrite}
-                      onEdit={openEdit} onDelete={setConfirmDelete} />
-          {total > PAGE_SIZE && (
-            <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
-          )}
-        </>
+      <AreasTabla
+        areas={areas}
+        loading={loading}
+        error={error}
+        canWrite={canWrite}
+        onRetry={load}
+        onEdit={openEdit}
+        onDelete={setConfirmDelete}
+        chips={chips}
+        onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
+        accionVacio={canWrite ? (
+          <Button className="min-h-11" onClick={openCreate}>Crear la primera</Button>
+        ) : undefined}
+      />
+
+      {/*
+       * 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS, no sólo cuando hay más de una página (era
+       * `total > PAGE_SIZE`): es lo que dice cuántos resultados dio la búsqueda, y ese número es
+       * el que importa justo cuando hay una búsqueda puesta.
+       * ⚠️ Y VA DETRÁS DE `!loading`: hasta ahora esta pantalla no podía dibujar el pie sobre el
+       * esqueleto porque el `return` temprano de la carga se llevaba la página entera. Al mover
+       * los estados adentro de la tabla, esa protección accidental desaparece — sin esta guarda,
+       * la barra quedaría mostrando el total del pedido ANTERIOR mientras carga el nuevo.
+       */}
+      {!loading && !error && areas.length > 0 && (
+        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
       )}
 
       <AreaModal

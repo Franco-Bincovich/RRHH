@@ -47,6 +47,7 @@ export function BajasTable({
           colSpan={columnas.length}
           chips={chips}
           sustantivo="bajas"
+          genero="femenino"
           claveSujeto="Empresa"
           onLimpiarTodo={onLimpiarTodo}
           accion={accionVacio}

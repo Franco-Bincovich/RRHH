@@ -1,9 +1,11 @@
 "use client"
 
 import { ChevronRight, ClipboardList, Lock, X } from "lucide-react"
+import type { ReactNode } from "react"
 
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { OnboardingTemplate } from "@/types/onboarding"
 
 interface TemplatesListProps {
@@ -17,6 +19,11 @@ interface TemplatesListProps {
   onAbrir: (id: string) => void
   /** Recibe el template entero: la confirmación lo nombra, no muestra un UUID. */
   onEliminar: (t: OnboardingTemplate) => void
+  /** Reintento del error. Antes el `ErrorState` se dibujaba SIN accion: el usuario leia que algo
+   *  fallo y no tenia con que volver a intentar salvo recargar la pestana entera. */
+  onReintentar: () => void
+  /** Que ofrecer cuando no hay datos: el alta. `undefined` si no puede escribir. */
+  accionVacio?: ReactNode
 }
 
 /**
@@ -32,25 +39,34 @@ export function TemplatesList({
   deletingId,
   onAbrir,
   onEliminar,
+  onReintentar,
+  accionVacio,
 }: TemplatesListProps) {
   if (loading) {
     return (
       <ul className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <li key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
+          <li key={i}><Skeleton shimmer className="h-20 w-full rounded-xl" /></li>
         ))}
       </ul>
     )
   }
 
-  if (error) return <ErrorState description={error} />
+  if (error) return <ErrorState description={error} action={onReintentar} />
 
   if (templates.length === 0) {
+    /*
+     * 🔴 COPY PROPIO, y no `textoVacio`: esta pantalla no tiene filtros, así que el helper sólo
+     * daría su rama genérica —"Cuando se cargue el primero va a aparecer acá"— y ahí se pierde lo
+     * único que importa. Sin templates **no se puede iniciar ningún onboarding**: la pantalla de
+     * al lado arranca eligiendo uno. No es "faltan datos", es una capacidad apagada.
+     */
     return (
       <EmptyState
         icon={<ClipboardList />}
-        title="Sin templates"
-        description="Creá un template para definir el proceso de onboarding de tu empresa."
+        title="Todavía no hay ningún template"
+        description="Mientras no haya al menos uno, no se puede iniciar un onboarding: el proceso arranca eligiendo el template que define sus tareas."
+        action={accionVacio}
       />
     )
   }
@@ -64,7 +80,7 @@ export function TemplatesList({
             onClick={() => onAbrir(t.id)}
             className="min-w-0 flex-1 rounded-xl border bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <div className="flex items-center justify-between gap-3">
+            <div className="group flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-1.5 font-medium text-foreground">
                   {t.nombre}
@@ -73,7 +89,7 @@ export function TemplatesList({
                       o sos gerencia. */}
                   {!t.es_publica && (
                     <span
-                      className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"
+                      className="inline-flex items-center gap-1 rounded-md border border-warning-line bg-warning-wash px-1.5 py-0.5 text-[11px] font-medium text-warning"
                       title={t.created_by_nombre ? `Privada de ${t.created_by_nombre}` : "Privada"}
                     >
                       <Lock className="size-3" />
@@ -95,7 +111,8 @@ export function TemplatesList({
                   )}
                 </p>
               </div>
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              {/* Siempre visible, solo cambia de color al apuntar la fila (§3). */}
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" aria-hidden="true" />
             </div>
           </button>
           {canWrite && (

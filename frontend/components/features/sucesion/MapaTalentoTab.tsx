@@ -1,24 +1,35 @@
 "use client"
 
-import { Filter, Layers, Search } from "lucide-react"
+import { Layers, Search } from "lucide-react"
 
 import { EmptyState } from "@/components/ui/EmptyState"
+import { ErrorState } from "@/components/ui/ErrorState"
+import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Select } from "@/components/ui/select"
-import { NineBox } from "./NineBox"
-import type { EmpleadoCelda } from "./NineBox"
+import { Skeleton } from "@/components/ui/skeleton"
+import { NineBox, type EmpleadoCelda } from "./NineBox"
+import { construirCamposSucesion } from "./_camposSucesion"
 import { toEmpleadoCelda } from "./_sucesion_ui"
 import type { Area } from "@/types/area"
 import type { EmpleadoMapa } from "@/types/sucesion"
 
+/**
+ * El esqueleto dibuja la MISMA grilla de 3×3 que va a aparecer, con el mismo alto de celda: es la
+ * regla del patrón (§3) —el esqueleto tiene la forma de lo que llega— y acá evita el salto de
+ * layout más grande de la pantalla.
+ *
+ * `shimmer` y no `animate-pulse`: el pulse de 2s late más lento que el resto del sistema y en una
+ * grilla de nueve bloques grandes se nota como un parpadeo.
+ */
 function MapaSkeleton() {
   return (
-    <div className="animate-pulse space-y-3">
-      <div className="h-6 w-32 rounded bg-muted" />
+    <div className="space-y-3">
+      <Skeleton shimmer className="h-6 w-32" />
       <div className="grid grid-cols-3 gap-1">
         {Array.from({ length: 9 }).map((_, i) => (
-          <div key={i} className="min-h-[100px] rounded-lg bg-muted" />
+          <Skeleton key={i} shimmer className="min-h-[100px] rounded-lg" />
         ))}
       </div>
     </div>
@@ -26,7 +37,7 @@ function MapaSkeleton() {
 }
 
 export function MapaTalentoTab({
-  empleados, areas, selectedArea, onSelectArea, loading, error, onAnalizar,
+  empleados, areas, selectedArea, onSelectArea, loading, error, onReintentar, onAnalizar,
 }: {
   empleados: EmpleadoMapa[]
   areas: Area[]
@@ -34,8 +45,12 @@ export function MapaTalentoTab({
   onSelectArea: (areaId: string) => void
   loading: boolean
   error: string | null
+  onReintentar: () => void
   onAnalizar: () => void
 }) {
+  const campos = construirCamposSucesion({ areas, area: selectedArea, setArea: onSelectArea })
+  const chips = chipsDeCampos(campos)
+
   const empleadosFiltrados: EmpleadoCelda[] = (
     selectedArea
       ? empleados.filter((e) => e.area_id === selectedArea)
@@ -47,38 +62,32 @@ export function MapaTalentoTab({
       <Card as="section" aria-label="Mapa 9-box de talento">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-foreground">Mapa 9-Box</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <Filter className="size-3.5 text-muted-foreground" />
-              <Select
-                size="sm" className="w-auto"
-                value={selectedArea}
-                onChange={(e) => onSelectArea(e.target.value)}
-                aria-label="Filtrar por área"
-              >
-                <option value="">Todas las áreas</option>
-                {areas.map((a) => (
-                  <option key={a.id} value={a.id}>{a.nombre}</option>
-                ))}
-              </Select>
-            </div>
-            <p className="hidden text-xs text-muted-foreground md:block">
-              Clic en un empleado para ver detalle
-            </p>
-          </div>
+          <p className="hidden text-xs text-muted-foreground md:block">
+            Clic en un empleado para ver detalle
+          </p>
         </div>
+
+        {/* `panel`: la forma completa del patrón —caja propia y la fila de chips abajo—. Un solo
+            campo, así que no hay nada detrás de "Más filtros". `disabled` durante la carga: el
+            filtro queda A LA VISTA con su chip pero no se puede tocar (§3). */}
+        <FiltersBar campos={campos} panel disabled={loading} />
 
         {loading && <MapaSkeleton />}
         {!loading && error && (
-          <EmptyState icon={<Layers />} title="Error al cargar el mapa" description={error} />
+          <ErrorState title="No se pudo cargar el mapa de talento" description={error} action={onReintentar} />
         )}
         {!loading && !error && empleadosFiltrados.length === 0 && (
           <EmptyState
             icon={<Layers />}
             title="Sin colaboradores en el mapa"
-            description={selectedArea
-              ? "No hay colaboradores en esta área con potencial y desempeño asignados."
-              : "Asigná potencial y desempeño a los colaboradores activos para verlos aquí."}
+            /* 🔴 EL VACÍO NOMBRA EL ÁREA REAL, no "esta área". El valor sale del chip, o sea de la
+               misma opción que llena el selector: no puede decir un uuid ni un nombre viejo.
+               Y dice lo que la ausencia SIGNIFICA: el 9-box necesita potencial Y desempeño
+               cargados, así que un padrón entero sin esos dos campos deja el mapa vacío sin que
+               falte nadie. */
+            description={chips.length > 0
+              ? `Nadie de ${chips[0].valor} tiene potencial y desempeño cargados.`
+              : "El mapa cruza potencial con desempeño: hasta que esos dos campos no estén cargados en las fichas, no hay a quién ubicar."}
           />
         )}
         {!loading && !error && empleadosFiltrados.length > 0 && (

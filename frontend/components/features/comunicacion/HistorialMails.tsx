@@ -3,6 +3,7 @@
 import { HistorialTabla } from "@/components/features/comunicacion/HistorialTabla"
 import { useHistorialMails } from "@/components/features/comunicacion/useHistorialMails"
 import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
 
 /**
  * Pestaña "Historial" de /comunicacion: qué mails salieron, a quién y —si falló— por qué.
@@ -20,17 +21,23 @@ import { FiltersBar } from "@/components/ui/FiltersBar"
 export function HistorialMails() {
   const { campos, items, limite, cargando, error, recargar } = useHistorialMails()
 
-  // "Hay filtros puestos" se deriva de los propios campos, no de una bandera aparte que haya
-  // que acordarse de actualizar al sumar un filtro nuevo.
-  const filtrado = campos.some((c) =>
-    c.tipo === "daterange" ? Boolean(c.value.desde || c.value.hasta) : Boolean(c.value))
+  /*
+   * "Hay filtros puestos" ya no es una bandera propia: son los CHIPS, derivados de los mismos
+   * campos que dibujan la barra. Es el mismo dato con una ventaja — además de saber SI hay
+   * filtros, el vacío puede decir CUÁLES ("No hay mails con estado No entregados").
+   */
+  const chips = chipsDeCampos(campos)
 
   return (
     <div>
-      <FiltersBar campos={campos} />
+      {/* `panel`: la forma completa del patrón de filtros (caja propia y los chips de la fila
+          inferior). Los dos filtros van a la vista: con dos —y uno es un rango de fechas—
+          esconder alguno detrás de "Más filtros" no compra nada. */}
+      <FiltersBar campos={campos} panel disabled={cargando} />
 
       <HistorialTabla
-        items={items} cargando={cargando} error={error} filtrado={filtrado}
+        items={items} cargando={cargando} error={error}
+        chips={chips} onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
         onReintentar={recargar}
       />
 

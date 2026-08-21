@@ -5,11 +5,13 @@ import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { FormErrores } from "@/components/ui/FormErrores"
 import { AreaFormFields } from "@/components/features/areas/AreaFormFields"
 import { EMPTY, type FormData, type FormErrors } from "@/components/features/areas/areaForm"
 import { guardarArea } from "@/components/features/areas/guardarArea"
@@ -86,12 +88,26 @@ export function AreaModal({ open, onClose, onSuccess, area, empresaId }: AreaMod
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-md">
+      {/* El ancho (560px) y los campos de 34px los pone el patrón, no el modal: por eso ya no
+          lleva `max-w-md`. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar área" : "Nueva área"}</DialogTitle>
+          {/* 🔴 UNA LÍNEA QUE EXPLICA LA CONSECUENCIA, no lo que el modal es (§3). Lo que el
+              usuario no puede deducir mirando los campos es que el área es POR EMPRESA y que de
+              ella cuelgan el filtro de área de media docena de pantallas. */}
+          <DialogDescription>
+            {isEdit
+              ? "Los cambios se ven al instante en la ficha de cada colaborador del área y en los filtros que la usan."
+              : "El área queda disponible para asignar colaboradores y para filtrar por ella en el resto del sistema."}
+          </DialogDescription>
         </DialogHeader>
 
         <form id="area-form" onSubmit={handleSubmit} noValidate>
+          {/* El PRIMER nivel de la validación es la CUENTA, no la lista de campos: el "qué
+              corrijo" lo contesta el segundo nivel, en cada campo. */}
+          <FormErrores cantidad={Object.values(errors).filter(Boolean).length} />
+
           <AreaFormFields form={form} errors={errors} empresas={empresas}
                           responsableNombre={area?.responsable_nombre ?? undefined}
                           onResponsable={(id) => setForm((p) => ({ ...p, responsable_id: id }))}

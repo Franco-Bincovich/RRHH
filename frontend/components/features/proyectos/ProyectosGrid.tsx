@@ -1,81 +1,26 @@
 "use client"
 
 /**
- * Grilla de proyectos: presentacional. Cubre los cuatro estados del listado (cargando /
- * error / vacío / datos) y no sabe nada de filtros ni de fetch — extraída de la página, que
- * estaba en 156 líneas contra un límite de 150.
+ * Grilla de proyectos: presentacional. Cubre los cuatro estados del listado (cargando / error /
+ * vacío / datos) y no sabe nada de filtros ni de fetch.
  *
- * Se llama Grid y no Table porque eso es lo que renderiza: tarjetas, no una tabla.
+ * Se llama Grid y no Table porque eso es lo que renderiza: tarjetas, no una tabla. UNA tarjeta
+ * vive en `ProyectoCard.tsx` — se mudó ahí al sumarle el patrón del bloque B, que llevaba este
+ * archivo a 180 líneas contra un límite de 150.
  */
-import { useRouter } from "next/navigation"
 import { FolderKanban } from "lucide-react"
+import type { ReactNode } from "react"
 
+import { EmptyState } from "@/components/ui/EmptyState"
+import { ErrorState } from "@/components/ui/ErrorState"
 import { GrillaTarjetas } from "@/components/ui/GrillaTarjetas"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import type { Proyecto, ProyectoEstado } from "@/types/proyecto"
+import { Skeleton } from "@/components/ui/skeleton"
+import type { ChipFiltro } from "@/components/ui/filtrosChips"
+import { textoVacio } from "@/components/ui/textoVacio"
+import type { Proyecto } from "@/types/proyecto"
 
-const ARS = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 })
-const ESTADO_VARIANT: Record<ProyectoEstado, "default" | "secondary" | "destructive" | "outline"> = {
-  activo: "default", pausado: "outline", cerrado: "secondary", cancelado: "destructive",
-}
-
-function CosteoBar({ pct }: { pct: number | null }) {
-  if (pct === null) return <p className="text-xs text-muted-foreground">Sin presupuesto</p>
-  const over = pct > 100
-  return (
-    <div className="space-y-1">
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <div
-          className={cn("h-full rounded-full", over ? "bg-destructive" : "bg-primary")}
-          style={{ width: `${Math.min(pct, 100)}%` }}
-        />
-      </div>
-      <p className={cn("text-xs", over ? "font-semibold text-destructive" : "text-muted-foreground")}>
-        {pct.toFixed(1)}% consumido
-      </p>
-    </div>
-  )
-}
-
-function ProyectoCard({ proyecto, canWrite, onEdit }: { proyecto: Proyecto; canWrite: boolean; onEdit: (p: Proyecto) => void }) {
-  const router = useRouter()
-  const { costeo } = proyecto
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-5">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">{proyecto.nombre}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">{proyecto.empresa_nombre}</p>
-        </div>
-        <Badge variant={ESTADO_VARIANT[proyecto.estado]} className="shrink-0 capitalize">{proyecto.estado}</Badge>
-      </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
-        <span className="text-muted-foreground">Presupuesto</span>
-        <span className="text-right font-medium text-foreground">{ARS.format(proyecto.presupuesto)}</span>
-        <span className="text-muted-foreground">Consumido</span>
-        <span className="text-right font-medium text-foreground">{ARS.format(costeo.costo_acumulado)}</span>
-        <span className="text-muted-foreground">Restante</span>
-        <span className={cn("text-right font-medium", costeo.presupuesto_restante < 0 ? "text-destructive" : "text-foreground")}>
-          {ARS.format(costeo.presupuesto_restante)}
-        </span>
-      </div>
-      <CosteoBar pct={costeo.pct_consumido} />
-      <div className="mt-auto flex gap-2 pt-1">
-        <Button variant="outline" size="sm" className="min-h-[2.75rem] flex-1 text-xs" onClick={() => router.push(`/proyectos/${proyecto.id}`)}>
-          Ver detalle
-        </Button>
-        {canWrite && (
-          <Button variant="ghost" size="sm" className="min-h-[2.75rem] text-xs" onClick={() => onEdit(proyecto)}>
-            Editar
-          </Button>
-        )}
-      </div>
-    </div>
-  )
-}
-
+import { ProyectoCard } from "./ProyectoCard"
 
 interface ProyectosGridProps {
   proyectos: Proyecto[]
@@ -83,34 +28,62 @@ interface ProyectosGridProps {
   error: string | null
   canWrite: boolean
   onEdit: (p: Proyecto) => void
-  onCrear: () => void
+  onRetry: () => void
+  /** Los filtros activos, para explicar el vacío con sus valores reales y ofrecer quitarlos. */
+  chips: ChipFiltro[]
+  onLimpiarTodo: () => void
+  /** Qué ofrecer cuando NO hay filtros y tampoco datos: el alta. `undefined` sin permiso. */
+  accionVacio?: ReactNode
 }
 
-export function ProyectosGrid({ proyectos, loading, error, canWrite, onEdit, onCrear }: ProyectosGridProps) {
+/**
+ * ═════════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 EL VACÍO ACÁ NO ES `TablaVacia`, Y NO PUEDE SERLO.
+ * ═════════════════════════════════════════════════════════════════════════════════════════
+ * `TablaVacia` renderiza un `<TableBody>` con una fila de `colSpan`, que es exactamente lo que
+ * conserva el encabezado y los anchos de las columnas. Acá no hay tabla: son TARJETAS (§5, "cosas
+ * que se eligen, no registros que se comparan"), sin encabezado que conservar ni `colSpan` que
+ * contar. Lo que sí se conserva es la parte que importa: el TEXTO sale de `textoVacio()`, el mismo
+ * helper y con los mismos chips, así que la frase se arma con los valores reales de los filtros
+ * igual que en las pantallas de tabla. Mismo precedente que `PerfilesGrid` y `CandidatosLista`.
+ *
+ * 🔴 Y ESE TEXTO ES EL ARREGLO, no un cambio de estilo: hasta ahora el vacío decía "No hay
+ * proyectos registrados" **con tres filtros puestos**. Es verdadero, no dice cuál de los tres
+ * dejó la pantalla en cero, y sobre un padrón con proyectos cargados es directamente engañoso.
+ */
+export function ProyectosGrid({
+  proyectos, loading, error, canWrite, onEdit, onRetry, chips, onLimpiarTodo, accionVacio,
+}: ProyectosGridProps) {
   if (loading) {
+    // El esqueleto son TARJETAS del mismo alto que las reales, con el shimmer de 1,2s que pide
+    // §3 (y no el `animate-pulse` de 2s): así la pantalla no cambia de forma al llegar los datos.
     return (
-      <GrillaTarjetas className="animate-pulse">
-        {[1, 2, 3].map((i) => <div key={i} className="h-60 rounded-xl border bg-muted" />)}
+      <GrillaTarjetas>
+        {[1, 2, 3].map((i) => <Skeleton key={i} shimmer className="h-60 rounded-xl" />)}
       </GrillaTarjetas>
     )
   }
-  if (error) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-16">
-        <FolderKanban className="size-8 text-muted-foreground" />
-        <p className="text-sm text-destructive">{error}</p>
-      </div>
-    )
-  }
+  if (error) return <ErrorState description={error} action={onRetry} />
   if (proyectos.length === 0) {
+    const { titulo, descripcion } = textoVacio(chips, "proyectos", "Empresa")
+    const ultimo = chips[chips.length - 1]
     return (
-      <div className="flex flex-col items-center gap-2 py-16">
-        <FolderKanban className="size-8 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">No hay proyectos registrados.</p>
-        {canWrite && (
-          <Button size="sm" variant="outline" className="mt-1" onClick={onCrear}>Crear el primero</Button>
-        )}
-      </div>
+      <EmptyState
+        icon={<FolderKanban />}
+        title={titulo}
+        description={descripcion}
+        /* Las dos salidas del patrón: quitar el último filtro (el que el usuario acaba de poner)
+           o limpiar todo. Nunca se ejecutan solas: si la pantalla se limpiara sola, el usuario
+           vería aparecer tarjetas sin entender que las está mirando sin el filtro que puso. */
+        action={ultimo ? (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button variant="outline" className="min-h-11" onClick={ultimo.quitar}>
+              Quitar {ultimo.etiqueta.toLowerCase()}: {ultimo.valor}
+            </Button>
+            <Button variant="ghost" className="min-h-11" onClick={onLimpiarTodo}>Limpiar todo</Button>
+          </div>
+        ) : accionVacio}
+      />
     )
   }
   return (

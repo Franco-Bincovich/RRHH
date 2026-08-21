@@ -30,12 +30,19 @@ export function useOffboardings() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
 
-  useEffect(() => {
+  // La carga sale del efecto para que el `ErrorState` de la pantalla pueda volver a dispararla.
+  // Antes el único reintento posible era `window.location.reload()`, que recarga la app entera —
+  // pierde el modo del sidebar, el scroll y cualquier modal abierto — para arreglar UN fetch.
+  const recargar = useCallback(() => {
+    setLoading(true)
+    setError(null)
     fetchOffboardings()
       .then(setOffboardings)
       .catch(() => setError("No se pudieron cargar los offboardings"))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => { recargar() }, [recargar])
 
   const toggleActivo = useCallback(async (instanciaId: string, activo: ActivoResponse) => {
     const devuelto = !activo.devuelto
@@ -66,5 +73,5 @@ export function useOffboardings() {
     setOffboardings((prev) => prev.filter((o) => o.id !== id))
   }, [])
 
-  return { offboardings, loading, error, saving, toggleActivo, marcarEntrevista, quitar }
+  return { recargar, offboardings, loading, error, saving, toggleActivo, marcarEntrevista, quitar }
 }

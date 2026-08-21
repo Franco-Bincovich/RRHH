@@ -1,3 +1,4 @@
+import { isoLocal } from "@/components/features/shared/fechas"
 import type { Empleado, EmpleadoCreate, EstadoAlta } from "@/types/empleado"
 import type { FormData, FormErrors } from "./_constants"
 
@@ -7,13 +8,14 @@ import type { FormData, FormErrors } from "./_constants"
  * 🔴 `new Date().toISOString().slice(0, 10)` es el atajo obvio y está mal acá: `toISOString`
  * convierte a UTC, y en Argentina (UTC-3) desde las 21:00 devuelve el día SIGUIENTE. O sea que
  * un alta cargada de noche con fecha de ingreso "mañana" se leería como "hoy" y nacería activa.
- * Es un bug de una hora por día, que es la peor clase: no se reproduce en la sesión que lo
+ * Es un bug de tres horas por día, que es la peor clase: no se reproduce en la sesión que lo
  * escribe.
+ *
+ * La cuenta vive en `shared/fechas.ts::isoLocal` desde que apareció el segundo llamador (la
+ * ventana de fechas de la pantalla pública de carga de horas). Esto es esa función sin parámetro.
  */
 export function hoyISO(): string {
-  const d = new Date()
-  const mes = String(d.getMonth() + 1).padStart(2, "0")
-  return `${d.getFullYear()}-${mes}-${String(d.getDate()).padStart(2, "0")}`
+  return isoLocal(new Date())
 }
 
 /**

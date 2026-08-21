@@ -3,13 +3,21 @@
  * de FiltroCampo para <FiltersBar>. Sigue el molde de components/features/shared/filtros.ts:
  * un solo objeto de filtros que consumen el listado Y el export, así no pueden divergir.
  *
- * `onFiltroChange` se dispara en cada cambio; la página lo cablea a resetear la paginación
- * (este listado no pagina hoy, pero el contrato queda igual que en el resto de los módulos).
+ * `onFiltroChange` se dispara en cada cambio y la pestaña lo cablea a volver a la página 1
+ * (invariante 4 del bloque B).
+ *
+ * ⚠️ ACÁ DECÍA "este listado no pagina hoy". **Sí pagina**: `GET /api/inventario/asignaciones`
+ * acepta `page`/`page_size` y `AsignacionesTab` dibuja su barra. El comentario quedó viejo y se
+ * corrigió, porque de él se deduce mal la próxima decisión — por ejemplo, contar sobre el array
+ * en vez de leer el `total` del backend.
+ *
+ * ⚠️ El ARMADO de los campos se mudó a `_camposInventario.ts` al migrar la pantalla al patrón del
+ * bloque B: es lo único que un test puede ejercitar sin DOM, y ahí vive la decisión de qué filtro
+ * queda detrás de "Más filtros".
  */
 import { useEffect, useState } from "react"
 
-import { etiquetaArea } from "@/components/features/shared/filtros"
-import type { FiltroCampo } from "@/components/ui/FiltersBar"
+import { construirCamposAsignaciones } from "@/components/features/inventario/_camposInventario"
 import { fetchAreas } from "@/services/areas"
 import type { Area } from "@/types/area"
 import { fetchEmpleadosSeleccionables } from "@/services/empleados"
@@ -44,17 +52,15 @@ export function useFiltrosAsignacionesInv(onFiltroChange: () => void) {
     fetchEmpleadosSeleccionables(empresaId).then(setEmpleados).catch(() => setEmpleados([]))
   }, [empresaId])
 
-  const campos: FiltroCampo[] = [
-    ...(!empresaActivaId && empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: empresaFiltro, opcionTodos: "Todas las empresas",
-      onChange: (v: string) => { setEmpresaFiltro(v); setEmpleadoFiltro(""); setAreaFiltro(""); onFiltroChange() },
-      opciones: empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
-    ...(areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: areaFiltro, opcionTodos: "Todas las áreas",
-      onChange: (v: string) => { setAreaFiltro(v); onFiltroChange() },
-      opciones: areas.map((a) => ({ value: a.id, label: etiquetaArea(a, empresas, Boolean(empresaId)) })) }] : []),
-    ...(empleados.length > 0 ? [{ tipo: "select" as const, label: "Colaborador", value: empleadoFiltro, opcionTodos: "Todos los colaboradores",
-      onChange: (v: string) => { setEmpleadoFiltro(v); onFiltroChange() },
-      opciones: empleados.map((e) => ({ value: e.id, label: `${e.apellido}, ${e.nombre}` })) }] : []),
-  ]
+  /** Cambiar de empresa limpia área y colaborador: los dos son de UNA empresa, y dejarlos
+   *  puestos deja el listado en cero sin que nada lo explique. */
+  const cambiarEmpresa = (v: string) => { setEmpresaFiltro(v); setEmpleadoFiltro(""); setAreaFiltro("") }
+
+  const campos = construirCamposAsignaciones({
+    empresaActivaId, empresas, empresaFiltro, cambiarEmpresa,
+    areas, areaFiltro, setAreaFiltro,
+    empleados, empleadoFiltro, setEmpleadoFiltro, onFiltroChange,
+  })
 
   const filtros: AsignacionesInventarioFiltros = {
     empresaIdOverride: !empresaActivaId && empresaFiltro ? empresaFiltro : undefined,

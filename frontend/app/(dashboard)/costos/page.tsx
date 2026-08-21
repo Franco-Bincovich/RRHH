@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { DollarSign, FileSpreadsheet, Upload } from "lucide-react"
+import { DollarSign, Upload } from "lucide-react"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { EmptyState } from "@/components/ui/EmptyState"
@@ -9,11 +9,11 @@ import { ErrorState } from "@/components/ui/ErrorState"
 import { Button } from "@/components/ui/button"
 import { NominaModal } from "@/components/features/costos/NominaModal"
 import { ImportarNominaCSVModal } from "@/components/features/costos/ImportarNominaCSVModal"
+import { CostosAcciones } from "@/components/features/costos/CostosAcciones"
 import { CostosPorAreaTable } from "@/components/features/costos/CostosPorAreaTable"
 import { DashboardSkeleton, EvolucionChart } from "@/components/features/costos/EvolucionChart"
 import { KpisCostos } from "@/components/features/costos/KpisCostos"
 import { NominaSection } from "@/components/features/costos/NominaSection"
-import { PeriodSelector } from "@/components/features/costos/PeriodSelector"
 import { MESES_LARGOS, totalesDeAreas } from "@/components/features/costos/formatos"
 import { fetchDashboardCostos } from "@/services/costos"
 import { getEmpresaActivaId } from "@/services/empresaStore"
@@ -34,6 +34,13 @@ import type { DashboardCostos } from "@/types/costo"
  *
  * Los dos fetch quedan separados a propósito: el dashboard y el detalle son consultas distintas
  * y `NominaSection` avisa por `onGuardado` cuando editar un sueldo obliga a recargar los KPIs.
+ *
+ * 🔴 ESTA PANTALLA NO TIENE PANEL DE FILTROS CON CHIPS, Y ES UNA DECISIÓN: su único filtro es el
+ * PERÍODO y el backend lo exige. El porqué completo, sin resumir, está en `CostosAcciones.tsx`.
+ * Lo que esta pantalla SÍ toma del patrón del bloque B es la tabla del detalle (`NominaSection`).
+ *
+ * ⚠️ Y NO TIENE TABS. Es un dashboard (KPIs + gráfico + tabla por área) con el detalle de nómina
+ * abajo, todo en la misma vista — no hay `<Tabs>` acá ni hay por qué agregarlas.
  */
 export default function CostosPage() {
   const canWrite = useCanWrite()
@@ -74,21 +81,12 @@ export default function CostosPage() {
         title="Costos de Personal"
         description={`Nómina y presupuesto — ${MESES_LARGOS[mes - 1]} ${anio}`}
         action={
-          <div className="flex items-center gap-2">
-            <PeriodSelector mes={mes} anio={anio} onChangeMes={setMes} onChangeAnio={setAnio} />
-            {canWrite && (
-              <>
-                <Button variant="outline" className="min-h-11 gap-1.5" onClick={() => setImportarNominaOpen(true)}>
-                  <FileSpreadsheet className="size-4" />
-                  Importar CSV
-                </Button>
-                <Button className="min-h-11 gap-1.5" onClick={() => setNominaOpen(true)}>
-                  <Upload className="size-4" />
-                  Cargar nómina
-                </Button>
-              </>
-            )}
-          </div>
+          <CostosAcciones
+            mes={mes} anio={anio} onChangeMes={setMes} onChangeAnio={setAnio}
+            canWrite={canWrite}
+            onImportar={() => setImportarNominaOpen(true)}
+            onCargar={() => setNominaOpen(true)}
+          />
         }
       />
 

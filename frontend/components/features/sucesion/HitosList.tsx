@@ -1,5 +1,6 @@
 "use client"
 
+import { ErrorState } from "@/components/ui/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Hito } from "@/types/sucesion"
 
@@ -21,12 +22,15 @@ export function HitosList({
       {loading && (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-14 w-full rounded-xl" />
+            <Skeleton key={i} shimmer className="h-14 w-full rounded-xl" />
           ))}
         </div>
       )}
       {!loading && error && (
-        <p className="text-sm text-destructive">{error}</p>
+        /* Era un `<p>` suelto: el patrón pide el estado de error con su reintento. Acá no hay
+           `action` porque la carga de hitos la dispara el panel padre al abrir el plan; volver a
+           abrirlo es el reintento, y un botón que no pudiera recargar mentiría. */
+        <ErrorState title="No se pudieron cargar los hitos" description={error} />
       )}
       {!loading && !error && hitos.length === 0 && mostrarVacio && (
         <p className="text-sm italic text-muted-foreground">
@@ -60,8 +64,10 @@ export function HitosList({
                   </p>
                 )}
               </div>
+              {/* Mismo cambio que en `_sucesion_ui`: el par sale de la paleta semántica, que ya
+                  trae su valor de modo oscuro y sí lo mide el barrido de contraste. */}
               {hito.completado && (
-                <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                <span className="shrink-0 rounded-full bg-success-wash px-1.5 py-0.5 text-xs font-medium text-success">
                   ✓
                 </span>
               )}

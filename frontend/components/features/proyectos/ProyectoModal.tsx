@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select } from "@/components/ui/select"
 import { fetchEmpresas } from "@/services/empresas"
 import type { Empresa } from "@/types/empresa"
@@ -67,9 +67,26 @@ export function ProyectoModal({ open, proyecto, onClose, onSave }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-lg">
+      {/* El ancho (560px) y los campos de 34px los pone el patrón, no el modal: por eso ya no
+          lleva `max-w-lg`. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle className="text-base">{isEdit ? "Editar proyecto" : "Nuevo proyecto"}</DialogTitle>
+          {/* 🔴 UNA LÍNEA QUE EXPLICA LA CONSECUENCIA, no lo que el modal es (§3). Lo que el
+              usuario no puede deducir de los campos es que la EMPRESA DUEÑA no se puede cambiar
+              después —por eso el select desaparece al editar— y que el presupuesto es contra lo
+              que se mide el costeo por horas de todo el proyecto.
+
+              ⚠️ ESTE MODAL NO TIENE EL PRIMER NIVEL DE LA VALIDACIÓN (`FormErrores`), y no es un
+              olvido: TAMPOCO tiene el segundo. No hay un solo mensaje de error por campo — lo
+              único que hay es el botón deshabilitado hasta que haya nombre y empresa. Un banner
+              que dijera "Revisá 0 campos" siempre sería peor que ninguno. Construir la validación
+              de este formulario (nombre, presupuesto ≥ 0, fin ≥ inicio) es una tanda propia. */}
+          <DialogDescription>
+            {isEdit
+              ? "Los cambios se ven al instante en la grilla y en el costeo del proyecto. La empresa dueña no se puede cambiar."
+              : "El proyecto queda disponible para asignarle gente y para cargarle horas. La empresa dueña se elige una sola vez."}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-2">
           {!isEdit && (

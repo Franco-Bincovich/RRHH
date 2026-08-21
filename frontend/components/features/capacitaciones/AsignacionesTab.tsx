@@ -10,6 +10,7 @@ import { EstadoModal } from "@/components/features/capacitaciones/EstadoModal"
 import { useFiltrosAsignacionesCap } from "@/components/features/capacitaciones/useFiltrosAsignacionesCap"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { Pagination } from "@/components/ui/Pagination"
 import { fetchAsignaciones, deleteAsignacion, exportarCapacitaciones } from "@/services/capacitaciones"
 import type { Asignacion } from "@/types/capacitacion"
@@ -29,12 +30,14 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
   // parado en la 7 pediría una página que el resultado nuevo no tiene y la tabla saldría
   // vacía sobre un filtro que sí tiene filas.
   const { empresaActivaId, filtros, campos } = useFiltrosAsignacionesCap(() => setPage(1))
+  const chips = chipsDeCampos(campos)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(false)
     try {
       const data = await fetchAsignaciones(filtros, page, PAGE_SIZE)
+      // El total sale del wrapper del backend, NUNCA de `data.items.length`.
       setAsignaciones(data.items); setTotal(data.total)
     } catch {
       setError(true)
@@ -55,9 +58,12 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <FiltersBar campos={campos} />
-        <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        {/* `panel`: la forma completa del patrón de filtros (caja propia, "Más filtros" y los
+            chips de la fila inferior). Antes era la barra simple, sin chips, con los CINCO
+            controles a la vista tapando la tabla. */}
+        <div className="min-w-[18rem] flex-1"><FiltersBar campos={campos} panel disabled={loading} /></div>
+        <div className="flex gap-2">
           {/* `total` y no `asignaciones.length`: en la página 2+ el largo de la página no dice
               si hay algo que exportar — lo dice el total del filtro. */}
           {!loading && !error && total > 0 && (
@@ -75,7 +81,24 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
         asignaciones={asignaciones} loading={loading} error={error} canWrite={canWrite}
         mostrarEmpresa={!empresaActivaId} deletingId={deletingId} onReload={load}
         onEditarEstado={setEstadoModal} onEliminar={handleDelete}
+        chips={chips}
+        onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
+        accionVacio={canWrite ? (
+          <Button className="min-h-11" onClick={() => setAsignacionModal(true)}>Asignar la primera</Button>
+        ) : undefined}
       />
+
+      {/*
+       * 🔴 ESTA BARRA NO EXISTÍA, Y SU AUSENCIA ERA UN BUG. La pestaña ya llevaba `page` y `total`
+       * y ya pedía de a 20 al backend, pero **nunca renderizaba `<Pagination>`** —el import estaba
+       * puesto y sin usar—: con más de 20 asignaciones cargadas, las que sobraban eran
+       * INALCANZABLES desde la UI y no había ninguna señal de que existieran. El pie va siempre
+       * que haya filas y sólo después de cargar; el total es el del backend, no
+       * `asignaciones.length`.
+       */}
+      {!loading && !error && asignaciones.length > 0 && (
+        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+      )}
 
       <AsignacionModal
         open={asignacionModal}

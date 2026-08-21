@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { Accordion } from "@base-ui/react/accordion"
 
 import { HistorialMails } from "@/components/features/comunicacion/HistorialMails"
 import { PlantillasSection } from "@/components/features/comunicacion/PlantillasSection"
@@ -55,15 +54,13 @@ export default function ComunicacionPage() {
           ))}
         </TabList>
 
-      {/* `PlantillasSection` se mudó TAL CUAL y sigue siendo un `Accordion.Item`, así que
-          necesita su Root. `defaultValue` lo deja ABIERTO: acá el plegado no aporta nada — es
-          el único bloque de la pestaña. Que el acordeón sobre en este contexto es real y quedó
-          anotado en el componente; sacarlo era rediseñar en el mismo diff que la mudanza. */}
-      <TabPanel value="plantillas">
-        <Accordion.Root defaultValue={["plantillas"]} multiple className="flex flex-col gap-4">
-          <PlantillasSection editable={editable} />
-        </Accordion.Root>
-      </TabPanel>
+      {/* ✅ EL `Accordion.Root` SE FUE. Estaba acá porque `PlantillasSection` se había mudado
+          TAL CUAL desde /configuracion y seguía siendo un `Accordion.Item`; el comentario de
+          entonces decía que el plegado "no aporta nada — es el único bloque de la pestaña" y que
+          sacarlo era rediseñar en el mismo diff que la mudanza. Ese rediseño es el del 21/8/2026:
+          las plantillas pasaron a TARJETAS (§5) y con eso el acordeón dejó de tener envoltorio
+          que justificar. */}
+      <TabPanel value="plantillas"><PlantillasSection editable={editable} /></TabPanel>
 
       <TabPanel value="historial"><HistorialMails /></TabPanel>
       </Tabs>

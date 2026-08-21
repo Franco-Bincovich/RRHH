@@ -1,19 +1,20 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Handshake, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { EmptyState } from "@/components/ui/EmptyState"
-import { ErrorState } from "@/components/ui/ErrorState"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { ClienteModal } from "@/components/features/clientes/ClienteModal"
 import { ClientesTabla } from "@/components/features/clientes/ClientesTabla"
 import { cargarClientes } from "@/components/features/clientes/cargarClientes"
+import { construirCampos } from "@/components/features/clientes/_camposClientes"
+import { AVISO_CATALOGO_GLOBAL } from "@/components/features/clientes/_avisoGlobal"
 import { deleteCliente, exportarClientes } from "@/services/clientes"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Cliente } from "@/types/cliente"
@@ -22,20 +23,32 @@ import type { Cliente } from "@/types/cliente"
  * Catálogo de clientes. ORQUESTADOR: estado y navegación; la tabla y el formulario viven en
  * `components/features/clientes/`, y la carga en `cargarClientes.ts` (testeable sin jsdom).
  *
- * El corte es a propósito: el molde de este módulo es `areas/page.tsx`, que está en 271/150 por
- * tener todo junto. Se copió su estructura, no su tamaño.
+ * 🔴 ES UN CATÁLOGO GLOBAL: el selector de empresa del sidebar NO lo acota (migraciones 108/109),
+ * y como es lo contrario a lo que hace el resto del producto la pantalla lo DICE en el subtítulo
+ * en vez de dejar que alguien lo deduzca al chocar con el 409 de nombre duplicado. Molde:
+ * `/perfiles-puesto`, el otro catálogo del grupo.
+ *
+ * ⚠️ NO TIENE PIE DE PAGINACIÓN, y no le falta: `GET /api/clientes` no acepta `page` ni
+ * `page_size` — devuelve el catálogo entero. Sin `total` del backend distinto del largo del
+ * array, un pie sería aritmética del cliente sobre lo que ya tiene.
  */
 export default function ClientesPage() {
   const canWrite = useCanWrite()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [incluirInactivos, setIncluirInactivos] = useState(false)
+  const [bajasFiltro, setBajasFiltro] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<Cliente | undefined>(undefined)
   const [aBaja, setABaja] = useState<Cliente | null>(null)
   const [bajando, setBajando] = useState(false)
 
+  // El listado no pagina, así que no hay página que resetear; el molde se respeta igual para que
+  // el día que el backend acepte `page` no haya que rehacer el cableado.
+  const campos = construirCampos({ bajasFiltro, setBajasFiltro, onFiltroChange: () => {} })
+  const chips = chipsDeCampos(campos)
+
+  const incluirInactivos = bajasFiltro === "todos"
   const filtros = { incluirInactivos }
   const load = useCallback(
     () => cargarClientes({ incluirInactivos }, { setClientes, setLoading, setError }),
@@ -60,39 +73,16 @@ export default function ClientesPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div>
-        <PageHeader title="Clientes" description="Cargando..." />
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-lg" />
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div>
-        <PageHeader title="Clientes" />
-        <ErrorState description={error} action={load} />
-      </div>
-    )
-  }
-
   return (
     <div>
       <PageHeader
         title="Clientes"
-        description={`${clientes.length} cliente${clientes.length !== 1 ? "s" : ""}`}
+        /* El conteo y, pegado, la advertencia de que el sidebar no filtra acá. Va en el
+           SUBTÍTULO y no en un bloque de aviso porque describe lo que la pantalla ES, no algo
+           que va a pasar — misma regla que en /perfiles-puesto. */
+        description={`${clientes.length} cliente${clientes.length !== 1 ? "s" : ""} · ${AVISO_CATALOGO_GLOBAL}`}
         action={
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="min-h-11"
-                    onClick={() => setIncluirInactivos((v) => !v)}>
-              {incluirInactivos ? "Ocultar bajas" : "Ver bajas"}
-            </Button>
             {/* El MISMO filtro que el listado: el archivo no puede traer filas que la pantalla
                 no muestre. El catálogo es GLOBAL (mig 108): no se acota por empresa por ningún
                 lado, ni por query param ni por el header X-Empresa-Id. */}
@@ -107,19 +97,24 @@ export default function ClientesPage() {
         }
       />
 
-      {clientes.length === 0 ? (
-        <EmptyState
-          icon={<Handshake />}
-          title="Sin clientes"
-          description="Todavía no hay clientes cargados. Creá el primero."
-          action={canWrite ? (
-            <Button className="min-h-11" onClick={abrirAlta}><Plus />Nuevo cliente</Button>
-          ) : undefined}
-        />
-      ) : (
-        <ClientesTabla clientes={clientes} canWrite={canWrite}
-                       onEdit={abrirEdicion} onDelete={setABaja} />
-      )}
+      {/* `panel`: la forma completa del patrón de filtros (caja propia y los chips de la fila
+          inferior). Un solo control, así que no hay "Más filtros" — ver `_camposClientes.ts`. */}
+      <FiltersBar campos={campos} panel disabled={loading} />
+
+      <ClientesTabla
+        clientes={clientes}
+        loading={loading}
+        error={error}
+        canWrite={canWrite}
+        onRetry={load}
+        onEdit={abrirEdicion}
+        onDelete={setABaja}
+        chips={chips}
+        onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
+        accionVacio={canWrite ? (
+          <Button className="min-h-11" onClick={abrirAlta}>Crear el primero</Button>
+        ) : undefined}
+      />
 
       <ClienteModal
         open={modalOpen}

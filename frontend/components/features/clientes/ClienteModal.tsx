@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react"
 
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
+import { FormErrores } from "@/components/ui/FormErrores"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -73,11 +74,25 @@ export function ClienteModal({ open, onClose, onSuccess, cliente }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-md">
+      {/* El ancho (560px) y los campos de 34px los pone el patrón, no el modal: por eso ya no
+          lleva `max-w-md`. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar cliente" : "Nuevo cliente"}</DialogTitle>
+          {/* 🔴 UNA LÍNEA QUE EXPLICA LA CONSECUENCIA, no lo que el modal es (§3). Lo que el
+              usuario no puede deducir de un formulario de un solo campo es que el catálogo es
+              GLOBAL —el cliente queda disponible para TODAS las empresas del grupo— y que el
+              nombre es único en todo el sistema. */}
+          <DialogDescription>
+            {isEdit
+              ? "El nombre es único en todo el sistema y el cambio se ve al instante en el link público de carga de horas."
+              : "El cliente queda disponible para todas las empresas del grupo al cargar horas."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          {/* El PRIMER nivel de la validación es la CUENTA; el "qué corrijo" lo contesta el
+              segundo nivel, abajo del campo. */}
+          <FormErrores cantidad={Object.values(errores).filter(Boolean).length} />
           <div className="space-y-1.5">
             <Label htmlFor="cliente-nombre">
               Nombre <span className="text-destructive" aria-hidden>*</span>

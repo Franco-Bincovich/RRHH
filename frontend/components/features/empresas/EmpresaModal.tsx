@@ -3,19 +3,27 @@
 import { useState, useEffect } from "react"
 
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { FormErrores } from "@/components/ui/FormErrores"
 import { createEmpresa, updateEmpresa } from "@/services/empresas"
 import type { Empresa, EmpresaCreate } from "@/types/empresa"
 
+import { EmpresaFormFields } from "./EmpresaFormFields"
+import { EMPTY_EMPRESA, validarEmpresa, type EmpresaFormData, type EmpresaFormErrors } from "./empresaForm"
+
+/**
+ * Alta y edición de una empresa. ORQUESTADOR: el ciclo de vida del formulario (abrir, escribir,
+ * validar, guardar, cerrar).
+ *
+ * ⚠️ ESTABA EN **226 LÍNEAS CONTRA UN LÍMITE DE 150** —deuda anotada en CLAUDE.md desde antes de
+ * esta tanda— y el patrón de modal de formulario del bloque B lo llevaba a 241. Se partió en tres
+ * por responsabilidad, con el molde que áreas ya tenía:
+ *   · `empresaForm.ts`        — la definición del formulario y sus dos reglas de validación.
+ *   · `EmpresaFormFields.tsx` — el render de los campos y el SEGUNDO nivel de la validación.
+ *   · este archivo            — el ciclo de vida y el PRIMER nivel (el banner con la cuenta).
+ */
 interface EmpresaModalProps {
   open: boolean
   onClose: () => void
@@ -23,45 +31,10 @@ interface EmpresaModalProps {
   empresa?: Empresa
 }
 
-type FormData = {
-  nombre: string
-  razon_social: string
-  cuit: string
-  direccion: string
-  telefono: string
-  email: string
-  logo_url: string
-}
-
-type FormErrors = Partial<Record<keyof FormData, string>>
-
-const EMPTY: FormData = {
-  nombre: "",
-  razon_social: "",
-  cuit: "",
-  direccion: "",
-  telefono: "",
-  email: "",
-  logo_url: "",
-}
-
-const CUIT_RE = /^\d{2}-\d{8}-\d{1}$/
-
-function validate(form: FormData): FormErrors {
-  const errors: FormErrors = {}
-  if (!form.nombre.trim()) {
-    errors.nombre = "El nombre es requerido"
-  }
-  if (form.cuit.trim() && !CUIT_RE.test(form.cuit.trim())) {
-    errors.cuit = "Formato inválido — debe ser XX-XXXXXXXX-X"
-  }
-  return errors
-}
-
 export function EmpresaModal({ open, onClose, onSuccess, empresa }: EmpresaModalProps) {
   const isEdit = Boolean(empresa)
-  const [form, setForm]             = useState<FormData>(EMPTY)
-  const [errors, setErrors]         = useState<FormErrors>({})
+  const [form, setForm]             = useState<EmpresaFormData>(EMPTY_EMPRESA)
+  const [errors, setErrors]         = useState<EmpresaFormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [serverError, setServerError] = useState("")
 
@@ -77,13 +50,13 @@ export function EmpresaModal({ open, onClose, onSuccess, empresa }: EmpresaModal
         logo_url: empresa.logo_url ?? "",
       })
     } else {
-      setForm(EMPTY)
+      setForm(EMPTY_EMPRESA)
     }
     setErrors({})
     setServerError("")
   }, [empresa, open])
 
-  function handleField(key: keyof FormData) {
+  function handleField(key: keyof EmpresaFormData) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const val = e.target.value
       setForm((prev) => ({ ...prev, [key]: val }))
@@ -93,7 +66,7 @@ export function EmpresaModal({ open, onClose, onSuccess, empresa }: EmpresaModal
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const errs = validate(form)
+    const errs = validarEmpresa(form)
     if (Object.keys(errs).length > 0) {
       setErrors(errs)
       return
@@ -128,83 +101,27 @@ export function EmpresaModal({ open, onClose, onSuccess, empresa }: EmpresaModal
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-lg">
+      {/* El ancho (560px) y los campos de 34px los pone el patrón, no el modal: por eso ya no
+          lleva `max-w-lg`. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar empresa" : "Nueva empresa"}</DialogTitle>
+          {/* 🔴 UNA LÍNEA QUE EXPLICA LA CONSECUENCIA, no lo que el modal es (§3). Lo que el
+              usuario no puede deducir de los campos es que una empresa nueva aparece en el
+              SELECTOR DEL SIDEBAR de todo el equipo y pasa a ser una opción en cada alta. */}
+          <DialogDescription>
+            {isEdit
+              ? "Los cambios se ven en el selector de empresa del sidebar y en todo listado que muestre el nombre."
+              : "La empresa aparece en el selector del sidebar de todo el equipo y pasa a ser elegible en cada alta."}
+          </DialogDescription>
         </DialogHeader>
 
         <form id="empresa-form" onSubmit={handleSubmit} noValidate>
           <div className="flex flex-col gap-4 py-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="nombre">
-                Nombre <span className="ml-0.5 text-destructive" aria-hidden>*</span>
-              </Label>
-              <Input
-                id="nombre"
-                value={form.nombre}
-                onChange={handleField("nombre")}
-                aria-invalid={Boolean(errors.nombre)}
-                aria-required
-              />
-              {errors.nombre && (
-                <p className="text-xs text-destructive" role="alert">{errors.nombre}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="razon_social">Razón social</Label>
-                <Input id="razon_social" value={form.razon_social} onChange={handleField("razon_social")} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="cuit">CUIT</Label>
-                <Input
-                  id="cuit"
-                  value={form.cuit}
-                  onChange={handleField("cuit")}
-                  placeholder="XX-XXXXXXXX-X"
-                  aria-invalid={Boolean(errors.cuit)}
-                />
-                {errors.cuit && (
-                  <p className="text-xs text-destructive" role="alert">{errors.cuit}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="telefono">Teléfono</Label>
-                <Input id="telefono" value={form.telefono} onChange={handleField("telefono")} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" value={form.email} onChange={handleField("email")} />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="direccion">Dirección</Label>
-              <Textarea
-                id="direccion"
-                value={form.direccion}
-                onChange={handleField("direccion")}
-                rows={2}
-                className="resize-none"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="logo_url">URL del logo</Label>
-              <Input
-                id="logo_url"
-                value={form.logo_url}
-                onChange={handleField("logo_url")}
-                placeholder="https://..."
-              />
-              <p className="text-xs text-muted-foreground">
-                Para subir desde archivo usá la sección de logo en el detalle de la empresa.
-              </p>
-            </div>
+            {/* El PRIMER nivel de la validación es la CUENTA, no la lista de campos: el "qué
+                corrijo" lo contesta el segundo nivel, en cada campo. */}
+            <FormErrores cantidad={Object.values(errors).filter(Boolean).length} />
+            <EmpresaFormFields form={form} errors={errors} onField={handleField} />
           </div>
 
           {serverError && (

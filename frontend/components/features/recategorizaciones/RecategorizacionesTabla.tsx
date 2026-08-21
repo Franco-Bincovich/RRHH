@@ -66,6 +66,7 @@ export function RecategorizacionesTabla({
           colSpan={cols.length}
           chips={chips}
           sustantivo="recategorizaciones"
+          genero="femenino"
           claveSujeto={sujetoVacio}
           onLimpiarTodo={onLimpiarTodo}
           accion={accionVacio}

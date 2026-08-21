@@ -40,9 +40,18 @@ const RESUELTO: Evento = {
   es_publica: false,
 }
 
+/*
+ * ⚠️ LOS PROPS NUEVOS SON DEL PATRÓN DEL BLOQUE B, no de este test: al migrar la pantalla, la
+ * tabla pasó a ser dueña de sus tres estados (carga, error, vacío), que antes tenía la página.
+ * Acá se le pasan los valores del camino con datos —sin carga, sin error, sin filtros— para que
+ * lo que estos tests miran siga siendo exactamente lo mismo: el gate de escritura y el estado
+ * de cada evento.
+ */
 function render(eventos: Evento[], canWrite: boolean): string {
   const html = renderToStaticMarkup(
     <EventosTabla eventos={eventos} canWrite={canWrite}
+                  loading={false} error={null} onRetry={() => {}}
+                  chips={[]} onLimpiarTodo={() => {}}
                   onEdit={() => {}} onDelete={() => {}} onResuelta={() => {}} />,
   )
   // 🔴 GUARDA: sin esto, un componente que renderiza "" pasaría todas las aserciones negativas.

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { FormErrores } from "@/components/ui/FormErrores"
 import { Button } from "@/components/ui/button"
 import { VacanteCamposBase } from "@/components/features/vacantes/VacanteCamposBase"
 import { useVacanteCatalogos } from "@/components/features/vacantes/useVacanteCatalogos"
@@ -82,12 +83,25 @@ export function VacanteModal({ open, onClose, onSuccess }: VacanteModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={(o: boolean) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-lg">
+      {/* El ancho (560px) y los campos de 34px los pone el patrón, no el modal: por eso ya no
+          lleva `max-w-lg`. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle>Nueva vacante</DialogTitle>
+          {/* 🔴 UNA LÍNEA QUE EXPLICA LA CONSECUENCIA, no lo que el modal es (§3). Lo que el
+              usuario no puede saber mirando los campos es que la vacante nace con un código de
+              postulación propio, que es lo que después empareja los mails de la casilla. */}
+          <DialogDescription>
+            Se abre la búsqueda con su código de postulación, y desde ahí ya puede recibir
+            candidatos por la casilla o por el formulario público.
+          </DialogDescription>
         </DialogHeader>
 
         <form id="vacante-form" onSubmit={handleSubmit} noValidate>
+          {/* El PRIMER nivel de la validación es la CUENTA, no la lista de campos: el "qué
+              corrijo" lo contesta el segundo nivel, en cada campo. */}
+          <FormErrores cantidad={Object.values(errors).filter(Boolean).length} />
+
           <VacanteCamposBase
             form={form} errors={errors} empresas={empresas} areas={areas}
             areasLoading={areasLoading} onEmpresaChange={handleEmpresaChange} field={field}

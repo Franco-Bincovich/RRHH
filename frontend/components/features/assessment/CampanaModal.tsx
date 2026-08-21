@@ -3,35 +3,25 @@
 import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import { CampanaFormFields } from "./CampanaFormFields"
+import { useCampanaOpciones } from "./useCampanaOpciones"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
-import { fetchAreas } from "@/services/areas"
 import { createCampana } from "@/services/assessment"
-import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
-import type { Area } from "@/types/area"
 import type { Campana, CampanaCreate, TipoEval } from "@/types/assessment"
-import type { Empresa } from "@/types/empresa"
 
 interface CampanaModalProps {
   open: boolean
   onClose: () => void
   onCreated: (campana: Campana) => void
 }
-
-const TIPOS: { value: TipoEval; label: string }[] = [
-  { value: "completo",   label: "Completo (AREAS + Cognitivo + Técnico)" },
-  { value: "conductual", label: "Conductual (AREAS)" },
-  { value: "cognitivo",  label: "Cognitivo" },
-]
 
 export function CampanaModal({ open, onClose, onCreated }: CampanaModalProps) {
   const empresaActivaId = getEmpresaActivaId()
@@ -41,38 +31,10 @@ export function CampanaModal({ open, onClose, onCreated }: CampanaModalProps) {
   const [empresaId, setEmpresaId]         = useState<string>(empresaActivaId ?? "")
   const [areaId, setAreaId]               = useState<string>("")
   const [posicionObjetivo, setPosicion]   = useState("")
-  const [empresas, setEmpresas]           = useState<Empresa[]>([])
-  const [areas, setAreas]                 = useState<Area[]>([])
   const [error, setError]                 = useState<string | null>(null)
   const [loading, setLoading]             = useState(false)
 
-  useEffect(() => {
-    if (!open) return
-    // Solo cargar empresas cuando topbar = "Todas"
-    if (!empresaActivaId) {
-      fetchEmpresas()
-        .then((res) => {
-          const activas = res.items.filter((e) => e.activa)
-          setEmpresas(activas)
-          if (activas.length > 0 && !empresaId) setEmpresaId(activas[0].id)
-        })
-        .catch(() => {})
-    }
-    // Cargar áreas filtradas por empresa activa (apiFetch envía X-Empresa-Id automáticamente)
-    fetchAreas()
-      .then(setAreas)
-      .catch(() => setAreas([]))
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Cuando cambia la empresa seleccionada, recargar las áreas de esa empresa
-  useEffect(() => {
-    if (!open || empresaActivaId) return
-    if (!empresaId) { setAreas([]); return }
-    fetchAreas(empresaId)
-      .then(setAreas)
-      .catch(() => setAreas([]))
-    setAreaId("")
-  }, [empresaId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const { empresas, areas } = useCampanaOpciones(open, empresaActivaId, empresaId, setEmpresaId, setAreaId)
 
   function handleClose() {
     setNombre("")
@@ -110,82 +72,29 @@ export function CampanaModal({ open, onClose, onCreated }: CampanaModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose() }}>
-      <DialogContent>
+      {/* El ancho (560px) y el alto en `dvh` los pone el patrón, no el modal. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle>Nueva campaña de assessment</DialogTitle>
+          {/* 🔴 UNA LÍNEA QUE EXPLICA LA CONSECUENCIA, no lo que el modal es (§3). Lo que no se
+              deduce de los campos es que crear la campaña NO le avisa a nadie: los links se
+              generan y se mandan después, uno por persona, desde la campaña ya creada. */}
+          <DialogDescription>
+            Crear la campaña no le manda nada a nadie: los links de evaluación se generan después,
+            uno por persona.
+          </DialogDescription>
         </DialogHeader>
 
         <form id="campana-form" onSubmit={handleSubmit} className="space-y-4 py-2">
-          {/* Selector de empresa — solo cuando topbar = "Todas" */}
-          {!empresaActivaId && (
-            <div className="space-y-1.5">
-              <Label htmlFor="campana-empresa">Empresa</Label>
-              <Select
-                id="campana-empresa"
-                value={empresaId}
-                onChange={(e) => setEmpresaId(e.target.value)}
-              >
-                <option value="">Seleccioná una empresa…</option>
-                {empresas.map((e) => (
-                  <option key={e.id} value={e.id}>{e.nombre}</option>
-                ))}
-              </Select>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor="campana-nombre">Nombre</Label>
-            <Input
-              id="campana-nombre"
-              value={nombre}
-              onChange={(e) => { setNombre(e.target.value); setError(null) }}
-              placeholder="Ej. Assessment Q2 2025"
-              autoFocus
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="campana-tipo">Tipo de evaluación</Label>
-            <Select
-              id="campana-tipo"
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value as TipoEval)}
-            >
-              {TIPOS.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="campana-area">Área <span className="text-muted-foreground">(opcional)</span></Label>
-            <Select
-              id="campana-area"
-              value={areaId}
-              onChange={(e) => setAreaId(e.target.value)}
-            >
-              <option value="">Sin área específica</option>
-              {areas.map((a) => (
-                <option key={a.id} value={a.id}>{a.nombre}</option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="campana-posicion">
-              Posición objetivo <span className="text-muted-foreground">(opcional)</span>
-            </Label>
-            <Input
-              id="campana-posicion"
-              value={posicionObjetivo}
-              onChange={(e) => setPosicion(e.target.value)}
-              placeholder="Ej. Tech Lead, Product Manager…"
-            />
-          </div>
-
-          {error && (
-            <p className="text-xs text-destructive">{error}</p>
-          )}
+          <CampanaFormFields
+            mostrarEmpresa={!empresaActivaId}
+            empresas={empresas} empresaId={empresaId} setEmpresaId={setEmpresaId}
+            nombre={nombre} setNombre={(v) => { setNombre(v); setError(null) }}
+            tipo={tipo} setTipo={setTipo}
+            areas={areas} areaId={areaId} setAreaId={setAreaId}
+            posicionObjetivo={posicionObjetivo} setPosicion={setPosicion}
+            error={error}
+          />
         </form>
 
         <DialogFooter>

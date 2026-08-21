@@ -4,8 +4,6 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { ErrorState } from "@/components/ui/ErrorState"
-import { Skeleton } from "@/components/ui/skeleton"
 import { PeriodoForm } from "@/components/features/periodos/PeriodoForm"
 import { PeriodoList } from "@/components/features/periodos/PeriodoList"
 import { useCanWrite } from "@/hooks/useCanWrite"
@@ -56,22 +54,29 @@ export default function PeriodosPage() {
     <div>
       <PageHeader
         title="Períodos"
+        /* ⚠️ NO HAY FILTROS NI PIE, y no faltan: `GET /api/periodos` no acepta un solo Query y
+           devuelve la lista entera de la empresa activa. Sin filtros no hay chips que mostrar y
+           sin `page` del backend no hay pie que armar. El recorte por empresa lo hace el header
+           `X-Empresa-Id` del sidebar, como en el resto del sistema. */
         description="Cerrá un período para impedir cambios en registros con fecha dentro de ese rango."
         action={<ExportMenu onExport={exportarPeriodos} />}
       />
       <div className="space-y-4">
         {canWrite && <PeriodoForm onCreated={load} />}
-        {loading ? (
-          <Skeleton className="h-40 w-full rounded-xl" />
-        ) : error ? (
-          <ErrorState action={load} />
-        ) : periodos.length === 0 ? (
-          <p className="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
-            Todavía no hay períodos cerrados.
-          </p>
-        ) : (
-          <PeriodoList periodos={periodos} nombreUsuario={nombreUsuario} canWrite={canWrite} onReabrir={handleReabrir} />
-        )}
+        {/* 🔴 LOS TRES ESTADOS SON DE LA TABLA, no de la página: el vacío tiene que ser una fila
+            con `colSpan` adentro de la `<Table>` para que el encabezado siga puesto (§3). Y ese
+            vacío lleva COPY PROPIO —"mientras no haya ninguno, todo se puede editar"— porque el
+            genérico del patrón le diría a `gerencia_lectura` que cargue el primero, cosa que no
+            puede hacer. El porqué completo está en `PeriodoList`. */}
+        <PeriodoList
+          periodos={periodos}
+          loading={loading}
+          error={error}
+          nombreUsuario={nombreUsuario}
+          canWrite={canWrite}
+          onRetry={load}
+          onReabrir={handleReabrir}
+        />
       </div>
     </div>
   )

@@ -3,24 +3,16 @@
 import { useEffect, useState } from "react"
 import { Search } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
-import { NIVEL_BADGE_CLASS } from "./_sucesion_ui"
+import { AnalisisResultados } from "./AnalisisResultados"
 import { fetchAnalisisPosicion } from "@/services/sucesion"
 import type { Area } from "@/types/area"
 import type { EmpleadoAnalisis } from "@/types/sucesion"
-
-function nivelBadge(nivel: string | null) {
-  if (!nivel) return null
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${NIVEL_BADGE_CLASS[nivel] ?? "bg-muted text-muted-foreground"}`}>
-      {nivel}
-    </span>
-  )
-}
 
 export function AnalisisAreaModal({
   open, onOpenChange, areas, areaInicial,
@@ -63,9 +55,19 @@ export function AnalisisAreaModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onOpenChange(false) }}>
-      <DialogContent className="max-w-lg">
+      {/* El ancho (560px) y el alto en `dvh` los pone el patrón, no el modal: el `max-w-lg`
+          escrito a mano quedaba 48px más angosto que el resto de los formularios del sistema. */}
+      <DialogContent patron="formulario">
         <DialogHeader>
           <DialogTitle>Analizar área</DialogTitle>
+          {/* 🔴 UNA LÍNEA QUE EXPLICA LA CONSECUENCIA, no lo que el modal es (§3). Lo que no se
+              deduce de un selector y un botón es de dónde sale el orden: no es una nota de
+              desempeño ni una evaluación, es el score del ASSESSMENT, que muchos no tienen
+              rendido — por eso abajo aparecen filas con "Sin score" y quedan al final. */}
+          <DialogDescription>
+            El ranking usa el score del assessment, no la evaluación de desempeño: quien no lo
+            haya rendido aparece sin score.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
@@ -85,41 +87,7 @@ export function AnalisisAreaModal({
 
           {error && <p className="text-xs text-destructive">{error}</p>}
 
-          {ran && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">
-                {res.length === 0
-                  ? "No hay colaboradores en esta área."
-                  : `${res.length} colaborador${res.length !== 1 ? "es" : ""} encontrado${res.length !== 1 ? "s" : ""}`}
-              </p>
-              {res.length > 0 && (
-                <ul className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border">
-                  {res.map((emp, idx) => (
-                    <li key={emp.id} className="flex items-center gap-3 px-3 py-2.5">
-                      <span className="w-5 shrink-0 text-center text-xs font-semibold text-muted-foreground">
-                        {idx + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {emp.nombre} {emp.apellido}
-                        </p>
-                        {emp.cargo && (
-                          <p className="truncate text-xs text-muted-foreground">{emp.cargo}</p>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {emp.score != null
-                          ? <Badge variant="default" className="tabular-nums">{emp.score}</Badge>
-                          : <Badge variant="outline">Sin score</Badge>
-                        }
-                        {nivelBadge(emp.potencial)}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
+          {ran && <AnalisisResultados res={res} />}
         </div>
 
         <DialogFooter>

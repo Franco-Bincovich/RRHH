@@ -1,18 +1,18 @@
 "use client"
 
 import { useState } from "react"
-import { CalendarHeart, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
-import { EmptyState } from "@/components/ui/EmptyState"
-import { ErrorState } from "@/components/ui/ErrorState"
+import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { Pagination } from "@/components/ui/Pagination"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
 import { EventoModal } from "@/components/features/eventos/EventoModal"
 import { EventosTabla } from "@/components/features/eventos/EventosTabla"
+import { construirCampos } from "@/components/features/eventos/_camposEventos"
 import { PAGE_SIZE, useEventos } from "@/components/features/eventos/useEventos"
 import { deleteEvento } from "@/services/eventos"
 import { useCanWrite } from "@/hooks/useCanWrite"
@@ -25,7 +25,7 @@ import type { Evento } from "@/types/evento"
  *
  * ⚠️ NO HAY EXPORT, por decisión de producto: una agenda de recordatorios no es un dato que se
  * lleve a Excel; lo que se hace con un evento es resolverlo. Por eso tampoco hay `ExportMenu`
- * acá, a diferencia del resto de los listados.
+ * acá, a diferencia del resto de los listados — y es la única pantalla del bloque sin él.
  */
 export default function EventosPage() {
   const canWrite = useCanWrite()
@@ -34,6 +34,14 @@ export default function EventosPage() {
   const [editando, setEditando] = useState<Evento | undefined>(undefined)
   const [aBorrar, setABorrar] = useState<Evento | null>(null)
   const [borrando, setBorrando] = useState(false)
+
+  const campos = construirCampos({
+    resueltosFiltro: agenda.resueltosFiltro,
+    // El reset a página 1 ya vive dentro de este setter, en `useEventos`.
+    setResueltosFiltro: agenda.setResueltosFiltro,
+    onFiltroChange: () => {},
+  })
+  const chips = chipsDeCampos(campos)
 
   function abrirAlta() { setEditando(undefined); setModalOpen(true) }
   function abrirEdicion(e: Evento) { setEditando(e); setModalOpen(true) }
@@ -52,65 +60,58 @@ export default function EventosPage() {
     }
   }
 
-  if (agenda.loading) {
-    return (
-      <div>
-        <PageHeader title="Eventos" description="Cargando..." />
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-lg" />
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (agenda.error) {
-    return (
-      <div>
-        <PageHeader title="Eventos" />
-        <ErrorState description={agenda.error} action={agenda.load} />
-      </div>
-    )
-  }
-
   return (
     <div>
       <PageHeader
         title="Eventos"
-        description={`${agenda.total} evento${agenda.total !== 1 ? "s" : ""}`}
+        /* El conteo sale de `total` (el del filtro entero, del backend). El subtítulo dice qué
+           HACE un evento —aparecer en el dashboard cuando se acerca—, que es lo que antes vivía
+           en el texto del estado vacío y sólo se veía con la agenda en cero. */
+        description={
+          agenda.loading && agenda.total === 0
+            ? "Recordatorios que aparecen en el dashboard cuando se acerca la fecha"
+            : `${agenda.total} evento${agenda.total !== 1 ? "s" : ""} · aparecen en el dashboard cuando se acerca la fecha`
+        }
         action={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" className="min-h-11" onClick={agenda.alternarResueltas}>
-              {agenda.incluirResueltas ? "Ocultar resueltos" : "Ver resueltos"}
+          canWrite ? (
+            <Button className="min-h-11" onClick={abrirAlta}>
+              <Plus />
+              Nuevo evento
             </Button>
-            {canWrite && (
-              <Button className="min-h-11" onClick={abrirAlta}>
-                <Plus />
-                Nuevo evento
-              </Button>
-            )}
-          </div>
+          ) : undefined
         }
       />
 
-      {agenda.eventos.length === 0 ? (
-        <EmptyState
-          icon={<CalendarHeart />}
-          title="Sin eventos"
-          description="Todavía no hay eventos cargados. Creá el primero y va a aparecer en el dashboard cuando se acerque."
-          action={canWrite ? (
-            <Button className="min-h-11" onClick={abrirAlta}><Plus />Nuevo evento</Button>
-          ) : undefined}
-        />
-      ) : (
-        <>
-          <EventosTabla eventos={agenda.eventos} canWrite={canWrite}
-                        onEdit={abrirEdicion} onDelete={setABorrar}
-                        onResuelta={agenda.cambiarResuelta} />
-          <Pagination page={agenda.page} total={agenda.total} pageSize={PAGE_SIZE}
-                      onPageChange={agenda.setPage} />
-        </>
+      {/* `panel`: la forma completa del patrón de filtros (caja propia y los chips de la fila
+          inferior). Un solo control, así que no hay "Más filtros" — ver `_camposEventos.ts`. */}
+      <FiltersBar campos={campos} panel disabled={agenda.loading} />
+
+      <EventosTabla
+        eventos={agenda.eventos}
+        loading={agenda.loading}
+        error={agenda.error}
+        canWrite={canWrite}
+        onRetry={agenda.load}
+        onEdit={abrirEdicion}
+        onDelete={setABorrar}
+        onResuelta={agenda.cambiarResuelta}
+        chips={chips}
+        onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
+        accionVacio={canWrite ? (
+          <Button className="min-h-11" onClick={abrirAlta}>Crear el primero</Button>
+        ) : undefined}
+      />
+
+      {/*
+       * 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS y sólo después de cargar. Antes la barra colgaba del
+       * bloque `eventos.length > 0`, que a su vez estaba protegido por los `return` tempranos de
+       * carga y error; al mover los estados adentro de la tabla esa protección desaparece, así
+       * que la guarda pasa a ser explícita. Sin ella, la barra quedaría mostrando el total del
+       * pedido ANTERIOR sobre el esqueleto. El total es el del backend, no `eventos.length`.
+       */}
+      {!agenda.loading && !agenda.error && agenda.eventos.length > 0 && (
+        <Pagination page={agenda.page} total={agenda.total} pageSize={PAGE_SIZE}
+                    onPageChange={agenda.setPage} />
       )}
 
       <EventoModal

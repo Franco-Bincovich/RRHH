@@ -1,18 +1,17 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Plus } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/layout/PageHeader"
-import { Button } from "@/components/ui/button"
 import { ObjetivoModal } from "@/components/features/objetivos/ObjetivoModal"
-import { ObjetivosFiltros } from "@/components/features/objetivos/ObjetivosFiltros"
+import { construirCampos } from "@/components/features/objetivos/_camposObjetivos"
+import { FiltersBar } from "@/components/ui/FiltersBar"
+import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { ObjetivosVistas } from "@/components/features/objetivos/ObjetivosVistas"
 import type { Vista } from "@/components/features/objetivos/ObjetivosVistas"
-import { ImportarObjetivosBoton } from "@/components/features/objetivos/ImportarObjetivosBoton"
+import { NuevoObjetivoBoton, ObjetivosAcciones } from "@/components/features/objetivos/ObjetivosAcciones"
 import { ImportarObjetivosModal } from "@/components/features/objetivos/ImportarObjetivosModal"
-import { ExportMenu } from "@/components/features/export/ExportMenu"
-import { cambiarEstadoObjetivo, deleteObjetivo, exportarObjetivos, fetchObjetivos, fetchUsuariosActivos } from "@/services/objetivos"
+import { cambiarEstadoObjetivo, deleteObjetivo, fetchObjetivos, fetchUsuariosActivos } from "@/services/objetivos"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { useCanWrite } from "@/hooks/useCanWrite"
@@ -85,6 +84,17 @@ export default function ObjetivosPage() {
   const mostrarEmpresa = !empresaActivaId
   const empresaDestino = empresaActivaId ?? (empresaFiltro || "")
 
+  /* ⚠️ `onFiltroChange` queda vacío: **este listado no pagina** (el backend devuelve el árbol
+     entero), así que no hay página que resetear. Se pasa igual para no divergir del molde y para
+     el día que pagine — el wrapper ya tiene la forma final, ver `types/objetivo.ts`. */
+  const campos = construirCampos({
+    mostrarEmpresa, empresas, empresaFiltro, setEmpresaFiltro,
+    estadoFiltro, setEstadoFiltro, prioridadFiltro, setPrioridadFiltro,
+    usuarios, responsableFiltro, setResponsableFiltro, onFiltroChange: () => {},
+  })
+  const chips = chipsDeCampos(campos)
+  const nuevoBtn = <NuevoObjetivoBoton onClick={() => { setEditing(null); setModalOpen(true) }} />
+
   return (
     <div>
       <PageHeader
@@ -96,30 +106,22 @@ export default function ObjetivosPage() {
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <ObjetivosFiltros
-          mostrarEmpresa={mostrarEmpresa} empresas={empresas} usuarios={usuarios}
-          empresaFiltro={empresaFiltro} setEmpresaFiltro={setEmpresaFiltro}
-          estadoFiltro={estadoFiltro} setEstadoFiltro={setEstadoFiltro}
-          prioridadFiltro={prioridadFiltro} setPrioridadFiltro={setPrioridadFiltro}
-          responsableFiltro={responsableFiltro} setResponsableFiltro={setResponsableFiltro}
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        {/* `panel`: la forma completa del patrón de filtros (caja propia, "Más filtros" y los
+            chips de la fila inferior). Reemplaza a `ObjetivosFiltros`, que eran cuatro `<Select>`
+            sueltos sin chips — su propio encabezado decía que migrarla "es un rediseño del filtro,
+            no una división", y éste es ese rediseño. */}
+        <div className="min-w-[18rem] flex-1"><FiltersBar campos={campos} panel disabled={loading} /></div>
+        <ObjetivosAcciones
+          canWrite={canWrite}
+          empresaOverride={!empresaActivaId && empresaFiltro ? empresaFiltro : undefined}
+          estado={estadoFiltro || undefined}
+          responsable={responsableFiltro || undefined}
+          prioridad={prioridadFiltro || undefined}
+          sinEmpresa={!empresaDestino}
+          onImportar={() => setImportOpen(true)}
+          nuevoBtn={nuevoBtn}
         />
-        <div className="flex gap-2">
-          <ExportMenu onExport={(f) => exportarObjetivos(f, !empresaActivaId && empresaFiltro ? empresaFiltro : undefined, estadoFiltro || undefined, responsableFiltro || undefined, prioridadFiltro || undefined)} />
-          {/* La empresa del import sale del sidebar o del filtro: importar es una ACCIÓN y
-              necesita una empresa concreta. En consolidado el botón queda deshabilitado. */}
-          {canWrite && (
-            <ImportarObjetivosBoton
-              sinEmpresa={!empresaDestino}
-              onClick={() => setImportOpen(true)}
-            />
-          )}
-          {canWrite && (
-            <Button className="min-h-11 gap-2" onClick={() => { setEditing(null); setModalOpen(true) }}>
-              <Plus className="size-4" /> Nuevo objetivo
-            </Button>
-          )}
-        </div>
       </div>
 
       <ObjetivosVistas
@@ -127,6 +129,9 @@ export default function ObjetivosPage() {
         objetivos={objetivos} total={total} mostrarEmpresa={mostrarEmpresa} canWrite={canWrite}
         onMover={handleMover} moviendo={moviendo} deletingId={deletingId}
         onEdit={(o) => { setEditing(o); setModalOpen(true) }} onDelete={handleDelete}
+        chips={chips}
+        onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
+        accionVacio={canWrite ? nuevoBtn : undefined}
       />
 
       <ImportarObjetivosModal

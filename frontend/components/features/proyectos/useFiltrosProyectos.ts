@@ -1,29 +1,28 @@
 /**
- * Estado de los filtros de proyectos + armado del array de FiltroCampo para <FiltersBar>.
- * Sigue el molde de components/features/shared/filtros.ts: un solo objeto de filtros que
- * consumen el listado y, cuando exista, el export.
+ * Estado de los filtros de proyectos + carga de las opciones (empresas, áreas). Sigue el molde de
+ * components/features/shared/filtros.ts: un solo objeto de filtros que consumen el listado y el
+ * export, que es lo que hace estructuralmente imposible que un filtro quede en una sola punta.
  *
- * `onFiltroChange` se dispara en cada cambio; la página lo cablea a resetear la paginación
- * (hoy este listado no pagina, pero el contrato queda igual que en el resto de los módulos).
+ * `onFiltroChange` se dispara en cada cambio y la página lo cablea a volver a la página 1
+ * (invariante 4 del bloque B).
+ * ⚠️ Acá decía *"hoy este listado no pagina"*: **sí pagina**. `GET /api/proyectos` acepta
+ * `page`/`page_size` desde antes de esta tanda y la pantalla dibuja su barra; el comentario quedó
+ * viejo y se corrigió, porque de él se deduce mal la próxima decisión (por ejemplo, contar sobre
+ * el array en vez de leer el `total` del backend).
+ *
+ * ⚠️ El ARMADO de los campos se mudó a `_camposProyectos.ts` al migrar la pantalla al patrón del
+ * bloque B: es lo único que un test puede ejercitar sin DOM, y ahí vive la decisión de qué filtro
+ * queda detrás de "Más filtros".
  */
 import { useEffect, useState } from "react"
 
-import { etiquetaArea } from "@/components/features/shared/filtros"
-import type { FiltroCampo } from "@/components/ui/FiltersBar"
+import { construirCampos } from "@/components/features/proyectos/_camposProyectos"
 import { fetchAreas } from "@/services/areas"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Area } from "@/types/area"
 import type { Empresa } from "@/types/empresa"
 import type { ProyectosFiltros } from "@/services/proyectos"
-import type { ProyectoEstado } from "@/types/proyecto"
-
-const ESTADO_OPCIONES: { value: ProyectoEstado; label: string }[] = [
-  { value: "activo", label: "Activo" },
-  { value: "pausado", label: "Pausado" },
-  { value: "cerrado", label: "Cerrado" },
-  { value: "cancelado", label: "Cancelado" },
-]
 
 export function useFiltrosProyectos(onFiltroChange: () => void) {
   const [estadoFiltro, setEstadoFiltro] = useState("")
@@ -43,16 +42,10 @@ export function useFiltrosProyectos(onFiltroChange: () => void) {
     fetchAreas(empresaId || undefined).then(setAreas).catch(() => setAreas([]))
   }, [empresaId])
 
-  const campos: FiltroCampo[] = [
-    ...(!empresaActivaId && empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: empresaFiltro, opcionTodos: "Todas las empresas",
-      onChange: (v: string) => { setEmpresaFiltro(v); setAreaFiltro(""); onFiltroChange() },
-      opciones: empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
-    { tipo: "select", label: "Estado", value: estadoFiltro, opcionTodos: "Todos los estados",
-      onChange: (v: string) => { setEstadoFiltro(v); onFiltroChange() }, opciones: ESTADO_OPCIONES },
-    ...(areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: areaFiltro, opcionTodos: "Todas las áreas",
-      onChange: (v: string) => { setAreaFiltro(v); onFiltroChange() },
-      opciones: areas.map((a) => ({ value: a.id, label: etiquetaArea(a, empresas, Boolean(empresaId)) })) }] : []),
-  ]
+  const campos = construirCampos({
+    empresaActivaId, empresas, empresaFiltro, setEmpresaFiltro,
+    estadoFiltro, setEstadoFiltro, areas, areaFiltro, setAreaFiltro, onFiltroChange,
+  })
 
   const filtros: ProyectosFiltros = {
     empresaIdOverride: !empresaActivaId && empresaFiltro ? empresaFiltro : undefined,

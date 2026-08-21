@@ -1,8 +1,11 @@
 "use client"
 
-import { cn } from "@/lib/utils"
+import { ErrorState } from "@/components/ui/ErrorState"
+import { GrillaTarjetas } from "@/components/ui/GrillaTarjetas"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
+import type { ChipFiltro } from "@/components/ui/filtrosChips"
+import type { ReactNode } from "react"
 import { KanbanView } from "@/components/features/objetivos/KanbanView"
 import { ListView } from "@/components/features/objetivos/ListView"
 import type { EstadoObjetivo, Objetivo } from "@/types/objetivo"
@@ -37,13 +40,18 @@ import type { EstadoObjetivo, Objetivo } from "@/types/objetivo"
 
 export type Vista = "tablero" | "lista"
 
-function TableSkeleton() {
+/**
+ * 🔴 EL ESQUELETO DEJÓ DE SER COMPARTIDO, y ése es el cambio del patrón acá. Era una pila de seis
+ * barras que se dibujaba para las DOS vistas, así que la de Lista perdía su encabezado mientras
+ * cargaba y la de Tablero mostraba renglones donde iban a aparecer columnas. Ahora cada vista
+ * carga con su propia forma: `ListView` con `FilasEsqueleto` (mismas columnas, mismos anchos) y
+ * el tablero con tarjetas. Lo único que sigue compartido es el ERROR, que sí es de la pantalla.
+ */
+function TableroSkeleton() {
   return (
-    <div className="space-y-2">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Skeleton key={i} className="h-12 w-full rounded-lg" />
-      ))}
-    </div>
+    <GrillaTarjetas>
+      {[1, 2, 3].map((i) => <Skeleton key={i} shimmer className="h-64 rounded-xl" />)}
+    </GrillaTarjetas>
   )
 }
 
@@ -68,11 +76,16 @@ interface Props {
   onEdit: (obj: Objetivo) => void
   onDelete: (id: string) => void
   deletingId: string | null
+  /** Los filtros activos, para explicar el vacío con sus valores reales y ofrecer quitarlos. */
+  chips: ChipFiltro[]
+  onLimpiarTodo: () => void
+  /** Qué ofrecer cuando NO hay filtros y tampoco datos: el alta. `undefined` sin permiso. */
+  accionVacio?: ReactNode
 }
 
 export function ObjetivosVistas({
   vista, onVista, loading, error, onReintentar, objetivos, total, mostrarEmpresa,
-  canWrite, onMover, moviendo, onEdit, onDelete, deletingId,
+  canWrite, onMover, moviendo, onEdit, onDelete, deletingId, chips, onLimpiarTodo, accionVacio,
 }: Props) {
   return (
     <>
@@ -82,23 +95,26 @@ export function ObjetivosVistas({
           <Tab value="lista">Lista</Tab>
         </TabList>
 
-        {/* Carga y error viven FUERA de los paneles a propósito: son estado de la pantalla, no
-            de una solapa, y duplicarlos adentro de cada panel los haría divergir. */}
-        {loading && <TableSkeleton />}
-        {!loading && error && <div className="py-12 text-center text-sm text-destructive">Error al cargar. <button onClick={onReintentar} className="underline">Reintentar</button></div>}
-
-        <TabPanel value="tablero">
-          {!loading && !error && (
-            <KanbanView objetivos={objetivos} total={total} onMover={onMover} moviendo={moviendo}
-              canWrite={canWrite} onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
-          )}
-        </TabPanel>
-        <TabPanel value="lista">
-          {!loading && !error && (
-            <ListView objetivos={objetivos} total={total} showEmpresa={mostrarEmpresa}
-              canWrite={canWrite} onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
-          )}
-        </TabPanel>
+        {/* El ERROR sigue viviendo FUERA de los paneles: es estado de la pantalla, no de una
+            solapa, y duplicarlo adentro de cada panel lo haría divergir. La CARGA, en cambio, se
+            bajó a cada vista — ver el 🔴 del esqueleto. */}
+        {error ? (
+          <ErrorState description="No se pudieron cargar los objetivos." action={onReintentar} />
+        ) : (
+          <>
+            <TabPanel value="tablero">
+              {loading ? <TableroSkeleton /> : (
+                <KanbanView objetivos={objetivos} total={total} onMover={onMover} moviendo={moviendo}
+                  canWrite={canWrite} onEdit={onEdit} onDelete={onDelete} deletingId={deletingId} />
+              )}
+            </TabPanel>
+            <TabPanel value="lista">
+              <ListView objetivos={objetivos} loading={loading} total={total} showEmpresa={mostrarEmpresa}
+                canWrite={canWrite} onEdit={onEdit} onDelete={onDelete} deletingId={deletingId}
+                chips={chips} onLimpiarTodo={onLimpiarTodo} accionVacio={accionVacio} />
+            </TabPanel>
+          </>
+        )}
       </Tabs>
     </>
   )

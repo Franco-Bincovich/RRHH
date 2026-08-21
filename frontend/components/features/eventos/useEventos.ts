@@ -16,11 +16,10 @@ export const PAGE_SIZE = 20
  * queda con lo que abre y cierra diálogos —modal de alta/edición y confirmación de baja—, que es
  * estado de PANTALLA; acá vive el estado de DATOS.
  *
- * 🔴 `alternarResueltas` VUELVE A LA PÁGINA 1, y es la regla del bloque B ("`page` se resetea al
- * cambiar cualquier filtro"). Vive acá y no en la página justamente por eso: mientras el toggle y
- * el `setPage` estén en el mismo lugar, no hay forma de mover uno y olvidarse del otro. Sin eso,
- * alguien parado en la página 4 de los pendientes que destilda el filtro puede caer fuera del
- * nuevo total y ver una tabla vacía con el endpoint respondiendo 200.
+ * ⚠️ `alternarResueltas` YA NO EXISTE: era el toggle de un botón, y al migrar la pantalla al
+ * patrón del bloque B el filtro pasó a ser un `<select>` dentro del panel para que produzca CHIP.
+ * Lo que sí se conserva —y es lo que importa— es que el setter resetea la página; ver el 🔴 del
+ * `return`.
  */
 export function useEventos() {
   const [eventos, setEventos] = useState<Evento[]>([])
@@ -28,7 +27,14 @@ export function useEventos() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [incluirResueltas, setIncluirResueltas] = useState(false)
+  /*
+   * 🔴 EL FILTRO SE GUARDA COMO TEXTO ("" | "todos") Y NO COMO BOOLEAN, y no es un capricho: los
+   * chips del patrón se derivan de un `FiltroCampo`, y el único control que puede expresar esto
+   * es un `select`, que trabaja con strings. La traducción a `incluir_resueltas: boolean` —lo
+   * único que el backend entiende— se hace UNA vez, abajo, al armar el pedido.
+   */
+  const [resueltosFiltro, setResueltosFiltro] = useState("")
+  const incluirResueltas = resueltosFiltro === "todos"
 
   const load = useCallback(
     () => cargarEventos({ incluirResueltas }, page, PAGE_SIZE,
@@ -48,8 +54,13 @@ export function useEventos() {
 
   return {
     eventos, total, page, setPage, loading, error, load,
-    incluirResueltas,
-    alternarResueltas: () => { setIncluirResueltas((v) => !v); setPage(1) },
+    resueltosFiltro,
+    // 🔴 El setter que la pantalla le pasa al filtro VUELVE A LA PÁGINA 1 (invariante 4 del
+    // bloque B). Vive acá y no en la página justamente por eso: mientras el filtro y el `setPage`
+    // estén en el mismo lugar, no hay forma de mover uno y olvidarse del otro. Sin eso, alguien
+    // parado en la página 4 de los pendientes que pide ver los resueltos puede caer fuera del
+    // nuevo total y ver una tabla vacía con el endpoint respondiendo 200.
+    setResueltosFiltro: (v: string) => { setResueltosFiltro(v); setPage(1) },
     cambiarResuelta,
   }
 }
