@@ -1,3 +1,4 @@
+import { isoLocal } from "@/components/features/shared/fechas"
 import { ApiError } from "@/services/api"
 import type { CargaHorasBody, CargaLicenciaBody } from "@/types/horasPublico"
 
@@ -78,12 +79,23 @@ export function puedeEnviar(modo: Modo, h: FormHoras, l: FormLicencia): boolean 
   return Object.keys(modo === "horas" ? validarHoras(h) : validarLicencia(l)).length === 0
 }
 
-/** `min`/`max` del input date: la ventana de 30 días que el backend impone. */
+/**
+ * `min`/`max` del input date: la ventana de 30 días que el backend impone.
+ *
+ * 🔴 LA CONVERSIÓN A ISO ES LOCAL Y NO UTC, Y ESO ERA UN BUG REAL EN ESTA PANTALLA. Antes hacía
+ * `d.toISOString().slice(0, 10)`: en Argentina (UTC-3), a partir de las 21:00 eso devuelve el día
+ * SIGUIENTE. O sea que **quien cargaba sus horas de noche —el escenario normal de este link— veía
+ * el calendario ofreciéndole MAÑANA**, elegía ese día de buena fe, y el backend se lo rechazaba
+ * sin que nada en pantalla explicara por qué. El `min` se corría igual, así que la ventana pasaba
+ * a ser de 29 días hacia atrás.
+ *
+ * `setDate` sí es correcto para restar días: opera sobre el calendario local y cruza bien los
+ * cambios de mes y de horario de verano. Lo que estaba mal era sólo cómo se escribía el resultado.
+ */
 export function ventanaFechas(hoy: Date): { min: string; max: string } {
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
   const desde = new Date(hoy)
   desde.setDate(desde.getDate() - DIAS_HACIA_ATRAS)
-  return { min: iso(desde), max: iso(hoy) }
+  return { min: isoLocal(desde), max: isoLocal(hoy) }
 }
 
 /** Body de la carga de horas. Los opcionales vacíos NO viajan: "" no es un dato. */

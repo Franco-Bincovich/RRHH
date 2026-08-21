@@ -1,3 +1,6 @@
+import { CalendarDays } from "lucide-react"
+
+import { EmptyState } from "@/components/ui/EmptyState"
 import type { Semana } from "@/types/horasPublico"
 
 const MODALIDAD: Record<string, string> = { home_office: "Home Office", on_site: "On site" }
@@ -14,6 +17,15 @@ function ddmm(iso: string): string {
  *
  * Muestra las licencias JUNTO a las horas, como el mockup: para la persona son dos formas del
  * mismo día de trabajo, y separarlas en dos tablas la obligaría a cruzarlas de memoria.
+ *
+ * 🔴 EL VACÍO ES `EmptyState`, EL MISMO DE TODO EL PRODUCTO, y antes era una línea de texto gris
+ * suelta. Ninguno de los tres estados compartidos había cruzado la frontera de `(dashboard)`: las
+ * pantallas públicas resolvían carga, error y vacío cada una a su manera, que es cómo terminan
+ * viéndose distintas sin que nadie lo haya decidido.
+ *
+ * ⚠️ El vacío es VERDAD para quien mira: dice que no cargó nada **esta semana**, que es el único
+ * período que esta tabla muestra. No dice "no cargaste nada" a secas — quien cargó el lunes
+ * pasado no está viendo un sistema vacío, está viendo otra semana.
  */
 export function SemanaTabla({ semana }: { semana: Semana }) {
   const vacia = semana.cargas.length === 0 && semana.licencias.length === 0
@@ -26,7 +38,11 @@ export function SemanaTabla({ semana }: { semana: Semana }) {
         </span>
       </div>
       {vacia ? (
-        <p className="text-sm text-muted-foreground">Todavía no cargaste nada esta semana.</p>
+        <EmptyState
+          icon={<CalendarDays />}
+          title="Todavía no cargaste nada esta semana"
+          description="Lo que cargues va a aparecer en esta lista."
+        />
       ) : (
         <ul className="space-y-1 text-sm">
           {semana.cargas.map((c, i) => (

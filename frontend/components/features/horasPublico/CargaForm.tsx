@@ -1,12 +1,10 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select } from "@/components/ui/select"
+import { FormErrores } from "@/components/ui/FormErrores"
+import { CamposHoras, CamposLicencia } from "@/components/features/horasPublico/CamposCarga"
 import {
-  MAX_HORAS_DIA, puedeEnviar, ventanaFechas,
+  puedeEnviar, ventanaFechas,
   type FormHoras, type FormLicencia, type Modo,
 } from "@/components/features/horasPublico/logica"
 import type { ClientePublico } from "@/types/horasPublico"
@@ -39,11 +37,21 @@ interface Props {
  * El botón de enviar SÍ usa `disabled` mientras faltan obligatorios — ahí es correcto: el campo
  * existe, la acción todavía no. Lo que un test puede afirmar de eso es `puedeEnviar()`, que es
  * la función pura que lo decide.
+ *
+ * 🔴 LA VALIDACIÓN ES EN DOS NIVELES (§3): el banner con la CUENTA arriba de los campos y el
+ * mensaje que dice QUÉ CORREGIR en cada uno. Acá el banner se gana su lugar: en modo horas hay
+ * cuatro obligatorios que en un teléfono se apilan en una columna, así que el último campo y el
+ * botón quedan lejos del primer borde rojo.
+ *
+ * ⚠️ El banner va DEBAJO del selector de modo, no arriba de todo: el modo no es un campo que se
+ * pueda "corregir" —siempre tiene un valor— y contarlo entre los errores no tendría sentido. La
+ * página LIMPIA `errores` al cambiar de modo, y eso es lo que impide que el banner diga "Revisá 3
+ * campos" sobre el formulario de licencia con los errores que habían quedado del de horas.
  */
 export function CargaForm(p: Props) {
   const { min, max } = ventanaFechas(p.hoy)
   const err = (k: string) =>
-    p.errores[k] ? <p className="text-xs text-destructive">{p.errores[k]}</p> : null
+    p.errores[k] ? <p className="text-xs text-destructive" role="alert">{p.errores[k]}</p> : null
 
   return (
     <div className="space-y-4">
@@ -57,83 +65,13 @@ export function CargaForm(p: Props) {
         ))}
       </div>
 
+      <FormErrores cantidad={Object.values(p.errores).filter(Boolean).length} />
+
       {p.modo === "horas" ? (
-        <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="fecha">Fecha</Label>
-              <Input id="fecha" type="date" value={p.horas.fecha} min={min} max={max}
-                     onChange={(e) => p.onHoras({ ...p.horas, fecha: e.target.value })} />
-              {err("fecha")}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="horas">Horas</Label>
-              <Input id="horas" type="number" step="0.5" min="0.5" max={MAX_HORAS_DIA}
-                     value={p.horas.horas}
-                     onChange={(e) => p.onHoras({ ...p.horas, horas: e.target.value })} />
-              {err("horas")}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="modalidad">Modalidad</Label>
-              <Select id="modalidad" value={p.horas.modalidad}
-                      onChange={(e) => p.onHoras({ ...p.horas, modalidad: e.target.value })}>
-                <option value="">Elegí una</option>
-                <option value="home_office">Home Office</option>
-                <option value="on_site">On site</option>
-              </Select>
-              {err("modalidad")}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cliente">Cliente</Label>
-              <Select id="cliente" value={p.horas.cliente_id}
-                      onChange={(e) => p.onHoras({ ...p.horas, cliente_id: e.target.value })}>
-                <option value="">Elegí uno</option>
-                {p.clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </Select>
-              {err("cliente_id")}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="proyecto">Proyecto (opcional)</Label>
-              <Input id="proyecto" value={p.horas.proyecto_texto} maxLength={200}
-                     onChange={(e) => p.onHoras({ ...p.horas, proyecto_texto: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tarea">Tarea (opcional)</Label>
-              <Input id="tarea" value={p.horas.tarea_texto} maxLength={200}
-                     onChange={(e) => p.onHoras({ ...p.horas, tarea_texto: e.target.value })} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="descripcion">Descripción (opcional)</Label>
-            <Textarea id="descripcion" rows={2} maxLength={1000} value={p.horas.descripcion}
-                      onChange={(e) => p.onHoras({ ...p.horas, descripcion: e.target.value })} />
-          </div>
-        </>
+        <CamposHoras form={p.horas} onForm={p.onHoras} clientes={p.clientes}
+                     err={err} min={min} max={max} />
       ) : (
-        <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="desde">Desde</Label>
-              <Input id="desde" type="date" value={p.licencia.fecha_desde} min={min} max={max}
-                     onChange={(e) => p.onLicencia({ ...p.licencia, fecha_desde: e.target.value })} />
-              {err("fecha_desde")}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="hasta">Hasta</Label>
-              <Input id="hasta" type="date" value={p.licencia.fecha_hasta} min={min} max={max}
-                     onChange={(e) => p.onLicencia({ ...p.licencia, fecha_hasta: e.target.value })} />
-              {err("fecha_hasta")}
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="observaciones">Observaciones (opcional)</Label>
-            <Textarea id="observaciones" rows={2} maxLength={1000}
-                      value={p.licencia.observaciones}
-                      onChange={(e) => p.onLicencia({ ...p.licencia, observaciones: e.target.value })} />
-          </div>
-        </>
+        <CamposLicencia form={p.licencia} onForm={p.onLicencia} err={err} min={min} max={max} />
       )}
 
       <Button type="submit" className="min-h-11 w-full"

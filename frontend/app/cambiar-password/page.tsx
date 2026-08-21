@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Building2 } from "lucide-react"
 
+import { EsqueletoAuth, MarcaAuth, MarcoAuth } from "@/components/features/auth/MarcaAuth"
 import { CambiarPasswordForm } from "@/components/features/usuarios/CambiarPasswordForm"
 import { getSession } from "@/services/api"
 
@@ -21,31 +21,27 @@ export default function CambiarPasswordPage() {
     setEstado(session.user.must_change_password ? "forzado" : "voluntario")
   }, [router])
 
-  if (estado === "cargando") return null
+  /*
+   * 🔴 EL RETURN TEMPRANO SE QUEDA, Y LO QUE CAMBIÓ ES LO QUE DEVUELVE. Protege dos cosas: que
+   * `forced` no se calcule antes de haber leído la sesión, y que alguien sin sesión no vea el
+   * formulario mientras la redirección a `/login` ocurre. Antes devolvía `null` —una pantalla
+   * blanca— y ahora devuelve el esqueleto de la pantalla que viene. Sacarlo para "simplificar" se
+   * lleva las dos protecciones.
+   */
+  if (estado === "cargando") return <EsqueletoAuth />
 
   const forced = estado === "forzado"
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary shadow-lg">
-            <Building2 className="size-7 text-primary-foreground" />
-          </div>
-          <div className="text-center">
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Cambiar contraseña</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {forced
-                ? "Tenés que cambiar tu contraseña temporal antes de continuar."
-                : "Actualizá la contraseña de tu cuenta."}
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border bg-card p-6 shadow-sm">
-          <CambiarPasswordForm forced={forced} />
-        </div>
+    <MarcoAuth>
+      <MarcaAuth titulo="Cambiar contraseña">
+        {forced
+          ? "Tenés que cambiar tu contraseña temporal antes de continuar."
+          : "Actualizá la contraseña de tu cuenta."}
+      </MarcaAuth>
+      <div className="rounded-2xl border bg-card p-6 shadow-sm">
+        <CambiarPasswordForm forced={forced} />
       </div>
-    </div>
+    </MarcoAuth>
   )
 }
