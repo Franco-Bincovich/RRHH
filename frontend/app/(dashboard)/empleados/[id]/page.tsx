@@ -13,6 +13,7 @@ import { AdjuntosSection } from "@/components/features/adjuntos/AdjuntosSection"
 import { InventarioSection } from "@/components/features/empleados/ficha/InventarioSection"
 import { HistorialCambiosSection } from "@/components/features/empleados/ficha/HistorialCambiosSection"
 import { HistorialSalarialSection } from "@/components/features/empleados/ficha/HistorialSalarialSection"
+import { RecategorizacionesSection } from "@/components/features/empleados/ficha/RecategorizacionesSection"
 import { VacacionesSection } from "@/components/features/empleados/ficha/VacacionesSection"
 import { CesionesSection } from "@/components/features/empleados/ficha/CesionesSection"
 import { fetchEmpleado } from "@/services/empleados"
@@ -91,6 +92,11 @@ export default function EmpleadoDetailPage() {
         </div>
         <div className="flex flex-col gap-4">
           <HistorialSalarialSection empleadoId={id} />
+          {/* Va en la TERCERA columna —"qué le pasó"— junto al sueldo y las vacaciones, y no en
+              la primera con los datos del legajo: una recategorización es un hecho fechado de su
+              línea de tiempo, no un atributo suyo. El rol vigente ya está arriba, en el panel
+              laboral; acá está cómo llegó a serlo. */}
+          <RecategorizacionesSection empleadoId={id} />
           <VacacionesSection empleadoId={id} />
         </div>
       </div>
