@@ -45,7 +45,11 @@ export function OffboardingCard({
           <p className="font-medium text-foreground">{instancia.empleado_nombre}</p>
           <p className="mt-0.5 text-sm text-muted-foreground">Egreso: {instancia.fecha_inicio}</p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        {/* 🔴 `sm:shrink-0` Y NO `shrink-0`: con `shrink-0` el contenedor toma su ancho de
+            contenido, así que el `flex-wrap` que ya tenía NUNCA se activaba y a 390px la fila se
+            iba 139px afuera de la pantalla. De `sm` para arriba manda lo de antes: lo que se
+            achica es el nombre, no las acciones. */}
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:shrink-0">
           {mostrarEmpresa && instancia.empresa_nombre && (
             <Badge variant="outline" className="text-xs">{instancia.empresa_nombre}</Badge>
           )}

@@ -1,0 +1,79 @@
+/*
+ * Utilidades propias del producto. Viven aparte de `globals.css` por el límite de 200 líneas —
+ * el mismo motivo por el que se separó `paleta.css`, y con la misma regla: acá van CLASES, allá
+ * van TOKENS. Se importan desde `globals.css`.
+ */
+
+/*
+ * ═══════════════════════════════════════════════════════════════════════════════════════════
+ * 🔴 `.scroll-x-indicio` — LA PISTA DE QUE HAY MÁS CONTENIDO A LA DERECHA.
+ * ═══════════════════════════════════════════════════════════════════════════════════════════
+ *
+ * EL PROBLEMA MEDIDO: a 390px toda tabla de datos se corta LIMPIA contra el borde de la
+ * pantalla. /ausencias muestra 3 de sus 11 columnas, /auditoria 3 de 7 (1058px y 946px de
+ * contenido en 358px de ancho útil). El contenedor scrollea —`overflow-x-auto` está desde
+ * siempre— pero en un teléfono no hay barra de scroll visible hasta que alguien ya arrastró, así
+ * que el corte se lee como **contenido faltante** y no como contenido alcanzable. Nadie desliza
+ * una tabla que no sabe que se puede deslizar.
+ *
+ * 🔴 EL INDICIO APARECE SÓLO CUANDO HAY DESBORDE REAL, y eso es la mitad del punto: un degradado
+ * permanente sobre una tabla de tres columnas que entra entera es peor que no tener ninguno —
+ * miente sobre que hay algo más. Se resuelve **sin una línea de JavaScript** y sin medir nada,
+ * con la técnica de Lea Verou de las cuatro capas de fondo:
+ *
+ *   · dos "tapas" del color de la superficie, pegadas al CONTENIDO (`background-attachment:
+ *     local`): se desplazan junto con la tabla cuando el usuario scrollea.
+ *   · dos sombras radiales, pegadas al CONTENEDOR (`background-attachment: scroll`): se quedan
+ *     quietas en los bordes.
+ *
+ * Con el contenido en su posición inicial, la tapa izquierda está exactamente encima de la
+ * sombra izquierda y la esconde; si NO hay desborde, la tapa derecha también cubre la suya y no
+ * se ve nada. Al scrollear, las tapas se corren con el contenido y destapan la sombra del lado
+ * que tiene más para mostrar. O sea: el navegador resuelve "¿hay overflow?" con geometría, no
+ * con un `ResizeObserver` que hay que acordarse de desconectar.
+ *
+ * ⚠️ LAS TAPAS SON OPACAS Y TIENEN QUE SER DEL COLOR DE LA SUPERFICIE, y por eso **el color lo
+ * declara la SUPERFICIE y no el scroller**: `card.tsx` pone `--indicio-fondo: var(--card)` y el
+ * popup del diálogo `var(--popover)`, así que cualquier tabla adentro hereda el valor correcto
+ * sin que nadie tenga que acordarse. El fallback es `--background`, que es donde viven las
+ * tablas de listado (verificado en el navegador: el ancestro pintado más cercano de
+ * `[data-slot=table-container]` en /empleados, /ausencias, /auditoria y /evaluaciones es el
+ * `body`). Si aparece una superficie nueva, le agrega la variable ELLA, no sus tablas.
+ *
+ * 🔴 Se vio en una captura antes de que existiera esa herencia: la tabla "Costos por área" vive
+ * adentro de una `Card`, y la tapa pintada con `--background` dibujaba una franja oscura sobre
+ * el borde de la tarjeta — un indicio que aparecía donde no había nada que indicar.
+ *
+ * ⚠️ LO QUE NO CUBRE: el fondo del contenedor queda DEBAJO de sus hijos, así que donde una fila
+ * pinta color propio —el `thead` de `patron="datos"`, que va sobre `--secondary`, y la fila que
+ * está bajo el mouse— la sombra queda tapada en esa franja. Se ve a lo largo del cuerpo de la
+ * tabla, que es donde importa. Arreglarlo del todo pediría un nodo absoluto por encima del
+ * contenido, o sea tocar el markup de los 31 consumidores.
+ */
+.scroll-x-indicio {
+  background-image:
+    /* tapa izquierda */
+    linear-gradient(to right, var(--indicio-fondo, var(--background)) 60%, transparent),
+    /* tapa derecha */ linear-gradient(to left, var(--indicio-fondo, var(--background)) 60%, transparent),
+    /* sombra izquierda */
+      radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.16), transparent),
+    /* sombra derecha */
+      radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.16), transparent);
+  background-position: 0 0, 100% 0, 0 0, 100% 0;
+  background-repeat: no-repeat;
+  background-size: 28px 100%, 28px 100%, 14px 100%, 14px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+/*
+ * En oscuro una sombra negra sobre `#0B1220` no se ve: el indicio pasa a ser un halo CLARO, que
+ * es el mismo recurso que usa la paleta para separar superficies (`--border` es más claro que el
+ * fondo, no más oscuro).
+ */
+.dark .scroll-x-indicio {
+  background-image:
+    linear-gradient(to right, var(--indicio-fondo, var(--background)) 60%, transparent),
+    linear-gradient(to left, var(--indicio-fondo, var(--background)) 60%, transparent),
+    radial-gradient(farthest-side at 0 50%, rgb(255 255 255 / 0.14), transparent),
+    radial-gradient(farthest-side at 100% 50%, rgb(255 255 255 / 0.14), transparent);
+}

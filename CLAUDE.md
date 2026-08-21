@@ -405,6 +405,18 @@ reconstrucción, no producción) ya refleja 113–121 completas, incluida la 121
   INVOCA) · el padrón y los fakes crecen más que las aserciones. Molde: los cuatro archivos del
   puente candidato→empleado. ⚠️ **Los helpers `tests/_*.py` NO están exentos**: son código de
   apoyo, no aserciones, y mantienen sus 200. Detalle completo en `docs/ORDEN-Y-LEGIBILIDAD.md` §2.
+- 🔴 **LO MISMO EN EL FRONT: `*.test.ts` / `*.test.tsx` ESTÁN EXENTOS DEL LÍMITE DE 200 —
+  declarado el 21/8/2026.** **El dato: de los 124 archivos de test del front, 14 están sobre 200
+  y 8 están entre 250 y 382**, máximo `components/ui/decisionesVisuales.test.ts` (382). La
+  exención se escribió para el backend el 18/8 y el front quedó afuera **sin que nadie decidiera
+  nada**: la regla ya se salteaba ahí desde antes (`filtros-export.test.ts` tenía 363 ese mismo
+  día), así que lo único que hacía la omisión era obligar a cada sesión a discutirlo de nuevo.
+  **Rige el MISMO criterio, y es el que importa: un archivo de test cubre UNA cosa —una pantalla,
+  un módulo, una clase de decisión— y cuando cubre tres se parte por eso, no por líneas.** Un
+  barrido estructural de 380 líneas sobre una sola clase de regla está bien; un
+  `<pantalla>Patron.test.tsx` de 180 que prueba tres pantallas está mal aunque entre. ⚠️ Los que
+  NO son test siguen con su límite: componente 150, hook 80, y los `.mjs` de
+  `frontend/scripts/` son herramientas de desarrollo, no código de producción.
 - Next.js 16: `params` en rutas dinámicas se await (es Promise).
 - NO usar `from __future__ import annotations` en routers FastAPI (rompe resolución de anotaciones Pydantic).
 - Helpers Supabase en políticas RLS necesitan `SECURITY DEFINER` (evita dependencia circular en login).
@@ -913,7 +925,7 @@ compilación real de Tailwind/Turbopack** — directivas mal ubicadas, imports d
 cliente, CSS que no resuelve.
 
 `next dev` con Turbopack transpila sin type-check → un error de tipo pasa desapercibido en
-desarrollo pero **`next build` falla**. `vitest` cubre 1451 tests en 123 archivos, pero **la mayor
+desarrollo pero **`next build` falla**. `vitest` cubre 1458 tests en 124 archivos, pero **la mayor
 parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Si aparece un error en
 cualquiera de los tres, es tuyo.**
 
@@ -1127,10 +1139,10 @@ contra el catálogo el 12/8/2026).
 ### Tests
 - **Backend: 4155 passed** en **203 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 223 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 21/8/2026, al cerrar los KPIs que faltaban del dashboard. Los CUATRO archivos nuevos son uno por módulo nuevo —masa salarial, operación, antigüedad y headcount—, que es el criterio del repo: un archivo de test cubre UN módulo. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
   > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → 4115 (el cliente real bloqueado bajo tests) → 4120 (`motivo_baja` sale por la API, el hermano de `fecha_egreso`) → **4155** (los KPIs de §6 + la masa salarial deduplicada). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
-- **Front: `npm test` (= `vitest run`) — 1451 tests en 123 archivos, verdes.** *(Windows, 21/8/2026, al cerrar el bloque B con las CUATRO pantallas de afuera de `(dashboard)` —/login, /horas, /evaluacion/[token] y /cambiar-password—. El archivo nuevo es uno solo, `app/pantallasPublicas.test.tsx`, y cubre a las cuatro juntas: son la unidad de esa tanda y comparten los mismos cuatro ejes (estados compartidos, mensajes por campo, touch targets de 44px y el bug de huso). La tanda anterior dejó 1425 en 122, al cerrar el patrón de ficha en las CINCO pantallas que faltaban —/vacantes/[id], /proyectos/[id], /empresas/[id], /assessment/[id] y /onboarding/templates/[id]— más el barrido de paginación. Los seis archivos nuevos son uno por ficha (`barra<Entidad>.test.tsx`, junto a la barra que prueban) y `components/ui/barridoPaginacion.test.ts`. La tanda anterior dejó 1360 en 116, al propagar los patrones del bloque B3 a las NUEVE pantallas que quedaban: /objetivos, /onboarding, /onboarding/templates, /offboarding, /horas-por-cliente, /procesos, /organigrama, /sucesion y /assessment. Con esta tanda el bloque B3 cubre el front entero. Los nueve archivos nuevos son uno por pantalla, que es el criterio del repo: un archivo de test cubre UNA pantalla — por eso /onboarding y /onboarding/templates tienen uno cada una aunque compartan carpeta. Las tandas anteriores dejaron 1271 en 107 (/auditoria, /eventos, /costos, /inventario, /capacitaciones, /evaluaciones, /comunicacion), 1187 en 100 (/areas, /clientes, /empresas, /usuarios, /periodos, /proyectos) y 1128 en 94 (/ausencias, /vacaciones, /candidatos, /vacantes, /equipo); antes de eso, 1071 en 89 al cerrar el dashboard de §6. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Front: `npm test` (= `vitest run`) — 1458 tests en 124 archivos, verdes.** *(Windows, 21/8/2026, al sumar el hover de tarjeta de §2 y el barrido que lo hubiera cazado. El archivo nuevo es uno solo, `components/ui/decisionesVisuales.test.ts`, y no cubre una pantalla sino una CLASE de decisión: lo que §2 y §3 deciden sobre superficie, densidad y movimiento, contra los primitivos donde eso vive. La tanda anterior dejó 1451 en 123, al cerrar el bloque B con las CUATRO pantallas de afuera de `(dashboard)` —/login, /horas, /evaluacion/[token] y /cambiar-password—. El archivo nuevo es uno solo, `app/pantallasPublicas.test.tsx`, y cubre a las cuatro juntas: son la unidad de esa tanda y comparten los mismos cuatro ejes (estados compartidos, mensajes por campo, touch targets de 44px y el bug de huso). La tanda anterior dejó 1425 en 122, al cerrar el patrón de ficha en las CINCO pantallas que faltaban —/vacantes/[id], /proyectos/[id], /empresas/[id], /assessment/[id] y /onboarding/templates/[id]— más el barrido de paginación. Los seis archivos nuevos son uno por ficha (`barra<Entidad>.test.tsx`, junto a la barra que prueban) y `components/ui/barridoPaginacion.test.ts`. La tanda anterior dejó 1360 en 116, al propagar los patrones del bloque B3 a las NUEVE pantallas que quedaban: /objetivos, /onboarding, /onboarding/templates, /offboarding, /horas-por-cliente, /procesos, /organigrama, /sucesion y /assessment. Con esta tanda el bloque B3 cubre el front entero. Los nueve archivos nuevos son uno por pantalla, que es el criterio del repo: un archivo de test cubre UNA pantalla — por eso /onboarding y /onboarding/templates tienen uno cada una aunque compartan carpeta. Las tandas anteriores dejaron 1271 en 107 (/auditoria, /eventos, /costos, /inventario, /capacitaciones, /evaluaciones, /comunicacion), 1187 en 100 (/areas, /clientes, /empresas, /usuarios, /periodos, /proyectos) y 1128 en 94 (/ausencias, /vacaciones, /candidatos, /vacantes, /equipo); antes de eso, 1071 en 89 al cerrar el dashboard de §6. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
   > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
   > 🔴 **Y APARECIÓ UN CUARTO ROJO DE WINDOWS, DE LA MISMA FAMILIA, arreglado el 20/8/2026.** `claudeMdNoMiente.test.ts` lanzaba el hijo con `execFileSync("node_modules/.bin/vitest")`, que **en Windows es un script de shell SIN extensión**: `ENOENT`. O sea que el barrido que existe para que estos números no mientan estaba **rojo en la Lenovo y verde en la Mac**, y por eso el front venía declarando 896/75 con 941/79 medidos. Ahora se lanza con `process.execPath` + `node_modules/vitest/vitest.mjs`. 🔑 **La regla que deja: un test que lanza un proceso usa el ejecutable de node que ya está corriendo, nunca un lanzador de `.bin/`.**
-- **Son 31 barridos estructurales conocidos** (20 backend + 11 front), renumerados el 19/8/2026 —
+- **Son 32 barridos estructurales conocidos** (20 backend + 12 front), renumerados el 19/8/2026 —
   la lista anterior tenía dos numeraciones distintas conviviendo (1–11 y 12–15 fuera de orden) y
   le faltaban 3 barridos que ya existían. **Cada uno cubre automáticamente lo que se agregue
   después, y todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una
@@ -1190,6 +1202,25 @@ contra el catálogo el 12/8/2026).
       comentarios: tres archivos de `/horas` explican EN PROSA por qué no usan esos patrones, y un
       barrido por texto plano empujaría a borrar justo esas explicaciones. Guardas de mínimo: ≥18
       archivos públicos y ≥30 controles medidos.
+  32. 🔴 **`frontend/components/ui/decisionesVisuales.test.ts`** — **las decisiones VISUALES de
+      `docs/SISTEMA-DE-DISENO.md` §2 y §3 están en el código, y siguen escritas en el documento.**
+      15 decisiones declaradas (superficie opaca, elevación de 3px con borde iluminado en la
+      tarjeta, desplazamiento SIN elevación en la fila, 160ms, filas de 46px, encabezado de 32px,
+      marca de 3px de `--primary`, chips con `--accent` y borde `--primary`, selectores de 30px,
+      monograma de 46px, filas etiqueta-valor de 30px, blur de 28px sobre scrim al 35% con tope
+      de 560px, campos de 34px, anillo de foco de 3px, shimmer de 1,2s), **cada una con su CITA
+      del documento**, que se busca en el documento REAL: si §2 se reescribe, rojea por la fuente
+      antes de que la aserción de código siga pasando sola. 🔑 **Lo que lo motivó: §2 pide DOS
+      movimientos al apuntar y sólo se había construido uno.** El de tarjeta existía como
+      variante `interactive` de `card.tsx` con CERO consumidores, mientras las dos tarjetas que
+      sí son un control tenían su copia a mano —media elevación, sin duración— y todo en verde.
+      Suma el barrido de reimplementación (nadie escribe el hover de tarjeta fuera de `card.tsx`,
+      misma forma que `barridoSelect`) y el de vidrio (`backdrop-blur` sólo en modales y sidebar,
+      excepciones verificadas en las dos direcciones). ⚠️ **Lo que NO puede ver se declara en
+      `NO_VERIFICABLE` con su motivo** —copy, "el chip es el único relleno azul", las acciones
+      siempre visibles—: una regla que nadie cubre y nadie nombra se vuelve a perder igual.
+      Guardas de mínimo ≥14 decisiones, ≥300 archivos barridos, ≥3 con vidrio, ≥5 declaradas
+      como no verificables.
 
   > ⚠️ **Esta lista es una FOTO, compilada por grep del marcador "BARRIDO ESTRUCTURAL" + memoria
   > de sesión, no una re-auditoría exhaustiva de cada archivo.** Puede faltar alguno con un

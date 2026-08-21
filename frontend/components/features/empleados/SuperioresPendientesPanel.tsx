@@ -77,7 +77,7 @@ export function SuperioresPendientesPanel({ onResuelto }: { onResuelto?: () => v
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-sm font-medium text-amber-900 dark:text-amber-100">
           <Link2Off className="size-4 shrink-0" />
-          {items.length} empleado{items.length !== 1 ? "s" : ""} sin superior asignado
+          {items.length} colaborador{items.length !== 1 ? "es" : ""} sin superior asignado
         </p>
         {canWrite && (
           <Button
@@ -93,7 +93,7 @@ export function SuperioresPendientesPanel({ onResuelto }: { onResuelto?: () => v
         )}
       </div>
       <p className="mt-1.5 text-sm text-amber-900 dark:text-amber-100">
-        El import leyó el superior del archivo pero no lo encontró entre los empleados cargados.
+        El import leyó el superior del archivo pero no lo encontró entre los colaboradores cargados.
         Dalos de alta y volvé a intentar — no hace falta subir el CSV otra vez.
       </p>
       <ul className="mt-2 space-y-1 text-sm text-amber-900 dark:text-amber-100" role="list">

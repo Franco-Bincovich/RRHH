@@ -93,7 +93,7 @@ export function ArbolEmpresa() {
                     style={{ borderTopColor: color.dot }}>
                     <span className="text-[12.5px] font-semibold text-foreground">{empresa.nombre}</span>
                     <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {empresa.total_empleados} empleados
+                      {empresa.total_empleados} colaboradores
                     </span>
                   </div>
                   {empresa.areas.length > 0 && (

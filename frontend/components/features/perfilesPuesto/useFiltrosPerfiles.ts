@@ -40,7 +40,10 @@ export function useFiltrosPerfiles(onFiltroChange: () => void) {
     // perfiles de puesto con nombre analista" se entiende; "con buscar analista", no.
     {
       tipo: "search", label: "Nombre", value: search,
-      placeholder: "Buscar por nombre del perfil...", onChange: setSearch,
+      // El buscador comparte la fila con el selector de bajas: con el texto largo el placeholder
+      // se cortaba a la mitad ("Buscar por nombre del per"), en desktop Y en mobile. Es el mismo
+      // texto que ya usa el listado de colaboradores.
+      placeholder: "Buscar por nombre...", onChange: setSearch,
     },
     {
       tipo: "select", label: "Bajas", value: inactivos, opcionTodos: "Solo activos",

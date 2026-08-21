@@ -55,27 +55,33 @@ export default function ProyectosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <PageHeader
-          title="Proyectos"
-          /* El conteo sale de `total` (el del filtro entero, del backend) y no de
-             `proyectos.length`: con paginación el largo del array es 20 en cualquier padrón. */
-          description={loading && total === 0
-            ? "Gestión de proyectos y costeo por horas"
-            : `${total} proyecto${total !== 1 ? "s" : ""} · gestión y costeo por horas`}
-        />
-        <div className="flex shrink-0 items-center gap-2">
-          {/* Los MISMOS `filtros` que alimentan el listado: el archivo no puede traer filas que
-              la pantalla no esté mostrando. Exportar es LECTURA, así que no va detrás de canWrite. */}
-          <ExportMenu onExport={(formato) => exportarProyectos(formato, filtros)} />
-          {canWrite && (
-            <Button size="sm" className="min-h-[2.75rem] shrink-0 gap-1.5"
-              onClick={() => { setEditing(null); setModalOpen(true) }}>
-              <Plus className="size-4" /> Nuevo proyecto
-            </Button>
-          )}
-        </div>
-      </div>
+      {/* 🔴 LAS ACCIONES VAN POR LA PROP `action` DE `PageHeader`, como en las otras 76 pantallas.
+          Estaban como un <div> HERMANO adentro de un flex propio, y por eso el arreglo del
+          encabezado compartido —que envuelve la fila de acciones en mobile— no llegaba acá: a
+          390px "Nuevo proyecto" se salía 5px de la pantalla. Un encabezado armado a mano al lado
+          del compartido es exactamente lo que hace que un arreglo del primitivo no valga para
+          todos. */}
+      <PageHeader
+        title="Proyectos"
+        /* El conteo sale de `total` (el del filtro entero, del backend) y no de
+           `proyectos.length`: con paginación el largo del array es 20 en cualquier padrón. */
+        description={loading && total === 0
+          ? "Gestión de proyectos y costeo por horas"
+          : `${total} proyecto${total !== 1 ? "s" : ""} · gestión y costeo por horas`}
+        action={
+          <div className="flex items-center gap-2">
+            {/* Los MISMOS `filtros` que alimentan el listado: el archivo no puede traer filas que
+                la pantalla no esté mostrando. Exportar es LECTURA, no va detrás de canWrite. */}
+            <ExportMenu onExport={(formato) => exportarProyectos(formato, filtros)} />
+            {canWrite && (
+              <Button size="sm" className="min-h-[2.75rem] shrink-0 gap-1.5"
+                onClick={() => { setEditing(null); setModalOpen(true) }}>
+                <Plus className="size-4" /> Nuevo proyecto
+              </Button>
+            )}
+          </div>
+        }
+      />
 
       {/* `panel`: la forma completa del patrón de filtros (caja propia, "Más filtros" y los chips
           de la fila inferior). Detrás de "Más filtros" queda sólo Área, que es el recorte a otra

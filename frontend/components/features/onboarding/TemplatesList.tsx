@@ -3,6 +3,7 @@
 import { ChevronRight, ClipboardList, Lock, X } from "lucide-react"
 import type { ReactNode } from "react"
 
+import { Card } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -75,10 +76,18 @@ export function TemplatesList({
     <ul className="space-y-3" role="list">
       {templates.map((t) => (
         <li key={t.id} className="flex items-stretch gap-2">
-          <button
+          {/* 🔴 LA TARJETA ES EL CONTROL —abre la ficha del template—, así que lleva el
+              movimiento al apuntar de `docs/SISTEMA-DE-DISENO.md` §2: **elevación de 3px con
+              borde iluminado, 160ms**, y sale de `interactive` de `components/ui/card.tsx`. La
+              ✕ de al lado NO va adentro: sería un botón dentro de otro botón (HTML inválido) y
+              además la tarjeta que se levanta no debe arrastrar a la acción destructiva. */}
+          <Card
+            as="button"
+            interactive
+            padding="sm"
             type="button"
             onClick={() => onAbrir(t.id)}
-            className="min-w-0 flex-1 rounded-xl border bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="min-w-0 flex-1 text-left"
           >
             <div className="group flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
@@ -114,7 +123,7 @@ export function TemplatesList({
               {/* Siempre visible, solo cambia de color al apuntar la fila (§3). */}
               <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" aria-hidden="true" />
             </div>
-          </button>
+          </Card>
           {canWrite && (
             <button
               type="button"

@@ -37,7 +37,14 @@ type VarianteTabs = "underline" | "pill"
 /** La variante viaja por contexto para que no haya que repetirla en cada `<Tab>`. */
 const VarianteContexto = React.createContext<VarianteTabs>("underline")
 
-const listaVariants = cva("flex", {
+/**
+ * ⚠️ `overflow-x-auto` EN LA BARRA: con cuatro solapas a 390px la última se sale de la pantalla
+ * —medido en /evaluaciones, "Importaciones" quedaba 121px afuera— y `flex` a secas la cortaba
+ * contra el borde sin dejarla alcanzable. Scrollea en vez de envolver porque una barra de
+ * solapas en dos renglones deja el subrayado del activo separado del contenido que gobierna.
+ * La pista de que hay más a la derecha la pone `.scroll-x-indicio` (ver `app/globals.css`).
+ */
+const listaVariants = cva("scroll-x-indicio flex overflow-x-auto", {
   variants: {
     variant: {
       underline: "gap-1 border-b border-border",

@@ -41,6 +41,76 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-21 · Lo que se vio en el recorrido visual + el arnés guardado · commits pendientes
+**Qué cambió:** frontend puro. **Cero backend, cero endpoints, cero migraciones, cero variables
+de entorno.** Seis cosas, en cuatro commits:
+
+1. **El arnés del recorrido visual entró al repo, en `frontend/scripts/`** (no en `frontend/dev/`:
+   el repo ya tenía lugar para esto — `backend/scripts/` y `scripts/` en la raíz). Son tres `.mjs`
+   más un README: un backend FALSO que escucha en `:8000` y dos scripts de Playwright que sacan
+   las 180 capturas y arman 45 hojas de contacto. 🔴 **`playwright` NO se agregó como dependencia
+   y las capturas NO van al repo** (19 MB de PNG con datos inventados): el README explica cómo se
+   instala afuera y la salida cae en `%TEMP%`. `package.json` no cambió.
+2. 🔴 **A 390px había SEIS pantallas con contenido cortado contra el borde, y ahora hay CERO** —
+   medido con el navegador, no a ojo. El botón primario salía partido al medio: "+ Nuevo em" en
+   /empleados, "Cargar nómina" en /costos. La causa estaba en `PageHeader` (77 consumidores): el
+   contenedor de acciones era `shrink-0` también en mobile, donde el layout es una columna. Se
+   arregló ahí, más `tabs.tsx` (la barra de solapas ahora scrollea en vez de cortarse) y
+   `OffboardingCard` (un `shrink-0` que anulaba su propio `flex-wrap`). /proyectos armaba su
+   encabezado a mano al lado del compartido: se lo pasó a la prop `action`.
+3. **Las tablas avisan que siguen a la derecha.** Clase nueva `.scroll-x-indicio`
+   (`app/utilidades.css`), enchufada en el primitivo `Table` — vale para los 31 consumidores de
+   una. 🔑 **Aparece SÓLO cuando hay desborde real y no usa una línea de JavaScript**: son cuatro
+   capas de fondo con `background-attachment: local/scroll`. El color de la tapa lo declara la
+   SUPERFICIE (`card.tsx`, el popup del diálogo) y se hereda por CSS.
+4. **Dos rellenos azules que §3 no permite** ("En uso" en el inventario de la ficha, el badge "IA"
+   del historial de reportes) pasaron a los pares semánticos.
+5. 🔴 **El barrido de vocabulario tenía DOS puntos ciegos y por eso la pantalla incumplía §4 en
+   verde**: su regex de texto JSX exigía `>` y `<` en la misma línea (y en este repo el texto de
+   un botón va solo en su renglón) y no escaneaba `frontend/types/`, donde vive `ROL_LABEL` con
+   "Administrador RRHH". Arreglado el barrido primero: pasó a encontrar **18 violaciones**, y las
+   18 se corrigieron.
+6. **Tres arreglos chicos:** el ítem "Próximamente" del sidebar dejó de truncar la etiqueta
+   ("Docume..." era "Documentación / Legajos"), el placeholder de /perfiles-puesto entra entero, y
+   las tres columnas del tablero de objetivos salen de la paleta y no de `slate/blue/emerald`.
+
+**Impacto en infraestructura:** Ninguno.
+
+⚠️ **Para el que revise el diff:** el repo tiene los finales de línea MEZCLADOS (400 archivos
+CRLF y 381 LF entre `.ts/.tsx/.css` del front). 23 de los archivos tocados quedaron normalizados
+a CRLF, así que alguno puede aparecer como "archivo entero modificado". `git diff --ignore-cr-at-eol`
+muestra el cambio real.
+
+---
+
+## 2026-08-21 · El hover de tarjeta de §2 + el barrido de decisiones visuales · commits pendientes
+**Qué cambió:** frontend puro. **Cero backend, cero endpoints, cero migraciones, cero variables
+de entorno, cero dependencias del repo.** Tres cosas:
+
+1. 🔴 **§2 pide DOS movimientos al apuntar y sólo estaba construido uno.** La fila de tabla se
+   desplaza sin elevarse (`tablePatron.ts`, ya estaba); la TARJETA se eleva 3px con el borde
+   iluminado en 160ms — existía como variante `interactive` en `components/ui/card.tsx` y tenía
+   **CERO consumidores**. Se cableó en las **dos tarjetas que son un control de verdad**: el
+   proceso de onboarding en curso (`OnboardingList`) y el template (`TemplatesList`), que hasta
+   hoy traían su propia copia a mano del tratamiento (`hover:border-primary/40 hover:shadow-sm`,
+   sin elevación y sin duración declarada). Verificado en un navegador real: la tarjeta sube
+   exactamente 3px. Las demás tarjetas del sistema (KPI, perfil de puesto, reporte, plantilla de
+   mail, proyecto, proceso) **NO llevan hover y cada una lo dice en su archivo**: no son
+   controles, sus controles son los botones de adentro.
+2. **Un barrido estructural nuevo**, `frontend/components/ui/decisionesVisuales.test.ts` (el 32
+   del repo): 15 decisiones de `docs/SISTEMA-DE-DISENO.md` §2 y §3 verificadas contra los
+   primitivos donde viven, **cada una con su cita del documento**, que se busca en el documento
+   real. Suma el barrido de reimplementación (nadie escribe el hover de tarjeta fuera de
+   `card.tsx`) y el de vidrio (`backdrop-blur` sólo en modales y sidebar). Verificado en las dos
+   direcciones con cinco mutaciones.
+3. **Un recorrido visual completo** de las 45 rutas × 2 temas × 2 anchos con Playwright, contra
+   un backend falso montado en el scratchpad. **Playwright NO entró al repo**: se instaló fuera,
+   en el directorio temporal de la sesión. `package.json` no cambió.
+
+**Impacto en infraestructura:** Ninguno.
+
+---
+
 ## 2026-08-21 · Las cuatro pantallas de afuera de (dashboard) — cierra el bloque B · commits pendientes
 **Qué cambió:** frontend puro. **Cero backend, cero endpoints nuevos, cero migraciones, cero
 dependencias, cero variables de entorno.** `/login`, `/horas`, `/evaluacion/[token]` y

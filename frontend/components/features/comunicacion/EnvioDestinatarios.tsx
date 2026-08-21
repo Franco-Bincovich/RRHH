@@ -90,7 +90,7 @@ export function EnvioDestinatarios({
       */}
       {total > traidos && (
         <p className="text-xs text-amber-600 dark:text-amber-500">
-          Esta lista trae {traidos} de {total} empleados activos. A los {total - traidos} restantes
+          Esta lista trae {traidos} de {total} colaboradores activos. A los {total - traidos} restantes
           no se les puede enviar desde acá todavía.
         </p>
       )}

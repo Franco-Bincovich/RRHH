@@ -70,6 +70,10 @@ export function ReporteCard({
     }
   }
 
+  // ⚠️ SIN HOVER DE TARJETA (§2), y no es un olvido: la tarjeta no es un control, es un
+  // FORMULARIO. Adentro hay tres selectores y un botón, y cada uno se apunta por separado;
+  // levantar la superficie entera mientras el usuario elige un mes movería justo lo que está
+  // por apretar. El control es "Generar".
   return (
     <div className="flex flex-col gap-4 rounded-xl border bg-card p-5">
       <div className="flex items-start gap-3">

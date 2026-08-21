@@ -180,7 +180,7 @@ export function ImportarNominaCSVModal({ open, onClose, onSuccess }: ImportarNom
                 </Select>
               )}
               <p className="text-xs text-muted-foreground">
-                El DNI de cada fila se busca entre los empleados de esta empresa. El empresa_id en nómina se hereda del empleado encontrado.
+                El DNI de cada fila se busca entre los colaboradores de esta empresa. El empresa_id en nómina se hereda del colaborador encontrado.
               </p>
             </div>
 
@@ -258,7 +258,7 @@ export function ImportarNominaCSVModal({ open, onClose, onSuccess }: ImportarNom
 
             {updateCount > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                Las filas marcadas con <strong>Actualizará</strong> tienen nómina existente en <strong>{empresaNombre}</strong> para ese empleado y período. Al confirmar, se sobrescribirán los montos.
+                Las filas marcadas con <strong>Actualizará</strong> tienen nómina existente en <strong>{empresaNombre}</strong> para ese colaborador y período. Al confirmar, se sobrescribirán los montos.
               </div>
             )}
 
@@ -331,7 +331,7 @@ export function ImportarNominaCSVModal({ open, onClose, onSuccess }: ImportarNom
             </p>
             <p className="mt-1 text-sm text-muted-foreground">Empresa: <strong>{empresaNombre}</strong></p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Los registros existentes (mismo empleado + período) se actualizarán con los montos del CSV.
+              Los registros existentes (mismo colaborador + período) se actualizarán con los montos del CSV.
             </p>
           </div>
         )}

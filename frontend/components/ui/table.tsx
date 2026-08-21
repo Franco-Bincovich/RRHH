@@ -24,7 +24,17 @@ function Table({ className, patron, ...props }: React.ComponentProps<"table"> & 
        * scroll horizontal que va y viene al pasar el mouse por las filas. Con 2px de canaleta
        * (0.5 = 2px) la tabla mide 2px menos y el desplazamiento cae justo adentro.
        */
-      className={cn("relative w-full overflow-x-auto", patron === "datos" && "pr-0.5")}
+      /*
+       * 🔴 `scroll-x-indicio` — la pista de que hay más columnas a la derecha, para las 31
+       * pantallas de una. A 390px una tabla de 11 columnas se cortaba limpia contra el borde y
+       * eso se lee como contenido FALTANTE, no como contenido alcanzable. Aparece sólo cuando
+       * hay desborde real (es geometría de fondos, no JavaScript) y desaparece sola cuando la
+       * tabla entra entera. El cómo y el porqué, en `app/utilidades.css`.
+       */
+      className={cn(
+        "scroll-x-indicio relative w-full overflow-x-auto",
+        patron === "datos" && "pr-0.5",
+      )}
     >
       <table
         data-slot="table"

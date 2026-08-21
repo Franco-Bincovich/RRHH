@@ -42,7 +42,9 @@ export const CLASES_POPUP =
    * sigue siendo "todo el ancho menos 1rem de cada lado", y el `max-w-*` del consumidor solo lo
    * puede achicar. Los cinco workarounds se sacaron en el mismo commit: ya no hacen falta.
    */
-  "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 " +
+  // `[--indicio-fondo:var(--popover)]` declara con qué color tapa su sombra de scroll una tabla
+  // que caiga adentro del modal. Ver `app/utilidades.css`; misma idea que en `card.tsx`.
+  "[--indicio-fondo:var(--popover)] fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 " +
   // `shrink-0` a los extremos por SELECTOR y no envolviéndolos en un div: sin él, flex los achica
   // a ellos antes que al cuerpo y el título se aplasta en vez de scrollear la parte larga. Va así
   // para no meter un nodo nuevo entre el popup y el footer — el footer sangra hasta el borde con

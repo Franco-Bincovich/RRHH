@@ -37,7 +37,7 @@ export function EmpleadosAcciones({ filtros, mostrarExport, canWrite, onImportar
           </Button>
           <Button className="min-h-11" onClick={onNuevo}>
             <Plus />
-            Nuevo empleado
+            Nuevo colaborador
           </Button>
         </>
       )}

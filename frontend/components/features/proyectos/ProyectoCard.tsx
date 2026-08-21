@@ -62,6 +62,12 @@ export function ProyectoCard({ proyecto, canWrite, onEdit }: {
 }) {
   const router = useRouter()
   const { costeo } = proyecto
+  // ⚠️ SIN HOVER DE TARJETA (§2). Es la que más lo tienta —hay ficha de detalle del otro lado—
+  // pero la tarjeta NO es el control: los controles son los dos botones, y "Editar" abre otra
+  // cosa que "Ver detalle". Hacer clickeable toda la superficie obligaría a frenarle la
+  // propagación a "Editar" y dejaría dos destinos en el mismo gesto. Si alguna vez se decide
+  // que la tarjeta entera navegue —es decisión de producto, no de estilo—, pasa a
+  // `<Card interactive>` y "Ver detalle" se va.
   return (
     <div className="flex flex-col gap-3 rounded-xl border bg-card p-5">
       <div className="flex items-start justify-between gap-2">

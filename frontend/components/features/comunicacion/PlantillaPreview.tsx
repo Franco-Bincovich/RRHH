@@ -29,7 +29,7 @@ export function PlantillaPreview({ preview }: { preview: PreviewResponse }) {
       )}
       {!preview.con_datos_reales && (
         <p className="mt-1 text-xs text-muted-foreground">
-          Vista con datos de ejemplo. Elegí un empleado para ver los huecos reales.
+          Vista con datos de ejemplo. Elegí un colaborador para ver los huecos reales.
         </p>
       )}
     </div>

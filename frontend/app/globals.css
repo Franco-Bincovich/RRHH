@@ -3,6 +3,8 @@
 @import "shadcn/tailwind.css";
 /* Los VALORES de la paleta viven aparte por el límite de 200 líneas — el porqué, allá. */
 @import "./paleta.css";
+/* Las CLASES propias, por el mismo motivo y con la misma regla: acá tokens, allá utilidades. */
+@import "./utilidades.css";
 
 @custom-variant dark (&:is(.dark *));
 

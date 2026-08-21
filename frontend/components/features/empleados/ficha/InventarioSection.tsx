@@ -86,7 +86,16 @@ export function InventarioSection({ empleadoId }: { empleadoId: string }) {
                       </TableCell>
                       <TableCell className="whitespace-nowrap">{a.fecha_asignacion}</TableCell>
                       <TableCell>
-                        <Badge variant={estado.enUso ? "default" : "secondary"}>
+                        {/* 🔴 NO ES AZUL: `variant="default"` es `bg-primary`, el relleno que
+                            §3 le reserva al chip de filtro — y acá eran SEIS pastillas azules
+                            sólidas en la tabla de la ficha, compitiendo con el botón primario
+                            de la barra de identidad que está justo arriba. "En uso" es un
+                            estado VIGENTE, así que va con el par de éxito, el mismo que
+                            `ImagenCard` eligió para "Principal" por el mismo motivo. */}
+                        <Badge
+                          variant="outline"
+                          className={estado.enUso ? "bg-success-wash text-success border-success-line" : undefined}
+                        >
                           {estado.texto}
                         </Badge>
                       </TableCell>

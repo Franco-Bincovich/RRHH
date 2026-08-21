@@ -34,6 +34,15 @@ const TONOS: Record<TonoKpi, EstiloTono> = {
   bien: { card: "border-success-line bg-success-wash", chip: "bg-success/10 text-success" },
 }
 
+/**
+ * ⚠️ SIN `interactive` Y SIN HOVER, aunque §2 defina el movimiento para las tarjetas: **un KPI
+ * no lleva a ningún lado.** Los diez son un número y su explicación; no hay pantalla de detalle
+ * detrás de "Colaboradores activos" ni filtro que quede aplicado al apretarlo. La elevación al
+ * apuntar es lo que dice "esto es un control" (ver el bloque de `components/ui/card.tsx`), así
+ * que ponérsela acá prometería un click que no existe — y encima sobre la card con fondo
+ * semántico, que es la que más invita a apretar. El día que un KPI navegue a su listado
+ * filtrado, esa card pasa a `<Card interactive>` y ésta es la nota que hay que borrar.
+ */
 export function KpiCard({ kpi }: { kpi: KpiCardData }) {
   const Icon = kpi.icon
   const tono = TONOS[kpi.tono]

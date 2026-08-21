@@ -22,7 +22,11 @@ function TipoCell({ tipo }: { tipo: string }) {
   return tipo === "adhoc" ? (
     <div className="flex items-center gap-1.5">
       <span className="text-sm text-muted-foreground">Ad Hoc IA</span>
-      <Badge className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0">IA</Badge>
+      {/* 🔴 NO ES AZUL: `bg-primary` hardcodeado es el relleno que §3 le reserva al chip de
+          filtro. Este badge marca una PROCEDENCIA ("lo escribió el modelo"), no un estado ni una
+          acción, así que va con contorno: informa sin pelear por atención en una celda de datos.
+          Mismo criterio que `ImagenCard` y `UsuariosTable`, que ya lo tienen escrito. */}
+      <Badge variant="outline" className="text-[10px] px-1.5 py-0">IA</Badge>
     </div>
   ) : (
     <span className="text-sm capitalize text-muted-foreground">{tipo}</span>

@@ -63,7 +63,7 @@ export function MapaTalentoTab({
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-foreground">Mapa 9-Box</h2>
           <p className="hidden text-xs text-muted-foreground md:block">
-            Clic en un empleado para ver detalle
+            Clic en un colaborador para ver detalle
           </p>
         </div>
 
@@ -100,7 +100,7 @@ export function MapaTalentoTab({
           <div>
             <h2 className="text-base font-semibold text-foreground">Análisis por área</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Rankeá a los empleados activos de un área por su score de assessment.
+              Rankeá a los colaboradores activos de un área por su score de assessment.
             </p>
           </div>
           <Button onClick={onAnalizar} className="min-h-11 shrink-0 gap-2">

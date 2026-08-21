@@ -56,11 +56,11 @@ export function EquipoTab({ proyectoId, proyectoEmpresaId, canWrite }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{asignaciones.length} empleado{asignaciones.length !== 1 ? "s" : ""} asignado{asignaciones.length !== 1 ? "s" : ""}</p>
+        <p className="text-sm text-muted-foreground">{asignaciones.length} colaborador{asignaciones.length !== 1 ? "es" : ""} asignado{asignaciones.length !== 1 ? "s" : ""}</p>
         {canWrite && (
           <Button size="sm" className="min-h-[2.75rem] gap-1.5"
             onClick={() => setAssignOpen(true)}>
-            <Plus className="size-4" /> Asignar empleados
+            <Plus className="size-4" /> Asignar colaboradores
           </Button>
         )}
       </div>

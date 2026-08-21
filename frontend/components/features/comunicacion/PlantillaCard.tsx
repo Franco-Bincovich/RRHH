@@ -20,6 +20,10 @@ import type { Plantilla } from "@/types/plantillas"
  * anotaba que el acordeón sobraba ("un acordeón de un solo ítem adentro de una pestaña es
  * redundante, quedó pendiente a propósito"). Al pasar a tarjetas el acordeón se fue con él.
  *
+ * ⚠️ SIN `interactive` NI HOVER (§2): la tarjeta no se abre, se leen sus dos líneas y se aprieta
+ * una de las dos acciones. Editar y Enviar son destinos distintos, así que no hay "el" click de
+ * la tarjeta que la elevación podría prometer.
+ *
  * 🔴 LAS DOS ACCIONES ESTÁN SIEMPRE VISIBLES y sólo cambian de color al apuntar (§3). En una
  * grilla, revelarlas en hover obliga a barrer la pantalla con el mouse para saber qué se puede
  * hacer con cada tarjeta. Van juntas detrás de `editable` —no de dos gates distintos— porque el

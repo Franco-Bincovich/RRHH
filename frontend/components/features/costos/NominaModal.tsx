@@ -184,7 +184,7 @@ export function NominaModal({ open, onClose, onSuccess }: NominaModalProps) {
 
         {!loading && empleados.length === 0 && !error && (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            No hay empleados activos.
+            No hay colaboradores activos.
           </p>
         )}
 

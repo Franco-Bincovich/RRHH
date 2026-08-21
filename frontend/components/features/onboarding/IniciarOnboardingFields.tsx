@@ -62,7 +62,7 @@ export function IniciarOnboardingFields({
             </Select>
           ) : (
             <p className="text-xs text-muted-foreground">
-              No hay templates configurados para la empresa de este empleado.
+              No hay templates configurados para la empresa de este colaborador.
             </p>
           )}
         </div>

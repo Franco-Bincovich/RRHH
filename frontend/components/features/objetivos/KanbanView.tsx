@@ -13,16 +13,30 @@ const ESTADO_LABELS: Record<EstadoObjetivo, string> = {
   terminado: "Terminado",
 }
 
+/**
+ * 🔴 LAS TRES COLUMNAS SALEN DE LA PALETA, NO DE LA DE TAILWIND. Eran `slate-50 / blue-50 /
+ * emerald-50` con sus `dark:` a mano: cinco colores elegidos fuera de todo token, medidos por
+ * nadie, y que en OSCURO dejaban las tres columnas casi indistinguibles entre sí. Además ponían
+ * **azul sobre un estado** — el color que en el resto del sistema significa "acción" y que
+ * `docs/SISTEMA-DE-DISENO.md` §3 le reserva al chip de filtro.
+ *
+ * La escala es la misma que ya usan `ProcesoCard` y `ProyectoCard`, y por el mismo criterio: lo
+ * que el estado SIGNIFICA, no el módulo del que viene.
+ *   · **por hacer** → NEUTRO. Todavía no arrancó.
+ *   · **haciendo** → ATENCIÓN. Es trabajo abierto: lo que el tablero existe para que se vea.
+ *   · **terminado** → ÉXITO.
+ * Los pares están medidos en los dos temas por `app/contrasteTokens.test.ts`.
+ */
 const ESTADO_COLUMN_BG: Record<EstadoObjetivo, string> = {
-  por_hacer: "bg-slate-50 dark:bg-slate-800/40",
-  haciendo:  "bg-blue-50 dark:bg-blue-900/20",
-  terminado: "bg-emerald-50 dark:bg-emerald-900/20",
+  por_hacer: "bg-muted",
+  haciendo:  "bg-warning-wash",
+  terminado: "bg-success-wash",
 }
 
 const ESTADO_DOT: Record<EstadoObjetivo, string> = {
-  por_hacer: "bg-slate-400",
-  haciendo:  "bg-blue-500",
-  terminado: "bg-emerald-500",
+  por_hacer: "bg-muted-foreground/40",
+  haciendo:  "bg-warning",
+  terminado: "bg-success",
 }
 
 interface Props {

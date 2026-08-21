@@ -20,6 +20,11 @@ import { cn } from "@/lib/utils"
  * `PerfilCard` cuatro campos y dos acciones). Lo único compartido es el reparto en columnas y el
  * aire entre ellas — y eso es lo que §5 fija.
  *
+ * ⚠️ Y TAMPOCO DECIDE EL HOVER. El movimiento al apuntar de §2 —elevación de 3px, borde
+ * iluminado, 160ms— es de la TARJETA y sólo si la tarjeta es un control (`interactive` de
+ * `components/ui/card.tsx`). Ponerlo acá se lo daría a las cinco pantallas de golpe, incluidas
+ * las tres cuyas tarjetas no se pueden apretar (perfiles, reportes, plantillas de mail).
+ *
  * ⚠️ POR QUÉ LOS BREAKPOINTS SON ESOS Y NO OTROS: 1 columna en mobile, 2 desde `sm`, 3 desde
  * `xl` — y NO desde `lg`. Con el sidebar abierto, `lg` deja tres tarjetas de ~230px y el resumen
  * del perfil (o la descripción del reporte) se corta en dos palabras por línea. Es el reparto que

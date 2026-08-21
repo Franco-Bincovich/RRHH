@@ -3,6 +3,7 @@
 import { ChevronRight } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
 import { semanaLabel } from "@/components/features/onboarding/_onboardingLabels"
 import type { OnboardingInstancia } from "@/types/onboarding"
 
@@ -36,11 +37,21 @@ export function OnboardingList({ onboardings, mostrarEmpresa, deshabilitado, onA
     <ul className="space-y-3" role="list">
       {onboardings.map((inst) => (
         <li key={inst.id}>
-          <button
-        type="button"
-        onClick={() => onAbrir(inst.empleado_id)}
-        disabled={deshabilitado}
-        className="group w-full rounded-xl border bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+          {/* 🔴 LA TARJETA ES EL CONTROL, así que lleva el movimiento al apuntar de
+              `docs/SISTEMA-DE-DISENO.md` §2: **elevación de 3px con borde iluminado, 160ms**. No
+              se escribe acá — sale de `interactive` de `components/ui/card.tsx`, que es el único
+              lugar del repo donde ese tratamiento está definido. Hasta el 21/8/2026 esta tarjeta
+              tenía su propia versión a mano (`hover:border-primary/40 hover:shadow-sm`, sin
+              elevación y sin duración declarada): la mitad del patrón, distinta de la del vecino
+              y sin nada que avisara que habían divergido. */}
+          <Card
+            as="button"
+            interactive
+            padding="sm"
+            type="button"
+            onClick={() => onAbrir(inst.empleado_id)}
+            disabled={deshabilitado}
+            className="group w-full text-left disabled:opacity-60"
           >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -73,7 +84,7 @@ export function OnboardingList({ onboardings, mostrarEmpresa, deshabilitado, onA
             />
           </div>
         </div>
-          </button>
+          </Card>
         </li>
       ))}
         </ul>

@@ -26,7 +26,14 @@ import { cn } from "@/lib/utils"
  * `<button>`— está la prop `as`, y para los casos que no encajan está `cardVariants` exportado,
  * como `buttonVariants` en `button.tsx`.
  */
-const cardVariants = cva("rounded-xl border bg-card", {
+/*
+ * `[--indicio-fondo:var(--card)]` no pinta nada acá: DECLARA, para todo el subárbol, con qué
+ * color tapa `.scroll-x-indicio` (`app/utilidades.css`) su sombra de scroll. Una tabla adentro de
+ * una tarjeta hereda el valor y su indicio deja de dibujar una franja del color de la página
+ * sobre el borde de la tarjeta. La variable viaja por herencia de CSS: cero JavaScript y cero
+ * props nuevas en los consumidores.
+ */
+const cardVariants = cva("rounded-xl border bg-card [--indicio-fondo:var(--card)]", {
   variants: {
     /**
      * Los dos escalones que el repo usaba de verdad. `lg` es el de los paneles (18 usos con el

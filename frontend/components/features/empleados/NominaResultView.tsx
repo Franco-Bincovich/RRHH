@@ -74,7 +74,7 @@ export function NominaResultView({ result }: { result: ImportacionNominaEmpleado
               aparte de "No cargados" a propósito — leerlas como filas perdidas haría que RRHH
               vuelva a subir el archivo creyendo que algo falló. */}
           <p className="mb-1.5 text-sm text-amber-800 dark:text-amber-200">
-            Los empleados quedaron cargados. Podés dar de alta a los superiores que faltan y
+            Los colaboradores quedaron cargados. Podés dar de alta a los superiores que faltan y
             resolverlos desde el listado, sin volver a subir el archivo.
           </p>
           <ul className="space-y-1 text-sm text-amber-800 dark:text-amber-200" role="list">

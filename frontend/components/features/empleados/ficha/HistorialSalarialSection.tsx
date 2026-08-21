@@ -80,7 +80,7 @@ export function HistorialSalarialSection({ empleadoId }: { empleadoId: string })
           </p>
         ) : items.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Todavía no hay sueldos cargados para este empleado.
+            Todavía no hay sueldos cargados para este colaborador.
           </p>
         ) : (
           <>
