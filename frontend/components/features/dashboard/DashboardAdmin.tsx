@@ -6,35 +6,13 @@ import { toast } from "sonner"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import { resolverAtencion } from "@/services/dashboard"
+import { bloquesKpi } from "./_kpisDashboard"
 import { AlertasPanel } from "./AlertasPanel"
 import { AtencionPanel } from "./AtencionPanel"
-import { buildKpis, cargarDatosAdmin, type DatosAdmin, type KpiCardData } from "./dashboardAdminData"
+import { cargarDatosAdmin, type DatosAdmin } from "./dashboardAdminData"
 import { DashboardExtras } from "./DashboardExtras"
 import { HeadcountPanel } from "./HeadcountPanel"
-
-function KpiCard({ kpi }: { kpi: KpiCardData }) {
-  const Icon = kpi.icon
-  return (
-    <div className="rounded-xl border bg-card p-4 md:p-5">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium text-muted-foreground">{kpi.title}</p>
-        <span className="shrink-0 rounded-lg bg-primary/10 p-1.5 text-primary">
-          <Icon className="size-4" />
-        </span>
-      </div>
-      <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">{kpi.value}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{kpi.description}</p>
-    </div>
-  )
-}
-
-function KpiSkeleton() {
-  return (
-    <div className="grid animate-pulse grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {[1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="h-28 rounded-xl border bg-muted" />)}
-    </div>
-  )
-}
+import { KpiCard, KpiSkeleton } from "./KpiCard"
 
 export function DashboardAdmin() {
   const [datos, setDatos] = useState<DatosAdmin | null>(null)
@@ -59,7 +37,7 @@ export function DashboardAdmin() {
       await resolverAtencion(eventoId)
       // La alerta se saca de la lista local en vez de recargar todo: el evento resuelto sale de
       // la ventana de aviso, así que un refetch traería lo mismo menos esta fila — y le
-      // agregaría un parpadeo a los nueve KPIs para quitar un renglón.
+      // agregaría un parpadeo a los diez KPIs para quitar un renglón.
       setDatos((prev) => prev && {
         ...prev, atencion: prev.atencion.filter((a) => a.evento_id !== eventoId),
       })
@@ -71,24 +49,30 @@ export function DashboardAdmin() {
   }
 
   const data = datos?.dashboard ?? null
-  const kpis = data ? buildKpis(data) : []
+  const bloques = datos ? bloquesKpi(datos) : []
 
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard Ejecutivo" description="Resumen del estado de la organización" />
 
-      {/* KPIs — 1 col mobile / 2 col tablet / 3 col desktop */}
-      <section aria-label="Indicadores clave">
-        {loading ? (
-          <KpiSkeleton />
-        ) : error ? (
-          <p className="py-8 text-center text-sm text-destructive">{error}</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {kpis.map((kpi) => <KpiCard key={kpi.title} kpi={kpi} />)}
-          </div>
-        )}
-      </section>
+      {/* Los DIEZ KPIs de §6 en sus DOS bloques con título — 1 col mobile / 2 tablet / 3 desktop.
+          Los dos bloques llevan la MISMA cantidad de columnas aunque tengan 6 y 4 cards: el ancho
+          de card uniforme en toda la pantalla pesa más que llenar la última fila del segundo.
+          El orden de los bloques y de las cards lo decide `_kpisDashboard`, no este componente. */}
+      {loading ? (
+        <KpiSkeleton />
+      ) : error ? (
+        <p className="py-8 text-center text-sm text-destructive">{error}</p>
+      ) : (
+        bloques.map((bloque) => (
+          <section key={bloque.titulo} aria-label={bloque.titulo} className="space-y-3">
+            <h2 className="text-base font-semibold text-foreground">{bloque.titulo}</h2>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {bloque.kpis.map((kpi) => <KpiCard key={kpi.title} kpi={kpi} />)}
+            </div>
+          </section>
+        ))
+      )}
 
       {/* Headcount + Alertas — las dos plegables: sus listas crecen con la plantilla.
           🔴 `items-start` (grid estira por defecto): sin él, plegar una card NO le baja el alto

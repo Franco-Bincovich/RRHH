@@ -1,6 +1,3 @@
-import { Briefcase, CalendarOff, DollarSign, TrendingUp, UserMinus, UserPlus, Users } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
-
 import {
   fetchAtencion, fetchDashboard,
   type AlertaAtencion, type AlertaDashboard, type DashboardData,
@@ -12,13 +9,12 @@ import {
  * La carga vive acá y no en `DashboardAdmin` porque desde A6 son DOS endpoints con dos paneles
  * distintos, y quien decide qué pasa si uno de los dos falla es una regla de datos, no del
  * componente que los pinta. Ver `cargarDatosAdmin`.
+ *
+ * 🔴 EL CATÁLOGO DE KPIs SE FUE a `_kpisDashboard.ts` (21/8/2026), y el corte no es por líneas:
+ * son dos preguntas distintas. Acá vive **cómo se traen los datos y qué pasa si un endpoint
+ * falla**; allá, **qué card muestra qué y cuándo se despega**. `_kpisDashboard` importa el
+ * `DatosAdmin` de este archivo y no al revés — este no sabe que existen las cards.
  */
-export interface KpiCardData {
-  title: string
-  value: string
-  icon: LucideIcon
-  description: string
-}
 
 export const NIVEL_VARIANT: Record<AlertaDashboard["nivel"], "default" | "secondary" | "destructive"> = {
   info:    "secondary",
@@ -30,32 +26,6 @@ export const NIVEL_LABEL: Record<AlertaDashboard["nivel"], string> = {
   info:    "Info",
   warning: "Aviso",
   error:   "Urgente",
-}
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency", currency: "ARS", maximumFractionDigits: 0,
-  }).format(value)
-}
-
-function formatVariacion(pct: number): string {
-  const signo = pct > 0 ? "+" : ""
-  return `${signo}${pct}% vs mes anterior`
-}
-
-export function buildKpis(data: DashboardData): KpiCardData[] {
-  const x = data.kpis_extra
-  return [
-    { title: "Colaboradores activos", value: String(data.kpis.empleados_activos), icon: Users, description: "Colaboradores vigentes" },
-    { title: "Ingresos este mes", value: String(data.kpis.ingresos_mes), icon: UserPlus, description: "Nuevos ingresos del período" },
-    { title: "Bajas este mes", value: String(data.kpis.bajas_mes), icon: UserMinus, description: "Egresos del período" },
-    { title: "Costo total nómina", value: formatCurrency(data.kpis.costo_nomina), icon: DollarSign, description: "Mensual bruto" },
-    { title: "Onboardings activos", value: String(data.kpis.onboardings_activos), icon: UserPlus, description: "Procesos en curso" },
-    { title: "Vacantes activas", value: String(data.kpis.vacantes_activas), icon: Briefcase, description: "Posiciones abiertas" },
-    { title: "Ausencias activas hoy", value: String(x.ausencias_activas_hoy), icon: CalendarOff, description: "Colaboradores ausentes hoy" },
-    { title: "Ausentismo del mes", value: `${x.ausentismo_mes_pct}%`, icon: CalendarOff, description: x.ausentismo_nota },
-    { title: "Masa salarial", value: formatCurrency(x.masa_salarial_actual), icon: TrendingUp, description: formatVariacion(x.masa_salarial_variacion_pct) },
-  ]
 }
 
 /**
