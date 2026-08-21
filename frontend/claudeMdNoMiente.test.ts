@@ -23,6 +23,15 @@ import { describe, expect, it } from "vitest"
  *     y "cero problemas" no pueden escribirse igual.
  *   · `vitest list` no ejecuta cuerpos de test, así que no hay recursión; aun así se pasa
  *     RRHH_VITEST_LIST=1 al hijo y el ancla se saltea si ya está puesta. Cinturón y tiradores.
+ *
+ * 🔴 EL HIJO SE LANZA CON `process.execPath` Y EL `.mjs`, NO CON `node_modules/.bin/vitest`.
+ * En Windows ese "binario" es un script de shell sin extensión: `execFileSync` lo intenta
+ * ejecutar directo y devuelve **ENOENT**, así que este barrido —el que existe para que los
+ * números no mientan— estaba ROJO en la Lenovo y verde en la Mac, sin que cambiara una línea del
+ * código auditado. Es exactamente el mismo modo de falla que ya había pagado
+ * `services/barridoFront.test.ts` con el separador de paths, y la regla que deja es la misma:
+ * **un test que lanza un proceso usa el ejecutable de node que ya está corriendo, nunca un
+ * lanzador de `.bin/`.**
  */
 
 const RAIZ = resolve(__dirname, "..")
@@ -35,7 +44,7 @@ function declarados(grupo: 1 | 2): number[] {
 
 /** El total real: se colectan los tests, no se ejecutan. */
 function totalReal(): number {
-  const salida = execFileSync(resolve(RAIZ, "frontend/node_modules/.bin/vitest"), ["list"], {
+  const salida = execFileSync(process.execPath, [resolve(RAIZ, "frontend/node_modules/vitest/vitest.mjs"), "list"], {
     cwd: resolve(RAIZ, "frontend"),
     encoding: "utf-8",
     env: { ...process.env, RRHH_VITEST_LIST: "1" },

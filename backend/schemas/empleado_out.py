@@ -41,6 +41,18 @@ class EmpleadoResponse(BaseModel):
     # solo quien está de baja. NO es un campo que el alta ni el PUT escriban — el único camino
     # que la setea es `dar_de_baja`, junto con `estado='baja'`, en un solo UPDATE.
     fecha_egreso: Optional[date] = None
+    # 🔴 EL OTRO DATO DE LA BAJA, y le pasaba lo MISMO que a `fecha_egreso` hasta hoy: la columna
+    # `empleados.motivo_baja` existe, la escriben los dos caminos de baja —`dar_de_baja` con el
+    # motivo copiado de `offboarding_instancias.motivo_egreso`, y el import de nómina con el texto
+    # libre de la columna `Motivo Baja`— y la lee `_reporte_movimientos`, pero NINGÚN consumidor
+    # de `EmpleadoResponse` podía verla. La pantalla de Bajas necesita decir POR QUÉ se fue cada
+    # persona, y el dato estaba guardado y sin salida.
+    #
+    # ⚠️ VIENE VACÍO MUY SEGUIDO Y ESO NO ES UN FALTANTE: una baja cargada por el import de nómina
+    # sin `Motivo Baja` en el CSV, o sin instancia de offboarding detrás, no tiene motivo que
+    # contar. La pantalla lo muestra vacío; inventarle un "Sin especificar" acá convertiría "no
+    # sabemos" en un motivo, que es justo lo que un listado de bajas no puede hacer.
+    motivo_baja: Optional[str] = None
     telefono: Optional[str] = None
     fecha_nacimiento: Optional[date] = None
     dni: Optional[str] = None

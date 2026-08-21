@@ -20,7 +20,7 @@ const BASE: Empleado = {
   id: "1", nombre: "Ana", apellido: "Pérez", email_corporativo: "a@k.com",
   empresa_id: "e1", empresa_nombre: "Bodegas Tupungato", area_id: "a1", area_nombre: "Sistemas",
   roles: ["Analista"], modalidad_trabajo: "remoto", tipo_contrato: "Relación de dependencia",
-  fecha_ingreso: "2020-03-01", telefono: null, fecha_nacimiento: null, dni: null, cuil: null,
+  fecha_ingreso: "2020-03-01", fecha_egreso: null, motivo_baja: null, telefono: null, fecha_nacimiento: null, dni: null, cuil: null,
   legajo: null, manager_id: "m1", manager_nombre: "Pérez, Juan", estado: "activo",
   dias_vacaciones_asignados: 14, email_personal: null, tipo_documento: null, sexo: null,
   telefono_alternativo: null, domicilio: null, domicilio_calle: null, domicilio_numero: null,

@@ -1,5 +1,6 @@
 import type {
   Empleado, EmpleadoCreate, EmpleadoListResponse, EmpleadoSeleccionable, EmpleadoUpdate,
+  OrdenEmpleados,
 } from "@/types/empleado"
 import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
 
@@ -30,12 +31,25 @@ export interface EmpleadosFiltros {
    * (`/empleados?sin_manager=true`), así que el nombre del query param es parte del contrato.
    */
   sinManager?: boolean
+  /**
+   * El ORDEN del listado. `undefined` = el de siempre (apellido, nombre, id).
+   *
+   * 🔴 VA EN `EmpleadosFiltros` —y no como argumento aparte— justamente porque NO es un filtro:
+   * así el export lo recibe por el mismo canal y el archivo sale en el mismo orden que la
+   * pantalla. La invariante del bloque B ("el MISMO tipo lo consumen el listado y el export")
+   * vale igual para el orden: un archivo ordenado distinto de lo que se ve es la misma clase de
+   * divergencia que un filtro que solo viaja en uno de los dos.
+   *
+   * Lo usan las dos pantallas del ciclo de vida: `/proximos-ingresos` pide `fecha_ingreso_asc`
+   * (quién entra primero) y `/bajas` pide `fecha_egreso_desc` (quién se fue último).
+   */
+  orden?: OrdenEmpleados
 }
 
 export async function fetchEmpleados(
   opts: EmpleadosFiltros & { page: number; pageSize: number },
 ): Promise<EmpleadoListResponse> {
-  const { page, pageSize, search, estado, empresaId, areaId, esLider, proyectoId, sinManager } = opts
+  const { page, pageSize, search, estado, empresaId, areaId, esLider, proyectoId, sinManager, orden } = opts
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
   if (search) params.set("search", search)
   if (estado) params.set("estado", estado)
@@ -43,6 +57,7 @@ export async function fetchEmpleados(
   if (esLider !== undefined) params.set("es_lider", String(esLider))
   if (proyectoId) params.set("proyecto_id", proyectoId)
   if (sinManager !== undefined) params.set("sin_manager", String(sinManager))
+  if (orden) params.set("orden", orden)
   return apiFetch<EmpleadoListResponse>(
     `/api/empleados?${params}`,
     empresaId ? { headers: { "X-Empresa-Id": empresaId } } : {},
@@ -53,7 +68,7 @@ export async function fetchEmpleados(
 export function exportarEmpleados(
   opts: EmpleadosFiltros & { formato: FormatoExport },
 ): Promise<void> {
-  const { formato, search, estado, empresaId, areaId, esLider, proyectoId, sinManager } = opts
+  const { formato, search, estado, empresaId, areaId, esLider, proyectoId, sinManager, orden } = opts
   const headers = empresaId ? { "X-Empresa-Id": empresaId } : undefined
   return descargarArchivo("/api/empleados/exportar", formato, "empleados", headers, {
     search,
@@ -62,6 +77,7 @@ export function exportarEmpleados(
     es_lider: esLider === undefined ? undefined : String(esLider),
     proyecto_id: proyectoId,
     sin_manager: sinManager === undefined ? undefined : String(sinManager),
+    orden,
   })
 }
 

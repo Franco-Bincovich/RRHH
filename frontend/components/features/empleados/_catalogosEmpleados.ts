@@ -17,8 +17,13 @@ import type { Proyecto } from "@/types/proyecto"
  * `empresaFiltro` entra como argumento en vez de vivir acá porque es un filtro elegido por
  * el usuario, no un catálogo: su dueño es el hook de filtros. Este solo lo necesita para
  * saber de qué empresa pedir áreas y proyectos cuando se está en modo consolidado.
+ *
+ * ⚠️ `conProyectos` existe porque las pantallas del ciclo de vida (`/proximos-ingresos`,
+ * `/bajas`) filtran por empresa y área pero NO por proyecto: sin el flag, cada una de las dos
+ * dispararía un `GET /api/proyectos` por carga para llenar un select que no existe. Es un
+ * default `true`, así que /empleados —el único caller que sí lo usa— no cambia.
  */
-export function useCatalogosEmpleados(empresaFiltro: string) {
+export function useCatalogosEmpleados(empresaFiltro: string, conProyectos = true) {
   const [empresaActivaId, setEmpresaActivaId] = useState<string | null>(null)
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [areas, setAreas] = useState<Area[]>([])
@@ -35,9 +40,11 @@ export function useCatalogosEmpleados(empresaFiltro: string) {
     fetchAreas(empId).then(setAreas).catch(() => setAreas([]))
     // El selector no necesita etiquetaProyecto: hoy no hay nombres de proyecto repetidos
     // entre empresas. Si algún día los hay, reusar el patrón de shared/filtros.ts.
-    fetchProyectos({ empresaIdOverride: empId })
-      .then((r) => setProyectos(r.items)).catch(() => setProyectos([]))
-  }, [empresaActivaId, empresaFiltro])
+    if (conProyectos) {
+      fetchProyectos({ empresaIdOverride: empId })
+        .then((r) => setProyectos(r.items)).catch(() => setProyectos([]))
+    }
+  }, [empresaActivaId, empresaFiltro, conProyectos])
 
   return { empresaActivaId, empresas, areas, proyectos }
 }

@@ -1,12 +1,19 @@
 /**
- * La GRILLA de la tabla de empleados: qué columnas hay, cuánto miden, cómo se dibuja el
- * encabezado y cómo se dibuja el esqueleto de carga. Salió de `EmpleadosTable.tsx` para que ese
- * archivo quedara adentro del límite de 150 de un componente, y el corte no es arbitrario: acá
- * está TODO lo que el encabezado, el esqueleto y las filas tienen que compartir para que las
- * columnas no se muevan entre un estado y el otro.
+ * La GRILLA de la tabla de empleados: qué columnas hay y cuánto miden.
+ *
+ * ⚠️ `Encabezado` y `FilasEsqueleto` VIVÍAN ACÁ y se mudaron a `components/ui/grillaTabla.tsx` al
+ * aparecer la segunda y la tercera tabla del patrón (`/proximos-ingresos` y `/bajas`): ninguna de
+ * las dos sabía nada de empleados. Se RE-EXPORTAN desde acá para que `EmpleadosTable` —y
+ * cualquier import existente— siga apuntando al mismo lugar; el corte fue de dónde vive el
+ * código, no de quién lo usa.
+ *
+ * Lo que se queda es `COLUMNAS`, que es lo único propio de esta pantalla, y el motivo por el que
+ * el archivo existía: acá está TODO lo que el encabezado, el esqueleto y las filas reales tienen
+ * que compartir para que las columnas no se muevan entre un estado y el otro.
  */
-import { Skeleton } from "@/components/ui/skeleton"
-import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { type Columna, Encabezado, FilasEsqueleto } from "@/components/ui/grillaTabla"
+
+export { Encabezado, FilasEsqueleto }
 
 /**
  * 🔴 LOS ANCHOS ESTÁN DECLARADOS PARA QUE LAS COLUMNAS NO SALTEN AL CARGAR (§3), y por eso viven
@@ -15,7 +22,7 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/compon
  * exactamente lo que el esqueleto viene a evitar.
  * `Nombre` no lleva ancho: es la columna que absorbe el espacio libre.
  */
-export const COLUMNAS = [
+export const COLUMNAS: Columna[] = [
   { clave: "nombre", label: "Nombre", ancho: "" },
   { clave: "empresa", label: "Empresa", ancho: "w-[16%]" },
   { clave: "area", label: "Área", ancho: "w-[14%]" },
@@ -26,42 +33,3 @@ export const COLUMNAS = [
   // y un "Acciones" en mayúsculas de 10px sobre una columna de 40px se lee como ruido.
   { clave: "acciones", label: "", ancho: "w-[48px]" },
 ]
-
-export function Encabezado({ columnas }: { columnas: typeof COLUMNAS }) {
-  return (
-    <TableHeader>
-      <TableRow>
-        {columnas.map((c) => (
-          <TableHead key={c.clave} className={c.ancho}>
-            {/* La columna de acciones tiene nombre para el lector de pantalla aunque no se vea. */}
-            {c.label || <span className="sr-only">Acciones</span>}
-          </TableHead>
-        ))}
-      </TableRow>
-    </TableHeader>
-  )
-}
-
-/**
- * El esqueleto es LA MISMA TABLA con barras en vez de datos (§3: "mismas columnas, mismos 46px"),
- * no una pila de rectángulos aparte. Así el encabezado ya está puesto mientras carga y las
- * columnas nacen con su ancho definitivo.
- */
-export function FilasEsqueleto({ columnas }: { columnas: typeof COLUMNAS }) {
-  return (
-    <TableBody>
-      {Array.from({ length: 8 }).map((_, i) => (
-        <TableRow key={i}>
-          {columnas.map((c) => (
-            <TableCell key={c.clave}>
-              {/* `shimmer`: el brillo de 1,2s que pide §3 para el esqueleto, en vez del
-                  `animate-pulse` de 2s que trae el componente por defecto. */}
-              <Skeleton shimmer className="h-3.5 w-full rounded" />
-            </TableCell>
-          ))}
-        </TableRow>
-      ))}
-    </TableBody>
-  )
-}
-

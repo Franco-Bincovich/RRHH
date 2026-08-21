@@ -12,6 +12,17 @@ export interface Empleado {
   modalidad_trabajo: "presencial" | "remoto" | "hibrido"
   tipo_contrato: string // texto libre (migración 065); el CSV de nómina trae valores abiertos
   fecha_ingreso: string
+  /**
+   * Los DOS datos de la baja. Vienen cargados SOLO en quien está de baja, así que en la enorme
+   * mayoría de las filas son `null` y eso no es un faltante.
+   *
+   * 🔴 `motivo_baja` PUEDE SER NULL EN UNA BAJA REAL: una baja del import de nómina sin la
+   * columna `Motivo Baja`, o sin instancia de offboarding detrás, no tiene motivo que contar.
+   * La pantalla de Bajas lo muestra VACÍO — no le inventa un "Sin especificar", que convertiría
+   * "no sabemos por qué se fue" en un motivo cargado.
+   */
+  fecha_egreso: string | null
+  motivo_baja: string | null
   telefono: string | null
   fecha_nacimiento: string | null
   dni: string | null
@@ -53,6 +64,17 @@ export interface Empleado {
   es_lider: boolean
   created_at: string
 }
+
+/**
+ * El vocabulario de orden que el listado (y su export) aceptan. Espejo del `OrdenEmpleados` del
+ * backend (`schemas/_empleado_orden.py`); ausente = el orden de siempre, por apellido.
+ *
+ * 🔴 EL ORDEN LO PONE LA QUERY, NO EL CLIENTE, y es lo que hace que las dos pantallas nuevas
+ * sean correctas con paginación: ordenar en el front reordena LA PÁGINA que llegó, así que con
+ * 40 preingresos la primera página saldría ordenada entre sí pero no sería la de los que entran
+ * primero. Por eso el param viaja al backend y ninguna tabla llama a `.sort()`.
+ */
+export type OrdenEmpleados = "fecha_ingreso_asc" | "fecha_egreso_desc"
 
 export interface EmpleadoListResponse {
   items: Empleado[]
