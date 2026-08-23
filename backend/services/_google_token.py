@@ -42,6 +42,7 @@ from typing import Optional
 import httpx
 
 from config.settings import settings
+from services._google_token_fallo import detalle_de_google, error_de_renovacion
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -66,8 +67,10 @@ def access_token_valido(repo, user_id: str) -> str:
 
     Raises:
         AppError: GMAIL_NOT_CONFIGURED (400) si no hay integración o falta el refresh token.
-        AppError: GMAIL_TOKEN_EXPIRED (401) si el refresh falla — el caso típico es que el
-            usuario revocó el permiso desde su cuenta de Google.
+        AppError: GMAIL_TOKEN_EXPIRED (502) si Google rechazó la credencial — el caso típico es
+            que el permiso fue revocado o el refresh token venció.
+        AppError: GMAIL_RENOVACION_FALLIDA (502) si no se pudo hablar con Google.
+            🔴 Los dos son 502 y NINGUNO es 401: ver `services/_google_token_fallo.py`.
     """
     integracion = repo.get_by_user_and_tipo(user_id, "google")
     if not integracion or not integracion.get("access_token"):
@@ -117,8 +120,13 @@ def _renovar(repo, user_id: str, integracion: dict) -> str:
             datos = resp.json()
         token: str = datos["access_token"]
     except Exception as exc:  # noqa: BLE001 — incluye el invalid_grant del token revocado
-        logger.error("Error al renovar token de Google", extra={"error": str(exc)})
-        raise AppError("No se pudo renovar el token de Google", "GMAIL_TOKEN_EXPIRED", 401)
+        # `detalle` trae lo que Google contestó de verdad; `str(exc)` solo, que es lo que se
+        # logueaba antes, no distingue `invalid_grant` de `invalid_client`. Ver el sibling.
+        logger.error("Error al renovar token de Google",
+                     extra={"error": str(exc), "google": detalle_de_google(exc)})
+        # 🔴 502, NO 401: el usuario está autenticado y quien no puede autenticarse es este
+        # backend contra Google. El porqué —y por qué no es 503— está en `_google_token_fallo`.
+        raise error_de_renovacion(exc)
     _persistir(repo, user_id, token, datos.get("expires_in"))
     return token
 

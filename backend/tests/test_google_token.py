@@ -61,13 +61,29 @@ class _Repo:
         self.persistidos.append((user_id, access_token, token_expiry))
 
 
+class _RechazoDeGoogle(Exception):
+    """Lo que levanta `raise_for_status()` de httpx: la RESPUESTA viaja adentro de la excepción.
+
+    🔴 ANTES ERA UN `RuntimeError` PELADO, y eso alcanzaba mientras todos los fallos de
+    renovación salían con el mismo código. Desde que `_google_token_fallo` distingue "Google
+    rechazó la credencial" (hay respuesta HTTP, 4xx) de "no se pudo hablar con Google" (no hay
+    respuesta), un fake sin `.response` **colapsa los dos casos en el segundo**: el test que dice
+    probar el permiso revocado pasaría igual con la clasificación entera borrada.
+    `error_de_renovacion` lee el atributo por duck-typing, así que el fake modela exactamente eso.
+    """
+
+    def __init__(self, response) -> None:
+        super().__init__("400 Bad Request")
+        self.response = response
+
+
 class _Resp:
-    def __init__(self, datos: dict, ok: bool = True) -> None:
-        self._datos, self._ok = datos, ok
+    def __init__(self, datos: dict, ok: bool = True, status_code: int = 400) -> None:
+        self._datos, self._ok, self.status_code = datos, ok, status_code
 
     def raise_for_status(self):
         if not self._ok:
-            raise RuntimeError("400 invalid_grant")
+            raise _RechazoDeGoogle(self)
 
     def json(self):
         return self._datos
@@ -76,8 +92,8 @@ class _Resp:
 class _HttpFalso:
     """Cliente httpx fake. CUENTA los POST: sin eso no se puede distinguir "no renovó"."""
 
-    def __init__(self, datos: dict, ok: bool = True) -> None:
-        self._datos, self._ok = datos, ok
+    def __init__(self, datos: dict, ok: bool = True, status: int = 400, explota=None) -> None:
+        self._datos, self._ok, self._status, self._explota = datos, ok, status, explota
         self.posts = 0
 
     def __call__(self, *a, **k):
@@ -91,15 +107,18 @@ class _HttpFalso:
 
     def post(self, url, data=None):
         self.posts += 1
-        return _Resp(self._datos, self._ok)
+        if self._explota is not None:
+            raise self._explota  # no hubo respuesta: timeout, DNS, conexión cortada
+        return _Resp(self._datos, self._ok, self._status)
 
 
 def _fila(expiry, access=VIEJO, refresh="refresh-1") -> dict:
     return {"access_token": access, "refresh_token": refresh, "token_expiry": expiry}
 
 
-def _armar(monkeypatch, fila, *, datos=None, ok=True):
-    http = _HttpFalso(datos if datos is not None else {"access_token": NUEVO, "expires_in": 3600}, ok)
+def _armar(monkeypatch, fila, *, datos=None, ok=True, status=400, explota=None):
+    http = _HttpFalso(datos if datos is not None else {"access_token": NUEVO, "expires_in": 3600},
+                      ok, status, explota)
     monkeypatch.setattr(mod.httpx, "Client", http)
     return _Repo(fila), http
 
@@ -213,17 +232,60 @@ class TestLosErroresNoCambiaron:
             mod.access_token_valido(repo, USER)
         assert exc.value.code == "GMAIL_NOT_CONFIGURED"
 
-    def test_refresh_revocado_es_401_ruidoso(self, monkeypatch) -> None:
-        """🔴 El caso real: el usuario sacó el permiso desde su cuenta de Google. Google responde
-        invalid_grant. Tiene que salir 401 con su código propio, nunca un 500 ni un silencio."""
+    def test_refresh_revocado_es_502_ruidoso(self, monkeypatch) -> None:
+        """🔴 ESTE TEST SE LLAMABA `..._es_401_ruidoso` Y FIJABA EL 401 COMO CONTRATO. Dado
+        vuelta en su lugar el 23/8/2026, con el porqué acá y no en el mensaje del commit.
+
+        **"Ruidoso" era lo correcto y sigue rigiendo**: el caso real —el permiso revocado desde
+        la cuenta de Google— tiene que salir con código propio y mensaje propio, nunca un 500 ni
+        un silencio. Eso no cambió.
+
+        **El 401 era lo equivocado, y costó caro.** Un 401 dice "VOS no estás autenticado", y acá
+        el usuario lo está: quien no puede autenticarse es este backend contra Google. El
+        interceptor del front leía el status y solo el status, así que este 401 llegaba a
+        `/vacantes` —que pide los mails pendientes al montar— y **deslogueaba a un usuario
+        perfectamente autenticado, en cada carga de la pantalla**, durante los once días que el
+        token de la casilla estuvo vencido.
+
+        La lección, para que no vuelva: **un status HTTP no es solo un número para el test que lo
+        assertea; es una instrucción para todo cliente que lo reciba.** Elegir 401 para "una
+        integración se cayó" le dice al front algo falso sobre la sesión del usuario.
+        """
         repo, _ = _armar(monkeypatch, _fila(_ahora(-10)), ok=False)
         with pytest.raises(AppError) as exc:
             mod.access_token_valido(repo, USER)
-        assert exc.value.code == "GMAIL_TOKEN_EXPIRED" and exc.value.status_code == 401
+        assert exc.value.code == "GMAIL_TOKEN_EXPIRED" and exc.value.status_code == 502
 
-    def test_una_respuesta_sin_access_token_tambien_es_401(self, monkeypatch) -> None:
-        """No puede salir un KeyError crudo: el contrato de errores del repo es AppError."""
+    def test_sin_contacto_con_google_es_el_OTRO_502(self, monkeypatch) -> None:
+        """Un timeout no es un permiso revocado: reconectar la cuenta no arregla nada y decirle
+        a RRHH que la reconecte lo manda a rehacer una integración que estaba bien."""
+        repo, _ = _armar(monkeypatch, _fila(_ahora(-10)), explota=TimeoutError("se cortó"))
+        with pytest.raises(AppError) as exc:
+            mod.access_token_valido(repo, USER)
+        assert exc.value.code == "GMAIL_RENOVACION_FALLIDA" and exc.value.status_code == 502
+
+    def test_una_respuesta_sin_access_token_no_es_un_KeyError(self, monkeypatch) -> None:
+        """No puede salir un KeyError crudo: el contrato de errores del repo es AppError.
+
+        Sale por el code TRANSITORIO y no por el de revocado, a propósito: Google contestó y no
+        rechazó nada, así que afirmar "te revocaron el permiso" sería inventar un diagnóstico.
+        """
         repo, _ = _armar(monkeypatch, _fila(_ahora(-10)), datos={"error": "invalid_grant"})
         with pytest.raises(AppError) as exc:
             mod.access_token_valido(repo, USER)
-        assert exc.value.code == "GMAIL_TOKEN_EXPIRED"
+        assert exc.value.code == "GMAIL_RENOVACION_FALLIDA" and exc.value.status_code == 502
+
+    def test_ningun_fallo_de_renovacion_sale_401(self, monkeypatch) -> None:
+        """🔴 El invariante que cierra el bug, dicho de una: NINGUNA de las formas de fallar acá
+        puede volver a emitir un 401. Es lo que el front no puede distinguir de "tu sesión
+        venció". Barre los tres caminos; agregar un cuarto sin pensarlo rojea acá."""
+        caminos = [
+            {"ok": False},                                  # Google rechazó
+            {"explota": TimeoutError("se cortó")},           # no hubo respuesta
+            {"datos": {"sin": "token"}},                     # respuesta sin access_token
+        ]
+        for kwargs in caminos:
+            repo, _ = _armar(monkeypatch, _fila(_ahora(-10)), **kwargs)
+            with pytest.raises(AppError) as exc:
+                mod.access_token_valido(repo, USER)
+            assert exc.value.status_code != 401, f"{kwargs} volvió a emitir un 401"

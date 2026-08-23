@@ -93,7 +93,10 @@ def token_de_lectura(remitente_repo, mensaje: Optional[str] = None) -> str:
 
     Raises:
         AppError: GMAIL_SIN_CASILLA (400) si no hay casilla del sistema designada.
-        AppError: GMAIL_NOT_CONFIGURED (400) | GMAIL_TOKEN_EXPIRED (401) — de `_google_token`.
+        AppError: GMAIL_NOT_CONFIGURED (400) — de `_google_token`.
+        AppError: GMAIL_TOKEN_EXPIRED (502) | GMAIL_RENOVACION_FALLIDA (502) — íd. 🔴 Son 502
+            y no 401: una integración caída no es una sesión vencida, y el front leía ese 401
+            como 'te venció la sesión' y deslogueaba. Ver `services/_google_token_fallo.py`.
     """
     fila = fila_o_error(remitente_repo, mensaje or MSG_LECTURA, "GMAIL_SIN_CASILLA")
     return access_token_valido(repo_de(fila), fila["user_id"])

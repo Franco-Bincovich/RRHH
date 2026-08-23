@@ -5,7 +5,7 @@ import { Inbox, TriangleAlert } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ApiError } from "@/services/api"
+import { mensajeDeCasilla } from "@/components/features/vacantes/_mailsPendientes"
 import { revisarCasilla } from "@/services/vacantes"
 import type { IngestaResultado } from "@/types/vacantesIngesta"
 
@@ -46,8 +46,11 @@ export function RevisarCasillaButton() {
     try {
       setResultado(await revisarCasilla())
     } catch (err) {
-      setError(err instanceof ApiError || err instanceof Error
-        ? err.message : "No se pudo revisar la casilla.")
+      // 🔴 Misma traducción que el bloque de mails pendientes, y no una copia: los dos leen LA
+      // MISMA casilla y fallan por lo mismo. Cuando la casilla pierde el acceso a Google el
+      // backend manda un mensaje que dice qué hacer —reconectarla, o esperar— y ese mensaje
+      // tiene que llegar igual se haya entrado por el botón o por la lista de abajo.
+      setError(mensajeDeCasilla(err))
     } finally {
       setCargando(false)
     }

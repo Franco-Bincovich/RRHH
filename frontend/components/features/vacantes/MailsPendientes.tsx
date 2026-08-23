@@ -1,11 +1,14 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Inbox, Paperclip } from "lucide-react"
+import { Inbox } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { MailPendienteFila } from "@/components/features/vacantes/MailPendienteFila"
+import { EmptyState } from "@/components/ui/EmptyState"
+import { ErrorState } from "@/components/ui/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Select } from "@/components/ui/select"
+import { mensajeDeCasilla, vista } from "@/components/features/vacantes/_mailsPendientes"
 import { asignarMail, fetchMailsPendientes, fetchVacantes } from "@/services/vacantes"
 import type { Vacante } from "@/types/vacantes"
 import type { MailPendiente } from "@/types/vacantesIngesta"
@@ -19,26 +22,30 @@ import type { MailPendiente } from "@/types/vacantesIngesta"
  * descartar uno sin asignarlo RRHH lo archiva o etiqueta EN GMAIL. Por eso acá no hay botón de
  * "descartar": sería un segundo estado del que el buzón no se entera.
  *
- * ⚠️ `adjuntos_validos` viene contado por el backend SIN bajar los archivos (extensión + tamaño
- * declarado). Un mail con 0 no se puede asignar: no crearía ningún candidato.
+ * 🔴 Y POR ESO MISMO, CUANDO LA CASILLA NO SE PUEDE LEER NO HAY NADA QUE AFIRMAR SOBRE EL BUZÓN.
+ * Hasta el 23/8/2026 este bloque mostraba el error Y debajo "No hay mails con adjuntos esperando
+ * asignación": con la casilla caída le decía a RRHH que no había nada, teniendo mails de verdad
+ * esperando. La decisión de qué se muestra vive en `_mailsPendientes.ts`, donde se puede testear.
+ *
+ * Orquestador: la carga, los dos errores y qué se muestra. La tarjeta de cada mail está en
+ * `MailPendienteFila.tsx`.
  */
-const MOTIVO: Record<string, string> = {
-  sin_codigo: "Sin código en el asunto",
-  codigo_ambiguo: "Más de un código en el asunto",
-  vacante_desconocida: "El código no corresponde a ninguna búsqueda",
-}
-
 export function MailsPendientes() {
   const [mails, setMails] = useState<MailPendiente[]>([])
   const [vacantes, setVacantes] = useState<Vacante[]>([])
   const [elegida, setElegida] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [asignando, setAsignando] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // 🔴 DOS errores y no uno: "no se pudo leer la casilla" invalida el bloque entero, "no se pudo
+  // asignar ESE mail" no invalida nada — la lista que se está viendo sigue siendo buena. Con un
+  // solo estado, un fallo al asignar se llevaría puesta la lista.
+  const [errorCasilla, setErrorCasilla] = useState<string | null>(null)
+  const [errorAsignar, setErrorAsignar] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     setLoading(true)
-    setError(null)
+    setErrorCasilla(null)
+    setErrorAsignar(null)
     try {
       // ⚠️ Es un SELECTOR, no un listado: necesita todas las vacantes elegibles, así que pide
       // el tope del endpoint (100, el `le` del router). Si alguna vez hay más de 100 abiertas,
@@ -47,7 +54,7 @@ export function MailsPendientes() {
       setMails(m)
       setVacantes(v.items)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudieron leer los mails pendientes.")
+      setErrorCasilla(mensajeDeCasilla(err))
     } finally {
       setLoading(false)
     }
@@ -59,13 +66,13 @@ export function MailsPendientes() {
     const vacanteId = elegida[messageId]
     if (!vacanteId) return
     setAsignando(messageId)
-    setError(null)
+    setErrorAsignar(null)
     try {
       await asignarMail(messageId, vacanteId)
       // Se saca de la lista sin recargar: el backend ya lo va a saltear en la próxima lectura.
       setMails((prev) => prev.filter((m) => m.message_id !== messageId))
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo asignar el mail.")
+      setErrorAsignar(err instanceof Error ? err.message : "No se pudo asignar el mail.")
     } finally {
       setAsignando(null)
     }
@@ -82,56 +89,34 @@ export function MailsPendientes() {
         <Button variant="ghost" size="sm" className="min-h-10" onClick={cargar}>Actualizar</Button>
       </div>
 
-      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+      {errorAsignar && <p className="mb-3 text-sm text-destructive" role="alert">{errorAsignar}</p>}
 
-      {mails.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center">
-          <Inbox className="mx-auto mb-3 size-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            No hay mails con adjuntos esperando asignación.
-          </p>
-        </div>
+      {vista(errorCasilla, mails.length) === "error" ? (
+        // El `description` es el mensaje del backend TAL CUAL: es el único que sabe si hay que
+        // reconectar la cuenta de Google o esperar un rato. Ver `_mailsPendientes.ts`.
+        <ErrorState
+          title="No se pudo leer la casilla"
+          description={errorCasilla ?? undefined}
+          action={cargar}
+        />
+      ) : vista(errorCasilla, mails.length) === "vacio" ? (
+        <EmptyState
+          icon={<Inbox />}
+          title="No hay mails sin asignar"
+          description="Los mails con CV que traen el código de la búsqueda en el asunto se procesan solos."
+        />
       ) : (
         <div className="space-y-2">
           {mails.map((m) => (
-            <div key={m.message_id} className="rounded-lg border bg-card p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{m.remitente || "(sin remitente)"}</p>
-                  <p className="truncate text-sm text-muted-foreground">{m.asunto || "(sin asunto)"}</p>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span>{m.fecha}</span>
-                    <span className="inline-flex items-center gap-1">
-                      <Paperclip className="size-3" />
-                      {m.adjuntos_validos} CV{m.adjuntos_validos !== 1 ? "s" : ""}
-                      {m.nombres_adjuntos.length > 0 && `: ${m.nombres_adjuntos.join(", ")}`}
-                    </span>
-                    <span>{MOTIVO[m.motivo] ?? m.motivo}</span>
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Select
-                    className="w-auto"
-                    aria-label={`Asignar ${m.asunto || m.message_id} a una búsqueda`}
-                    value={elegida[m.message_id] ?? ""}
-                    onChange={(e) => setElegida((p) => ({ ...p, [m.message_id]: e.target.value }))}
-                  >
-                    <option value="">Elegí una búsqueda…</option>
-                    {vacantes.map((v) => (
-                      <option key={v.id} value={v.id}>{v.codigo} · {v.titulo}</option>
-                    ))}
-                  </Select>
-                  <Button
-                    size="sm"
-                    className="min-h-10"
-                    disabled={!elegida[m.message_id] || m.adjuntos_validos === 0 || asignando === m.message_id}
-                    onClick={() => asignar(m.message_id)}
-                  >
-                    {asignando === m.message_id ? "Asignando…" : "Asignar"}
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <MailPendienteFila
+              key={m.message_id}
+              mail={m}
+              vacantes={vacantes}
+              elegida={elegida[m.message_id] ?? ""}
+              asignando={asignando === m.message_id}
+              onElegir={(id) => setElegida((p) => ({ ...p, [m.message_id]: id }))}
+              onAsignar={() => asignar(m.message_id)}
+            />
           ))}
         </div>
       )}

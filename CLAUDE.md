@@ -288,7 +288,7 @@ backend/
 │                          router NUEVO exige dividirlo primero (ver "Líneas" más abajo).
 ├── config/settings.py   ← única fuente de config y env (Settings() se instancia en import)
 ├── routers/             ← 81 archivos (límite 80 líneas cada uno)
-├── services/            ← 235 archivos de lógica de negocio (261 con submódulos: export/ 8,
+├── services/            ← 236 archivos de lógica de negocio (262 con submódulos: export/ 8,
 │                          mailer/ 6, reportes/ 12) (límite 150)
 │   ├── _empleado_scope.py     ← barrera de empresa/ownership sobre el empleado target (Fase 2)
 │   ├── _adjunto_padres.py     ← resolver de la entidad padre de un adjunto (Fase 2)
@@ -348,7 +348,7 @@ backend/
 │                          viven en migracionAWS/). 🔴 121 es el NÚMERO de la última, no la cantidad.
 ├── ruff.toml            ← config de ruff (reemplazó pyproject.toml, por Vercel)
 ├── pytest.ini           ← config de pytest (asyncio_mode=auto, testpaths=tests)
-└── tests/               ← 223 archivos .py: 203 `test_*.py` + 20 helpers `_*.py` (exentos del
+└── tests/               ← 225 archivos .py: 205 `test_*.py` + 20 helpers `_*.py` (exentos del
                             límite de 200 los primeros, NO los segundos — ver "Líneas")
 ```
 
@@ -925,7 +925,7 @@ compilación real de Tailwind/Turbopack** — directivas mal ubicadas, imports d
 cliente, CSS que no resuelve.
 
 `next dev` con Turbopack transpila sin type-check → un error de tipo pasa desapercibido en
-desarrollo pero **`next build` falla**. `vitest` cubre 1458 tests en 124 archivos, pero **la mayor
+desarrollo pero **`next build` falla**. `vitest` cubre 1477 tests en 126 archivos, pero **la mayor
 parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Si aparece un error en
 cualquiera de los tres, es tuyo.**
 
@@ -1137,12 +1137,12 @@ contra el catálogo el 12/8/2026).
 - **"Compatibilidad con una posición"** (sucesión): feature nunca construida, no deuda técnica. El ranking es por assessment genérico. Cuando RRHH la reclame, definir qué significa compatibilidad antes de improvisar.
 
 ### Tests
-- **Backend: 4155 passed** en **203 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 223 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 21/8/2026, al cerrar los KPIs que faltaban del dashboard. Los CUATRO archivos nuevos son uno por módulo nuevo —masa salarial, operación, antigüedad y headcount—, que es el criterio del repo: un archivo de test cubre UN módulo. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
-  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → 4115 (el cliente real bloqueado bajo tests) → 4120 (`motivo_baja` sale por la API, el hermano de `fecha_egreso`) → **4155** (los KPIs de §6 + la masa salarial deduplicada). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
-- **Front: `npm test` (= `vitest run`) — 1458 tests en 124 archivos, verdes.** *(Windows, 21/8/2026, al sumar el hover de tarjeta de §2 y el barrido que lo hubiera cazado. El archivo nuevo es uno solo, `components/ui/decisionesVisuales.test.ts`, y no cubre una pantalla sino una CLASE de decisión: lo que §2 y §3 deciden sobre superficie, densidad y movimiento, contra los primitivos donde eso vive. La tanda anterior dejó 1451 en 123, al cerrar el bloque B con las CUATRO pantallas de afuera de `(dashboard)` —/login, /horas, /evaluacion/[token] y /cambiar-password—. El archivo nuevo es uno solo, `app/pantallasPublicas.test.tsx`, y cubre a las cuatro juntas: son la unidad de esa tanda y comparten los mismos cuatro ejes (estados compartidos, mensajes por campo, touch targets de 44px y el bug de huso). La tanda anterior dejó 1425 en 122, al cerrar el patrón de ficha en las CINCO pantallas que faltaban —/vacantes/[id], /proyectos/[id], /empresas/[id], /assessment/[id] y /onboarding/templates/[id]— más el barrido de paginación. Los seis archivos nuevos son uno por ficha (`barra<Entidad>.test.tsx`, junto a la barra que prueban) y `components/ui/barridoPaginacion.test.ts`. La tanda anterior dejó 1360 en 116, al propagar los patrones del bloque B3 a las NUEVE pantallas que quedaban: /objetivos, /onboarding, /onboarding/templates, /offboarding, /horas-por-cliente, /procesos, /organigrama, /sucesion y /assessment. Con esta tanda el bloque B3 cubre el front entero. Los nueve archivos nuevos son uno por pantalla, que es el criterio del repo: un archivo de test cubre UNA pantalla — por eso /onboarding y /onboarding/templates tienen uno cada una aunque compartan carpeta. Las tandas anteriores dejaron 1271 en 107 (/auditoria, /eventos, /costos, /inventario, /capacitaciones, /evaluaciones, /comunicacion), 1187 en 100 (/areas, /clientes, /empresas, /usuarios, /periodos, /proyectos) y 1128 en 94 (/ausencias, /vacaciones, /candidatos, /vacantes, /equipo); antes de eso, 1071 en 89 al cerrar el dashboard de §6. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Backend: 4198 passed** en **205 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 225 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 21/8/2026, al cerrar los KPIs que faltaban del dashboard. Los CUATRO archivos nuevos son uno por módulo nuevo —masa salarial, operación, antigüedad y headcount—, que es el criterio del repo: un archivo de test cubre UN módulo. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
+  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → 4115 (el cliente real bloqueado bajo tests) → 4120 (`motivo_baja` sale por la API, el hermano de `fecha_egreso`) → 4155 (los KPIs de §6 + la masa salarial deduplicada) → **4198** (el cierre del deslogueo en /vacantes: el barrido de codes 401, la clasificación del fallo de renovación de Google y los tests del interceptor, que no tenía ninguno). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
+- **Front: `npm test` (= `vitest run`) — 1477 tests en 126 archivos, verdes.** *(Windows, 21/8/2026, al sumar el hover de tarjeta de §2 y el barrido que lo hubiera cazado. El archivo nuevo es uno solo, `components/ui/decisionesVisuales.test.ts`, y no cubre una pantalla sino una CLASE de decisión: lo que §2 y §3 deciden sobre superficie, densidad y movimiento, contra los primitivos donde eso vive. La tanda anterior dejó 1451 en 123, al cerrar el bloque B con las CUATRO pantallas de afuera de `(dashboard)` —/login, /horas, /evaluacion/[token] y /cambiar-password—. El archivo nuevo es uno solo, `app/pantallasPublicas.test.tsx`, y cubre a las cuatro juntas: son la unidad de esa tanda y comparten los mismos cuatro ejes (estados compartidos, mensajes por campo, touch targets de 44px y el bug de huso). La tanda anterior dejó 1425 en 122, al cerrar el patrón de ficha en las CINCO pantallas que faltaban —/vacantes/[id], /proyectos/[id], /empresas/[id], /assessment/[id] y /onboarding/templates/[id]— más el barrido de paginación. Los seis archivos nuevos son uno por ficha (`barra<Entidad>.test.tsx`, junto a la barra que prueban) y `components/ui/barridoPaginacion.test.ts`. La tanda anterior dejó 1360 en 116, al propagar los patrones del bloque B3 a las NUEVE pantallas que quedaban: /objetivos, /onboarding, /onboarding/templates, /offboarding, /horas-por-cliente, /procesos, /organigrama, /sucesion y /assessment. Con esta tanda el bloque B3 cubre el front entero. Los nueve archivos nuevos son uno por pantalla, que es el criterio del repo: un archivo de test cubre UNA pantalla — por eso /onboarding y /onboarding/templates tienen uno cada una aunque compartan carpeta. Las tandas anteriores dejaron 1271 en 107 (/auditoria, /eventos, /costos, /inventario, /capacitaciones, /evaluaciones, /comunicacion), 1187 en 100 (/areas, /clientes, /empresas, /usuarios, /periodos, /proyectos) y 1128 en 94 (/ausencias, /vacaciones, /candidatos, /vacantes, /equipo); antes de eso, 1071 en 89 al cerrar el dashboard de §6. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
   > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
   > 🔴 **Y APARECIÓ UN CUARTO ROJO DE WINDOWS, DE LA MISMA FAMILIA, arreglado el 20/8/2026.** `claudeMdNoMiente.test.ts` lanzaba el hijo con `execFileSync("node_modules/.bin/vitest")`, que **en Windows es un script de shell SIN extensión**: `ENOENT`. O sea que el barrido que existe para que estos números no mientan estaba **rojo en la Lenovo y verde en la Mac**, y por eso el front venía declarando 896/75 con 941/79 medidos. Ahora se lanza con `process.execPath` + `node_modules/vitest/vitest.mjs`. 🔑 **La regla que deja: un test que lanza un proceso usa el ejecutable de node que ya está corriendo, nunca un lanzador de `.bin/`.**
-- **Son 32 barridos estructurales conocidos** (20 backend + 12 front), renumerados el 19/8/2026 —
+- **Son 33 barridos estructurales conocidos** (21 backend + 12 front), renumerados el 19/8/2026 —
   la lista anterior tenía dos numeraciones distintas conviviendo (1–11 y 12–15 fuera de orden) y
   le faltaban 3 barridos que ya existían. **Cada uno cubre automáticamente lo que se agregue
   después, y todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una
@@ -1221,6 +1221,23 @@ contra el catálogo el 12/8/2026).
       siempre visibles—: una regla que nadie cubre y nadie nombra se vuelve a perder igual.
       Guardas de mínimo ≥14 decisiones, ≥300 archivos barridos, ≥3 con vidrio, ≥5 declaradas
       como no verificables.
+  33. 🔴 **`tests/test_espejo_codes_401.py`** — **todo 401 que el backend puede emitir está
+      DECIDIDO del lado del front**, en las dos direcciones: o su `code` está en la allowlist
+      `CODES_SESION_MUERTA` de `frontend/services/authRefresh.ts` (y entonces desloguea), o está
+      declarado acá en `AJENOS` con su razón; y ninguna entrada de las dos listas puede apuntar a
+      un code que el backend ya no emite. 🔑 **Lo que lo motivó:** el interceptor decidía por
+      `res.status` a secas, así que CUALQUIER 401 deslogueaba — y `/vacantes` recibía al montar un
+      401 `GMAIL_TOKEN_EXPIRED` de la casilla del sistema, así que mandaba al login a un usuario
+      perfectamente autenticado en cada carga, once días seguidos. Buscando ése apareció el
+      segundo: equivocarse de contraseña actual en /cambiar-password devuelve 401
+      `INVALID_CREDENTIALS` y también echaba. **Pasar a allowlist cierra el bug pero abre uno
+      peor si la lista se pudre** —un 401 de auth nuevo que nadie anote deja al usuario con un
+      token muerto y SIN salida al login—, y eso es lo que este barrido impide. Por **AST y no
+      grep**: `utils/errors.py:19` tiene un `AppError(..., 401)` adentro de un docstring, como
+      ejemplo de uso, y un grep empujaría a declarar un code que nadie emite. Cubre las tres
+      formas que el repo usa (llamada a `AppError`, tupla de módulo invocada con `*`, y el
+      `JSONResponse` del middleware) y **un 401 cuyo `code` no se puede resolver es un FALLO, no
+      un salteo**. Guardas de mínimo ≥8 codes en el backend y ≥3 en la allowlist del front.
 
   > ⚠️ **Esta lista es una FOTO, compilada por grep del marcador "BARRIDO ESTRUCTURAL" + memoria
   > de sesión, no una re-auditoría exhaustiva de cada archivo.** Puede faltar alguno con un

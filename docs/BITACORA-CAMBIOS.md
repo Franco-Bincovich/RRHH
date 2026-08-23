@@ -41,6 +41,57 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-23 · Entrar a /vacantes cerraba la sesión · commits pendientes
+**Qué cambió:** el interceptor de 401 del front y el status con el que el backend reporta un
+token de Google muerto. **Cero migraciones, cero variables de entorno, cero endpoints nuevos,
+cero dependencias, cero buckets.** Cuatro commits:
+
+1. **El interceptor decide por `code`, no por status** (`frontend/services/authRefresh.ts`).
+   Solo cuatro codes deslogean —`MISSING_TOKEN`, `INVALID_TOKEN`, `SESION_EXPIRADA`,
+   `INVALID_REFRESH_TOKEN`—, todos de nuestra autenticación. Cualquier otro 401 se devuelve tal
+   cual, como ya se hacía con los 403. Un 401 sin `code` o con uno desconocido **no** desloguea.
+   El archivo no tenía un solo test: ahora tiene 12, más un barrido
+   (`backend/tests/test_espejo_codes_401.py`) que exige que todo 401 del backend esté clasificado
+   de un lado o del otro — una allowlist a mano se pudre, y pudrida deja al usuario con un token
+   muerto y sin salida al login.
+2. **Un fallo de renovación del token de Google ya no es 401: es 502**
+   (`backend/services/_google_token_fallo.py`, nuevo). El usuario está autenticado; quien no
+   puede autenticarse es el backend contra Google. Se distinguen dos causas con mensajes
+   opuestos: `GMAIL_TOKEN_EXPIRED` (Google rechazó la credencial → reconectar la cuenta) y
+   `GMAIL_RENOVACION_FALLIDA` (no se pudo hablar con Google → esperar y reintentar). El log de
+   ERROR ahora lleva el `error`/`error_description` que mandó Google.
+3. **La pantalla avisa en vez de mentir** (`MailsPendientes.tsx`). Con la casilla caída mostraba
+   el error **y debajo** "No hay mails con adjuntos esperando asignación". Ahora un error de
+   lectura gana sobre el vacío, con el mensaje accionable del backend y un botón de reintentar.
+   Se separaron los dos errores del bloque (leer la casilla vs asignar un mail): con uno solo, un
+   fallo al asignar se llevaba puesta la lista.
+4. Esta entrada y los conteos de `CLAUDE.md`.
+
+**Impacto en infraestructura:**
+- 🔴 **Cambio en el manejo de la sesión del lado del cliente.** No cambian los tokens, ni los
+  claims, ni el middleware, ni `/api/auth/*`: cambia **cuándo el front decide que la sesión murió**.
+  Si algún monitor o sintético contaba "401 → sesión caída", ahora un 401 de negocio ya no
+  produce una redirección a `/login`.
+- 🔴 **`GET /api/vacantes/casilla/pendientes` y `POST /api/vacantes/casilla/revisar` pasan de
+  devolver 401 a devolver 502** cuando la casilla del sistema no puede renovar su token. **Si hay
+  alertas por tasa de 5xx, esto las va a disparar mientras la integración esté caída** — y es
+  correcto que lo haga: hasta hoy esa caída se contaba como error de autenticación del usuario.
+  Ningún WAF ni proxy debería reintentar sobre ese 502.
+- **Ninguna migración, variable de entorno, dependencia, bucket, endpoint nuevo ni proceso de
+  fondo.** Nada que correr antes ni después del deploy.
+
+🔴 **ACCIÓN PENDIENTE, Y NO ES DE CÓDIGO — la casilla del sistema está caída desde el 10/8/2026.**
+La integración de Google (`franbincovich@gmail.com`, marcada `es_remitente_sistema`) tiene
+`token_expiry` y `updated_at` congelados en el 10/8 12:50: desde entonces **ninguna renovación se
+persistió**. El diagnóstico es que falla la **renovación**, no la escritura — si la renovación
+funcionara y solo fallara el `_persistir`, la lectura de la casilla devolvería 200 y nadie se
+habría enterado; lo que se observó fue el error, así que `_renovar` está levantando y `_persistir`
+no llega a correr nunca. **Hay que reconectar la cuenta desde Configuración → Integraciones.**
+⚠️ **Antes de reconectar, mirar el Publishing status de la pantalla de consentimiento en Google
+Cloud Console.** Si el proyecto está en **Testing**, Google caduca los refresh tokens **a los 7
+días** — que es exactamente el intervalo que se observó— y reconectar va a durar otra semana.
+Publicarlo (o pasar la cuenta a un usuario interno del workspace) es lo que lo arregla de verdad.
+
 ## 2026-08-21 · Lo que se vio en el recorrido visual + el arnés guardado · commits pendientes
 **Qué cambió:** frontend puro. **Cero backend, cero endpoints, cero migraciones, cero variables
 de entorno.** Seis cosas, en cuatro commits:

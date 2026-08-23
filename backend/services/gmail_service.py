@@ -52,7 +52,8 @@ class GmailService:
     def token(self) -> str:
         """Access token vigente de la casilla del sistema.
 
-        Raises: GMAIL_SIN_CASILLA (400) | GMAIL_NOT_CONFIGURED (400) | GMAIL_TOKEN_EXPIRED (401).
+        Raises: GMAIL_SIN_CASILLA (400) | GMAIL_NOT_CONFIGURED (400) |
+            GMAIL_TOKEN_EXPIRED (502) | GMAIL_RENOVACION_FALLIDA (502).
         """
         return token_de_lectura(self._remitente_repo)
 
