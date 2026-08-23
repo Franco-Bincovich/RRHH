@@ -8,6 +8,11 @@ backend/.venv/
 backend/__pycache__/
 backend/**/__pycache__/
 backend/**/*.pyc
+# 🔴 `scripts/` cuelga de la raíz, así que las reglas de `backend/**` NO lo cubren y su
+# `__pycache__` quedaba fuera del ignore. Hay un .pyc TRACKED de antes
+# (`scripts/__pycache__/medir_escala.cpython-312.pyc`): esta regla no lo destrackea sola,
+# hace falta un `git rm --cached` una vez.
+scripts/__pycache__/
 # Caché de pytest. `v/cache/lastfailed` se reescribe en cada corrida con rojos y acumula
 # node-ids de tests ya renombrados, así que viaja desactualizado y no le sirve a nadie.
 .pytest_cache/
@@ -33,3 +38,14 @@ _commit*.txt
 # de escribirla. Los dos patrones son deliberadamente angostos —no `_c*.txt`, que se llevaría
 # puesto cualquier `_config.txt`— y por eso son dos y no uno.
 _c[0-9]*.txt
+
+# Manifiesto de la semilla de datos de prueba (scripts/semilla_smoke.py). Es el registro EXACTO
+# de qué filas se sembraron en QUÉ base, así que es de una máquina y una corrida: commitearlo
+# haría que otro clon crea que ya sembró —y no limpiaría nada—, o peor, que intente borrar ids
+# de otra base. Se regenera solo al sembrar.
+scripts/.semilla-smoke.json
+
+# Credenciales de la semilla (SEMILLA_TOKEN o SEMILLA_USUARIO/SEMILLA_PASSWORD). Existe para
+# que la credencial NO viaje por la línea de comandos, donde el historial de PowerShell la
+# guardaría en texto plano y para siempre. Ver `scripts/_semilla_credencial.py`.
+scripts/.semilla.env

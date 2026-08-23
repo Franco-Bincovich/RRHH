@@ -41,6 +41,80 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-23 · 🔴 `maybe_single()` devolvía None pelado: 24 call sites en 500, offboarding inutilizable · commit pendiente
+
+**Qué cambió:** al sembrar datos de prueba por la API apareció que **`POST /api/offboarding`
+devolvía 500 para toda persona sin offboarding previo** — o sea, para el primero de cualquiera.
+`maybe_single().execute()` devuelve **`None` PELADO** con 0 filas, no un objeto con
+`.data = None`, así que `if not res.data:` es un `AttributeError` que el handler global convierte
+en 500. Barrido por AST de las cuatro capas: **24 call sites rotos en 16 repos**, todos por lo
+mismo. Arreglados los 24 (`res.data if res and res.data else None`), corregido el fake compartido
+`tests/_almacen_tabla.py` —que devolvía `Resp(None)` y por eso ningún test podía desmentirlo— y
+agregado el barrido `tests/test_maybe_single_guarda.py` para que el próximo no nazca roto.
+
+**Por qué nadie lo había visto:** el caso que lo dispara es **"no hay filas"**, la rama menos
+probada de cada módulo (id inexistente o recurso de otra empresa). Y `offboarding_instancias`
+está en 0 filas en producción, así que el módulo entero estaba inutilizable sin que ninguna
+pantalla lo mostrara.
+
+**Impacto en infraestructura:** **Ninguno.** Ni migraciones, ni env vars, ni dependencias, ni
+endpoints nuevos. Tres cosas para saber igual:
+
+- 🔴 **REQUIERE DEPLOY DEL BACKEND para que sirva de algo.** Hasta que `sofia-backend` no tenga
+  este commit, `POST /api/offboarding` sigue en 500 en producción y las dos fases de la semilla
+  que dependen de él (bajas y offboarding en curso) no se pueden sembrar.
+- **Comportamiento visible que cambia:** varios endpoints pasan de **500 a 404** ante un id
+  inexistente o ajeno — `vacantes`, `proyectos`, `capacitaciones`, `ausencias`, `vacaciones`,
+  `inventario`, `objetivos`, `asignaciones`. Es el contrato que la barrera de empresa siempre
+  declaró ("el 404 es idéntico, siempre") y que en producción no se cumplía.
+- **`empleado_ownership_repo` estaba entre los rotos**, o sea el resolver de ownership de
+  `mandos_medios`: un usuario sin fila de empleado daba 500 en vez de resolver a "sin alcance".
+
+**Dependencias:** ninguna nueva. Suite: 4200 passed.
+
+---
+
+## 2026-08-23 · Semilla de datos de prueba por la API, y su limpiador · commit pendiente
+
+**Qué cambió:** ocho tablas están en cero (`perfiles_puesto`, `recategorizaciones`,
+`offboarding_instancias`, `eventos_agenda`, `costos_nomina`, `capacitaciones`,
+`empleado_capacitacion`, más los preingresos y bajas que no existen) y sus pantallas no se pueden
+probar ni mostrar en el recorrido con Capital Humano. Se agregaron **`scripts/semilla_smoke.py`**,
+que las siembra **por la API HTTP del backend desplegado** —nunca por INSERT— y
+**`scripts/limpiar_semilla.py`**, que deshace exactamente lo sembrado. Ninguno se importa desde
+`backend/`: son herramientas de operación, no código de producción. Documentado en
+**`docs/SEMILLA-SMOKE.md`**.
+
+**Por qué por la API:** un INSERT se saltea las guardas y deja filas que el sistema nunca habría
+producido; sembrar por la API **ejercita los caminos de escritura del bloque A, que tienen tests
+verdes y nunca corrieron contra la base real**; y los estados derivados (`fecha_egreso`,
+`motivo_baja`, los `*_anterior` de una recategorización, la `empresa_id` heredada del padre) los
+calcula el backend. El limpiador, en cambio, va por la base y es deliberado: `empleados`,
+`costos_nomina`, `recategorizaciones` y `offboarding_instancias` **no tienen endpoint de borrado**
+y el DELETE de `perfiles_puesto` es una baja lógica.
+
+**Impacto en infraestructura:** **Ninguno en el producto.** Ni migraciones, ni endpoints nuevos,
+ni buckets, ni cambios de auth. Cuatro puntos igual para tener presentes:
+
+- **Dos variables de entorno NUEVAS, pero de OPERACIÓN — no van en Vercel ni en SSM.**
+  `SEMILLA_TOKEN`, o el par `SEMILLA_USUARIO`/`SEMILLA_PASSWORD`. Existen porque la credencial
+  **no se pasa por la línea de comandos**: el historial de PowerShell la guardaría en texto plano
+  y sin vencimiento. Alternativa local: `scripts/.semilla.env`, ignorado por git.
+- **Dos entradas nuevas en `.gitignore`:** `scripts/.semilla-smoke.json` (el manifiesto de lo
+  sembrado: es de una máquina y de una base, commitearlo haría que otro clon crea que ya sembró)
+  y `scripts/.semilla.env`.
+- **El limpiador necesita `backend/.env`** (usa `supabase_admin` con la service key) y hace
+  `os.chdir(backend)` porque `Settings.Config.env_file` es relativo al directorio de trabajo.
+  **En AWS eso cambia**: cuando la config salga de SSM, ese `chdir` deja de tener sentido.
+- **`auditoria` queda con eventos de filas borradas.** El limpiador NO toca la tabla por default
+  —es inmutable por diseño— así que tras limpiar, `/auditoria` sigue mostrando el alta de los
+  nueve colaboradores sembrados. `--con-auditoria` los borra; es una decisión, no un default.
+
+**Dependencias:** ninguna nueva. Usa `httpx` y `openpyxl`, que ya están en
+`backend/requirements.txt`, y corre con `backend/venv`.
+
+---
+
 ## 2026-08-23 · Los KPIs llevan a su sección, las dos vistas de objetivos, todo plegado, "Agenda" y el .gitattributes · commits pendientes
 
 **Qué cambió:** cinco cosas independientes, una por commit. (1) Las diez cards de KPI del
