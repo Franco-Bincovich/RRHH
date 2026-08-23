@@ -37,7 +37,7 @@ class EmpleadoOwnershipRepo:
             .maybe_single()
             .execute()
         )
-        return res.data if res.data else None
+        return res.data if (res and res.data) else None
 
     def ids_subordinados(self, empleado_id: str) -> List[str]:
         """

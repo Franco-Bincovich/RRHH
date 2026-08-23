@@ -35,7 +35,7 @@ class OffboardingRepo:
     def find_by_empleado(self, empleado_id: str, empresa_id: Optional[UUID] = None) -> Optional[OffboardingResponse]:
         q = supabase_admin.table(_OI).select(f"*, {_EJ}").eq("empleado_id", empleado_id).not_.in_("estado", _EXCL).limit(1)
         res = _with_empresa(q, empresa_id).maybe_single().execute()
-        if not res.data:
+        if not (res and res.data):
             return None
         return _inst_row(res.data, _activos.activos_de(res.data["id"]))
 

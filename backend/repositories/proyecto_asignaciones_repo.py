@@ -39,14 +39,14 @@ def find_empresa_for_empleado(empleado_id: str) -> Optional[str]:
     """Retorna empresa_id del empleado. None si no existe."""
     res = (supabase_admin.table("empleados").select("empresa_id")
            .eq("id", empleado_id).maybe_single().execute())
-    return str(res.data["empresa_id"]) if res.data else None
+    return str(res.data["empresa_id"]) if (res and res.data) else None
 
 
 def get_estado_empleado(empleado_id: str) -> Optional[str]:
     """Retorna estado del empleado. None si no existe."""
     res = (supabase_admin.table("empleados").select("estado")
            .eq("id", empleado_id).maybe_single().execute())
-    return res.data.get("estado") if res.data else None
+    return res.data.get("estado") if (res and res.data) else None
 
 
 class AsignacionesRepo:
@@ -58,7 +58,7 @@ class AsignacionesRepo:
 
     def find_by_id(self, id: str) -> Optional[AsignacionResponse]:
         res = supabase_admin.table(_T).select("*").eq("id", id).maybe_single().execute()
-        return _build([res.data])[0] if res.data else None
+        return _build([res.data])[0] if (res and res.data) else None
 
     def save(
         self, proyecto_id: str, empleado_id: str, empleado_empresa_id: str,

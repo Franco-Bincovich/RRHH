@@ -50,7 +50,7 @@ class PresupuestoRepo:
             .maybe_single()
             .execute()
         )
-        if not area_res.data or not area_res.data.get("empresa_id"):
+        if not (area_res and area_res.data) or not area_res.data.get("empresa_id"):
             raise AppError("Área no encontrada", "AREA_NOT_FOUND", 404)
         payload = {
             "area_id": data.area_id, "mes": data.mes, "anio": data.anio,

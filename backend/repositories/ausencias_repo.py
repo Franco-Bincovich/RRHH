@@ -43,12 +43,12 @@ class AusenciasRepo:
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         res = q.maybe_single().execute()
-        return _build([res.data])[0] if res.data else None
+        return _build([res.data])[0] if (res and res.data) else None
 
     def find_empresa_for_empleado(self, empleado_id: str) -> Optional[str]:
         """Retorna el empresa_id del empleado, o None si no existe."""
         res = supabase_admin.table("empleados").select("empresa_id").eq("id", empleado_id).maybe_single().execute()
-        return str(res.data["empresa_id"]) if res.data else None
+        return str(res.data["empresa_id"]) if (res and res.data) else None
 
     def save(self, empleado_id: str, empresa_id: str, tipo_id: str, fecha_desde: date, fecha_hasta: date, dias: int, justificada: bool, motivo: Optional[str]) -> AusenciaResponse:
         """Inserta una ausencia y retorna el registro enriquecido."""

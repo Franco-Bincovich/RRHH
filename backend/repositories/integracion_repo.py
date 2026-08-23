@@ -78,7 +78,7 @@ class IntegracionRepo:
             .maybe_single()
             .execute()
         )
-        return result.data
+        return result.data if result else None
 
     def delete(self, user_id: str, tipo: str) -> bool:
         """Elimina una integración de un usuario por tipo."""

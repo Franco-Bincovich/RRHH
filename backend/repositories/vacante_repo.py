@@ -51,7 +51,7 @@ class VacanteRepo:
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         res = q.maybe_single().execute()
-        return _vrow(res.data) if res.data else None
+        return _vrow(res.data) if (res and res.data) else None
 
     def find_by_codigo(self, codigo: str) -> Optional[VacanteResponse]:
         """Busca vacante por su código (`VAC-0001`). CASE-INSENSITIVE. None si no existe.

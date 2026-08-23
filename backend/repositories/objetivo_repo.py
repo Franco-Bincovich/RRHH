@@ -49,7 +49,7 @@ class ObjetivoRepo:
     def find_by_id(self, id: str, empresa_id: Optional[UUID] = None) -> Optional[ObjetivoResponse]:
         q = con_empresa(supabase_admin.table(_T).select("*").eq("id", id), empresa_id)
         res = q.maybe_single().execute()
-        return _build([res.data])[0] if res.data else None
+        return _build([res.data])[0] if (res and res.data) else None
 
     def save(self, data: ObjetivoCreate) -> ObjetivoResponse:
         """Inserta un objetivo y retorna el registro enriquecido.

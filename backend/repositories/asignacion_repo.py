@@ -49,7 +49,7 @@ class AsignacionRepo:
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         res = q.maybe_single().execute()
-        return _build([res.data])[0] if res.data else None
+        return _build([res.data])[0] if (res and res.data) else None
 
     def save(self, capacitacion_id: str, empleado_id: Optional[str], empresa_id: str, fecha_asignacion: Optional[date], fecha_limite: Optional[date],
              *, proyecto: Optional[str] = None, anio: Optional[str] = None, mes: Optional[str] = None, nombre_libre: Optional[str] = None,
@@ -87,7 +87,7 @@ class AsignacionRepo:
     def find_empresa_for_empleado(self, empleado_id: str) -> Optional[str]:
         """Retorna empresa_id del empleado, o None si no existe."""
         res = supabase_admin.table("empleados").select("empresa_id").eq("id", empleado_id).maybe_single().execute()
-        return str(res.data["empresa_id"]) if res.data else None
+        return str(res.data["empresa_id"]) if (res and res.data) else None
 
     def empleados_por_empresa(self, empresa_id: str) -> list:
         """El padrón de la empresa para el matcheo del import: UNA query, nunca una por fila."""

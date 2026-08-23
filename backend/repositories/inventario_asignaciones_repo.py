@@ -61,7 +61,7 @@ class InventarioAsignacionesRepo:
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         res = q.maybe_single().execute()
-        return _build([res.data])[0] if res.data else None
+        return _build([res.data])[0] if (res and res.data) else None
 
     def save(self, item_id: str, empresa_id: str, empleado_id: str) -> AsignacionResponse:
         """Crea una asignación activa. El índice único parcial en DB previene duplicados."""

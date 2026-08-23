@@ -348,7 +348,7 @@ backend/
 │                          viven en migracionAWS/). 🔴 121 es el NÚMERO de la última, no la cantidad.
 ├── ruff.toml            ← config de ruff (reemplazó pyproject.toml, por Vercel)
 ├── pytest.ini           ← config de pytest (asyncio_mode=auto, testpaths=tests)
-└── tests/               ← 225 archivos .py: 205 `test_*.py` + 20 helpers `_*.py` (exentos del
+└── tests/               ← 226 archivos .py: 206 `test_*.py` + 20 helpers `_*.py` (exentos del
                             límite de 200 los primeros, NO los segundos — ver "Líneas")
 ```
 
@@ -513,8 +513,22 @@ Hay que **seguir el parámetro hasta la query**. Un router que recibe `empresa_i
 ### 🚨 Fakes de test que HONRAN `empresa_id`
 Un fake cuyo `find_by_id(id, empresa_id)` **acepta el parámetro y lo ignora** da **verde falso**: el test pasa sin validar nada, y es exactamente el bug que se quería cubrir. Es el caso #1 de "Un test solo prueba lo que el fake puede desmentir" — leer esa sección entera.
 
-### `.single()` vs `maybe_single()`
-**Usar `maybe_single()` salvo que la fila esté garantizada.** `.single()` **lanza** con 0 filas en vez de devolver `None` → el `return None` de abajo queda **inalcanzable** y el endpoint da **500 donde el service pretendía 404**. Pasó en `area_repo` y `empresa_repo`; ambos corregidos. Los `.single()` que sobreviven son legítimos: post-`upsert` (`nomina_repo`) y lookups de auth donde la fila existe por construcción.
+### `.single()` vs `maybe_single()` — **DOS trampas, no una**
+
+**TRAMPA 1 — elegir `.single()`.** **Usar `maybe_single()` salvo que la fila esté garantizada.** `.single()` **lanza** con 0 filas en vez de devolver `None` → el `return None` de abajo queda **inalcanzable** y el endpoint da **500 donde el service pretendía 404**. Pasó en `area_repo` y `empresa_repo`; ambos corregidos. Los `.single()` que sobreviven son legítimos: post-`upsert` (`nomina_repo`) y lookups de auth donde la fila existe por construcción.
+
+🔴 **TRAMPA 2 — `maybe_single().execute()` DEVUELVE `None` PELADO, no un objeto con `.data = None`.** Elegir bien la primera y escribir `if not res.data:` deja el MISMO 500 que la primera venía a evitar, porque `res` es `None` y `res.data` es un `AttributeError`. **La forma correcta chequea el OBJETO:**
+
+```python
+res = q.maybe_single().execute()
+return res.data if res and res.data else None     # ← `res and`, no solo `.data`
+```
+
+**Descubierto el 23/8/2026 sembrando datos de prueba por la API**, y el alcance era grande: **24 call sites en 16 repos**, todos rotos por el mismo motivo. `POST /api/offboarding` devolvía **500 para toda persona sin offboarding previo** —o sea, para el primero de cualquiera— porque su guarda *"¿ya tiene uno activo?"* consulta justo el caso de 0 filas: **el módulo nunca funcionó en producción**. Medido contra el backend desplegado con un uuid inexistente: `vacantes`, `proyectos` y `capacitaciones` daban **500 donde el diseño dice 404**, mientras `clientes`, `empleados`, `areas` y `perfiles-puesto` daban 404 correcto — la correlación con la guarda era exacta. También estaba roto `empleado_ownership_repo`, que es el resolver de ownership de `mandos_medios`.
+
+> 🚨 **Rompe además el contrato del "404 idéntico siempre"** de la barrera de empresa: un recurso ajeno salía 500. No es un oráculo de enumeración (los dos casos dan 500), pero la pantalla dice "error interno" donde el diseño dice "no encontrado".
+
+**POR QUÉ NINGÚN TEST LO VIO, y qué se hizo:** el doble de Supabase devolvía `Resp(None)` donde el real devuelve `None`. Caso de manual de *"un test solo prueba lo que el fake puede desmentir"* — **el fake no modelaba la única diferencia que importaba**. Se corrigió `tests/_almacen_tabla.py` para que devuelva `None` pelado, y se agregó el barrido **`tests/test_maybe_single_guarda.py`** (nº 36), que exige la guarda por AST en las cuatro capas. Arreglar los 24 sin el barrido dejaba al próximo naciendo roto.
 
 ---
 
@@ -1137,12 +1151,12 @@ contra el catálogo el 12/8/2026).
 - **"Compatibilidad con una posición"** (sucesión): feature nunca construida, no deuda técnica. El ranking es por assessment genérico. Cuando RRHH la reclame, definir qué significa compatibilidad antes de improvisar.
 
 ### Tests
-- **Backend: 4198 passed** en **205 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 225 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 21/8/2026, al cerrar los KPIs que faltaban del dashboard. Los CUATRO archivos nuevos son uno por módulo nuevo —masa salarial, operación, antigüedad y headcount—, que es el criterio del repo: un archivo de test cubre UN módulo. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
-  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → 4115 (el cliente real bloqueado bajo tests) → 4120 (`motivo_baja` sale por la API, el hermano de `fecha_egreso`) → 4155 (los KPIs de §6 + la masa salarial deduplicada) → **4198** (el cierre del deslogueo en /vacantes: el barrido de codes 401, la clasificación del fallo de renovación de Google y los tests del interceptor, que no tenía ninguno). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
+- **Backend: 4200 passed** en **206 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 226 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 21/8/2026, al cerrar los KPIs que faltaban del dashboard. Los CUATRO archivos nuevos son uno por módulo nuevo —masa salarial, operación, antigüedad y headcount—, que es el criterio del repo: un archivo de test cubre UN módulo. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
+  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → 4115 (el cliente real bloqueado bajo tests) → 4120 (`motivo_baja` sale por la API, el hermano de `fecha_egreso`) → 4155 (los KPIs de §6 + la masa salarial deduplicada) → 4198 (el cierre del deslogueo en /vacantes: el barrido de codes 401, la clasificación del fallo de renovación de Google y los tests del interceptor, que no tenía ninguno) → **4200** (el barrido de `maybe_single()`, que nació del 500 permanente de `POST /api/offboarding`). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
 - **Front: `npm test` (= `vitest run`) — 1528 tests en 130 archivos, verdes.** *(Windows, 23/8/2026, al cablear los KPIs del dashboard a su pantalla, sumar el selector de vista de objetivos y cerrar todos los desplegables. Los CUATRO archivos nuevos son uno por unidad: `components/features/dashboard/_destinosKpi.test.ts` (a dónde lleva cada KPI y quién puede llegar), `components/ui/barridoAcordeones.test.ts` (ningún desplegable nace desplegado, con sus dos excepciones declaradas), y los dos del selector de vista de objetivos (`TipoObjetivoTabs.test.tsx` y `_filtrosObjetivos.test.ts`, que existen separados porque uno cubre el control y el otro el cable que lleva lo elegido a la query — el segundo nació de una mutación que sobrevivió). La tanda anterior dejó 1477 en 126, al sumar el hover de tarjeta de §2 y el barrido que lo hubiera cazado. El archivo nuevo es uno solo, `components/ui/decisionesVisuales.test.ts`, y no cubre una pantalla sino una CLASE de decisión: lo que §2 y §3 deciden sobre superficie, densidad y movimiento, contra los primitivos donde eso vive. La tanda anterior dejó 1451 en 123, al cerrar el bloque B con las CUATRO pantallas de afuera de `(dashboard)` —/login, /horas, /evaluacion/[token] y /cambiar-password—. El archivo nuevo es uno solo, `app/pantallasPublicas.test.tsx`, y cubre a las cuatro juntas: son la unidad de esa tanda y comparten los mismos cuatro ejes (estados compartidos, mensajes por campo, touch targets de 44px y el bug de huso). La tanda anterior dejó 1425 en 122, al cerrar el patrón de ficha en las CINCO pantallas que faltaban —/vacantes/[id], /proyectos/[id], /empresas/[id], /assessment/[id] y /onboarding/templates/[id]— más el barrido de paginación. Los seis archivos nuevos son uno por ficha (`barra<Entidad>.test.tsx`, junto a la barra que prueban) y `components/ui/barridoPaginacion.test.ts`. La tanda anterior dejó 1360 en 116, al propagar los patrones del bloque B3 a las NUEVE pantallas que quedaban: /objetivos, /onboarding, /onboarding/templates, /offboarding, /horas-por-cliente, /procesos, /organigrama, /sucesion y /assessment. Con esta tanda el bloque B3 cubre el front entero. Los nueve archivos nuevos son uno por pantalla, que es el criterio del repo: un archivo de test cubre UNA pantalla — por eso /onboarding y /onboarding/templates tienen uno cada una aunque compartan carpeta. Las tandas anteriores dejaron 1271 en 107 (/auditoria, /eventos, /costos, /inventario, /capacitaciones, /evaluaciones, /comunicacion), 1187 en 100 (/areas, /clientes, /empresas, /usuarios, /periodos, /proyectos) y 1128 en 94 (/ausencias, /vacaciones, /candidatos, /vacantes, /equipo); antes de eso, 1071 en 89 al cerrar el dashboard de §6. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
   > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
   > 🔴 **Y APARECIÓ UN CUARTO ROJO DE WINDOWS, DE LA MISMA FAMILIA, arreglado el 20/8/2026.** `claudeMdNoMiente.test.ts` lanzaba el hijo con `execFileSync("node_modules/.bin/vitest")`, que **en Windows es un script de shell SIN extensión**: `ENOENT`. O sea que el barrido que existe para que estos números no mientan estaba **rojo en la Lenovo y verde en la Mac**, y por eso el front venía declarando 896/75 con 941/79 medidos. Ahora se lanza con `process.execPath` + `node_modules/vitest/vitest.mjs`. 🔑 **La regla que deja: un test que lanza un proceso usa el ejecutable de node que ya está corriendo, nunca un lanzador de `.bin/`.**
-- **Son 35 barridos estructurales conocidos** (21 backend + 14 front), renumerados el 19/8/2026 —
+- **Son 36 barridos estructurales conocidos** (22 backend + 14 front), renumerados el 19/8/2026 —
   la lista anterior tenía dos numeraciones distintas conviviendo (1–11 y 12–15 fuera de orden) y
   le faltaban 3 barridos que ya existían. **Cada uno cubre automáticamente lo que se agregue
   después, y todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una
@@ -1268,6 +1282,21 @@ contra el catálogo el 12/8/2026).
       cualquiera de ellos borrar el chequeo entero dejaría el archivo en verde. Descubre los
       títulos leyendo `_kpisDashboard.ts` con los comentarios enmascarados. Guardas de mínimo ≥10
       cards y ≥9 rutas.
+  36. 🔴 **`tests/test_maybe_single_guarda.py`** — **todo `maybe_single().execute()` chequea el
+      OBJETO antes de leer su `.data`.** 🔑 Lo que lo motivó: `execute()` devuelve `None` PELADO
+      con 0 filas, no un objeto con `.data = None`, así que `if not res.data:` es un
+      `AttributeError` → **500**. Y el caso que lo dispara es siempre "no hay filas", o sea **la
+      rama menos probada de cada módulo**: id inexistente o recurso de otra empresa. Estaban
+      rotos **24 call sites en 16 repos**, y el más caro dejaba `POST /api/offboarding` en 500
+      permanente —el módulo entero inutilizable en producción, sin que nadie lo notara porque
+      `offboarding_instancias` estaba en 0 filas. Por **AST y no grep**: `utils/errors.py` tiene
+      código de ejemplo dentro de un docstring. Acepta CUALQUIER forma de probar el objeto
+      (`and`, `or`, ternario) en vez de exigir una sintaxis: lo que se verifica es que el nombre
+      se pruebe antes de desreferenciarlo, no cómo. ⚠️ **Es estructural y no de comportamiento a
+      propósito**: los 24 viven en 16 archivos con dobles propios, y 24 tests de comportamiento
+      son 24 que nadie escribe. Su condición previa fue arreglar el fake compartido
+      (`tests/_almacen_tabla.py`), que devolvía `Resp(None)` y por eso **ningún test podía
+      desmentir esto**. Guarda de mínimo ≥45 call sites.
 
   > ⚠️ **Esta lista es una FOTO, compilada por grep del marcador "BARRIDO ESTRUCTURAL" + memoria
   > de sesión, no una re-auditoría exhaustiva de cada archivo.** Puede faltar alguno con un

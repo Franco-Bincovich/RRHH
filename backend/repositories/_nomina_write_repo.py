@@ -33,7 +33,7 @@ def guardar(data: NominaCreate) -> NominaResponse:
         .maybe_single()
         .execute()
     )
-    if not emp_res.data or not emp_res.data.get("empresa_id"):
+    if not (emp_res and emp_res.data) or not emp_res.data.get("empresa_id"):
         raise AppError("Empleado no encontrado", "EMPLEADO_NOT_FOUND", 404)
     cargas = max(0.0, data.monto_bruto - data.monto_neto)
     payload = {

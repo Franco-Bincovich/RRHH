@@ -46,14 +46,14 @@ class ProyectosRepo:
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         res = q.maybe_single().execute()
-        if not res.data:
+        if not (res and res.data):
             return None
         return enriquecer([res.data], batch_costos([res.data["id"]]))[0]
 
     def find_empresa_for(self, proyecto_id: str) -> Optional[str]:
         """Retorna empresa_id (dueña) del proyecto."""
         res = supabase_admin.table(_T).select("empresa_id").eq("id", proyecto_id).maybe_single().execute()
-        return str(res.data["empresa_id"]) if res.data else None
+        return str(res.data["empresa_id"]) if (res and res.data) else None
 
     def save(self, data: ProyectoCreate) -> ProyectoResponse:
         payload = {k: (str(v) if isinstance(v, UUID) else (str(v) if hasattr(v, "isoformat") else v))

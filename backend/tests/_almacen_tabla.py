@@ -122,7 +122,14 @@ class _Q:
         if self._orden:
             halladas = sorted(halladas, key=lambda f: str(f.get(self._orden, "")))
         if self._single:
-            return Resp(halladas[0] if halladas else None)
+            # 🔴 CON 0 FILAS DEVUELVE `None` PELADO, NO `Resp(None)`. Es lo que hace el cliente
+            # real (supabase-py 2.9.1) y es la diferencia que este doble NO modelaba, así que
+            # ningún test podía desmentirla. El código que escribe `res.data` sin chequear
+            # `res` primero pasaba en verde acá y devolvía **500** en producción — medido el
+            # 23/8/2026 sobre `POST /api/offboarding`, que fallaba SIEMPRE porque su guarda
+            # "¿ya tiene un offboarding activo?" consulta justo el caso de 0 filas.
+            # La forma correcta en el repo es `res.data if res and res.data else None`.
+            return Resp(halladas[0]) if halladas else None
         return Resp(halladas)
 
 

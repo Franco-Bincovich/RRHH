@@ -46,12 +46,12 @@ class InventarioItemsRepo:
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         res = q.maybe_single().execute()
-        return _build([res.data])[0] if res.data else None
+        return _build([res.data])[0] if (res and res.data) else None
 
     def find_empresa_for(self, id: str) -> Optional[str]:
         """Retorna empresa_id del ítem, o None si no existe."""
         res = supabase_admin.table(_T).select("empresa_id").eq("id", id).maybe_single().execute()
-        return str(res.data["empresa_id"]) if res.data else None
+        return str(res.data["empresa_id"]) if (res and res.data) else None
 
     def has_asignaciones(self, id: str) -> bool:
         """True si el ítem tiene al menos una asignación (histórica o activa)."""

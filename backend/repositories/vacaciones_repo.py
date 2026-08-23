@@ -39,7 +39,7 @@ class VacacionesRepo:
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         res = q.maybe_single().execute()
-        return build_responses([res.data])[0] if res.data else None
+        return build_responses([res.data])[0] if (res and res.data) else None
 
     def find_overlapping(
         self, empleado_id: str, fecha_desde: date, fecha_hasta: date,

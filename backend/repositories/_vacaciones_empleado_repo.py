@@ -22,7 +22,7 @@ _EMP = "empleados"
 def empresa_de_empleado(empleado_id: str) -> Optional[str]:
     """Retorna el empresa_id del empleado, o None si no existe."""
     res = supabase_admin.table(_EMP).select("empresa_id").eq("id", empleado_id).maybe_single().execute()
-    return str(res.data["empresa_id"]) if res.data else None
+    return str(res.data["empresa_id"]) if (res and res.data) else None
 
 
 def datos_para_saldo(empleado_id: str, empresa_id: Optional[UUID] = None) -> Optional[dict]:
@@ -40,4 +40,4 @@ def datos_para_saldo(empleado_id: str, empresa_id: Optional[UUID] = None) -> Opt
     if empresa_id:
         q = q.eq("empresa_id", str(empresa_id))
     res = q.maybe_single().execute()
-    return res.data if res.data else None
+    return res.data if (res and res.data) else None

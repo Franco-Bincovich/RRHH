@@ -30,7 +30,7 @@ class CapacitacionRepo:
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
         res = q.maybe_single().execute()
-        return _build([res.data])[0] if res.data else None
+        return _build([res.data])[0] if (res and res.data) else None
 
     def save(self, data: CapacitacionCreate) -> CapacitacionResponse:
         """Inserta una capacitación y retorna el registro enriquecido."""
@@ -88,4 +88,4 @@ class CapacitacionRepo:
         if empresa_id:
             q = q.eq("empresa_id", empresa_id)
         res = q.maybe_single().execute()
-        return str(res.data["empresa_id"]) if res.data else None
+        return str(res.data["empresa_id"]) if (res and res.data) else None
