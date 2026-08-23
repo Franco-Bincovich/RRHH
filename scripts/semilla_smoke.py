@@ -47,13 +47,14 @@ import _semilla_fases_formacion as form  # noqa: E402
 import _semilla_fases_licencias as lic  # noqa: E402
 import _semilla_fases_nomina as nom  # noqa: E402
 import _semilla_fases_personas as per  # noqa: E402
+import _semilla_fases_usuarios as usr  # noqa: E402
 from _semilla_cliente import Cliente, TokenVencido, consola_utf8  # noqa: E402
 from _semilla_credencial import credencial  # noqa: E402
 from _semilla_guarda import ColaboradorReal, exigir_sembrado  # noqa: E402
 from _semilla_padron import DOMINIO  # noqa: E402
 
 BASE_DEFAULT = "https://sofia-backend-pi.vercel.app"
-FASES = ["perfiles", "personas", "recategorizaciones", "offboarding", "eventos",
+FASES = ["perfiles", "personas", "usuarios", "recategorizaciones", "offboarding", "eventos",
          "ausencias", "vacaciones", "nomina", "formacion", "objetivos", "vacantes"]
 
 
@@ -88,7 +89,7 @@ def _contexto(cli: Cliente) -> dict:
     return dict(empresas=empresas, areas=areas, usuarios=usuarios, reales=reales)
 
 
-def _correr(cli: Cliente, ctx: dict, fases: list) -> dict:
+def _correr(cli: Cliente, ctx: dict, fases: list, base: str) -> dict:
     """Corre las fases pedidas en el orden del ciclo de vida. Devuelve lo sembrado por fase."""
     principal = ctx["empresas"][0]["id"]
     personas = {}
@@ -100,6 +101,12 @@ def _correr(cli: Cliente, ctx: dict, fases: list) -> dict:
         personas = _desde_manifiesto(cli, ctx)
     if "perfiles" in fases:
         cat.sembrar_perfiles(cli)
+    if "usuarios" in fases:
+        # Va DESPUÉS de personas y ANTES de offboarding, y las dos mitades importan: necesita a
+        # SMK-10 y a los cuatro a cargo ya creados, y conviene colgar la jerarquía antes de que
+        # las bajas se efectivicen — un `PUT /api/empleados` sobre alguien ya dado de baja es
+        # justo el caso que `docs/SEMILLA-SMOKE.md` §7 dejó anotado como pregunta abierta.
+        usr.sembrar_usuarios(cli, base, personas)
     if "recategorizaciones" in fases:
         per.sembrar_recategorizaciones(cli, personas)
     if "offboarding" in fases:
@@ -161,7 +168,7 @@ def main() -> int:
     interrumpida = ""
     try:
         ctx = _contexto(cli)
-        _correr(cli, ctx, args.solo or FASES)
+        _correr(cli, ctx, args.solo or FASES, args.base)
     except TokenVencido as exc:
         # 🔴 El token dura ~1 hora. Al primer 401 se PARA: seguir mandando requests con una
         # credencial muerta llenaría el reporte de fallos falsos y dejaría fases con ids a medias.

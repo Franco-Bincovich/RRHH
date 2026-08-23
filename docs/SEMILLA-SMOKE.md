@@ -48,8 +48,8 @@ backend\venv\Scripts\python.exe scripts\semilla_smoke.py            # 3. el rest
 | `--pausa SEG` | espera entre escrituras (default 0.15) |
 | `--solo FASE` | una sola fase, repetible |
 
-Fases: `perfiles` · `personas` · `recategorizaciones` · `offboarding` · `eventos` ·
-`ausencias` · `vacaciones` · `nomina` · `formacion` · `objetivos` · `vacantes`.
+Fases: `perfiles` · `personas` · **`usuarios`** · `recategorizaciones` · `offboarding` ·
+`eventos` · `ausencias` · `vacaciones` · `nomina` · `formacion` · `objetivos` · `vacantes`.
 
 ⚠️ **El token dura ~1 hora** y la corrida completa son ~160 requests. Al primer 401 el script
 **para** y dice dónde quedó: seguir con una credencial muerta llenaría el reporte de fallos
@@ -74,6 +74,7 @@ con un token nuevo, las fases ya hechas se saltean solas.
 | 8 | Formación | 3 cursos + ~20 asignaciones | con colaborador vinculado **y** con `nombre_libre` |
 | 9 | Objetivos | 8 (4 anuales, 4 operativos) | los tres estados, con un subobjetivo anidado |
 | 10 | Vacantes y candidatos | +4 y +9 | uno en `oferta`+`activo` → habilita **Contratar** |
+| 11 | **Usuarios de prueba** | 3 (uno por rol) | entrar con `admin_rrhh`, `gerencia_lectura` y `mandos_medios` — ver §9 |
 
 **Lo que a propósito NO hace:** activar el preingreso que entra hoy. Ese botón tiene que
 funcionar **en el recorrido**; apretado por la semilla, la pantalla llega con el caso resuelto y
@@ -136,6 +137,14 @@ backend\venv\Scripts\python.exe scripts\limpiar_semilla.py --si    # ejecuta
 El orden de borrado es el de las FKs y no es intercambiable: `costos_nomina.empleado_id` y
 `offboarding_instancias.empleado_id` son **ON DELETE RESTRICT**, así que con una sola fila viva de
 cualquiera de las dos el DELETE del colaborador falla.
+
+🔴 **Los TRES USUARIOS no se borran: se les REVOCA el acceso, y por la API.** Es el único paso
+del limpiador que no va por base. `DELETE /api/usuarios/{id}` hace las dos mitades —`activo=false`
++ **ban permanente en Supabase Auth** (~100 años)— y deja su evento de auditoría. La fila queda y
+en `/usuarios` se ven como inactivos, que es lo correcto: **un acceso revocado tiene que verse**.
+El porqué completo está en el encabezado de `limpiar_semilla.py` y en `_semilla_baja_usuarios.py`.
+Ese paso pide credencial de `admin_rrhh`; si falta, el resto de la limpieza corre igual y el
+script termina con código 1 diciendo qué accesos quedaron vivos.
 
 ⚠️ **Lo que NO borra por default: los eventos de `auditoria`.** La tabla es inmutable por diseño
 en este repo. `--con-auditoria` los borra también. **Es una decisión, no un default**: dejarlos
@@ -203,4 +212,42 @@ que aparece por accidente del orden de un script es un hallazgo que la próxima 
 | `scripts/_semilla_guarda.py` | la red de seguridad sobre colaboradores reales |
 | `scripts/_semilla_padron.py` · `_semilla_catalogo.py` | los datos inventados (y el índice de qué borrar) |
 | `scripts/_semilla_fases_personas.py` · `_nomina.py` · `_catalogo.py` · `_formacion.py` · `_licencias.py` | las fases |
+| `scripts/_semilla_usuarios.py` | los tres usuarios de prueba y a quién tiene a cargo el mando medio |
+| `scripts/_semilla_fases_usuarios.py` | la fase: alta, cambio de contraseña y `.smoke.env` |
+| `scripts/_semilla_baja_usuarios.py` | la revocación de accesos, por la API (ver §6) |
 | `scripts/limpiar_semilla.py` | el limpiador |
+
+---
+
+## 9. Los tres usuarios de prueba (uno por rol)
+
+**Por qué existen:** `docs/SMOKE-TEST.md` declara como su límite más grande que *"los 4 usuarios
+de producción son admin_rrhh, así que todo el modelo de permisos se ejercita desde el rol más
+amplio"*. Estos tres lo cierran sin tocar ninguna credencial real — que además no se puede: no
+sabemos sus contraseñas y resetearlas es intervenir la cuenta de una persona.
+
+| Usuario | Rol | Para qué |
+|---|---|---|
+| `smk.admin` | `admin_rrhh` | el control contra el que se comparan los otros dos |
+| `smk.gerencia` | `gerencia_lectura` | lee todo, toda escritura le da 403 |
+| `smk.mando` | `mandos_medios` | solo vacaciones y ausencias, y solo de los suyos |
+
+**Las contraseñas las genera el script** (`secrets`, 20 chars) y **no se imprimen nunca**: van a
+`scripts/.smoke.env`, que está en `.gitignore`. 🔴 **Ese archivo es de un solo uso: se borra al
+terminar el smoke** (`Remove-Item scripts\.smoke.env`), y lo dice adentro. Borrarlo NO revoca
+nada — para eso está el limpiador.
+
+**La jerarquía del mando medio.** `smk.mando` está vinculado a **SMK-10 (Verónica Ledesma)** y
+tiene a cargo a **SMK-02, SMK-04, SMK-06 y SMK-08**. Los otros tres con licencias sembradas
+—SMK-05, SMK-07 y SMK-09— quedan afuera **a propósito**: son el control. Medido el 23/8/2026:
+
+| Endpoint | admin | mando |
+|---|---:|---:|
+| `GET /api/ausencias` | 5 | **2** (Carla Zabaleta, Ludmila Sarquís) |
+| `GET /api/vacaciones` | 4 | **2** (las mismas) |
+| `/empleados`, `/costos/nomina`, `/auditoria`, `/vacantes`, `/objetivos` | 200 | **403** |
+
+🔴 **Los cuatro a cargo son de la MISMA empresa que el jefe, y no es una preferencia.** Un
+`manager_id` de otra empresa devuelve **500**: lo rechaza el trigger `trg_emp_empleados`
+(migración 094). Eso **contradice** lo que declara `services/_alcance_mandos.py` — está reportado
+en `docs/DEUDA-TECNICA.md` §1-quater y no se tocó acá.

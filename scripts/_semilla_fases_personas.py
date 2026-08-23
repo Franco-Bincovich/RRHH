@@ -1,5 +1,5 @@
 """
-Fases de la semilla que tocan PERSONAS SEMBRADAS: los 9 colaboradores nuevos, sus
+Fases de la semilla que tocan PERSONAS SEMBRADAS: los 10 colaboradores nuevos, sus
 recategorizaciones y su offboarding (instancias abiertas y bajas efectivizadas).
 
 🔴 TODO LO DE ESTE ARCHIVO APUNTA A GENTE QUE ESTE SCRIPT CREÓ, sin una sola excepción. Las dos
@@ -58,7 +58,7 @@ def sembrar_empleados(cli, empresas: List[dict], areas: Dict[str, list]) -> Dict
     Reparte entre las empresas disponibles alternando, para que el modo consolidado y el filtro
     por empresa tengan las dos algo que mostrar.
     """
-    print("→ colaboradores nuevos (4 preingresos + 5 activos)")
+    print("→ colaboradores nuevos (4 preingresos + 5 activos + el jefe del mando medio)")
     creados: Dict[str, dict] = {}
     for i, p in enumerate(PERSONAS):
         empresa = empresas[i % len(empresas)]

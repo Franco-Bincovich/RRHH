@@ -41,6 +41,91 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-23 · Tres usuarios de prueba para el smoke, uno por rol · commit pendiente
+
+**Qué cambió:** la semilla tiene una fase nueva, **`usuarios`**, que crea `smk.admin`
+(`admin_rrhh`), `smk.gerencia` (`gerencia_lectura`) y `smk.mando` (`mandos_medios`) con el
+dominio de la semilla, genera sus contraseñas con `secrets` y las deja en `scripts/.smoke.env`
+(agregado a `.gitignore` **antes** de escribir nada; verificado con `git check-ignore`). Se sumó
+un colaborador sembrado, **SMK-10**, que es el jefe del mando medio y tiene a cargo a SMK-02,
+04, 06 y 08. **Ninguno de los 31 legajos reales se tocó.**
+
+**Verificado contra producción:** los tres `POST /api/auth/login` dan **200** con su rol
+correcto y `must_change_password=false`, y los tres `GET /api/auth/me` dan **200**. El mando
+medio ve **2 de 5 ausencias y 2 de 4 vacaciones** (las de sus subordinados) y recibe **403** en
+`/empleados`, `/costos/nomina`, `/auditoria`, `/vacantes` y `/objetivos`. `gerencia_lectura` lee
+las cuatro superficies probadas y recibe 403 en las tres escrituras probadas.
+
+**El limpiador los cubre, y de una forma distinta al resto:** el plan en seco los lista
+(`users (baja por API)  3 accesos a revocar de 3 sembrados`) y la ejecución los da de baja con
+**`DELETE /api/usuarios/{id}`**, no con un DELETE de tabla. Es el único paso del limpiador que va
+por la API, y es deliberado: así quedan las dos mitades (`activo=false` + **ban permanente en
+Supabase Auth**) y el evento de auditoría de quién revocó qué. El resultado es una baja blanda —
+la fila queda visible como inactiva, que es lo correcto para un acceso revocado.
+
+**🔴 DOS HALLAZGOS, ninguno arreglado en esta tanda (los dos en `docs/DEUDA-TECNICA.md`):**
+
+- **§1-ter — `must_change_password` no tiene enforcement en el backend.** Un usuario nuevo puede
+  usar la API completa con la contraseña provisoria que le dio el admin, sin cambiarla nunca,
+  porque el único que lo obliga es el `AuthGuard` del navegador (`AuthGuard.tsx:29`). El
+  middleware no lo mira y ningún gate lo consulta. Sumado como caso a probar en
+  `docs/INVENTARIO-SMOKE.md`.
+- **§1-quater — la base prohíbe el jefe de otra empresa que la app declara soportar.** `PUT
+  /api/empleados/{id}` con un `manager_id` de otra sociedad devuelve **500**: lo rechaza el
+  trigger `trg_emp_empleados` (`fn_misma_empresa('area_id','areas','manager_id','empleados')`,
+  migración 094). Contradice la decisión de producto que documenta `services/_alcance_mandos.py`
+  —la **única excepción declarada a la barrera de empresa** del repo—, que existe para un caso de
+  datos que la base no deja crear. Además, una violación de regla de la base no debería salir
+  como `INTERNAL_ERROR`. Se descubrió sembrando: es la primera vez que alguien arma esa jerarquía
+  por la API.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno nuevas, sin
+dependencias, sin endpoints nuevos, sin buckets.
+🔴 **Lo que SÍ hay que saber:** quedan **tres usuarios activos en producción** con contraseña
+conocida hasta que se corra `scripts/limpiar_semilla.py --si`. `scripts/.smoke.env` tiene esas
+contraseñas en claro, está fuera de git y **se borra a mano al terminar el smoke** — borrarlo no
+revoca nada, es el limpiador el que corta el acceso.
+
+## 2026-08-23 · Inventario de lo que hay que probar, generado desde el código · commit pendiente
+
+**Qué cambió:** nace `docs/INVENTARIO-SMOKE.md` — **265 endpoints, 46 pantallas y 139 acciones de
+escritura**, cada fila con si se puede probar automáticamente y, si no, por qué. **No se escribió:
+lo genera `scripts/inventario_smoke.py`** (más 9 satélites `_inv_*.py`) leyendo el código:
+`app.routes` con TODOS los flags encendidos para los endpoints, el gate de permisos sacado del
+closure de `require_permission`, el árbol de `app/` para las pantallas y el grafo de imports del
+front para las acciones. Lo sostiene el barrido **`backend/tests/test_inventario_smoke.py`**
+(nº 37, 13 tests), que da rojo si aparece algo que el documento no lista **y** si el documento
+nombra algo que ya no existe.
+
+**Nada de producción cambió.** La tanda fue read-only sobre el código: los únicos archivos
+tocados fuera de `scripts/` y `docs/` son el test nuevo y los conteos de `CLAUDE.md` que el
+barrido de "CLAUDE.md no miente" exigió al sumarse un archivo de test (226→227 `.py`, 206→207
+`test_*.py`, 4205→**4218** passed, 36→37 barridos).
+
+**Tres hallazgos que la generación produjo y hay que decidir aparte:**
+- 🔴 **`docs/SISTEMA-DE-DISENO.md` §2 tiene DOS decisiones sin construir.** Las *manchas de fondo*
+  (azul al 9%, verde al 7%) no existen: `app/globals.css` pinta `body { @apply bg-background }`,
+  un color plano, y los únicos `radial-gradient` del front son las sombras de scroll horizontal
+  de `utilidades.css`. Y el *vidrio del sidebar* tampoco: `Sidebar.tsx` usa `bg-sidebar` opaco y
+  su scrim mobile es `bg-black/50` sin blur. Las dos son **invisibles para
+  `decisionesVisuales.test.ts`**, que verifica que una clase esté donde la decisión dice y
+  prohíbe el vidrio fuera de donde §2 lo permite: ninguna de sus dos preguntas puede ver una
+  decisión que no se construyó en NINGÚN lado.
+- 🟠 **`DELETE /api/capacitaciones/{id}` no es una baja lógica**, aunque se lea como una: su
+  service hace *"soft-delete si tiene asignaciones; hard-delete si no"*
+  (`capacitacion_service.py:86`). Sobre una formación recién sembrada —que por definición no
+  tiene asignaciones— **borra de verdad**, que es justo el caso del smoke.
+- 🟠 **Un export está escrito distinto de los otros 27**: `GET /api/evaluaciones/resultados/
+  lotes/{lote_id}/evaluados/export`, sin la `-ar` final. No rompe nada, pero cualquier barrido o
+  filtro que agrupe exports por `/exportar` se lo pierde en silencio (a este inventario le pasó
+  antes de corregirlo).
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno, sin
+dependencias, sin endpoints nuevos, sin buckets. `scripts/inventario_smoke.py` corre sin `.env`
+(usa las credenciales de mentira de `backend/tests/`) y no emite un solo request ni toca la base.
+⚠️ Para el pipeline: `inventario_smoke.py --verificar` sale con código 1 si el documento quedó
+atrás, sin escribir nada — sirve como gate.
+
 ## 2026-08-23 · Guarda del egreso en recategorizaciones + el limpiador partido · commit pendiente
 
 **Qué cambió:** `services/_recategorizacion_egreso.py` (nuevo) rechaza con **422

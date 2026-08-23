@@ -507,6 +507,70 @@ Gravedad 🟡 · Esfuerzo M (el inventario de las 66 columnas es el trabajo, no 
 
 ---
 
+## 1-ter. 🔴 `must_change_password` NO TIENE ENFORCEMENT EN EL BACKEND (23/8/2026)
+
+**Es un agujero, no un obstáculo del smoke.** Un usuario nuevo **puede usar la API completa con
+la contraseña provisoria que le dio el admin, sin cambiarla nunca**, porque el único que lo
+obliga es el AuthGuard del navegador.
+
+**Dónde está cada mitad, medido:**
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| lo escribe | `services/_usuario_alta.py:89` | el alta persiste `must_change_password: True` |
+| lo devuelve | `services/auth_service.py:76` | el login lo manda en el payload de sesión |
+| lo baja | `repositories/usuario_repo.py:58` | tras un cambio de contraseña exitoso |
+| **lo aplica** | **`frontend/components/layout/AuthGuard.tsx:29`** | **y NADIE MÁS** |
+
+**Lo que eso significa concretamente:** `middleware/auth.py` no lo mira, `utils/permisos.py` no
+lo mira y ningún gate lo consulta. Con la contraseña temporal —que viaja por el canal que el
+admin haya elegido para pasársela— se puede hacer `POST /api/auth/login` y de ahí **todo lo que
+el rol permita**, indefinidamente. El navegador redirige a `/cambiar-password`; `curl` no.
+
+**Por qué importa más de lo que parece:** la contraseña temporal la genera el sistema y la ve el
+admin que crea al usuario. El diseño asume que deja de servir en cuanto la persona entra. Hoy no
+deja de servir nunca, y **nada registra que se siguió usando**: `ultimo_acceso` se actualiza igual.
+
+⚠️ **NO se arregló en la tanda que lo encontró (23/8/2026), a propósito.** Cerrarlo es una
+decisión de producto antes que de código: hay que definir qué endpoints quedan permitidos con el
+flag prendido (por lo menos `/api/auth/*` y `/api/usuarios/cambiar-password`, o el usuario queda
+encerrado sin poder cambiarla) y qué pasa con las sesiones ya emitidas. Un `if` en el middleware
+sin esa lista deja a todo usuario nuevo sin forma de entrar.
+
+**Está sumado como caso a probar en `docs/INVENTARIO-SMOKE.md`** (sección 5): entrar por API con
+un usuario que tiene `must_change_password=true` y ver que el sistema lo deja hacer todo.
+
+---
+
+## 1-quater. 🟠 LA BASE PROHÍBE EL JEFE DE OTRA EMPRESA QUE LA APP DECLARA SOPORTAR (23/8/2026)
+
+**Medido sembrando, no deducido.** `PUT /api/empleados/{id}` con un `manager_id` de otra empresa
+devuelve **500 `INTERNAL_ERROR`**. Lo rechaza el trigger `trg_emp_empleados`, que corre
+`fn_misma_empresa('area_id','areas','manager_id','empleados')` (migración 094) y levanta
+excepción cuando el padre es de otra sociedad.
+
+🔴 **Contradice la decisión de producto del 2/8/2026 que documenta `services/_alcance_mandos.py`**
+— *"un empleado puede tener superior de OTRA empresa del grupo, y para `mandos_medios` el
+`manager_id` REEMPLAZA al filtro de empresa"*. Ese módulo es **la única excepción declarada a la
+barrera de empresa** de todo el repo, y existe para un caso de datos que **la base no deja
+crear**. Las dos mitades del sistema están escritas contra reglas opuestas.
+
+**Los dos problemas son independientes y hay que decidirlos por separado:**
+
+1. **Cuál de las dos reglas rige.** Si el jefe cruzado es legítimo, el trigger tiene que sacar el
+   par `('manager_id','empleados')` de sus argumentos; si no lo es, `_alcance_mandos.py` está
+   resolviendo un caso imposible y sobra su excepción entera. Hoy conviven y nadie eligió.
+2. **El 500.** Aunque se decida prohibirlo, una violación de regla de negocio de la base no puede
+   salir como `INTERNAL_ERROR`: la pantalla dice "error interno" donde el diseño diría "el
+   superior tiene que ser de la misma empresa". Es la misma familia que el 500 de
+   `maybe_single()` — un 4xx convertido en 5xx por no atrapar la excepción de abajo.
+
+⚠️ **Hoy no se nota** porque `manager_id` se cargó a mano para 11 de 31 y presumiblemente siempre
+dentro de la misma sociedad. Se descubrió al sembrar el usuario `mandos_medios` de prueba, que es
+la primera vez que alguien arma esa jerarquía por la API.
+
+---
+
 ## 2. Fugas y oráculos pendientes
 
 | # | Qué | Dónde | Gravedad | Esf. |

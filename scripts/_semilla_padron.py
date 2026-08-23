@@ -1,5 +1,5 @@
 """
-EL PADRÓN INVENTADO de la semilla de smoke: los 9 colaboradores nuevos y sus recategorizaciones.
+EL PADRÓN INVENTADO de la semilla de smoke: los 10 colaboradores nuevos y sus recategorizaciones.
 Datos puros, sin I/O. Los catálogos (perfiles, agenda, formación, objetivos, vacantes) viven en
 `_semilla_catalogo.py`: el corte es gente por un lado y catálogos por el otro, no una división
 por líneas — los consumen fases distintas del sembrador.
@@ -56,6 +56,15 @@ PERSONAS = [
     dict(grupo="offboarding", legajo="SMK-09", nombre="Nahuel", apellido="Otamendi", dias=-3200,
          seniority="lider", categoria="C6", rol="Supervisor de Producción",
          motivo="jubilacion", ultimo_dia=45),
+    # 🔴 EL JEFE del usuario de prueba `mandos_medios`. `grupo="manager"` no lo consume ninguna
+    # fase del ciclo de vida —no es preingreso, ni baja, ni offboarding—: nace ACTIVO y limpio, y
+    # lo único que le pasa después es que cuatro de los de arriba pasan a colgar de él.
+    # Por qué hizo falta uno nuevo en vez de reusar a alguno de los nueve: los cuatro primeros
+    # son preingresos (quien todavía no entró no puede tener gente a cargo), tres terminan de
+    # baja, y los dos que quedan activos tienen un offboarding abierto — un jefe que se está
+    # yendo se lee mal en el recorrido con Capital Humano. Ver `_semilla_usuarios.py`.
+    dict(grupo="manager", legajo="SMK-10", nombre="Verónica", apellido="Ledesma", dias=-2400,
+         seniority="lider", categoria="C6", rol="Jefa de Administración"),
 ]
 
 # ── Recategorizaciones ────────────────────────────────────────────────────────

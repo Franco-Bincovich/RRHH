@@ -49,3 +49,9 @@ scripts/.semilla-smoke.json
 # que la credencial NO viaje por la línea de comandos, donde el historial de PowerShell la
 # guardaría en texto plano y para siempre. Ver `scripts/_semilla_credencial.py`.
 scripts/.semilla.env
+
+# 🔴 CREDENCIALES DE LOS TRES USUARIOS DE PRUEBA DEL SMOKE (uno por rol), con su contraseña EN
+# CLARO. Lo escribe `scripts/_semilla_fases_usuarios.py` y es lo único del repo que contiene una
+# contraseña utilizable contra producción. Commitearlo publicaría tres accesos al sistema.
+# Es de UN SOLO USO: se borra a mano al terminar el smoke (dice cómo adentro del propio archivo).
+scripts/.smoke.env

@@ -71,6 +71,32 @@ def _empleados_por_clave_natural() -> list:
     return sorted({r["id"] for r in (por_legajo.data or []) + (por_mail.data or [])})
 
 
+def usuarios_sembrados(datos: dict) -> list:
+    """Los tres usuarios de prueba: `[{id, username, email, rol, activo}]`, los de baja incluidos.
+
+    🔴 VAN APARTE DEL PLAN Y NO ENTRAN EN `ORDEN`, y no es un olvido: **no se borran, se dan de
+    baja, y por la API**. El porqué está en el encabezado de `limpiar_semilla.py`. Acá solo se
+    RESUELVE quiénes son; darlos de baja es de `_semilla_baja_usuarios.py`.
+
+    Las dos capas de siempre: el manifiesto (`usuarios`) y la clave natural, que acá es el
+    dominio del mail — el mismo que marca a los colaboradores. `activo` viaja para que el plan en
+    seco pueda decir cuáles YA están dados de baja y cuáles no, que es la única forma de que una
+    segunda corrida del limpiador no parezca que no hizo nada.
+    """
+    anotados = _ids_manifiesto(datos, "usuarios")
+    res = (supabase_admin.table("users")
+           .select("id, username, email, rol, activo")
+           .ilike("email", f"%@{DOMINIO}").execute())
+    por_id = {r["id"]: r for r in (res.data or [])}
+    for uid in anotados:                       # el manifiesto puede tener uno que el mail no
+        if uid not in por_id:
+            fila = (supabase_admin.table("users")
+                    .select("id, username, email, rol, activo").eq("id", uid).execute())
+            for r in (fila.data or []):
+                por_id[r["id"]] = r
+    return sorted(por_id.values(), key=lambda r: r.get("username") or "")
+
+
 def _hijas_de(tabla: str, columna: str, ids: list) -> list:
     if not ids:
         return []
