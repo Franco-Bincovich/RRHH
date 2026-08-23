@@ -20,6 +20,7 @@ from functools import lru_cache
 from typing import Dict, List, NamedTuple, Tuple
 
 from _inv_backend import BACKEND, endpoints
+from _inv_declaraciones import CONTRATO_404_APARTE, SIN_BARRERA
 from _inv_front import FRONT, RAIZ, sin_comentarios
 
 
@@ -32,20 +33,6 @@ class Caso(NamedTuple):
     motivo: str
 
 
-# 🔴 Los 8 endpoints que la Fase 2 marcó NO APLICA para la barrera de empresa, con su razón.
-# Se declaran acá porque la razón es de PRODUCTO y no se lee del código: que `empresas/{id}`
-# no valide empresa no es un descuido, es que la empresa ES el recurso. Citado de CLAUDE.md,
-# sección "Patrón de barrera de empresa". El barrido verifica que las rutas sigan existiendo.
-SIN_BARRERA: Dict[Tuple[str, str], str] = {
-    ("DELETE", "/api/usuarios/{user_id}"): "los usuarios no cuelgan de una empresa",
-    ("GET", "/api/empresas/{id}"): "la empresa ES el recurso",
-    ("PUT", "/api/empresas/{id}"): "la empresa ES el recurso",
-    ("PATCH", "/api/empresas/{id}/activa"): "la empresa ES el recurso",
-    ("POST", "/api/empresas/{id}/logo"): "la empresa ES el recurso",
-    ("GET", "/api/assessment/evaluacion/{token}"): "sin auth: la autorización es el token",
-    ("POST", "/api/assessment/evaluacion/{token}/submit"): "sin auth: la autorización es el token",
-    ("DELETE", "/api/integraciones/{tipo}"): "scopeado por user_id, no por empresa",
-}
 
 
 def _con_id() -> List[Tuple[str, str]]:
@@ -140,7 +127,9 @@ def casos() -> List[Caso]:
              "los 24 `maybe_single()` que devolvían 500 (CLAUDE.md · §.single() vs maybe_single). "
              "`tests/test_maybe_single_guarda.py` lo vigila por AST desde adentro; nada lo "
              "vigila desde afuera",
-             len(_con_id()), "sí", ""),
+             len(_con_id()), "sí",
+             f"{len(CONTRATO_404_APARTE)} salen APARTE del contrato y se declaran abajo: con su "
+             "flag apagado el router no se monta y responden el 404 de plataforma"),
         Caso("id de OTRA EMPRESA",
              "el mismo endpoint con un id real de otra empresa: 404 IDÉNTICO al de 'no existe' "
              "— mismo status, mismo code, mismo mensaje. Nunca 403 ni 500",

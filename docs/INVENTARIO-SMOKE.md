@@ -541,13 +541,44 @@ No salen de recorrer la superficie: son **afirmaciones sobre el comportamiento**
 
 | Familia | Qué probar | Origen | Casos | ¿Automatizable? | Reserva |
 |---|---|---|---:|---|---|
-| **id INEXISTENTE** | todo endpoint que recibe un id, con un uuid que no existe: 404 con el contrato {error,message,code}, nunca 500 | los 24 `maybe_single()` que devolvían 500 (CLAUDE.md · §.single() vs maybe_single). `tests/test_maybe_single_guarda.py` lo vigila por AST desde adentro; nada lo vigila desde afuera | 115 | sí |  |
-| **id de OTRA EMPRESA** | el mismo endpoint con un id real de otra empresa: 404 IDÉNTICO al de 'no existe' — mismo status, mismo code, mismo mensaje. Nunca 403 ni 500 | CLAUDE.md · Patrón de barrera de empresa. Es el contrato que el bug de maybe_single rompía: un recurso ajeno salía 500 | 104 | sí, sólo sobre datos sembrados | necesita dos empresas con datos propios; hoy hay 2 empresas cargadas |
+| **id INEXISTENTE** | todo endpoint que recibe un id, con un uuid que no existe: 404 con el contrato {error,message,code}, nunca 500 | los 24 `maybe_single()` que devolvían 500 (CLAUDE.md · §.single() vs maybe_single). `tests/test_maybe_single_guarda.py` lo vigila por AST desde adentro; nada lo vigila desde afuera | 115 | sí | 4 salen APARTE del contrato y se declaran abajo: con su flag apagado el router no se monta y responden el 404 de plataforma |
+| **id de OTRA EMPRESA** | el mismo endpoint con un id real de otra empresa: 404 IDÉNTICO al de 'no existe' — mismo status, mismo code, mismo mensaje. Nunca 403 ni 500 | CLAUDE.md · Patrón de barrera de empresa. Es el contrato que el bug de maybe_single rompía: un recurso ajeno salía 500 | 97 | sí, sólo sobre datos sembrados | necesita dos empresas con datos propios; hoy hay 2 empresas cargadas |
 | **editar a alguien dado de baja** | PUT /api/empleados/{id} y POST /api/recategorizaciones sobre alguien con estado='baja'. La guarda del egreso rechaza `fecha_efectiva > fecha_egreso` con 422; verificar que lo RETROACTIVO legítimo siga entrando | docs/SEMILLA-SMOKE.md §7 — se descubrió sembrando, con 201 y el legajo pisado | 2 | sí, sólo sobre datos sembrados | escribe sobre un legajo: sólo sobre los SMK-xx |
 | **contraseña provisoria que nunca vence** | entrar por API (POST /api/auth/login + cualquier endpoint) con un usuario que tiene must_change_password=true y ver que el sistema LO DEJA HACER TODO. Hoy pasa: el flag lo aplica solo AuthGuard.tsx:29, en el navegador | medido el 23/8/2026 al sembrar los tres usuarios de prueba del smoke. Anotado en docs/DEUDA-TECNICA.md §1-ter | 1 | sí | los tres usuarios de smk.* ya tienen el flag bajo; para probarlo hay que crear uno nuevo y NO cambiarle la contraseña |
 | **los tres roles, uno por uno** | el mismo recorrido con smk.admin, smk.gerencia y smk.mando: que gerencia_lectura reciba 403 en TODA escritura, que mandos_medios reciba 403 fuera de vacaciones/ausencias, y que dentro de las suyas vea SOLO a sus subordinados | docs/SMOKE-TEST.md declaraba como su límite más grande que los 4 usuarios de producción son admin_rrhh. Las credenciales las genera la fase `usuarios` de scripts/semilla_smoke.py | 3 | sí, sólo sobre datos sembrados | el corte de ownership depende de los manager_id sembrados sobre SMK-xx |
 | **bugs abiertos del recorrido** | clic en el nombre del usuario · los filtros de objetivos salen desalineados · un 404 de la API se muestra como "Algo salió mal" · SENIOR y senior se cuentan como dos categorías en Distribución de plantilla | recorrido manual con Franco (23/8/2026). Es el único origen de este documento que no se deriva del repo | 4 | parcial | el de Distribución es un test de backend; los otros tres son visuales o de interacción y hoy no hay jsdom en la suite del front |
 | **sistema de diseño §2 y §3** | las decisiones punto por punto, incluidas las que el barrido declaró no verificables y las DOS que están sin construir (ver la tabla de abajo) | docs/SISTEMA-DE-DISENO.md §2 y §3 + components/ui/decisionesVisuales.test.ts | 23 | parcial | 15 las verifica el barrido por clase CSS; 6 están declaradas no verificables desde el código; 2 no están construidas |
+
+### Lo que queda FUERA de las dos familias de arriba
+
+**15 endpoints no aplican para la barrera de empresa.** No es que no se hayan probado: es que pedirles el filtro sería un bug. Los seis de `clientes` y `perfiles-puesto` entraron el 23/8/2026 —sus tablas **no tienen columna `empresa_id`**— y el de `horas-cliente` también, por la decisión L9 de que las horas son del CLIENTE.
+
+| Endpoint | Por qué no aplica |
+|---|---|
+| `GET /api/assessment/evaluacion/{token}` | sin auth: la autorización es el token |
+| `POST /api/assessment/evaluacion/{token}/submit` | sin auth: la autorización es el token |
+| `GET /api/clientes/{id}` | catálogo GLOBAL: la tabla no tiene empresa_id |
+| `PUT /api/clientes/{id}` | catálogo GLOBAL: la tabla no tiene empresa_id |
+| `DELETE /api/clientes/{id}` | catálogo GLOBAL: la tabla no tiene empresa_id |
+| `GET /api/empresas/{id}` | la empresa ES el recurso |
+| `PUT /api/empresas/{id}` | la empresa ES el recurso |
+| `PATCH /api/empresas/{id}/activa` | la empresa ES el recurso |
+| `POST /api/empresas/{id}/logo` | la empresa ES el recurso |
+| `DELETE /api/horas-cliente/{hora_id}` | L9: las horas son del CLIENTE, no de la empresa |
+| `DELETE /api/integraciones/{tipo}` | scopeado por user_id, no por empresa |
+| `GET /api/perfiles-puesto/{id}` | catálogo GLOBAL: la tabla no tiene empresa_id |
+| `PUT /api/perfiles-puesto/{id}` | catálogo GLOBAL: la tabla no tiene empresa_id |
+| `DELETE /api/perfiles-puesto/{id}` | catálogo GLOBAL: la tabla no tiene empresa_id |
+| `DELETE /api/usuarios/{user_id}` | los usuarios no cuelgan de una empresa |
+
+**4 endpoints dan 404 pero NO con el contrato `{error, message, code}`**, y es lo correcto: con su flag apagado el router no se monta, así que FastAPI responde el 404 de plataforma (`{"detail": "Not Found"}`) igual que ante cualquier URL inventada — que es justamente lo que CLAUDE.md busca. Se declaran acá porque **la familia «id INEXISTENTE» afirmaba el contrato para sus filas y estas no lo pueden cumplir por diseño.**
+
+| Endpoint | Por qué |
+|---|---|
+| `POST /api/assessment/campanas/{campana_id}/links` | flag apagado: el router no se monta y sale el 404 de plataforma |
+| `GET /api/assessment/evaluacion/{token}` | flag apagado: el router no se monta y sale el 404 de plataforma |
+| `POST /api/assessment/evaluacion/{token}/submit` | flag apagado: el router no se monta y sale el 404 de plataforma |
+| `GET /api/assessment/resultados/{resultado_id}` | flag apagado: el router no se monta y sale el 404 de plataforma |
 
 ### Los cuatro bugs abiertos del recorrido
 

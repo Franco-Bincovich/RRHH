@@ -9,6 +9,7 @@ escrito al lado. Son dos maneras distintas de saber que algo hay que probarlo.
 from typing import Dict, List, Tuple
 
 from _inv_casos import BUGS_DEL_RECORRIDO, Caso, brechas_de_diseno, decisiones_visuales
+from _inv_declaraciones import CONTRATO_404_APARTE, SIN_BARRERA
 from _inv_render import _c
 
 
@@ -25,6 +26,7 @@ def tabla_casos(casos: List[Caso]) -> List[str]:
     for c in casos:
         out.append(f"| **{_c(c.familia)}** | {_c(c.que_probar)} | {_c(c.origen)} | {c.cuantos} | "
                    f"{c.automatizable} | {_c(c.motivo)} |")
+    out += _declaraciones()
     out += ["", "### Los cuatro bugs abiertos del recorrido", "",
             "| Bug | Dónde mirar |", "|---|---|"]
     out += [f"| {_c(q)} | {_c(d)} |" for q, d in BUGS_DEL_RECORRIDO]
@@ -56,3 +58,33 @@ def bloque_sin_caller(sin_caller: Dict[Tuple[str, str], str]) -> List[str]:
     for (m, p), razon in sorted(sin_caller.items(), key=lambda x: x[0][1]):
         out.append(f"| `{m} {p}` | {_c(razon)} |")
     return out + [""]
+
+
+def _declaraciones() -> List[str]:
+    """Las dos listas que NO se descubren recorriendo el código. Ver `_inv_declaraciones.py`.
+
+    🔴 Van dentro de la sección 5 y no en un anexo al final, y es la corrección del 23/8/2026:
+    las dos son RESERVAS de una familia de arriba —qué queda fuera de «id de OTRA EMPRESA» y qué
+    queda fuera del contrato de «id INEXISTENTE»— y una familia que declara 115 casos con una
+    excepción escrita tres pantallas más abajo se lee como 115 casos sin excepción.
+    """
+    out = ["", "### Lo que queda FUERA de las dos familias de arriba", "",
+           f"**{len(SIN_BARRERA)} endpoints no aplican para la barrera de empresa.** No es que "
+           "no se hayan probado: es que pedirles el filtro sería un bug. Los seis de `clientes` "
+           "y `perfiles-puesto` entraron el 23/8/2026 —sus tablas **no tienen columna "
+           "`empresa_id`**— y el de `horas-cliente` también, por la decisión L9 de que las horas "
+           "son del CLIENTE.", "",
+           "| Endpoint | Por qué no aplica |", "|---|---|"]
+    out += [f"| `{m} {p}` | {_c(r)} |" for (m, p), r in sorted(SIN_BARRERA.items(),
+                                                               key=lambda x: x[0][1])]
+    out += ["",
+            f"**{len(CONTRATO_404_APARTE)} endpoints dan 404 pero NO con el contrato "
+            "`{error, message, code}`**, y es lo correcto: con su flag apagado el router no se "
+            "monta, así que FastAPI responde el 404 de plataforma (`{\"detail\": \"Not "
+            "Found\"}`) igual que ante cualquier URL inventada — que es justamente lo que "
+            "CLAUDE.md busca. Se declaran acá porque **la familia «id INEXISTENTE» afirmaba el "
+            "contrato para sus filas y estas no lo pueden cumplir por diseño.**", "",
+            "| Endpoint | Por qué |", "|---|---|"]
+    out += [f"| `{m} {p}` | {_c(r)} |" for (m, p), r in sorted(CONTRATO_404_APARTE.items(),
+                                                              key=lambda x: x[0][1])]
+    return out

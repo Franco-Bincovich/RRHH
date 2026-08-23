@@ -28,16 +28,32 @@ from _semilla_catalogo import (
     CAPACITACIONES, EVENTOS, NOMBRES_LIBRES, OBJETIVOS, PERFILES, VACANTES,
 )
 from _semilla_padron import DOMINIO, PERSONAS
+from _semilla_plan_barrera import plan_barrera
 from integrations.supabase_client import supabase_admin
 
 
 # `offboarding_instancias.empleado_id` son ON DELETE **RESTRICT**: con una sola fila viva de
 # cualquiera de las dos, el DELETE del colaborador falla. `empleado_capacitacion` cuelga de las
 # dos puntas (capacitación y colaborador) y por eso encabeza.
+#
+# 🔴 LAS DOCE TABLAS DE LA FASE `barrera` ESTÁN INTERCALADAS ACÁ Y NO AGRUPADAS AL FINAL, porque
+# el orden que manda es el de las FKs y no el de la fase que las sembró: `horas_proyecto` tiene
+# que caer antes que `proyectos`, `cesiones` antes que `empleados` y `tipos_ausencia` DESPUÉS de
+# `solicitudes_ausencia` (que lo referencia por `tipo_id`). Agruparlas al final rompía tres de
+# esas relaciones a la vez. Qué filas son de la semilla en cada una lo resuelve
+# `_semilla_plan_barrera.py`; acá vive el orden, entero y de una sola lectura.
 ORDEN = [
+    ("horas_proyecto", "horas_proyecto_barrera"),
+    ("proyecto_asignaciones", "asignaciones_proyecto_barrera"),
+    ("inventario_asignaciones", "inventario_asignaciones_barrera"),
+    ("cesiones", "cesiones_barrera"),
+    ("onboarding_progreso", "onboarding_progreso_barrera"),
+    ("onboarding_instancias", "onboarding_instancias_barrera"),
+    ("onboarding_tareas", "onboarding_tareas_barrera"),
     ("empleado_capacitacion", "asignaciones_formacion"),
     ("solicitudes_ausencia", "ausencias"),
     ("solicitudes_vacaciones", "vacaciones"),
+    ("tipos_ausencia", "tipos_ausencia_barrera"),
     ("capacitaciones", "capacitaciones"),
     ("costos_nomina", "costos_nomina"),
     ("recategorizaciones", "recategorizaciones"),
@@ -46,8 +62,16 @@ ORDEN = [
     ("vacantes", "vacantes"),
     ("objetivos", "objetivos"),
     ("eventos_agenda", "eventos_agenda"),
+    ("inventario_items", "inventario_items_barrera"),
+    ("onboarding_templates", "onboarding_templates_barrera"),
+    ("proyectos", "proyectos_barrera"),
+    ("plantillas_mail", "plantillas_barrera"),
+    ("periodos_cerrados", "periodos_barrera"),
     ("perfiles_puesto", "perfiles_puesto"),
     ("empleados", "empleados"),
+    # `areas` va DESPUÉS de `empleados`: `empleados.area_id` la referencia. El área sembrada no
+    # tiene a nadie adentro, pero el orden no se escribe para el caso feliz.
+    ("areas", "areas_barrera"),
 ]
 
 
@@ -147,4 +171,8 @@ def plan_de_borrado(datos: dict) -> dict:
         "perfiles_puesto": sorted(set(_ids_manifiesto(datos, "perfiles_puesto")) |
                                   set(_por_nombre("perfiles_puesto", "nombre", [p["nombre"] for p in PERFILES]))),
         "empleados": empleados,
+        # Las doce de la fase `barrera`. Se resuelven en su propio archivo (ver el encabezado de
+        # `_semilla_plan_barrera.py`) y se le pasan los colaboradores YA resueltos: las cesiones
+        # cuelgan de ellos y las dos mitades del plan no pueden diferir sobre quiénes son.
+        **plan_barrera(datos, _ids_manifiesto, empleados),
     }

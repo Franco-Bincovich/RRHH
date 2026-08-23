@@ -12,6 +12,197 @@
 
 ---
 
+## 0.pre 🔴 LO QUE ENCONTRÓ EL SMOKE DE §5 CONTRA PRODUCCIÓN (23/8/2026)
+
+Las dos familias del punto 5 de `docs/INVENTARIO-SMOKE.md` —**id inexistente** e **id de otra
+empresa**— corridas por HTTP contra `sofia-backend-pi.vercel.app`, con los tres usuarios de
+prueba y sobre datos sembrados. **185 casos, un solo bug de barrera.** El resto de lo que salió
+son correcciones al inventario, no al código: van igual acá porque una lista que pide lo que el
+código prohíbe se "arregla" sola en la dirección equivocada.
+
+### 🔴 1. `PUT /api/onboarding/{instancia_id}/tareas/{tarea_id}/completar` NO TIENE BARRERA DE EMPRESA
+
+**Es un bug, no una decisión.** Con el header de la empresa A y la instancia de la B, responde
+**200 `{"ok": true}` y COMPLETA LA TAREA**. Verificado en las dos direcciones, escribiendo de
+verdad sobre las dos instancias sembradas.
+
+La causa se lee en una pantalla: **el empresa_id no llega ni al router.**
+
+```
+routers/onboarding.py:72   async def completar_tarea(instancia_id, tarea_id, service)  ← sin Request
+services/onboarding_service.py:86   def completar_tarea(self, instancia_id, tarea_id)  ← sin empresa_id
+repositories/…                       .eq("instancia_id").eq("tarea_id")                ← sin empresa
+```
+
+No es el falso positivo que CLAUDE.md advierte («el router pasando `empresa_id` NO prueba
+nada»): acá es más simple y más difícil de ver leyendo el archivo, porque **no hay ningún
+parámetro que seguir**. El hermano de al lado, `iniciar_onboarding`, sí recibe
+`get_empresa_id(request)` y además tiene el orden de gates corregido — o sea que la firma que
+falta destaca sólo si se comparan las dos, que es justo lo que un barrido de "¿pasa empresa_id?"
+no hace cuando la respuesta es "no hay nada que pasar".
+
+**Alcance real, para no venderlo de más:** el gate es `ONBOARDING · WRITE`, o sea sólo
+`admin_rrhh`, y por decisión de producto **todo usuario accede a todas las empresas**. Así que
+no es una fuga de datos entre clientes: es que el header deja de gobernar una escritura, y la
+pantalla puede marcar completa una tarea que no está mirando. Gravedad por eso 🔴 y no crítico.
+
+| Qué | Gravedad · esfuerzo |
+|---|---|
+| Pasar `get_empresa_id(request)` del router al service y de ahí al `WHERE` del repo, con el 404 idéntico. Es exactamente el patrón de `_empleado_scope`. | 🔴 · S |
+
+### 🟠 2. Cuatro endpoints validan el PAYLOAD antes de mirar si el recurso existe
+
+`POST /api/candidatos/{id}/contratar` (422 `VALIDACION_INVALIDA`) · `PUT /api/candidatos/{id}/etapa`
+(400 `ETAPA_INVALIDA`) · `POST /api/inventario/asignaciones/{id}/devolver` (422
+`ESTADO_DEVOLUCION_INVALIDO`) · `PUT /api/objetivos/{id}/estado` (422 `ESTADO_INVALIDO`).
+
+Con un valor de enum válido los cuatro dan 404. **No es un oráculo de enumeración** —el mensaje
+habla del payload y es idéntico exista o no el recurso—, pero **contradice el orden de gates que
+declara CLAUDE.md** («la barrera de empresa va ANTES de cualquier chequeo de estado que responda
+otro código») y **hace que cualquier arnés con un cuerpo genérico dé cuatro rojos falsos**. Es
+deuda de consistencia: hoy cuesta cuatro líneas y el día que alguien escriba el barrido de la
+familia (a) cuesta discutir cuatro excepciones.
+
+| Qué | Gravedad · esfuerzo |
+|---|---|
+| Mover la resolución del recurso arriba de la validación del enum en los cuatro services. | 🟠 · S |
+
+### 🔴 4. VEINTE de 46 pantallas tiran error de hidratación en producción
+
+React **#418** (`Minified React error #418`) con `admin_rrhh` en: `/areas`, `/ausencias`,
+`/capacitaciones`, `/clientes`, `/comunicacion`, `/configuracion`, `/costos`, `/empresas`,
+`/evaluaciones`, `/eventos`, `/inventario`, `/objetivos`, `/onboarding`, `/periodos`,
+`/proximos-ingresos`, `/proyectos`, `/recategorizaciones`, `/reportes`, `/vacaciones`,
+`/vacantes`. Reproducible, no intermitente (dos corridas idénticas).
+
+**La causa es UNA y está verificada contra el HTML que sirve el servidor.** `useCanWrite`
+(`hooks/useCanWrite.ts`) y `components/auth/Can.tsx:15` llaman a `getRol()` —que lee
+`localStorage`— **durante el render**. En el prerender de Next no hay `localStorage`, así que
+`puede(null, …)` da `false` y el control de escritura NO sale en el HTML; en el cliente la sesión
+existe, da `true`, y el árbol servido deja de coincidir. React descarta el HTML del servidor y
+vuelve a dibujar la pantalla entera.
+
+```
+$ curl -s https://www.hrkarstec.site/clientes | grep -o "Nuevo cliente"    → (vacío)
+$ curl -s https://www.hrkarstec.site/clientes | grep -o "Exportar"         → Exportar
+```
+
+**Lo que lo confirma sin leer una línea más: el conjunto de pantallas que rojean es EXACTAMENTE
+el conjunto donde el rol puede escribir.** `gerencia_lectura` —que no escribe en ningún lado—
+rojea en 2 pantallas y `mandos_medios` en sus 2 secciones, `/vacaciones` y `/ausencias`.
+
+| Qué | Gravedad · esfuerzo |
+|---|---|
+| Que `useCanWrite`/`Can` devuelvan `false` en el primer render del cliente y recién después lean la sesión (`useEffect` + bandera de montado), o marcar esas ramas con `suppressHydrationWarning`. Es un solo lugar cada uno. | 🔴 · S |
+
+### 🔴 5. El menú de usuario del sidebar NO ABRE — `Base UI error #31`
+
+Clic en el nombre del usuario: el menú **no se despliega** y la consola tira
+`Error: Base UI error #31`. Reproducido en los **tres** roles.
+
+**Causa:** `components/layout/UserMenu.tsx:51` renderiza `<DropdownMenuLabel>` —que es
+`Menu.GroupLabel` de `@base-ui/react`— **directamente adentro de `<DropdownMenuContent>`, sin un
+`<DropdownMenuGroup>` que lo envuelva**. `GroupLabel` exige el contexto de `Menu.Group`; en
+desarrollo el mensaje es *"MenuGroupRootContext is missing. Menu group parts must be used within
+`<Menu.Group>`"* y en producción queda como el código 31.
+
+**Lo que lo aísla:** es el ÚNICO uso de `DropdownMenuLabel` en todo el front (grep sobre `app/` y
+`components/`), y es el ÚNICO dropdown que falla — `ExportMenu`, con el mismo primitivo pero solo
+`DropdownMenuItem`, abre bien. **Consecuencia real: Configuración, Cambiar contraseña y Cerrar
+sesión son inalcanzables desde el menú.** El logout tiene salida por `/cambiar-password`, pero
+"Cerrar sesión" no tiene otra puerta.
+
+| Qué | Gravedad · esfuerzo |
+|---|---|
+| Envolver el label y los ítems en `<DropdownMenuGroup>`, o pintar el rol con un `<div>` en vez de `DropdownMenuLabel`. | 🔴 · S |
+
+### 🟠 6. Un 404 de la API se muestra como "Algo salió mal"
+
+`/empleados/{uuid-inexistente}` pinta **"Algo salió mal · Ocurrió un error inesperado. Intentá de
+nuevo en unos instantes."** con un botón **Reintentar** que no puede funcionar nunca. El backend
+devolvió un 404 limpio con `code: EMPLEADO_NOT_FOUND`. La pantalla aplana el 404 y el 500 al
+mismo mensaje, y encima ofrece la acción equivocada: reintentar sirve para un 500, no para algo
+que no existe.
+
+| Qué | Gravedad · esfuerzo |
+|---|---|
+| Que `ErrorState` reciba el `code`/`status` y distinga "no existe" (con salida al listado) de "falló" (con Reintentar). El backend ya manda los dos datos. | 🟠 · M |
+
+### 🟠 7. Los filtros de `/objetivos` no siguen el patrón de §3 — medido en pantalla
+
+`app/(dashboard)/objetivos/page.tsx:101-113` mete las acciones (`Exportar`, `Importar`, `Nuevo`)
+**en la misma fila que la barra de filtros**, dentro de un `flex justify-between`, en vez de en
+el `<PageHeader>` como el resto del sistema. Medido a 1440px:
+
+| | `/empleados` (patrón) | `/objetivos` |
+|---|---|---|
+| Acciones | y=32, junto al título | **y=166, al lado de los filtros** |
+| Ancho del panel de filtros | x 301 → 1395 | **x 301 → 774** |
+| Selector de vista (`TipoObjetivoTabs`) | — | x=288, **13px a la izquierda del panel** |
+
+§3 pide "panel propio entre el encabezado y la tabla" y "buscador que ocupa el ancho libre". Acá
+el panel comparte fila, queda a media pantalla y los selectores salen comprimidos.
+
+| Qué | Gravedad · esfuerzo |
+|---|---|
+| Mover `ObjetivosAcciones` al `actions` del `PageHeader` y dejar `FiltersBar` solo en su fila. | 🟠 · S |
+
+### 🟡 8. `EmpresaSelector` pide `/api/empresas` sin chequear permiso
+
+`components/layout/EmpresaSelector.tsx:22` llama a `fetchEmpresas()` en un `useEffect`
+incondicional y se traga el error (`.catch(() => {})`). `mandos_medios` no tiene
+`EMPRESA · read`, así que **se come un 403 en cada carga de cada pantalla** — medido: 9 de sus 10
+pantallas. No se ve (el selector devuelve `null` con la lista vacía), pero es un request que
+sabemos de antemano que va a fallar. Lo mismo, más chico, con `/api/areas/opciones` y
+`/api/proyectos` en `/vacaciones` y `/ausencias`: los filtros de área y proyecto piden datos que
+ese rol no puede leer.
+
+| Qué | Gravedad · esfuerzo |
+|---|---|
+| `useCanRead("empresa")` antes del fetch. El hook ya existe y se usa para esto mismo en la ficha del empleado. | 🟡 · S |
+
+### 🟡 9. La distribución parte `SENIOR` de `senior` — y también `RELACION DE DEPENDENCIA` de `efectivo`
+
+Medido en el KPI vivo del dashboard (23/8/2026), modo consolidado:
+
+```
+distribucion_seniority = [lider 2, SENIOR 1, TRAINEE 1, EXPERT 1, senior 1, Sin especificar 28]
+distribucion_modalidad = [RELACION DE DEPENDENCIA 30, efectivo 3, HONORARIOS 1]
+```
+
+`services/reportes/_reporte_distribucion.py:33` — `clave = _SIN if not crudo or
+str(crudo).upper() in VACIOS else crudo`. El `.upper()` decide sólo si el valor está VACÍO; la
+clave de agrupación es el valor **crudo**. Afecta al reporte R3 y al KPI, y **a los TRES ejes**,
+no sólo a seniority: el bug se reportó por `SENIOR`/`senior` porque es el caso donde las dos
+grafías significan lo mismo con certeza.
+
+⚠️ **No alcanza con `.upper()` en la clave**: `efectivo` y `RELACION DE DEPENDENCIA` no son la
+misma categoría escrita distinto, son valores distintos que conviven porque el import de nómina
+escribe en mayúsculas y el formulario en minúsculas. Normalizar la clave arregla el conteo pero
+deja la etiqueta a elegir — y limpiar la columna es un UPDATE, que es otra decisión (el propio
+archivo ya lo dice para `SIN DATOS`).
+
+| Qué | Gravedad · esfuerzo |
+|---|---|
+| Agrupar por `crudo.upper()` y mostrar una etiqueta canónica; decidir aparte si se normaliza la columna. | 🟡 · S-M |
+
+### ⬜ 10. Correcciones al inventario, ya aplicadas
+
+- **`SIN_BARRERA` pasó de 8 a 15 entradas.** Faltaban los seis de los catálogos GLOBALES
+  (`clientes`, `perfiles-puesto` — sus tablas no tienen `empresa_id`) y el `DELETE
+  /api/horas-cliente/{hora_id}`, que por la decisión L9 se borra por `id` porque **las horas son
+  del cliente, no de la empresa**. El universo de la familia (b) bajó de **104 a 98**.
+- **Los cuatro de assessment se declararon aparte** (`CONTRATO_404_APARTE`): dan el 404 **de
+  plataforma** (`{"detail": "Not Found"}`) porque con el flag apagado el router no se monta. Es
+  lo correcto; lo que estaba mal era que la familia (a) afirmara el contrato
+  `{error, message, code}` para sus 115 filas cuando cuatro no lo pueden cumplir por diseño.
+- **`GET /api/areas` ignora `X-Empresa-Id`** y corta sólo por el Query `empresa_id`. **No es
+  deuda**: `useAreas.ts` le pasa `getEmpresaActivaId()`, así que la pantalla está bien acotada.
+  Queda escrito como trampa para scripts — escribir `empresa` en vez de `empresa_id` no da error
+  (FastAPI descarta el parámetro desconocido) y devuelve las áreas de las dos sociedades.
+
+---
+
 ## 0.bis 🔴 LO QUE DEJÓ ABIERTO LA TANDA DE KPIs DEL DASHBOARD (21/8/2026)
 
 Backend puro: los diez KPIs de `SISTEMA-DE-DISENO.md` §6 quedaron calculados. Lo que sigue

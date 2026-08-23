@@ -41,6 +41,98 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-23 · Recorrido de lectura de las 46 pantallas × 3 roles · commit pendiente
+
+**Qué cambió:** nada de código. Es la corrida del recorrido con Playwright contra
+`https://www.hrkarstec.site` con los tres usuarios de prueba, en modo LECTURA (todo request que
+no fuera GET quedó abortado por el interceptor, y el log confirma que ninguno se disparó). 102
+combinaciones pantalla × rol. **Ninguna pantalla se rompió y ninguna quedó cargando.** Los
+permisos salieron correctos en las tres direcciones: `gerencia_lectura` no ve un solo control de
+escritura en 40 pantallas (ni de encabezado ni por fila), `mandos_medios` ve "Registrar
+vacaciones"/"Registrar ausencia" sólo en sus dos secciones y ve 2 de 5 ausencias y 2 de 4
+vacaciones — el ownership por `manager_id` recorta bien.
+
+**🔴 Dos bugs de front nuevos, ninguno arreglado** (detalle en `docs/DEUDA-TECNICA.md` §0.pre):
+
+1. **20 de 46 pantallas tiran error de hidratación de React (#418) en producción con
+   `admin_rrhh`.** La causa es una sola y está verificada contra el HTML que sirve el servidor:
+   `useCanWrite`/`Can.tsx` llaman a `getRol()` —que lee `localStorage`— DURANTE el render. En el
+   servidor no hay `localStorage`, así que el control de escritura no sale en el HTML; en el
+   cliente sí, y React descarta el árbol y lo vuelve a dibujar. Coincide exactamente con quién
+   puede escribir: `gerencia_lectura` rojea en 2 pantallas y `mandos_medios` en sus 2 secciones.
+2. **El menú de usuario del sidebar NO ABRE** — lanza `Base UI error #31` en los tres roles.
+   `components/layout/UserMenu.tsx:51` pone `<DropdownMenuLabel>` (= `Menu.GroupLabel` de
+   Base UI) directo adentro de `<DropdownMenuContent>`, sin `<DropdownMenuGroup>`. Es el único
+   uso de ese componente en todo el front y el único dropdown que falla: el de exportar, con el
+   mismo primitivo, abre bien.
+
+**Lo demás que salió:** un 404 de la API se muestra como "Algo salió mal · Ocurrió un error
+inesperado" con un botón Reintentar que nunca va a andar · los filtros de `/objetivos` comparten
+fila con las acciones y el panel no ocupa el ancho (medido: termina en x≈774 contra x≈1395 en
+`/empleados`) · `EmpresaSelector` pide `GET /api/empresas` sin chequear permiso, así que
+`mandos_medios` se come un 403 en CADA carga de CADA pantalla · el KPI de distribución parte
+`SENIOR` de `senior` **y también** `RELACION DE DEPENDENCIA` de `efectivo` en modalidad.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno, sin
+dependencias, sin endpoints nuevos, sin escrituras en la base.
+
+---
+
+## 2026-08-23 · La fase `barrera` de la semilla, y el onboarding que escribe en la empresa ajena · commit pendiente
+
+**Qué cambió:** una fase nueva de semilla, **`barrera`**, que siembra **EN LAS DOS EMPRESAS** un
+recurso de cada tipo que antes sólo existía como dato real de Karstec o no existía: área,
+proyecto (con su asignación y una carga de horas), cesión, template de onboarding con su tarea,
+onboarding iniciado, plantilla de mail, ítem de inventario con su asignación, período cerrado y
+tipo de ausencia propio de empresa. Todo por la API y al manifiesto; el limpiador las cubre (12
+tablas nuevas en `ORDEN`, resueltas por `_semilla_plan_barrera.py`). Sin recursos en las dos
+sociedades la barrera de empresa no se puede probar: no hay id ajeno al que apuntar.
+
+**🔴 EL HALLAZGO — `PUT /api/onboarding/{instancia_id}/tareas/{tarea_id}/completar` NO VALIDA
+EMPRESA.** Con el header de una empresa y la instancia de la otra responde **200 y completa la
+tarea**. El `empresa_id` no llega ni al router: `routers/onboarding.py:72` no recibe `Request` y
+`services/onboarding_service.py:86` no tiene el parámetro. Verificado en las dos direcciones,
+escribiendo. **NO está arreglado** — el detalle y el arreglo propuesto están en
+`docs/DEUDA-TECNICA.md` §0.pre. Alcance: el gate es `admin_rrhh`, que por decisión de producto ya
+accede a todas las empresas, así que no es fuga entre clientes; es que el header deja de gobernar
+una escritura.
+
+**Cobertura final de §5:** **109/115** de «id inexistente» y **84/97** de «id de otra empresa»,
+todos con el 404 y el `code` idénticos. Los 19 restantes son multipart, servicio externo, módulo
+apagado por flag, o tablas que siguen en cero (sucesión, vacaciones pendientes, reportes
+generados). El `DELETE` del lote de evaluaciones quedó **declarado sin cubrir a propósito**: 307
+filas por CASCADE no valen para confirmar lo que 84 casos ya confirmaron.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno, sin
+dependencias, sin endpoints nuevos. Los archivos tocados son de `scripts/` y `docs/`, que no se
+despliegan. ⚠️ Las filas sembradas SÍ están en la base de producción y se sacan con
+`python scripts/limpiar_semilla.py --si`.
+
+---
+
+## 2026-08-23 · Smoke §5 corrido contra producción, y los 6 endpoints que el inventario contaba de más · commit pendiente
+
+**Qué cambió:** se corrieron contra `sofia-backend-pi.vercel.app` las dos familias del punto 5
+de `docs/INVENTARIO-SMOKE.md` —**id inexistente** e **id de otra empresa**— y se corrigió
+`scripts/_inv_casos.py`. `SIN_BARRERA` pasó de **8 a 14** entradas: faltaban los seis endpoints
+de los catálogos GLOBALES (`GET`/`PUT`/`DELETE` de `clientes/{id}` y de `perfiles-puesto/{id}`),
+cuyas tablas **no tienen columna `empresa_id`**. El universo de la familia «id de otra empresa»
+baja de **104 a 98**. `docs/INVENTARIO-SMOKE.md` se regeneró y sus 13 tests siguen verdes.
+
+**Resultado de la corrida:** 109 de los 115 casos de «id inexistente» y 57 de los 98 de «id de
+otra empresa» dieron el 404 esperado, con el `code` y el mensaje IDÉNTICOS a los de «no
+existe». **Cero 500 y cero 403.** El contrato que el bug de los 24 `maybe_single()` rompía está
+sano en todo lo alcanzable hoy.
+
+**Escrituras: cero, y está medido.** Los 106 requests no-GET (PUT/POST/DELETE/PATCH contra ids
+inexistentes o ajenos) se corrieron con un conteo de filas de **las 55 tablas antes y después**:
+ninguna cambió, `auditoria` incluida (300 filas en las tres mediciones). Ningún endpoint hace
+upsert donde debería hacer update.
+
+**Impacto en infraestructura:** Ninguno. No hay migraciones, ni variables de entorno, ni
+dependencias, ni endpoints nuevos. El único archivo de producción tocado es
+`scripts/_inv_casos.py`, que no se despliega.
+
 ## 2026-08-23 · Tres usuarios de prueba para el smoke, uno por rol · commit pendiente
 
 **Qué cambió:** la semilla tiene una fase nueva, **`usuarios`**, que crea `smk.admin`

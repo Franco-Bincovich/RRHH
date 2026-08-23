@@ -22,7 +22,8 @@ plano. Ver `_credencial`.
     --base URL      backend a sembrar (default: producción)
     --pausa SEG     espera entre escrituras (default 0.15; ver `_semilla_cliente`)
     --solo FASE     una sola fase, repetible: perfiles · personas · recategorizaciones ·
-                    offboarding · eventos · nomina · formacion · objetivos · vacantes
+                    offboarding · eventos · nomina · formacion · objetivos · vacantes ·
+                    barrera
 
 🔴 RE-EJECUTABLE: correrlo dos veces no duplica nada. Las dos capas que lo garantizan —el
 manifiesto y la clave natural— están explicadas en `_semilla_cliente.Cliente.obtener_o_crear`.
@@ -42,6 +43,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import _semilla_fases_barrera as bar  # noqa: E402
 import _semilla_fases_catalogo as cat  # noqa: E402
 import _semilla_fases_formacion as form  # noqa: E402
 import _semilla_fases_licencias as lic  # noqa: E402
@@ -55,7 +57,7 @@ from _semilla_padron import DOMINIO  # noqa: E402
 
 BASE_DEFAULT = "https://sofia-backend-pi.vercel.app"
 FASES = ["perfiles", "personas", "usuarios", "recategorizaciones", "offboarding", "eventos",
-         "ausencias", "vacaciones", "nomina", "formacion", "objetivos", "vacantes"]
+         "ausencias", "vacaciones", "nomina", "formacion", "objetivos", "vacantes", "barrera"]
 
 
 def _contexto(cli: Cliente) -> dict:
@@ -125,6 +127,11 @@ def _correr(cli: Cliente, ctx: dict, fases: list, base: str) -> dict:
         cat.sembrar_objetivos(cli, principal, ctx["usuarios"])
     if "vacantes" in fases:
         cat.sembrar_vacantes(cli, principal, ctx["areas"][principal])
+    if "barrera" in fases:
+        # 🔴 VA ÚLTIMA Y RECIBE **TODAS** las empresas, no `principal`. Es la única fase que
+        # siembra en las dos: sin un recurso en cada una, la barrera de empresa no se puede
+        # probar (no hay id ajeno al que apuntar). Ver su encabezado.
+        bar.sembrar_barrera(cli, ctx["empresas"])
     return personas
 
 
