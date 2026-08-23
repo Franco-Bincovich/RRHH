@@ -28,10 +28,25 @@ const BASE: KpiCardData = {
 const render = (kpi: Partial<KpiCardData>) =>
   renderToStaticMarkup(<KpiCard kpi={{ ...BASE, ...kpi }} />)
 
-/** La clase del contenedor de la card (el primer <div> del markup). */
+/** El tag del contenedor de la card: `div` sin destino, `a` cuando la card linkea. */
+function tagCard(html: string): string {
+  const m = html.match(/^<([a-z]+)[ >]/)
+  expect(m, "cambió la forma de la card: el markup ya no arranca con el contenedor").not.toBeNull()
+  return m![1]
+}
+
+/**
+ * La clase del contenedor de la card.
+ *
+ * ⚠️ NO ancla el tag ni la posición del atributo, al revés que la versión anterior
+ * (`/^<div class="/`). La card pasó a `<Card>` —que emite `data-slot="card"` antes de la clase— y
+ * ahora es un `<a>` cuando lleva destino: anclar cualquiera de las dos cosas volvería a romper el
+ * helper con el próximo cambio de envoltorio, sin que nada del FONDO —que es lo que este archivo
+ * mira— haya cambiado.
+ */
 function claseCard(html: string): string {
-  const m = html.match(/^<div class="([^"]*)"/)
-  expect(m, "cambió la forma de la card: el markup ya no arranca con el div contenedor").not.toBeNull()
+  const m = html.match(/^<[a-z]+[^>]*\sclass="([^"]*)"/)
+  expect(m, "cambió la forma de la card: el contenedor ya no trae class").not.toBeNull()
   return m![1]
 }
 
@@ -85,6 +100,47 @@ describe("el detalle", () => {
   it("y no deja un <ul> vacío cuando no hay nada que repartir", () => {
     expect(render({ detalle: [] })).not.toContain("<ul")
     expect(render({})).not.toContain("<ul")
+  })
+})
+
+/**
+ * 🔴 EL MOVIMIENTO ES CONSECUENCIA DEL LINK, Y ACÁ SE PRUEBA JUSTO ESO: que las dos cosas viajen
+ * juntas. Un hover en la card sin destino promete un click que no existe; un destino sin hover
+ * esconde el único control de la pantalla. Por eso cada aserción lleva su contraria.
+ *
+ * ⚠️ Se afirma sobre `hover:-translate-y-[3px]`, que es el literal que `card.tsx` pone en
+ * `interactive` y que `decisionesVisuales.test.ts` fija contra la cita de §2. Si esa decisión
+ * cambia de forma, rojea allá (por la fuente) y acá (por el consumidor), que es lo que se quiere.
+ */
+describe("la card lleva a su sección sólo cuando tiene destino", () => {
+  it("con href es un <a> a esa ruta", () => {
+    const html = render({ href: "/empleados?estado=activo" })
+    expect(tagCard(html)).toBe("a")
+    expect(html).toContain('href="/empleados?estado=activo"')
+  })
+
+  it("y ahí SÍ lleva la elevación de §2, que es lo que dice que se puede apretar", () => {
+    expect(claseCard(render({ href: "/vacantes" }))).toContain("hover:-translate-y-[3px]")
+  })
+
+  it("EL CONTRASTE: sin href es un <div> quieto, sin hover y sin href", () => {
+    const html = render({})
+    expect(tagCard(html)).toBe("div")
+    expect(claseCard(html)).not.toContain("hover:-translate-y")
+    expect(html).not.toContain("href=")
+  })
+
+  it("el interior no cambia: lo único que cambia es el envoltorio", () => {
+    const sin = render({})
+    const con = render({ href: "/vacantes" })
+    // Hasta el ÚLTIMO "<": el cierre del envoltorio (`</div>` vs `</a>`) es justamente lo que
+    // sí tiene que diferir, y compararlo haría fallar el test por la única diferencia esperada.
+    const interior = (h: string) => h.slice(h.indexOf("<div class="), h.lastIndexOf("<"))
+    expect(interior(con)).toBe(interior(sin))
+  })
+
+  it("y el fondo semántico sigue siendo el de su tono aunque linkee", () => {
+    expect(claseCard(render({ tono: "atencion", href: "/vacantes" }))).toContain("bg-warning-wash")
   })
 })
 

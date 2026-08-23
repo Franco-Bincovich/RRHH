@@ -13,13 +13,19 @@ import { PageHeader } from "@/components/layout/PageHeader"
 import { useCanRead, useCanWrite } from "@/hooks/useCanWrite"
 
 /**
- * Secciones abiertas al entrar: solo las de identidad, que son las que todo usuario tiene.
+ * 🔴 NINGUNA SECCIÓN ARRANCA DESPLEGADA — cambió el 23/8/2026. Acá había `["password", "perfil"]`
+ * con este argumento: *"con ocho bloques abiertos la pantalla que la mayoría viene a usar
+ * —cambiar la contraseña— queda debajo de varias pantallas de formularios de reglas"*. El
+ * argumento sigue siendo verdadero y por eso lleva a la conclusión contraria: **con las ocho
+ * plegadas, los ocho títulos entran en una sola pantalla y "Contraseña" se encuentra de un
+ * vistazo**, que es exactamente lo que esa nota quería. Dejarlas abiertas empujaba hacia abajo a
+ * las otras seis para ahorrarle un click a dos.
  *
- * Las reglas nacen PLEGADAS a propósito. No es una preferencia estética: con ocho bloques
- * abiertos la pantalla que la mayoría viene a usar —cambiar la contraseña— queda debajo de
- * varias pantallas de formularios de reglas que casi nadie toca.
+ * Se mantiene el array (vacío) y no se saca el `defaultValue`: el día que una sección tenga que
+ * nacer abierta, el lugar donde se decide eso es éste y está a la vista. Un `defaultValue` que
+ * desaparece obliga al próximo a averiguar dónde iba.
  */
-const ABIERTAS = ["password", "perfil"]
+const ABIERTAS: string[] = []
 
 /**
  * /configuracion — la ruta NO está gateada (services/permisos.ts la deja fuera de

@@ -48,7 +48,7 @@ export function useEventos() {
       await setEventoResuelta(evento.id, resuelta)
       void load()
     } catch {
-      toast.error("No se pudo cambiar el estado del evento. Intentá de nuevo.")
+      toast.error("No se pudo cambiar el estado del recordatorio. Intentá de nuevo.")
     }
   }
 

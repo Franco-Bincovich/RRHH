@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { DashboardData, KpisExtra } from "@/services/dashboard"
+import { DESTINOS, SIN_DESTINO } from "./_destinosKpi"
 import { bloquesKpi, formatVariacion, SIN_DATO } from "./_kpisDashboard"
 import type { DatosAdmin } from "./dashboardAdminData"
 
@@ -79,15 +80,23 @@ function datos(extra: Partial<KpisExtra> = {}, resto: Partial<DashboardData> = {
   return { dashboard: soloLoQueMandaElBackend(dashboard, "dashboard"), atencion: [], atencionError: false }
 }
 
-const titulos = (d: DatosAdmin) => bloquesKpi(d).map((b) => b.kpis.map((k) => k.title))
+/**
+ * El rol con el que se arman las cards en casi todo este archivo. Va explícito y no por default:
+ * `bloquesKpi` lo exige justamente para que nadie se olvide de pasarlo y la pantalla quede sin
+ * links en verde. Qué pasa con OTROS roles es de `_destinosKpi.test.ts`, que es donde vive esa
+ * decisión — acá solo hace falta un rol que pueda leer todo, para que los diez títulos salgan.
+ */
+const ADMIN = "admin_rrhh" as const
+
+const titulos = (d: DatosAdmin) => bloquesKpi(d, ADMIN).map((b) => b.kpis.map((k) => k.title))
 const card = (d: DatosAdmin, title: string) =>
-  bloquesKpi(d).flatMap((b) => b.kpis).find((k) => k.title === title)!
+  bloquesKpi(d, ADMIN).flatMap((b) => b.kpis).find((k) => k.title === title)!
 
 // ── (a) los diez, en los dos bloques, en el orden de §6 ───────────────────────────
 
 describe("los diez KPIs de §6", () => {
   it("salen en dos bloques con sus títulos", () => {
-    expect(bloquesKpi(datos()).map((b) => b.titulo)).toEqual(["Operación", "Indicadores del período"])
+    expect(bloquesKpi(datos(), ADMIN).map((b) => b.titulo)).toEqual(["Operación", "Indicadores del período"])
   })
 
   it("son exactamente diez y en el orden del documento", () => {
@@ -179,13 +188,13 @@ describe("el payload es el del backend y nada más", () => {
   it("construir las diez cards no toca ninguna clave inexistente", () => {
     // El proxy revienta ante `kpis.costo_nomina` (el bug real del 21/8) o cualquier otro campo
     // que el front crea que existe. Sin él, esto pasaría con la card mostrando "undefined".
-    expect(() => bloquesKpi(datos())).not.toThrow()
+    expect(() => bloquesKpi(datos(), ADMIN)).not.toThrow()
   })
 
   it("y ninguna card renderiza undefined ni NaN", () => {
     // La contracara: el proxy caza el ACCESO, esto caza el RESULTADO — un campo opcional que
     // llegue vacío y termine formateado como "$NaN" no rompe ninguna lectura.
-    const cards = bloquesKpi(datos()).flatMap((b) => b.kpis)
+    const cards = bloquesKpi(datos(), ADMIN).flatMap((b) => b.kpis)
     expect(cards).toHaveLength(10)   // guarda: sin cards, el forEach no compara nada
     cards.forEach((c) => {
       expect(`${c.title} ${c.value} ${c.description}`).not.toMatch(/undefined|NaN/)
@@ -245,19 +254,53 @@ describe("el fondo semántico", () => {
       atencion: [{ origen: "calculada", tipo: "ingreso_proximo", mensaje: "x", fecha: null,
                    href: null, evento_id: null, creado_por_nombre: null }],
     }
-    const conTono = bloquesKpi(conAviso).flatMap((b) => b.kpis).filter((k) => k.tono !== "neutro")
+    const conTono = bloquesKpi(conAviso, ADMIN).flatMap((b) => b.kpis).filter((k) => k.tono !== "neutro")
     expect(conTono.map((k) => [k.title, k.tono])).toEqual([["Ingresos próximos 30 días", "atencion"]])
   })
 
   it("sin alertas de ingreso, la pantalla entera queda neutra", () => {
     // Si se despegan cinco cards no se despega ninguna. El umbral no es "hay preingresos": es
     // "hay uno dentro de la ventana de aviso", que es el que el backend ya trata como accionable.
-    const todas = bloquesKpi(datos()).flatMap((b) => b.kpis)
+    const todas = bloquesKpi(datos(), ADMIN).flatMap((b) => b.kpis)
     expect(todas.every((k) => k.tono === "neutro")).toBe(true)
   })
 
   it("si /atencion falló, no se inventa la alerta", () => {
     const d = { ...datos(), atencionError: true, atencion: [] }
     expect(card(d, "Ingresos próximos 30 días").tono).toBe("neutro")
+  })
+})
+
+// ── el destino de cada card ───────────────────────────────────────────────────────
+
+/**
+ * 🔴 ESTE BLOQUE EXISTE PORQUE UNA MUTACIÓN SOBREVIVIÓ. `_destinosKpi.test.ts` prueba el MAPA y
+ * el permiso, y `KpiCard.test.tsx` prueba que una card CON href linkee; entre los dos quedaba
+ * suelto el cable: sacarle a `bloquesKpi` el `href: destino(rol, k.title)` dejaba las 33
+ * aserciones de los otros dos archivos en verde y el dashboard entero sin un solo link.
+ * Es el único lugar donde el cable se puede afirmar, porque es el único que tiene el fixture.
+ *
+ * Y por eso se afirma contra `DESTINOS` en vez de contra rutas escritas a mano: una lista propia
+ * acá sería una tercera copia del mapa, que es lo que hace que las copias diverjan.
+ */
+describe("cada card llega con su destino ya resuelto", () => {
+  it("las que tienen destino declarado lo traen, y son las mismas del mapa", () => {
+    const cards = bloquesKpi(datos(), ADMIN).flatMap((b) => b.kpis)
+    const conHref = cards.filter((k) => k.href).map((k) => k.title).sort()
+    expect(conHref).toEqual(Object.keys(DESTINOS).sort())
+    cards.forEach((k) => expect(k.href).toBe(DESTINOS[k.title]))
+  })
+
+  it("EL CONTRASTE: con un rol que no puede leer casi nada, casi ninguna trae href", () => {
+    // Sin este contraste, un `href` cableado como constante pasaría el test de arriba.
+    const cards = bloquesKpi(datos(), "mandos_medios").flatMap((b) => b.kpis)
+    expect(cards.filter((k) => k.href).map((k) => k.title)).toEqual(["Ausencias en curso"])
+  })
+
+  it("y la card declarada SIN destino no trae href con ningún rol", () => {
+    expect(Object.keys(SIN_DESTINO).length).toBeGreaterThanOrEqual(1) // guarda
+    Object.keys(SIN_DESTINO).forEach((t) => {
+      expect(card(datos(), t).href).toBeUndefined()
+    })
   })
 })

@@ -111,7 +111,7 @@ function tabla(props: Partial<Parameters<typeof EventosTabla>[0]> = {}) {
 describe("(c) el vacío con filtros activos mantiene el encabezado y usa los valores reales", () => {
   it("las columnas siguen ahí y el vacío es una fila de la tabla", () => {
     const html = tabla()
-    for (const columna of ["Evento", "Fecha", "Aviso", "Visibilidad", "Estado"]) {
+    for (const columna of ["Recordatorio", "Fecha", "Aviso", "Visibilidad", "Estado"]) {
       expect(html, `desapareció la columna ${columna} del vacío`).toContain(columna)
     }
     expect(html).toContain("<thead")
@@ -119,12 +119,12 @@ describe("(c) el vacío con filtros activos mantiene el encabezado y usa los val
   })
 
   it("la frase arranca impersonal y nombra el filtro puesto", () => {
-    expect(tabla()).toContain("No hay eventos con estado Pendientes y resueltos.")
+    expect(tabla()).toContain("No hay recordatorios con estado Pendientes y resueltos.")
   })
 
   it("sin filtros ofrece crear el primero", () => {
     const html = tabla({ chips: [], accionVacio: <button>Crear el primero</button> })
-    expect(html).toContain("Todavía no hay eventos")
+    expect(html).toContain("Todavía no hay recordatorios")
     expect(html).toContain("Crear el primero")
     expect(html).not.toContain("Limpiar todo")
   })

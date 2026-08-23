@@ -120,7 +120,7 @@ export const NAV_GROUPS: ReadonlyArray<NavGroupDef> = [
     { label: "Procesos", href: "/procesos", icon: Activity, seccion: "procesos" },
     // Agenda de eventos (migración 113): se carga un evento, se lo ve venir en el dashboard y se
     // lo resuelve. Es operación semanal, no un catálogo de Administración.
-    { label: "Eventos", href: "/eventos", icon: CalendarHeart, seccion: "eventos" },
+    { label: "Agenda", href: "/eventos", icon: CalendarHeart, seccion: "eventos" },
   ] },
   { label: "Egresos", icon: LogOut, items: [
     { label: "Offboarding", href: "/offboarding", icon: UserMinus, seccion: "offboarding" },

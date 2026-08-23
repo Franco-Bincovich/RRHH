@@ -41,6 +41,59 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-23 · Los KPIs llevan a su sección, las dos vistas de objetivos, todo plegado, "Agenda" y el .gitattributes · commits pendientes
+
+**Qué cambió:** cinco cosas independientes, una por commit. (1) Las diez cards de KPI del
+dashboard dejaron de ser informativas: nueve llevan ahora a la pantalla de donde sale el dato
+—con el filtro en la URL sólo donde la pantalla lo sabe leer— y por eso recién ahora se ganaron
+la elevación de 3px de §2, que hasta hoy no tenían porque el criterio era "sólo las clickeables".
+El destino se resuelve con el MISMO par que usa el AuthGuard (`seccionDeRuta` + `puede`), así que
+una card cuya sección destino el rol no puede leer no linkea. (2) El filtro por `tipo` de
+objetivos (migración 119, la vista **anual** vs **operativo**) estaba entero en el backend y sin
+nada en el front; se cableó server-side, en el listado y en el export, con las etiquetas servidas
+por `GET /api/objetivos/campos`. De paso los dos wrappers de objetivos dejaron de tomar filtros
+posicionales. (3) Ningún desplegable del producto nace desplegado: se cerraron "Alertas activas"
+y las dos secciones de /configuracion, con dos excepciones declaradas ("Requiere tu atención" y
+el grupo activo del sidebar). (4) La pantalla "Eventos" pasó a llamarse **Agenda** y sus filas
+**recordatorios**, sólo en texto visible. (5) Se agregó `.gitattributes` con `* text=auto`.
+
+**Impacto en infraestructura:** **Ninguno.** Ni migraciones, ni env vars, ni dependencias, ni
+buckets, ni endpoints nuevos, ni jobs, ni cambios de auth, ni de CORS. El detalle de por qué,
+punto por punto, y las tres cosas que sí conviene que el dev de infra sepa:
+
+- **Endpoints:** cero nuevos. `GET /api/objetivos/campos` y todo lo de objetivos ya existían y ya
+  estaban montados; lo único que cambió es que ahora el front los llama. Por eso `/campos` salió
+  de la lista de endpoints declarados sin caller en `tests/test_callers_huerfanos.py` — su
+  disparador estaba escrito ahí desde que se construyó y se cumplió tal cual.
+- **Migraciones:** ninguna nueva. La 119 (`objetivo.tipo`) ya estaba escrita y contemplada; esta
+  tanda sólo construyó el front que la usa. Sigue vigente lo que declara la entrada del 17/8: la
+  última CORRIDA en producción es la 120 y la 121 está escrita sin correr.
+- 🔴 **`.gitattributes` — lo único que le toca mirar a infraestructura, y es una buena noticia.**
+  El repo no tenía ninguno y el árbol está mezclado (medido hoy, excluyendo `node_modules`,
+  `venv` y `.next`: **1077 archivos CRLF, 682 LF y 4 con finales mezclados**). Con el repo
+  clonándose en Windows y en Mac, y el destino siendo un dev en Linux, la línea `* text=auto`
+  fija el criterio en el repo en vez de depender de la config local de cada máquina.
+  **No produce un diff masivo al normalizar**, y la razón se puede verificar sin correr nada: el
+  git de esta máquina tiene `core.autocrlf = true` en la config del sistema
+  (`C:\Program Files\Git\etc\gitconfig`), o sea que el filtro de limpieza ya venía guardando LF
+  en el índice; y `git status` da limpio con 1077 archivos CRLF en el árbol, lo que sólo puede
+  pasar si el contenido del índice YA es LF para todos ellos. `* text=auto` reproduce exactamente
+  ese comportamiento, ahora para todas las máquinas. **Verificación de un comando antes de
+  commitear, por si el índice tuviera alguna sorpresa:** `git add --renormalize .` y mirar
+  `git status --short`; si aparece más que el `.gitattributes`, el commit tiene que ser sólo eso.
+- **Vercel:** nada que tocar. No hay variable nueva ni cambio de build.
+
+**Lo que sí conviene saber, aunque no requiera acción:**
+
+- El front pasó de **1477 tests en 126 archivos** a **1528 en 130**; el backend queda igual en
+  **4198**, porque los cambios de backend fueron cuatro mensajes de error de texto visible.
+- El renombre a "Agenda" **NO tocó** la tabla `eventos_agenda`, las columnas, la ruta `/eventos`,
+  los endpoints `/api/eventos`, `Seccion.EVENTOS`, los `code` de error (`EVENTO_NOT_FOUND`) ni el
+  valor `entidad` de auditoría. Misma regla que el renombre a "Colaboradores": cambiar un
+  `entidad` reescribe el significado de las filas ya guardadas.
+- Hay **dos barridos estructurales nuevos** (34 y 35 en la lista de CLAUDE.md):
+  `barridoAcordeones.test.ts` y `_destinosKpi.test.ts`. Los dos corren con `npm test`.
+
 ## 2026-08-23 · Entrar a /vacantes cerraba la sesión · commits pendientes
 **Qué cambió:** el interceptor de 401 del front y el status con el que el backend reporta un
 token de Google muerto. **Cero migraciones, cero variables de entorno, cero endpoints nuevos,

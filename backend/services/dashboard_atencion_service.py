@@ -84,5 +84,5 @@ class DashboardAtencionService:
                 "su causa (la persona ingresó, el período de prueba terminó).",
                 "ALERTA_NO_RESOLUBLE", 409)
         if body.evento_id is None:
-            raise AppError("Falta el evento a resolver", "EVENTO_REQUERIDO", 422)
+            raise AppError("Falta el recordatorio a resolver", "EVENTO_REQUERIDO", 422)
         return self._eventos.resolver(body.evento_id, True, empresa_id, user_id, rol)

@@ -90,7 +90,7 @@ export function EventoModal({ open, onClose, onSuccess, evento }: Props) {
           lleva `max-w-md`. */}
       <DialogContent patron="formulario">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar evento" : "Nuevo evento"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Editar recordatorio" : "Nuevo recordatorio"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {/* El PRIMER nivel de la validación es la CUENTA, no la lista de campos: el "qué

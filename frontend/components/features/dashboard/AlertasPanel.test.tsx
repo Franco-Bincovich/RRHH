@@ -15,9 +15,14 @@ import type { AlertaDashboard } from "@/services/dashboard"
  *    no existe, y cada test lo afirma explícitamente antes de comparar.
  * 2. Los mensajes de las alertas NO traen dígitos, para que ningún número del contenido pueda
  *    hacer pasar una aserción sobre el contador por casualidad.
- * 3. El acordeón es el real de base-ui, sin mockear: un panel plegado NO renderiza su contenido
- *    (verificado en ConfigSection.test.tsx), así que "arranca abierta" es afirmable — si alguien
- *    le saca el `defaultValue`, los mensajes desaparecen del markup y rojea.
+ * 3. 🔴 El acordeón es el real de base-ui, sin mockear: un panel PLEGADO no renderiza su
+ *    contenido (verificado en ConfigSection.test.tsx). Eso es lo que hace afirmable el estado
+ *    inicial en las dos direcciones — y por eso el test de abajo cambió de signo el 23/8/2026:
+ *    decía "arranca ABIERTA" y buscaba los mensajes EN el markup; ahora afirma que NO están.
+ *    Si alguien le devuelve el `defaultValue`, los mensajes reaparecen y rojea.
+ *    ⚠️ Un test que buscara los mensajes con `not.toContain` a secas sería vacuo: pasaría también
+ *    con el componente entero borrado. Por eso cada aserción de ausencia va acompañada de la
+ *    presencia del ENCABEZADO (título y contador), que plegada sí se renderiza.
  *
  * Sin jsdom no hay click: el eje abierto/cerrado se cubre en ConfigSection.test.tsx, que es
  * donde vive el mecanismo. Acá se verifica el estado INICIAL, que es la decisión de esta card.
@@ -71,13 +76,15 @@ describe("contador de alertas", () => {
 })
 
 describe("card vacía", () => {
-  it("sigue diciendo 'Sin alertas activas.'", () => {
-    // Se ve porque esta card arranca ABIERTA. El mensaje vive en el panel como el resto del
-    // contenido — ya no hay un slot aparte que lo muestre plegada.
-    expect(render(0)).toContain("Sin alertas activas.")
+  it("su mensaje vive en el panel, así que plegada no se ve — y el contador sí", () => {
+    // "Sin alertas activas." es contenido del panel, no un slot aparte del encabezado. Plegada,
+    // la respuesta a "cuántas hay" la da el contador en 0, que es la misma información.
+    const html = render(0)
+    expect(html).not.toContain("Sin alertas activas.")
+    expect(contador(html)).toBe("0")
   })
 
-  it("y se puede plegar igual, como cualquier otra", () => {
+  it("y se puede desplegar igual, como cualquier otra", () => {
     // El chevron está siempre: plegar una card con "Sin alertas activas." no es útil, pero un
     // chevron que a veces está y a veces no obliga al usuario a descubrir la regla.
     expect(render(0)).toContain("group-data-panel-open:rotate-180")
@@ -85,13 +92,28 @@ describe("card vacía", () => {
 })
 
 describe("estado inicial", () => {
-  it("arranca ABIERTA: las alertas son accionables y el punto es que se vean", () => {
+  /**
+   * 🔴 ARRANCA PLEGADA — la regla es "ningún desplegable nace desplegado", con dos excepciones
+   * declaradas en `components/ui/barridoAcordeones.test.ts`, y ésta no es una de ellas. Este
+   * panel es la salud del SISTEMA (tablas vacías, campos del padrón sin cargar): una deuda de
+   * carga que se arrastra hace meses, no algo que se hace esta semana. Lo que sí es de esta
+   * semana —"Requiere tu atención"— es lo único que queda abierto, y que sea el único es lo que
+   * hace que estar abierto vuelva a significar algo.
+   */
+  it("arranca PLEGADA: ninguno de sus mensajes está en el markup", () => {
     const html = render(3)
-    expect(html).toContain("Empleado sin manager asignado ·</p>")
-    expect(html).toContain("Empleado sin manager asignado ···</p>")
+    expect(html).not.toContain("Empleado sin manager asignado ·</p>")
+    expect(html).not.toContain("Empleado sin manager asignado ···</p>")
   })
 
-  it("con alertas sí ofrece plegar", () => {
+  it("EL CONTRASTE: el encabezado SÍ está, o sea que el panel existe y sólo está plegado", () => {
+    // Sin esta aserción, la de arriba pasaría con el componente devolviendo null.
+    const html = render(3)
+    expect(html).toContain("Alertas activas")
+    expect(contador(html)).toBe("3")
+  })
+
+  it("con alertas ofrece desplegar", () => {
     expect(render(3)).toContain("group-data-panel-open:rotate-180")
   })
 })

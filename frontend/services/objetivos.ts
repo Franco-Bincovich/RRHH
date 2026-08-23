@@ -1,5 +1,6 @@
 import type {
-  CambiarEstadoRequest, Objetivo, ObjetivoCreate, ObjetivoListResponse, ObjetivoUpdate, UserItem,
+  CambiarEstadoRequest, Objetivo, ObjetivoCreate, ObjetivoListResponse, ObjetivoUpdate,
+  TipoObjetivo, UserItem,
 } from "@/types/objetivo"
 import { apiFetch, descargarArchivo, type FormatoExport } from "@/services/api"
 
@@ -7,27 +8,69 @@ const BASE = "/api/objetivos"
 
 export type { FormatoExport }
 
-export function exportarObjetivos(formato: FormatoExport, empresaIdOverride?: string, estado?: string, responsableId?: string, prioridad?: string): Promise<void> {
-  const headers = empresaIdOverride ? { "X-Empresa-Id": empresaIdOverride } : undefined
-  return descargarArchivo(`${BASE}/exportar`, formato, "objetivos", headers, { estado, responsable_id: responsableId, prioridad })
+/**
+ * Filtros del listado de objetivos. Los consumen el listado Y el export: es el MISMO tipo a
+ * propósito, para que un filtro nuevo no pueda quedar en uno solo de los dos (invariante 2 del
+ * bloque B). Molde: `VacacionesFiltros` / `AusenciasFiltros`.
+ *
+ * 🔴 ESTO ERA CUATRO POSICIONALES Y POR ESO SE CAMBIÓ. `fetchObjetivos(empresa, estado,
+ * responsable, prioridad)` ya tenía cuatro `string | undefined` en fila, y sumarle `tipo` daba
+ * CINCO: el corrimiento silencioso de argumentos que el bloque B pagó en vacaciones y ausencias
+ * —un argumento corrido no da error, da el conjunto equivocado—. Es exactamente el mismo cambio
+ * que el backend ya hizo del lado suyo con `ObjetivosFiltros` (schemas/objetivo_filtros.py), y
+ * por eso el objeto se llama igual a los dos lados.
+ *
+ * ⚠️ `periodicidad` y `area` EXISTEN en el backend y NO están acá: hoy ninguna pantalla los
+ * ofrece. Agregarlos es sumar un campo y una línea en `queryObjetivos`, y nada más.
+ */
+export interface ObjetivosFiltros {
+  empresaIdOverride?: string
+  estado?: string
+  responsableId?: string
+  prioridad?: string
+  /** A cuál de las dos vistas (anual / operativo) se acota. `undefined` = las dos. */
+  tipo?: TipoObjetivo
+}
+
+/** Traducción filtros → query params. Fuente ÚNICA compartida por listado y export. */
+function queryObjetivos(f: ObjetivosFiltros): Record<string, string | undefined> {
+  return {
+    estado: f.estado,
+    responsable_id: f.responsableId,
+    prioridad: f.prioridad,
+    tipo: f.tipo,
+  }
 }
 
 function override(id?: string): RequestInit {
   return id ? { headers: { "X-Empresa-Id": id } } : {}
 }
 
-export async function fetchObjetivos(
-  empresaIdOverride?: string,
-  estado?: string,
-  responsableId?: string,
-  prioridad?: string,
-): Promise<ObjetivoListResponse> {
+export function exportarObjetivos(formato: FormatoExport, filtros: ObjetivosFiltros = {}): Promise<void> {
+  const headers = filtros.empresaIdOverride ? { "X-Empresa-Id": filtros.empresaIdOverride } : undefined
+  return descargarArchivo(`${BASE}/exportar`, formato, "objetivos", headers, queryObjetivos(filtros))
+}
+
+export async function fetchObjetivos(filtros: ObjetivosFiltros = {}): Promise<ObjetivoListResponse> {
   const params = new URLSearchParams()
-  if (estado)        params.set("estado",         estado)
-  if (responsableId) params.set("responsable_id", responsableId)
-  if (prioridad)     params.set("prioridad",       prioridad)
+  for (const [k, v] of Object.entries(queryObjetivos(filtros))) {
+    if (v) params.set(k, v)
+  }
   const q = params.size ? `?${params}` : ""
-  return apiFetch<ObjetivoListResponse>(`${BASE}${q}`, override(empresaIdOverride))
+  return apiFetch<ObjetivoListResponse>(`${BASE}${q}`, override(filtros.empresaIdOverride))
+}
+
+/**
+ * El vocabulario cerrado de `tipo`, con su etiqueta legible, servido por el backend.
+ *
+ * 🔴 NO SE DERIVA EN EL FRONT. Los dos `value` son el literal del CHECK de la migración 119 y del
+ * `Literal` de Pydantic; una copia local que derive ofrecería en el selector un valor que el
+ * backend rechaza con 422. El endpoint existe para eso — ver el docstring de
+ * `routers/objetivos_catalogos.py::campos_objetivo`. Mismo criterio que provincias y que los
+ * campos de perfil de puesto.
+ */
+export async function fetchCamposObjetivo(): Promise<{ tipos: { value: TipoObjetivo; label: string }[] }> {
+  return apiFetch<{ tipos: { value: TipoObjetivo; label: string }[] }>(`${BASE}/campos`)
 }
 
 export async function createObjetivo(data: ObjetivoCreate): Promise<Objetivo> {

@@ -25,6 +25,7 @@ import {
   exportarInventarioAsignaciones, exportarInventarioItems,
   fetchAsignaciones as fetchInventarioAsignaciones, fetchItems,
 } from "@/services/inventario"
+import { exportarObjetivos, fetchObjetivos } from "@/services/objetivos"
 import { fetchProyectos } from "@/services/proyectos"
 import { exportarVacaciones, fetchVacaciones } from "@/services/vacaciones"
 
@@ -359,5 +360,62 @@ describe("la empresa viaja por header, no por query", () => {
     await exportarCapacitaciones("excel", { empresaIdOverride: "emp-1" })
     expect(queryListado().get("empresa_id")).toBeNull()
     expect(queryExport()).not.toHaveProperty("empresa_id")
+  })
+})
+
+/**
+ * OBJETIVOS — el módulo entró a este archivo recién ahora, y no por olvido: `fetchObjetivos` y
+ * `exportarObjetivos` tomaban los filtros POSICIONALES, cada uno en su propio orden, así que no
+ * había un objeto común que comparar. Al sumarse el filtro de VISTA se los pasó al mismo
+ * `ObjetivosFiltros` + `queryObjetivos` que usa el resto del bloque, y con eso el par se volvió
+ * comparable.
+ *
+ * 🔴 LO QUE ESTOS TESTS IMPIDEN ES EL FILTRO DE VISTA RESUELTO EN EL CLIENTE. `tipo` recorta a
+ * cuál de las dos vistas —anual u operativo— se está mirando. Si ese recorte viviera en el front
+ * sobre `items`, el listado mostraría una vista y el Excel saldría con las dos, sin error y sin
+ * aviso; y encima el contador del encabezado sale de `total`, que el backend calcula sobre el
+ * filtro entero, así que diría un número que no es el de las filas que se ven.
+ */
+describe("objetivos — la vista (anual / operativo) es un filtro server-side más", () => {
+  const filtros = {
+    empresaIdOverride: "emp-1", estado: "haciendo", responsableId: "u-9",
+    prioridad: "alta", tipo: "anual" as const,
+  }
+
+  it("el listado manda la vista en la query", async () => {
+    await fetchObjetivos(filtros)
+    expect(listadoComoObjeto()).toEqual({
+      estado: "haciendo", responsable_id: "u-9", prioridad: "alta", tipo: "anual",
+    })
+  })
+
+  it("el export manda EXACTAMENTE lo mismo", async () => {
+    await exportarObjetivos("excel", filtros)
+    expect(queryExport()).toEqual({
+      estado: "haciendo", responsable_id: "u-9", prioridad: "alta", tipo: "anual",
+    })
+  })
+
+  it("listado y export traducen el mismo objeto a los mismos params", async () => {
+    await fetchObjetivos(filtros)
+    await exportarObjetivos("excel", filtros)
+    expect(queryExport()).toEqual(listadoComoObjeto())
+  })
+
+  it("EL CONTRASTE: sin vista elegida no se manda `tipo`, y llegan las dos", async () => {
+    // "Todas" no es un valor del vocabulario: es la AUSENCIA del filtro. Mandar `tipo=""` haría
+    // que el backend rechace con 422 (es un Literal cerrado), y mandar `tipo=todas` traería cero.
+    await fetchObjetivos({ estado: "haciendo" })
+    expect(listadoComoObjeto()).toEqual({ estado: "haciendo" })
+    await exportarObjetivos("excel", { estado: "haciendo" })
+    expect(queryExport()).toEqual({ estado: "haciendo" })
+  })
+
+  it("la empresa viaja por header en los dos, no por query", async () => {
+    await fetchObjetivos(filtros)
+    await exportarObjetivos("excel", filtros)
+    expect(initListado()?.headers).toEqual({ "X-Empresa-Id": "emp-1" })
+    expect(headersExport()).toEqual({ "X-Empresa-Id": "emp-1" })
+    expect(listadoComoObjeto()).not.toHaveProperty("empresa_id")
   })
 })

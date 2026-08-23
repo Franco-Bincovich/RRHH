@@ -34,7 +34,7 @@ function obj(over: Partial<Objetivo> & { id: string; titulo: string }): Objetivo
     responsable_id: "u-1", responsable_nombre: "Ana Gómez",
     descripcion: null, prioridad: "media", estado: "por_hacer",
     fecha_entrega: null, created_at: "2026-01-05T09:00:00Z", updated_at: "2026-02-01T12:00:00Z",
-    parent_id: null, parent_titulo: null,
+    parent_id: null, parent_titulo: null, tipo: "operativo",
     responsables: [{ id: "u-1", nombre: "Ana Gómez" }], hijos: [],
     ...over,
   }

@@ -58,7 +58,7 @@ def guardar(data: EventoCreate, empresa_id: UUID, dias_aviso: int, created_by: s
                     "dias_aviso": dias_aviso})
     res = supabase_admin.table(_T).insert(payload).execute()
     if not res.data:
-        raise AppError("Error al crear el evento", "DB_ERROR", 500)
+        raise AppError("Error al crear el recordatorio", "DB_ERROR", 500)
     return res.data[0]
 
 

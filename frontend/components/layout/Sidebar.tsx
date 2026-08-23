@@ -23,7 +23,15 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [rol, setRol] = useState<UserRol | null>(null)
   const pathname = usePathname()
-  // Acordeón: un solo grupo abierto. Arranca en el que contiene la ruta activa.
+  /**
+   * Acordeón: un solo grupo abierto. Arranca en el que contiene la ruta activa.
+   *
+   * 🔴 EXCEPCIÓN DECLARADA a "todo desplegable nace plegado" — la razón completa está en
+   * `components/ui/barridoAcordeones.test.ts`, que rojea si alguien la cambia sin sacarla de la
+   * lista. En una línea: esto no es "abierto por defecto", es abierto PORQUE EL USUARIO ESTÁ
+   * ADENTRO, y plegarlo esconde la pantalla en la que está sin recuperar nada (`openGroup` es un
+   * solo valor, así que nunca hay más de un grupo desplegado).
+   */
   const [openGroup, setOpenGroup] = useState<string | null>(() => grupoDeRuta(pathname))
 
   // El rol se lee tras montar (localStorage) para no romper la hidratación SSR.

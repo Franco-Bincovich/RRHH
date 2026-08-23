@@ -33,6 +33,25 @@ import type { AlertaAtencion } from "@/services/dashboard"
  *
  * 🔑 El contador es `alertas.length` y sale de los datos que ya llegaron: acá `length` ES el
  * total, porque este endpoint no pagina ni recorta — devuelve todo lo que está en ventana.
+ *
+ * 🔴 LA ÚNICA SECCIÓN PLEGABLE DEL PRODUCTO QUE ARRANCA DESPLEGADA, Y ESTÁ DECLARADA COMO
+ * EXCEPCIÓN EN `components/ui/barridoAcordeones.test.ts` — el barrido rojea si se le saca el
+ * `defaultValue` sin sacarla de la lista, y también si alguien pone otro `defaultValue` en el
+ * front sin declararlo. Las cuatro razones, en orden:
+ *
+ *   1. **Es lo único de esta pantalla que es una COLA DE TRABAJO, no contexto.** Headcount,
+ *      alertas de sistema, distribución y cumpleaños contestan "cómo venimos". Éste contesta "qué
+ *      tengo que hacer esta semana con gente", y tiene un botón de Resolver: es una bandeja.
+ *      Una bandeja plegada es una bandeja que nadie mira.
+ *   2. **Que sea el ÚNICO abierto es lo que hace que signifique algo.** Cuando todo arranca
+ *      desplegado, estar desplegado no prioriza nada. La regla nueva —todo plegado— es
+ *      justamente lo que convierte a esta excepción en una señal.
+ *   3. **No crece sin techo, al revés que el resto.** Sólo trae lo que está DENTRO de la ventana
+ *      de aviso, y cuando no hay nada muestra su vacío ("Nada pendiente esta semana"). Headcount
+ *      crece con el organigrama y cumpleaños con la plantilla; esos sí había que plegarlos.
+ *   4. **La pantalla ya se apoya en él.** `_kpisDashboard._tonoIngresos` decide con el contenido
+ *      de este panel cuál es la ÚNICA card de KPI que se despega con fondo semántico. Plegarlo
+ *      dejaría una card en ámbar apuntando a un panel cerrado.
  */
 export function AtencionPanel(
   { alertas, canResolver, resolviendo, onResolver }: {

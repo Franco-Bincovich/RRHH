@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import { resolverAtencion } from "@/services/dashboard"
+import type { UserRol } from "@/types/auth"
 import { bloquesKpi } from "./_kpisDashboard"
 import { AlertasPanel } from "./AlertasPanel"
 import { AtencionPanel } from "./AtencionPanel"
@@ -14,7 +15,14 @@ import { DashboardExtras } from "./DashboardExtras"
 import { HeadcountPanel } from "./HeadcountPanel"
 import { KpiCard, KpiSkeleton } from "./KpiCard"
 
-export function DashboardAdmin() {
+/**
+ * `rol` llega por prop y NO de un `useRol()` propio, aunque el hook exista y sea de una línea.
+ * La página ya lo resolvió —no monta este componente hasta que deja de ser `null`—, así que
+ * pedirlo de nuevo acá agregaría un render con `rol === null` en el que `_destinosKpi` es
+ * fail-closed: las diez cards aparecerían SIN link y un instante después con link. Un destino
+ * que parpadea se lee como un bug de la pantalla, no como la resolución del permiso.
+ */
+export function DashboardAdmin({ rol }: { rol: UserRol }) {
   const [datos, setDatos] = useState<DatosAdmin | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -49,7 +57,7 @@ export function DashboardAdmin() {
   }
 
   const data = datos?.dashboard ?? null
-  const bloques = datos ? bloquesKpi(datos) : []
+  const bloques = datos ? bloquesKpi(datos, rol) : []
 
   return (
     <div className="space-y-6">

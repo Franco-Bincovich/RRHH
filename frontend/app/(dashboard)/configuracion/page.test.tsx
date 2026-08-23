@@ -134,7 +134,23 @@ describe("fail-closed", () => {
     expect(render("rol_inventado")).not.toContain("Tipos de ausencia")
   })
 
-  it("pero el cierre de sesión sigue disponible: si no, quedaría encerrado", () => {
-    expect(render("rol_inventado")).toContain("Cerrar sesión")
+  /**
+   * 🔴 CAMBIÓ DE FORMA EL 23/8/2026, no de intención. Este test decía
+   * `toContain("Cerrar sesión")`, y pasaba porque "Mi perfil" nacía DESPLEGADA. Desde que todas
+   * las secciones arrancan plegadas (ver `components/ui/barridoAcordeones.test.ts`), el contenido
+   * del panel no está en el markup inicial y buscar el botón ahí sería afirmar el estado del
+   * acordeón, no la disponibilidad de la salida.
+   *
+   * Lo que importa sigue siendo lo mismo y sigue siendo cierto por DOS vías independientes:
+   *   · las dos secciones de identidad se MONTAN igual con un rol desconocido —sus encabezados
+   *     están, o sea que el logout y el cambio de contraseña están a un click—, y
+   *   · el logout de verdad no depende de esta pantalla: vive también en el `UserMenu` del
+   *     layout, visible en todo momento y sin acordeón de por medio.
+   * O sea que nadie queda encerrado ni aunque esta pantalla entera fallara.
+   */
+  it("pero las secciones de identidad se montan igual: la salida está a un click", () => {
+    const html = render("rol_inventado")
+    expect(html).toContain("Cambiar contraseña")
+    expect(html).toContain("Mi perfil")
   })
 })

@@ -80,7 +80,7 @@ export function EventosTabla({
         <TablaVacia
           colSpan={columnas.length}
           chips={chips}
-          sustantivo="eventos"
+          sustantivo="recordatorios"
           onLimpiarTodo={onLimpiarTodo}
           accion={accionVacio}
         />

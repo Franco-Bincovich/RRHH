@@ -20,5 +20,8 @@ function DashboardLoading() {
 export default function DashboardPage() {
   const rol = useRol()
   if (rol === null) return <DashboardLoading />
-  return rol === "mandos_medios" ? <DashboardMando /> : <DashboardAdmin />
+  // `rol` baja como prop: acá ya dejó de ser `null`, así que el dashboard ejecutivo resuelve el
+  // permiso de cada KPI en su PRIMER render y sus links no parpadean. Ver el bloque de
+  // `DashboardAdmin`.
+  return rol === "mandos_medios" ? <DashboardMando /> : <DashboardAdmin rol={rol} />
 }

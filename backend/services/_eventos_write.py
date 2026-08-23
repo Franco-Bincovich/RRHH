@@ -27,7 +27,10 @@ from utils.errors import AppError
 
 # El literal canónico del 404 del módulo. Uno solo, para que "no existe", "es de otra empresa" y
 # "es privado de otro" no puedan divergir en mensaje, code ni status.
-NO_ENCONTRADO = ("Evento no encontrado", "EVENTO_NOT_FOUND", 404)
+# 🔴 El MENSAJE dice "Recordatorio" (es lo que ve RRHH) y el `code` sigue siendo
+# EVENTO_NOT_FOUND: un code es un identificador de contrato, no texto de pantalla, y el front
+# lo matchea. Misma regla que el renombre a "Colaboradores".
+NO_ENCONTRADO = ("Recordatorio no encontrado", "EVENTO_NOT_FOUND", 404)
 
 
 def _visible_o_404(repo: EventoAgendaRepo, id: UUID, empresa_id: Optional[UUID],
@@ -45,7 +48,7 @@ def _o_error(fila: Optional[EventoResponse]) -> EventoResponse:
     hace un instante y el gate ya pasó, así que es un fallo real de la base y sale como 500 —
     devolver un 404 diría que el recurso no existe cuando acabamos de escribirlo."""
     if not fila:
-        raise AppError("No se pudo leer el evento después de guardarlo", "DB_ERROR", 500)
+        raise AppError("No se pudo leer el recordatorio después de guardarlo", "DB_ERROR", 500)
     return fila
 
 

@@ -13,7 +13,7 @@ export interface EstadoListado {
   setError: (m: string | null) => void
 }
 
-export const ERROR_CARGA = "No se pudieron cargar los eventos."
+export const ERROR_CARGA = "No se pudieron cargar los recordatorios."
 
 /**
  * Carga una página de la agenda y APAGA SIEMPRE el loading: éxito, error de red o respuesta sin

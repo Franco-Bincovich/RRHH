@@ -19,13 +19,28 @@ import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Evento } from "@/types/evento"
 
 /**
- * Agenda de eventos. ORQUESTADOR: abre y cierra diálogos; el estado de DATOS vive en
+ * Agenda. ORQUESTADOR: abre y cierra diálogos; el estado de DATOS vive en
  * `useEventos`, la tabla y el formulario en `components/features/eventos/`, y la carga en
  * `cargarEventos.ts` (testeable sin jsdom).
  *
  * ⚠️ NO HAY EXPORT, por decisión de producto: una agenda de recordatorios no es un dato que se
- * lleve a Excel; lo que se hace con un evento es resolverlo. Por eso tampoco hay `ExportMenu`
- * acá, a diferencia del resto de los listados — y es la única pantalla del bloque sin él.
+ * lleve a Excel; lo que se hace con un recordatorio es resolverlo. Por eso tampoco hay
+ * `ExportMenu` acá, a diferencia del resto de los listados — y es la única pantalla sin él.
+ *
+ * 🔴 "AGENDA" (la pantalla) y "RECORDATORIO" (cada fila) — renombrado el 23/8/2026, antes era
+ * "Eventos". Dos razones, y la segunda es la que cierra la discusión:
+ *   · "Evento" no decía nada: puede ser cualquier cosa. Esto son fechas con días de anticipación.
+ *   · El sistema YA usaba "evento" para OTRA cosa —el `evento` de la AUDITORÍA, columna de
+ *     /auditoria y del export—, o sea dos conceptos con el mismo nombre en el mismo menú. Y ya
+ *     usaba "Agenda" para ÉSTA: es el badge que "Requiere tu atención" le pone a estas filas en
+ *     el dashboard, así que el usuario veía un badge sin pantalla que le correspondiera. Se
+ *     eligió el nombre que el producto ya estaba usando. ("Avisos" habría sido el TERCER
+ *     sinónimo del dashboard, y nombra el efecto y no la cosa: el mismo error que "Eventos".)
+ *
+ * ⚠️ EL RENOMBRE ES SÓLO DE TEXTO VISIBLE. Siguen igual: la ruta `/eventos`, la tabla
+ * `eventos_agenda`, los endpoints `/api/eventos`, `Seccion.EVENTOS`, los `code` de error
+ * (`EVENTO_NOT_FOUND`) y el valor `entidad` de auditoría. Misma regla que el renombre a
+ * "Colaboradores": cambiar un `entidad` reescribe el significado de las filas ya guardadas.
  */
 export default function EventosPage() {
   const canWrite = useCanWrite()
@@ -54,7 +69,7 @@ export default function EventosPage() {
       setABorrar(null)
       void agenda.load()
     } catch {
-      toast.error("No se pudo eliminar el evento. Intentá de nuevo.")
+      toast.error("No se pudo eliminar el recordatorio. Intentá de nuevo.")
     } finally {
       setBorrando(false)
     }
@@ -63,20 +78,20 @@ export default function EventosPage() {
   return (
     <div>
       <PageHeader
-        title="Eventos"
-        /* El conteo sale de `total` (el del filtro entero, del backend). El subtítulo dice qué
-           HACE un evento —aparecer en el dashboard cuando se acerca—, que es lo que antes vivía
-           en el texto del estado vacío y sólo se veía con la agenda en cero. */
+        title="Agenda"
+        /* El conteo sale de `total` (el del filtro entero, del backend). 🔴 EL SUBTÍTULO EXPLICA
+           QUÉ SON, NO REPITE EL NOMBRE: quién los carga, que llevan fecha, y que el aviso sale
+           los días previos que se le indiquen. "Agenda · tu agenda" no le enseña nada a nadie. */
         description={
           agenda.loading && agenda.total === 0
-            ? "Recordatorios que aparecen en el dashboard cuando se acerca la fecha"
-            : `${agenda.total} evento${agenda.total !== 1 ? "s" : ""} · aparecen en el dashboard cuando se acerca la fecha`
+            ? "Fechas que Capital Humano anota a mano para que el dashboard las avise con anticipación"
+            : `${agenda.total} recordatorio${agenda.total !== 1 ? "s" : ""} · cada uno avisa en el dashboard los días previos que le pongas`
         }
         action={
           canWrite ? (
             <Button className="min-h-11" onClick={abrirAlta}>
               <Plus />
-              Nuevo evento
+              Nuevo recordatorio
             </Button>
           ) : undefined
         }
@@ -126,7 +141,7 @@ export default function EventosPage() {
         onClose={() => setABorrar(null)}
         onConfirm={confirmarBaja}
         loading={borrando}
-        title="Eliminar el evento"
+        title="Eliminar el recordatorio"
         description={`"${aBorrar?.nombre}" se borra definitivamente y deja de aparecer en el dashboard. La baja queda registrada en la auditoría.`}
         confirmLabel="Eliminar"
       />

@@ -17,11 +17,19 @@ import { NIVEL_LABEL, NIVEL_VARIANT } from "./dashboardAdminData"
  * (las accionables van arriba) y el destino de cada alerta también — acá NO se arma ninguna
  * ruta. Ver el comentario de `href` en services/dashboard.ts.
  *
- * ARRANCA ABIERTA (`defaultValue`), a diferencia del headcount: una alerta es accionable y el
- * punto de la card es que se vea. Se puede plegar para recuperar la pantalla cuando son muchas,
- * y plegada queda SOLO el título y el contador — ninguna alerta asomando. Un asomo no serviría
- * de nada acá: las alertas vienen ordenadas por accionabilidad, así que las primeras son
- * justamente las que hay que leer enteras, no de reojo.
+ * 🔴 ARRANCA PLEGADA — cambió el 23/8/2026, y acá decía lo contrario. La nota vieja justificaba
+ * el arranque abierto con que "una alerta es accionable y el punto de la card es que se vea", y
+ * el problema es que eso YA NO LA DISTINGUE de nada: hoy el dashboard tiene un panel que es
+ * literalmente la cola de trabajo de la semana ("Requiere tu atención", con su botón de
+ * Resolver), y éste es la otra cosa — la salud del SISTEMA: tablas vacías, campos del padrón sin
+ * cargar. Eso es una deuda de carga que se arrastra hace meses, no algo que se hace hoy. Con los
+ * dos desplegados, el que sí es de esta semana quedaba empujado hacia abajo por el que no.
+ * El contador del encabezado sigue contestando de un vistazo la única pregunta rápida que este
+ * panel responde —cuántas hay—, y el detalle queda a un click.
+ *
+ * Plegada queda SOLO el título y el contador, ninguna alerta asomando. Un asomo no serviría de
+ * nada acá: las alertas vienen ordenadas por accionabilidad, así que las primeras son justamente
+ * las que hay que leer enteras, no de reojo.
  *
  * 🔑 El contador es SIEMPRE `alertas.length`, sin desglose por nivel y sin ocultarse en cero:
  * "0" es una respuesta legítima a "cuántas alertas tengo". Sale de los datos que ya llegan, no
@@ -33,7 +41,7 @@ import { NIVEL_LABEL, NIVEL_VARIANT } from "./dashboardAdminData"
 export function AlertasPanel({ alertas }: { alertas: AlertaDashboard[] }) {
   return (
     // Sin `className="contents"`: ver el comentario del Root en HeadcountPanel.
-    <Accordion.Root defaultValue={["alertas"]}>
+    <Accordion.Root>
       <ConfigSection
         value="alertas"
         title="Alertas activas"

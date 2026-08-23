@@ -129,22 +129,23 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     # services/perfilesPuesto.ts"— y el disparador se cumplió: la pantalla existe, con sus
     # tarjetas, su formulario construido contra /campos y su export. Seis salieron por tener
     # caller; la séptima quedó, con OTRA razón, unas líneas más abajo.
-    # 🔴 OBJETIVOS / catálogos — mismo caso y mismo disparador que perfiles y recategorizaciones:
-    # el backend de la feature 2.4 se construyó primero (sesión 1 de 3) y el front es la sesión 3.
-    # NO es completitud REST: este endpoint tiene un consumidor concreto y planificado —el
-    # selector de vista (anual / operativos) del formulario y de la barra de filtros—, que hoy
-    # todavía no existe.
-    # SALE DE ESTA LISTA cuando `frontend/services/objetivos.ts` tenga su `fetchCamposObjetivo`.
-    # Si para entonces sigue acá, el vocabulario quedó publicado y el front lo hardcodeó igual,
-    # que es exactamente lo que el endpoint existe para evitar.
-    ("GET", "/api/objetivos/campos"):
-        "el vocabulario cerrado de `tipo` (anual/operativo) servido para que el front no lo "
-        "escriba por su cuenta. Backend de la sesión 1 de 3; lo consume el selector de vista "
-        "que se construye en la sesión 3 del front.",
+    # ✅ `/api/objetivos/campos` YA NO ESTÁ ACÁ (23/8/2026). Estaba declarado con DISPARADOR
+    # —"sale cuando `frontend/services/objetivos.ts` tenga su `fetchCamposObjetivo`"— y el
+    # disparador se cumplió al pie de la letra: el selector de vista (`TipoObjetivoTabs`) pide
+    # el vocabulario en vez de escribir `anual | operativo` por su cuenta, que es exactamente
+    # para lo que ese endpoint existía.
+    # 🔴 Y POR ESO EL DE ABAJO CAMBIÓ DE TEXTO: decía "SALE DE ESTA LISTA junto con /campos, con
+    # el mismo disparador", y eso ya no es cierto — /campos salió y éste sigue sin caller. Una
+    # declaración que apunta a un disparador ajeno ya cumplido es una excepción que nadie va a
+    # volver a mirar. Ahora tiene el suyo.
     ("GET", "/api/objetivos/areas-conocidas"):
-        "el pool de áreas ya usadas, para el desplegable del filtro por área. Backend de la "
-        "sesión 2 de 3; lo consume la barra de filtros que se construye en la sesión 3 del "
-        "front. SALE DE ESTA LISTA junto con /campos, con el mismo disparador.",
+        "el pool de áreas ya usadas, para el desplegable del filtro por área. Sigue sin caller: "
+        "la tanda del selector de vista (23/8/2026) construyó el filtro por `tipo`, no el de "
+        "área. SALE DE ESTA LISTA cuando `_camposObjetivos.ts` monte el select de área — hoy ese "
+        "archivo declara en su encabezado por qué NO lo tiene (los objetivos son del equipo de "
+        "Capital Humano, y sus operadores no tienen área), así que el disparador real es que esa "
+        "decisión de producto se revierta. Si eso no pasa, lo que corresponde es BORRAR el "
+        "endpoint, no dejarlo declarado para siempre.",
 
     # ✅ RECATEGORIZACIONES YA NO ESTÁ ACÁ (20/8/2026). Sus 6 rutas estuvieron declaradas con
     # DISPARADOR —"salen cuando exista frontend/app/(dashboard)/recategorizaciones/ con su

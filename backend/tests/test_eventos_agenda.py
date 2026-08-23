@@ -1039,9 +1039,14 @@ class TestPermisos:
 class TestContratoDelModulo:
     def test_el_404_es_uno_solo(self) -> None:
         """Los tres motivos de rechazo (no existe / otra empresa / privado ajeno) salen del
-        MISMO literal. Tres constantes serían tres mensajes que pueden divergir."""
+        MISMO literal. Tres constantes serían tres mensajes que pueden divergir.
+
+        El MENSAJE dice "Recordatorio" desde el renombre del 23/8/2026 (la pantalla se llama
+        Agenda y sus filas, recordatorios) y el `code` sigue siendo EVENTO_NOT_FOUND: un code es
+        un identificador de contrato que el front matchea, no texto de pantalla. Esta aserción
+        cubre las dos mitades a la vez — cambiar cualquiera de ellas la rompe."""
         from services._eventos_write import NO_ENCONTRADO
-        assert NO_ENCONTRADO == ("Evento no encontrado", "EVENTO_NOT_FOUND", 404)
+        assert NO_ENCONTRADO == ("Recordatorio no encontrado", "EVENTO_NOT_FOUND", 404)
 
     def test_la_seccion_no_es_de_mandos_medios(self) -> None:
         from utils.permisos import MANDOS_MEDIOS_SECCIONES, Seccion

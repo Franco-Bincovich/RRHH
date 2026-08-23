@@ -10,7 +10,7 @@ import type { Columna } from "@/components/ui/grillaTabla"
  * promesa que la pantalla no cumple. Está fijado por `EventosTabla.test.tsx`.
  */
 export const COLUMNAS: Columna[] = [
-  { clave: "evento", label: "Evento", ancho: "" },
+  { clave: "evento", label: "Recordatorio", ancho: "" },
   { clave: "fecha", label: "Fecha", ancho: "w-[12%]" },
   { clave: "aviso", label: "Aviso", ancho: "w-[12%]" },
   { clave: "visibilidad", label: "Visibilidad", ancho: "w-[13%]" },

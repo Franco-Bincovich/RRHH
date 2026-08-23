@@ -40,14 +40,14 @@ export function AvisosReglas(p: AvisosReglasProps) {
       value="avisos"
       icon={<BellRing className="size-5 text-primary" />}
       title="Avisos y período de prueba"
-      description="Con cuánta anticipación avisan los eventos de agenda y cuánto dura el período de prueba."
+      description="Con cuánta anticipación avisan los recordatorios de la agenda y cuánto dura el período de prueba."
     >
       {!p.params ? p.fallback : (
         <div className="space-y-4">
           <CampoNumero
             id="dias-aviso-evento"
-            etiqueta="Avisar eventos con"
-            ayuda="Días de anticipación con los que un evento de agenda aparece en el dashboard. Es el valor por defecto: cada evento puede pisarlo con el suyo, y cambiar esto afecta a los eventos NUEVOS, no a los ya cargados."
+            etiqueta="Avisar recordatorios con"
+            ayuda="Días de anticipación con los que un recordatorio de la agenda aparece en el dashboard. Es el valor por defecto: cada recordatorio puede pisarlo con el suyo, y cambiar esto afecta a los NUEVOS, no a los ya cargados."
             editable={p.editable}
             valor={p.params.dias_aviso_evento}
             onChange={(v) => p.onCampo("dias_aviso_evento", v)}

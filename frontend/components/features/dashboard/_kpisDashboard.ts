@@ -5,6 +5,8 @@ import {
 import type { LucideIcon } from "lucide-react"
 
 import type { KpisExtra } from "@/services/dashboard"
+import type { UserRol } from "@/types/auth"
+import { destino } from "./_destinosKpi"
 import type { DatosAdmin } from "./dashboardAdminData"
 
 /**
@@ -37,6 +39,12 @@ export interface KpiCardData {
   tono: TonoKpi
   /** Filas chicas debajo del valor. Hoy solo las usa el headcount por empresa. */
   detalle?: { etiqueta: string; valor: string }[]
+  /**
+   * A dónde lleva la card. `undefined` = no lleva a ningún lado y no se pinta como control.
+   * NO se escribe card por card: lo pone `bloquesKpi` al final, leyendo `_destinosKpi`, que es
+   * donde vive también el chequeo de permiso. Ver el 🔴 de ese archivo.
+   */
+  href?: string
 }
 
 export interface BloqueKpi {
@@ -169,9 +177,21 @@ function bloquePeriodo(datos: DatosAdmin): KpiCardData[] {
   ]
 }
 
-export function bloquesKpi(datos: DatosAdmin): BloqueKpi[] {
+/**
+ * 🔴 `rol` ES OBLIGATORIO Y NO TIENE DEFAULT. Un `rol = null` por defecto sería fail-closed —o
+ * sea, correcto— pero dejaría que un caller se olvide de pasarlo y la pantalla quede SIN NINGÚN
+ * link, en verde y sin que nada rojee: el verde vacuo que este repo ya pagó cinco veces. Que
+ * falte es un error de compilación. La página lo tiene resuelto antes de montar el dashboard
+ * (`useRol` en `app/(dashboard)/dashboard/page.tsx`), así que nunca es `null` acá.
+ *
+ * El destino se cuelga al FINAL y en un solo lugar, no dentro de cada literal de card: las diez
+ * cards siguen diciendo solo qué muestran, y a dónde llevan lo decide `_destinosKpi`.
+ */
+export function bloquesKpi(datos: DatosAdmin, rol: UserRol | null): BloqueKpi[] {
+  const conDestino = (kpis: KpiCardData[]) =>
+    kpis.map((k) => ({ ...k, href: destino(rol, k.title) }))
   return [
-    { titulo: "Operación", kpis: bloqueOperacion(datos) },
-    { titulo: "Indicadores del período", kpis: bloquePeriodo(datos) },
+    { titulo: "Operación", kpis: conDestino(bloqueOperacion(datos)) },
+    { titulo: "Indicadores del período", kpis: conDestino(bloquePeriodo(datos)) },
   ]
 }

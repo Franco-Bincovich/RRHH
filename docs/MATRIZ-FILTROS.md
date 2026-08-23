@@ -122,9 +122,37 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 | estado | `objetivo_repo.py:48` | ✅ | `objetivos.py:30` | `_camposObjetivos.ts` | ✅ `:50` |
 | responsable | `objetivo_repo.py:49` | ✅ | `objetivos.py:31` | `_camposObjetivos.ts` (avanzado) | ✅ |
 | prioridad | `objetivo_repo.py:50` | ✅ | `objetivos.py:32` | `_camposObjetivos.ts` | ✅ |
+| **tipo (la vista)** | `_objetivo_filtros.py` | ✅ | `objetivos.py:47` | **`TipoObjetivoTabs.tsx`** | ✅ |
+| periodicidad | `_objetivo_filtros.py` | ✅ | `objetivos.py:47` | ❌ **sin UI** | ✅ (inalcanzable) |
+| area | `_objetivo_area.py` | ✅ | `objetivos.py:47` | ❌ **sin UI** | ✅ (inalcanzable) |
 
 > Módulo **completo y coherente en las 4 capas**. Es el mejor ejemplo del repo junto con auditoría.
 > `responsable_id` apunta a `users`, no a `empleados` (limitación de modelo ya documentada).
+>
+> 🟢 **EL FILTRO POR VISTA SE CABLEÓ EL 23/8/2026** (migración 119). `tipo` acota a una de las dos
+> vistas —**anual**, la que va al directorio, u **operativo**— y no vive en `<FiltersBar>` sino en
+> unas solapas propias arriba de todo (`TipoObjetivoTabs`): no es un recorte más sobre el mismo
+> conjunto, es a cuál de los dos conjuntos se está mirando. El default es **"Todas"**, que no es un
+> valor del vocabulario sino la AUSENCIA del filtro — arrancar en una de las dos escondería
+> objetivos que hasta ese día se veían.
+> 🔴 **El recorte es server-side, como todo el bloque.** Hacerlo en el cliente mentía dos veces acá:
+> el contador del encabezado sale de `total` (que el backend calcula sobre el filtro entero) y el
+> EXPORT lo arma el backend, así que el Excel habría salido con las dos vistas mientras la pantalla
+> muestra una. Y este listado devuelve un ÁRBOL: recortar en el cliente deja hijos sin padre.
+>
+> ⚠️ **`periodicidad` y `area` siguen SIN UI** y por eso el export los acepta pero nadie puede
+> mandarlos: son filtros publicados e inalcanzables. `area` es una decisión de producto declarada
+> (los objetivos son del equipo de Capital Humano y sus operadores no tienen área — ver el
+> encabezado de `_camposObjetivos.ts`); `periodicidad` es texto libre y todavía no se definió cómo
+> se ofrece. Los dos están anotados en `services/objetivos.ts::ObjetivosFiltros`: agregarlos es un
+> campo en el objeto y una línea en `queryObjetivos`.
+>
+> 🔑 **Y el módulo dejó de tener filtros POSICIONALES**: `fetchObjetivos`/`exportarObjetivos`
+> tomaban cuatro `string | undefined` en fila cada uno, así que `tipo` habría sido el quinto — el
+> corrimiento silencioso que el bloque B ya pagó en vacaciones y ausencias. Ahora los dos reciben
+> un `ObjetivosFiltros` y lo traducen con la MISMA `queryObjetivos`, igual que el backend hizo del
+> lado suyo con `schemas/objetivo_filtros.py`. Recién con eso el módulo pudo entrar a
+> `services/filtros-export.test.ts`, del que estaba afuera justamente por los posicionales.
 >
 > ⚠️ **`ObjetivosFiltros.tsx` YA NO EXISTE** (21/8/2026): era una barra propia de cuatro `<Select>`
 > sueltos y su propio encabezado decía que migrarla a `FiltersBar` "es un rediseño del filtro, no
