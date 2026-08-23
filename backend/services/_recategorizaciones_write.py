@@ -29,6 +29,7 @@ from services._audit_payloads_recategorizaciones import (
     payload_alta_recategorizacion, payload_update_recategorizacion,
 )
 from services._empleado_scope import ensure_empleado_de_empresa
+from services._recategorizacion_egreso import egreso_de, ensure_efectiva_antes_del_egreso
 from services._recategorizacion_anteriores import (
     empresa_de, es_la_mas_reciente, patch_empleado, resolver_anteriores,
 )
@@ -59,11 +60,13 @@ def crear(repo, empleados, empleado_service, audit, data: RecategorizacionCreate
 
     Raises:
         AppError: EMPLEADO_NOT_FOUND (404) si el empleado no existe o es de otra empresa ·
-            RECATEGORIZACION_SIN_CAMBIOS (422) si no trae ningún valor nuevo.
+            RECATEGORIZACION_SIN_CAMBIOS (422) si no trae ningún valor nuevo ·
+            RECATEGORIZACION_POSTERIOR_AL_EGRESO (422) si es efectiva después de la baja.
     """
     ensure_algo_cambia(data.rol_nuevo, data.seniority_nueva, data.categoria_nueva)
     empleado = ensure_empleado_de_empresa(empleados, data.empleado_id, empresa_id)
     fecha: date = data.fecha_efectiva or date.today()
+    ensure_efectiva_antes_del_egreso(fecha, egreso_de(empleado))
     eid = str(data.empleado_id)
     anteriores = resolver_anteriores(repo.find_previa(eid, fecha), empleado)
     fila = repo.save(data, empresa_de(empleado), anteriores, fecha, usuario_id)
@@ -94,6 +97,10 @@ def editar(repo, empleados, empleado_service, audit, id: UUID, data: Recategoriz
                        data.categoria_nueva or prior.categoria_nueva)
     empleado = ensure_empleado_de_empresa(empleados, prior.empleado_id, empresa_id)
     fecha: date = data.fecha_efectiva or prior.fecha_efectiva
+    # También en el PUT, y no solo en el alta: mover `fecha_efectiva` a después del egreso por
+    # edición dejaría exactamente la fila que el alta rechaza. Va después de la barrera de
+    # empresa (el orden de los gates: nunca delatar la existencia de un recurso ajeno).
+    ensure_efectiva_antes_del_egreso(fecha, egreso_de(empleado))
     eid = str(prior.empleado_id)
     anteriores = resolver_anteriores(repo.find_previa(eid, fecha, str(id)), empleado)
     nuevo = repo.update(str(id), data, anteriores)

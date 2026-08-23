@@ -41,6 +41,63 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-23 · Guarda del egreso en recategorizaciones + el limpiador partido · commit pendiente
+
+**Qué cambió:** `services/_recategorizacion_egreso.py` (nuevo) rechaza con **422
+`RECATEGORIZACION_POSTERIOR_AL_EGRESO`** toda recategorización cuya `fecha_efectiva` sea
+posterior a `empleados.fecha_egreso`. Va en el alta **y en el PUT**. Sin la guarda, el sistema
+aceptaba una recategorización efectiva trece meses después de la baja y **le reescribía el puesto
+al legajo** de alguien que ya no trabaja — y esa fila contaba en el KPI del mes.
+
+🔴 **Lo que se rechaza es lo IMPOSIBLE, no lo retroactivo.** NO es "no se puede recategorizar a
+alguien de baja": cargar tarde un cambio que sí ocurrió mientras la persona trabajaba es legítimo
+y frecuente. `fecha_egreso` NULL pasa siempre. Es una comparación de fechas, no un chequeo de
+estado.
+
+También se partió `scripts/limpiar_semilla.py` (201/200) en dos por el criterio del repo, no por
+líneas: **`_semilla_plan_borrado.py` decide QUÉ se borra** —la mitad delicada, la que define si
+el limpiador deja basura o toca algo real— y el limpiador quedó con el CLI y el DELETE por lotes.
+
+**Impacto en infraestructura:** **Ninguno.** Ni migraciones, ni env vars, ni endpoints nuevos, ni
+dependencias. Dos cosas para saber:
+
+- **Comportamiento que cambia en un endpoint publicado:** `POST /api/recategorizaciones` y
+  `PUT /api/recategorizaciones/{id}` pueden devolver **422** donde antes devolvían 201. Solo en
+  el caso imposible; ninguna fila válida de hoy queda fuera.
+- **Hubo reparación de datos en producción**, a mano y acotada a filas sembradas: se borró la
+  recategorización que la semilla había cargado sobre SMK-07 (dado de baja) y se restauró su
+  legajo con los `*_anterior` que la propia fila registraba. La semilla la mudó a SMK-08, que
+  está activo. **No se tocó ninguna fila real.**
+
+**Suite:** 4205 passed. Mutation check de la guarda: 4 mutaciones, 4 muertas.
+
+---
+
+## 2026-08-23 · Fase extra de la semilla: ausencias, vacaciones y la recategorización del mes · commit pendiente
+
+**Qué cambió:** la primera tanda de la semilla dejó tres pantallas de uso diario en cero.
+`scripts/_semilla_fases_licencias.py` agrega **5 ausencias** (2 en curso hoy, para que el KPI de
+ausencias vigentes y el % de ausentismo del mes dejen de ser 0) y **4 licencias** (tomada,
+planificada, cancelada y un día franco), más una **sexta recategorización con fecha de este mes**
+para que la card "Recategorizaciones del mes" tenga qué contar. El limpiador cubre las dos tablas
+nuevas (`solicitudes_ausencia`, `solicitudes_vacaciones`), por `empleado_id` de los sembrados.
+
+**Los tipos de ausencia se LEEN de `GET /api/ausencias/tipos`, no se hardcodean:** el catálogo es
+global, RRHH lo edita desde la UI y **"Injustificada" está desactivada a propósito** — una lista
+escrita a mano la incluiría y el alta fallaría contra el CHECK.
+
+**Impacto en infraestructura:** **Ninguno.** Ni migraciones, ni env vars, ni endpoints nuevos.
+
+**🔴 HALLAZGO DE PRODUCTO, no de infraestructura:** se puede registrar una recategorización sobre
+alguien **dado de baja**, con `fecha_efectiva` posterior al egreso, y **le pisa el legajo**
+(rol/seniority/categoría). Ocurrió sobre SMK-07: baja el 2025-07-23, recategorización efectiva el
+2026-08-19, respuesta 201 y `roles` reescrito. `_recategorizaciones_write.crear` sólo tiene la
+guarda de empresa; `aplicar_al_empleado` mira si la fila es la más reciente de esa persona, no si
+la persona sigue en la empresa. Queda anotado en `docs/SEMILLA-SMOKE.md` §7 con las tres opciones
+de producto — no se tocó nada, es una decisión.
+
+---
+
 ## 2026-08-23 · 🔴 `maybe_single()` devolvía None pelado: 24 call sites en 500, offboarding inutilizable · commit pendiente
 
 **Qué cambió:** al sembrar datos de prueba por la API apareció que **`POST /api/offboarding`

@@ -846,3 +846,84 @@ class TestExport:
         for col in ("Rol anterior", "Rol nuevo", "Seniority anterior", "Seniority nueva",
                     "Categor", "Colaborador"):
             assert col in cab, f"falta la columna {col}"
+
+
+# ── 12. La guarda del egreso ──────────────────────────────────────────────────
+
+
+def _dar_de_baja(almacen: Almacen, fecha_egreso: str) -> None:
+    """Deja al colaborador del padrón en `baja` con su fecha de egreso.
+
+    Escribe sobre la MISMA fila que lee el service, no sobre una copia: el efecto de la guarda
+    se mide contra el estado real del almacén.
+    """
+    fila = _fila_empleado(almacen)
+    fila["estado"] = "baja"
+    fila["fecha_egreso"] = fecha_egreso
+
+
+class TestGuardaDelEgreso:
+    """🔴 Una recategorización no puede ser EFECTIVA después del egreso.
+
+    Lo que se rechaza es lo IMPOSIBLE, no lo retroactivo: cargar tarde un cambio que ocurrió
+    mientras la persona trabajaba es legítimo y frecuente. Por eso la comparación es contra
+    `fecha_efectiva` y NO contra `estado`. Ver `services/_recategorizacion_egreso.py`.
+
+    Qué tendría que ser distinto en el fake para que estos tests puedan fallar: la fila de
+    `empleados` del almacén tiene que llevar `fecha_egreso` de verdad y el service tiene que
+    leerla de ahí — por eso `_dar_de_baja` escribe sobre la fila que el repo consulta, y por eso
+    el caso de control (baja + fecha ANTERIOR) tiene que seguir entrando. Sin ese control, una
+    guarda que rechazara "todo lo de un empleado de baja" pasaría los otros dos tests igual.
+    """
+
+    async def test_efectiva_POSTERIOR_al_egreso_se_rechaza(self, almacen, como) -> None:
+        """El caso que motivó la guarda: 201 en producción, con el legajo reescrito."""
+        _dar_de_baja(almacen, "2025-07-23")
+        async with como() as c:
+            r = await c.post(BASE, json=_alta("2026-08-19", rol="JEFE", cat="6"))
+        assert r.status_code == 422
+        assert r.json()["code"] == "RECATEGORIZACION_POSTERIOR_AL_EGRESO"
+        # 🔴 Las DOS mitades, y la segunda es la que importa: no alcanza con que no se persista
+        # la recategorización — el bug era que además PISABA el legajo de alguien que ya no está.
+        assert almacen.catalogo["recategorizaciones"] == []
+        assert _fila_empleado(almacen)["roles"] == ["ANALISTA", "SOPORTE"]
+        assert _fila_empleado(almacen)["categoria"] == "3"
+
+    async def test_efectiva_ANTERIOR_al_egreso_sobre_alguien_de_baja_SI_entra(
+            self, almacen, como) -> None:
+        """EL CASO LEGÍTIMO, y el que impide que la guarda se escriba como "no se puede tocar a
+        alguien de baja": RRHH carga el histórico tarde, a veces después de que la persona se fue.
+        """
+        _dar_de_baja(almacen, "2025-07-23")
+        async with como() as c:
+            r = await c.post(BASE, json=_alta("2025-03-01", rol="JEFE", cat="6"))
+        assert r.status_code == 201, r.text
+        assert len(almacen.catalogo["recategorizaciones"]) == 1
+
+    async def test_sobre_alguien_ACTIVO_entra(self, almacen, como) -> None:
+        """`fecha_egreso` NULL: no hay nada con qué comparar y la guarda no opina."""
+        assert _fila_empleado(almacen).get("fecha_egreso") is None
+        async with como() as c:
+            r = await c.post(BASE, json=_alta("2026-09-01", rol="JEFE", cat="6"))
+        assert r.status_code == 201, r.text
+        assert len(almacen.catalogo["recategorizaciones"]) == 1
+
+    async def test_el_MISMO_DIA_del_egreso_entra(self, almacen, como) -> None:
+        """El borde: el último día trabajado sigue siendo un día trabajado. `<=`, no `<`."""
+        _dar_de_baja(almacen, "2025-07-23")
+        async with como() as c:
+            r = await c.post(BASE, json=_alta("2025-07-23", cat="6"))
+        assert r.status_code == 201, r.text
+
+    async def test_el_PUT_no_puede_mover_la_fecha_despues_del_egreso(self, almacen,
+                                                                    como) -> None:
+        """La guarda va en los DOS caminos: por edición se llegaba a la misma fila prohibida."""
+        async with como() as c:
+            alta = await c.post(BASE, json=_alta("2025-03-01", rol="JEFE"))
+            assert alta.status_code == 201, alta.text
+            _dar_de_baja(almacen, "2025-07-23")
+            r = await c.put(f"{BASE}/{alta.json()['id']}",
+                            json={"fecha_efectiva": "2026-08-19"})
+        assert r.status_code == 422
+        assert r.json()["code"] == "RECATEGORIZACION_POSTERIOR_AL_EGRESO"
+        assert almacen.catalogo["recategorizaciones"][0]["fecha_efectiva"] == "2025-03-01"

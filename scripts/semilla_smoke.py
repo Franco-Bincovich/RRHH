@@ -44,16 +44,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import _semilla_fases_catalogo as cat  # noqa: E402
 import _semilla_fases_formacion as form  # noqa: E402
+import _semilla_fases_licencias as lic  # noqa: E402
 import _semilla_fases_nomina as nom  # noqa: E402
 import _semilla_fases_personas as per  # noqa: E402
 from _semilla_cliente import Cliente, TokenVencido, consola_utf8  # noqa: E402
 from _semilla_credencial import credencial  # noqa: E402
-from _semilla_guarda import ColaboradorReal  # noqa: E402
+from _semilla_guarda import ColaboradorReal, exigir_sembrado  # noqa: E402
 from _semilla_padron import DOMINIO  # noqa: E402
 
 BASE_DEFAULT = "https://sofia-backend-pi.vercel.app"
-FASES = ["perfiles", "personas", "recategorizaciones", "offboarding", "eventos", "nomina",
-         "formacion", "objetivos", "vacantes"]
+FASES = ["perfiles", "personas", "recategorizaciones", "offboarding", "eventos",
+         "ausencias", "vacaciones", "nomina", "formacion", "objetivos", "vacantes"]
 
 
 def _contexto(cli: Cliente) -> dict:
@@ -105,6 +106,10 @@ def _correr(cli: Cliente, ctx: dict, fases: list) -> dict:
         per.sembrar_offboarding(cli, personas)
     if "eventos" in fases:
         cat.sembrar_eventos(cli, principal)
+    if "ausencias" in fases:
+        lic.sembrar_ausencias(cli, personas, exigir_sembrado)
+    if "vacaciones" in fases:
+        lic.sembrar_vacaciones(cli, personas, exigir_sembrado)
     if "nomina" in fases:
         nom.sembrar_nomina(cli, ctx["reales"])
     if "formacion" in fases:

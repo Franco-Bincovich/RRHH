@@ -1,0 +1,124 @@
+"""
+QUÉ FILAS SON DE LA SEMILLA: la construcción del plan de borrado. La mitad que hay que auditar.
+
+Separado de `limpiar_semilla.py` —que quedó con el CLI y la ejecución— porque son dos preguntas
+distintas y solo una es delicada: **"¿qué se borra?" decide si el limpiador deja basura o toca
+algo real; "¿cómo se borra?" es un DELETE por lotes.** Un archivo que mezcle las dos hace que la
+primera se lea como plomería.
+
+🔴 CÓMO SE DISTINGUE LO SEMBRADO DE LO REAL — DOS CAPAS, y el plan es la UNIÓN de las dos:
+  1. **El manifiesto**: el id exacto de cada fila creada. Es la única capa que sirve para
+     `costos_nomina`, porque esas filas cuelgan de colaboradores REALES y una tabla de montos no
+     admite marca de agua — nada distingue una fila sembrada de una que cargue RRHH el mismo mes.
+  2. **La clave natural**, para cuando el manifiesto se perdió (otra máquina, otro clon): el
+     legajo `SMK-xx` y el dominio `@semilla.hrkarstec.site` en los colaboradores, los nombres y
+     títulos literales en los catálogos, y el `empleado_id` para todo lo que cuelga de una
+     persona sembrada.
+
+Se UNEN y no se elige una: un manifiesto incompleto —una corrida cortada a la mitad— igual
+limpia todo, y una clave natural que no encuentre nada no deja filas sin dueño.
+
+⚠️ VERIFICADO EL 23/8/2026 con los datos puestos: el plan listó exactamente lo sembrado en las
+trece tablas y CERO filas reales — ni los 31 colaboradores, ni la vacante "Analista contable",
+ni el objetivo "búsqueda líder de equipo", ni los 3 candidatos reales.
+"""
+from typing import List
+
+from _semilla_catalogo import (
+    CAPACITACIONES, EVENTOS, NOMBRES_LIBRES, OBJETIVOS, PERFILES, VACANTES,
+)
+from _semilla_padron import DOMINIO, PERSONAS
+from integrations.supabase_client import supabase_admin
+
+
+# `offboarding_instancias.empleado_id` son ON DELETE **RESTRICT**: con una sola fila viva de
+# cualquiera de las dos, el DELETE del colaborador falla. `empleado_capacitacion` cuelga de las
+# dos puntas (capacitación y colaborador) y por eso encabeza.
+ORDEN = [
+    ("empleado_capacitacion", "asignaciones_formacion"),
+    ("solicitudes_ausencia", "ausencias"),
+    ("solicitudes_vacaciones", "vacaciones"),
+    ("capacitaciones", "capacitaciones"),
+    ("costos_nomina", "costos_nomina"),
+    ("recategorizaciones", "recategorizaciones"),
+    ("offboarding_instancias", "offboarding"),
+    ("candidatos", "candidatos"),
+    ("vacantes", "vacantes"),
+    ("objetivos", "objetivos"),
+    ("eventos_agenda", "eventos_agenda"),
+    ("perfiles_puesto", "perfiles_puesto"),
+    ("empleados", "empleados"),
+]
+
+
+def _ids_manifiesto(datos: dict, recurso: str) -> list:
+    """Los ids anotados de un recurso. Los valores centinela ("hecho") no son ids: se filtran."""
+    return sorted({v for v in (datos.get(recurso) or {}).values()
+                   if isinstance(v, str) and v != "hecho"})
+
+
+def _empleados_por_clave_natural() -> list:
+    """Los colaboradores sembrados, por legajo `SMK-xx` Y por el dominio del mail.
+
+    Los DOS criterios y no uno: el legajo es único por empresa (no globalmente) y el mail es
+    único en todo el sistema, así que juntos cubren el caso de un legajo repetido entre las dos
+    sociedades. Es la red que salva si el manifiesto se perdió.
+    """
+    legajos = [p["legajo"] for p in PERSONAS]
+    por_legajo = supabase_admin.table("empleados").select("id").in_("legajo", legajos).execute()
+    por_mail = (supabase_admin.table("empleados").select("id")
+                .ilike("email_corporativo", f"%@{DOMINIO}").execute())
+    return sorted({r["id"] for r in (por_legajo.data or []) + (por_mail.data or [])})
+
+
+def _hijas_de(tabla: str, columna: str, ids: list) -> list:
+    if not ids:
+        return []
+    res = supabase_admin.table(tabla).select("id").in_(columna, ids).execute()
+    return [r["id"] for r in (res.data or [])]
+
+
+def _por_nombre(tabla: str, columna: str, valores: list) -> list:
+    res = supabase_admin.table(tabla).select("id").in_(columna, valores).execute()
+    return [r["id"] for r in (res.data or [])]
+
+
+def plan_de_borrado(datos: dict) -> dict:
+    """`{tabla: [ids]}`. Une lo anotado con lo que la clave natural encuentra: la unión es lo que
+    hace que un manifiesto incompleto (corrida cortada a la mitad) igual limpie todo."""
+    empleados = sorted(set(_ids_manifiesto(datos, "empleados")) | set(_empleados_por_clave_natural()))
+    caps = sorted(set(_ids_manifiesto(datos, "capacitaciones")) |
+                  set(_por_nombre("capacitaciones", "nombre", [c["nombre"] for c in CAPACITACIONES])))
+    vacantes = sorted(set(_ids_manifiesto(datos, "vacantes")) |
+                      set(_por_nombre("vacantes", "titulo", [v["titulo"] for v in VACANTES])))
+    asignaciones = sorted(set(_ids_manifiesto(datos, "asignaciones_formacion")) |
+                          set(_hijas_de("empleado_capacitacion", "capacitacion_id", caps)) |
+                          set(_hijas_de("empleado_capacitacion", "empleado_id", empleados)) |
+                          set(_por_nombre("empleado_capacitacion", "nombre_libre", NOMBRES_LIBRES)))
+    return {
+        "empleado_capacitacion": asignaciones,
+        # Cuelgan del colaborador: la clave natural es su `empleado_id`, así que se alcanzan
+        # igual con el manifiesto perdido.
+        "solicitudes_ausencia": sorted(set(_ids_manifiesto(datos, "ausencias")) |
+                                       set(_hijas_de("solicitudes_ausencia", "empleado_id", empleados))),
+        "solicitudes_vacaciones": sorted(set(_ids_manifiesto(datos, "vacaciones")) |
+                                         set(_hijas_de("solicitudes_vacaciones", "empleado_id", empleados))),
+        "capacitaciones": caps,
+        # 🔴 SOLO POR MANIFIESTO. Estas filas cuelgan de colaboradores REALES: no hay clave
+        # natural que las separe de una carga de RRHH del mismo mes. Sin manifiesto no se tocan.
+        "costos_nomina": _ids_manifiesto(datos, "costos_nomina"),
+        "recategorizaciones": sorted(set(_ids_manifiesto(datos, "recategorizaciones")) |
+                                     set(_hijas_de("recategorizaciones", "empleado_id", empleados))),
+        "offboarding_instancias": sorted(set(_ids_manifiesto(datos, "offboarding")) |
+                                         set(_hijas_de("offboarding_instancias", "empleado_id", empleados))),
+        "candidatos": sorted(set(_ids_manifiesto(datos, "candidatos")) |
+                             set(_hijas_de("candidatos", "vacante_id", vacantes))),
+        "vacantes": vacantes,
+        "objetivos": sorted(set(_ids_manifiesto(datos, "objetivos")) |
+                            set(_por_nombre("objetivos", "titulo", [o["titulo"] for o in OBJETIVOS]))),
+        "eventos_agenda": sorted(set(_ids_manifiesto(datos, "eventos_agenda")) |
+                                 set(_por_nombre("eventos_agenda", "nombre", [e["nombre"] for e in EVENTOS]))),
+        "perfiles_puesto": sorted(set(_ids_manifiesto(datos, "perfiles_puesto")) |
+                                  set(_por_nombre("perfiles_puesto", "nombre", [p["nombre"] for p in PERFILES]))),
+        "empleados": empleados,
+    }

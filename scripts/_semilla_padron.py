@@ -77,5 +77,18 @@ RECATEGORIZACIONES = [
     dict(legajo="SMK-06", dias=-430, rol="Analista Senior de Compras", seniority="senior",
          categoria="C4", impacto=240000,
          motivo="Promoción tras cubrir la jefatura interinamente"),
+    # 🔴 ESTA VA CON FECHA DE ESTE MES, y es la única con esa condición. El KPI
+    # "Recategorizaciones del mes" (`_dashboard_operacion`) cuenta por `fecha_efectiva` dentro
+    # del mes corriente: con las cinco anteriores repartidas entre marzo 2025 y mayo 2026 la
+    # card decía 0 —correctamente— y no se podía probar. `dias=-4` la deja adentro del mes sin
+    # ponerla en el futuro, que el módulo aceptaría pero sería un hecho que todavía no ocurrió.
+    # 🔴 VA SOBRE SMK-08, QUE ESTÁ ACTIVO, y la primera versión la puso sobre SMK-07, que para
+    # entonces ya estaba dado de baja. Entró igual —el módulo no tenía guarda— y dejó el
+    # dashboard mostrando el bug como si fuera un dato: una recategorización efectiva trece
+    # meses DESPUÉS del egreso, contando en el KPI del mes. Desde entonces
+    # `_recategorizacion_egreso.ensure_efectiva_antes_del_egreso` la rechazaría con 422, así que
+    # esta línea no es solo higiene del dato: sobre SMK-07 la semilla ya no correría.
+    dict(legajo="SMK-08", dias=-4, rol="Jefa de Marketing", seniority=None,
+         categoria="C6", impacto=295000, motivo="Ascenso a jefatura del sector"),
 ]
 

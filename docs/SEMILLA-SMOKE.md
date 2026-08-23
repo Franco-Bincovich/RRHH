@@ -48,8 +48,8 @@ backend\venv\Scripts\python.exe scripts\semilla_smoke.py            # 3. el rest
 | `--pausa SEG` | espera entre escrituras (default 0.15) |
 | `--solo FASE` | una sola fase, repetible |
 
-Fases: `perfiles` · `personas` · `recategorizaciones` · `offboarding` · `eventos` · `nomina` ·
-`formacion` · `objetivos` · `vacantes`.
+Fases: `perfiles` · `personas` · `recategorizaciones` · `offboarding` · `eventos` ·
+`ausencias` · `vacaciones` · `nomina` · `formacion` · `objetivos` · `vacantes`.
 
 ⚠️ **El token dura ~1 hora** y la corrida completa son ~160 requests. Al primer 401 el script
 **para** y dice dónde quedó: seguir con una credencial muerta llenaría el reporte de fallos
@@ -66,8 +66,10 @@ con un token nuevo, las fases ya hechas se saltean solas.
 | 2 | Preingresos | 4 | entra en 3 días, en 20, HOY (botón Activar) y uno con la fecha ya pasada |
 | 3 | Bajas | 3 | hace 2, 10 y 13 meses → la rotación 12m tiene que contar **2**, no 3 |
 | 4 | Offboarding en curso | 2 | procesos abiertos sin efectivizar |
-| 5 | Recategorizaciones | 5 | tres pares cambiados · solo seniority · con y sin impacto · **dos sobre la misma persona** |
+| 5 | Recategorizaciones | 6 | tres pares cambiados · solo seniority · con y sin impacto · **dos sobre la misma persona** · **una de este mes** (si no, el KPI del mes dice 0) |
 | 6 | Agenda | 5 | 2 en ventana de aviso, 2 fuera, 1 resuelto |
+| 6b | **Ausencias** | 5 | **2 en curso hoy** (el KPI cuenta las de hoy) + 3 pasadas, para que el ausentismo del mes deje de ser 0,0%; tipos distintos, una sin justificar |
+| 6c | **Vacaciones** | 4 | tomada · planificada · **cancelada** (por `PUT /{id}/cancelar`, no se borra) · un día franco |
 | 7 | Costos de nómina | 31 × 2 meses | masa salarial y su variación (el mes actual ~4% arriba) |
 | 8 | Formación | 3 cursos + ~20 asignaciones | con colaborador vinculado **y** con `nombre_libre` |
 | 9 | Objetivos | 8 (4 anuales, 4 operativos) | los tres estados, con un subobjetivo anidado |
@@ -164,6 +166,31 @@ propósito —sembrar y descubrir son objetivos distintos, y para el recorrido c
 gana sembrar datos coherentes— y el caso quedó anotado acá para buscarlo aparte. **Un hallazgo
 que aparece por accidente del orden de un script es un hallazgo que la próxima vez no aparece.**
 
+> ✅ **RESPONDIDO Y CERRADO EL 23/8/2026 — pasaba, y ahora se rechaza.** Ver abajo el hallazgo
+> completo; la guarda vive en `services/_recategorizacion_egreso.py` y **lo que rechaza es lo
+> IMPOSIBLE (efectiva después del egreso), no lo retroactivo**: cargar tarde un cambio que sí
+> ocurrió mientras la persona trabajaba sigue entrando, que es el caso legítimo y frecuente.
+> `fecha_egreso` NULL pasa siempre. Cubierto por cinco tests con mutation check de cuatro
+> mutaciones (incluida "rechaza todo lo de alguien de baja", que mata el caso legítimo).
+>
+> 🔴 **EL HALLAZGO, COMO SE MIDIÓ.** La fase extra de licencias
+> sembró una recategorización con fecha de este mes sobre **SMK-07, que ya estaba dado de baja**
+> (egreso 2025-07-23). El alta devolvió **201** y además **pisó el legajo de la persona dada de
+> baja**: `roles` pasó a `["Jefe de Mantenimiento"]` y `categoria` a `C6`. O sea que el sistema
+> acepta **una recategorización con `fecha_efectiva` TRECE MESES POSTERIOR al egreso** y le
+> reescribe el puesto a alguien que no trabaja más. No hay guarda de estado en
+> `_recategorizaciones_write.crear` — sólo la de empresa.
+>
+> **Lo decidido:** se rechaza sólo `fecha_efectiva > fecha_egreso`, en el alta Y en el PUT (por
+> edición se llegaba a la misma fila prohibida). No se rechaza "sobre alguien de baja", porque
+> eso mataría el caso legítimo. El 422 lleva las dos fechas y dice qué hacer.
+>
+> ⚠️ **El dato sembrado quedó sucio y se reparó a mano:** esa recategorización estaba sobre
+> SMK-07, ya dado de baja, así que el dashboard mostraba el bug como si fuera un dato. Se borró
+> la fila, se restauró el legajo de SMK-07 con los `*_anterior` que la propia fila registraba
+> (la fuente autoritativa) y la semilla la mudó a **SMK-08, que está activo**. Sobre SMK-07 hoy
+> ni siquiera correría: la guarda la rechazaría con 422.
+
 ---
 
 ## 8. Archivos
@@ -175,5 +202,5 @@ que aparece por accidente del orden de un script es un hallazgo que la próxima 
 | `scripts/_semilla_cliente.py` | HTTP, manifiesto e idempotencia |
 | `scripts/_semilla_guarda.py` | la red de seguridad sobre colaboradores reales |
 | `scripts/_semilla_padron.py` · `_semilla_catalogo.py` | los datos inventados (y el índice de qué borrar) |
-| `scripts/_semilla_fases_personas.py` · `_nomina.py` · `_catalogo.py` · `_formacion.py` | las fases |
+| `scripts/_semilla_fases_personas.py` · `_nomina.py` · `_catalogo.py` · `_formacion.py` · `_licencias.py` | las fases |
 | `scripts/limpiar_semilla.py` | el limpiador |
