@@ -40,7 +40,7 @@ export function PlantillaCard({ plantilla, editable, onEditar, onEnviar }: {
   onEnviar: (p: Plantilla) => void
 }) {
   return (
-    <Card padding="sm" className="group flex h-full flex-col gap-2">
+    <Card padding="sm" interactive className="group flex h-full flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{plantilla.clave}</p>
         {/* "General" = la plantilla no cuelga de una empresa. Contorno y no relleno: el único

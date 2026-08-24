@@ -79,6 +79,13 @@ class HorasService:
 
         empresa_id = self._proyectos.find_empresa_for(str(proyecto_id)) or str(asig.empleado_empresa_id)
 
+        # 🔴 LOS CUATRO DE LA MIGRACIÓN 103 VIAJAN. `HoraCreate` los acepta desde que la 103 los
+        # agregó y este service NO se los pasaba al repo: la API contestaba 201 y los DESCARTABA
+        # en silencio. Hoy el `HoraCreate` del front no los manda, así que no se notaba; el día
+        # que alguien cablee el campo de cliente en /proyectos, la carga caería en "sin cliente"
+        # en la vista de Horas por cliente sin ningún error que lo delate. Se pasan en vez de
+        # sacarlos del schema porque las columnas existen y son justamente las que esa vista
+        # agrupa: quitarlos borraría una capacidad que el modelo ya soporta.
         row = self._repo.save(
             asignacion_id=str(data.asignacion_id),
             proyecto_id=str(proyecto_id),
@@ -89,6 +96,10 @@ class HorasService:
             valor_hora_snapshot=asig.valor_hora,   # ← snapshot congelado al insertar
             descripcion=data.descripcion,
             cargado_por=cargado_por,
+            cliente_id=str(data.cliente_id) if data.cliente_id else None,
+            modalidad=data.modalidad,
+            proyecto_texto=data.proyecto_texto,
+            tarea_texto=data.tarea_texto,
         )
         logger.info("Horas registradas", extra={
             "proyecto_id": str(proyecto_id),

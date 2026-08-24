@@ -16,11 +16,20 @@ import { cn } from "@/lib/utils"
  * comparar muchas de un vistazo. **El vidrio queda SOLO para el sidebar y los modales**, donde
  * comunica "esto está adelante"; en una grilla no comunica nada y cuesta rendimiento.
  *
- * 🔴 `interactive` NO ES DECORATIVO — ES LA DIFERENCIA ENTRE "SE PUEDE APRETAR" Y "NO".
- * El movimiento al apuntar (3px de elevación, borde iluminado, 160ms) es lo que le dice al
- * usuario que la superficie es un control. **Una card informativa no se mueve**, y ponerle hover
- * "porque queda lindo" promete un click que no existe. Por eso es una prop explícita y no algo
- * que la card haga siempre: la mayoría de las superficies del producto son paneles de lectura.
+ * 🔴 `interactive` DISTINGUE **TARJETA** DE **PANEL**, no "clickeable" de "no clickeable".
+ * El movimiento al apuntar (3px de elevación, borde iluminado, 160ms) lo lleva TODA TARJETA:
+ * las de KPI, perfil, proyecto, plantilla, reporte, proceso y las del organigrama, se puedan
+ * apretar o no. Lo que NO lo lleva es un PANEL —una sección de lectura que ocupa el ancho de la
+ * pantalla (`as="section"`, el historial, un formulario)—: ahí el movimiento no significa nada
+ * porque no hay nada de qué distinguirlo.
+ *
+ * ⚠️ **Esto REVIERTE la decisión anterior**, que era "una card informativa no se mueve" y dejaba
+ * sin movimiento a perfiles, reportes y plantillas. La regla nueva la fijó Franco el 23/8/2026 y
+ * es de producto, no de implementación: en una grilla, que unas tarjetas respondan y otras no se
+ * lee como que algunas están deshabilitadas. No volver a "arreglarlo" sin preguntar.
+ *
+ * 🔑 El movimiento vive ACÁ y en ningún otro lado: `decisionesVisuales.test.ts` rojea si alguien
+ * lo reescribe a mano en un componente. Una tarjeta que no use este primitivo se queda sin él.
  *
  * ⚠️ Para las superficies que NO son un `<div>` —`<section aria-label>`, `<form>`, `<li>`,
  * `<button>`— está la prop `as`, y para los casos que no encajan está `cardVariants` exportado,

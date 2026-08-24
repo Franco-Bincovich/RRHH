@@ -10,6 +10,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 
 from services.export._excel_estilos import autofit, escribir_tabla
+from services.export._formato import celda, etiqueta, titulo_seccion
 
 
 def build_excel(nombre: str, datos: Dict[str, Any]) -> bytes:
@@ -32,14 +33,14 @@ def build_excel(nombre: str, datos: Dict[str, Any]) -> bytes:
         ws.cell(row=row, column=1, value="Resumen").font = Font(bold=True, size=11)
         row += 1
         for key, val in scalars.items():
-            ws.cell(row=row, column=1, value=key.replace("_", " ").capitalize()).font = Font(bold=True, size=9)
-            ws.cell(row=row, column=2, value=str(val)).font = Font(size=9)
+            ws.cell(row=row, column=1, value=etiqueta(key)).font = Font(bold=True, size=9)
+            ws.cell(row=row, column=2, value=celda(val)).font = Font(size=9)
             row += 1
         row += 1
 
     for key in ("analisis", "contexto_datos"):
         if key in datos and isinstance(datos[key], str):
-            ws.cell(row=row, column=1, value=key.replace("_", " ").capitalize()).font = Font(bold=True, size=11)
+            ws.cell(row=row, column=1, value=etiqueta(key)).font = Font(bold=True, size=11)
             row += 1
             cell = ws.cell(row=row, column=1, value=datos[key])
             cell.font = Font(size=9)
@@ -48,26 +49,31 @@ def build_excel(nombre: str, datos: Dict[str, Any]) -> bytes:
             row += 2
 
     for key, val in datos.items():
-        if not isinstance(val, list) or not val:
+        if key.startswith("_") or not isinstance(val, list) or not val:
             continue
-        ws.cell(row=row, column=1, value=key.replace("_", " ").capitalize()).font = Font(bold=True, size=11)
-        row += 1
+        # `None` = el encabezado repetiría el título de la hoja (ver `_formato`)
+        seccion = titulo_seccion(key, nombre)
+        if seccion:
+            ws.cell(row=row, column=1, value=seccion).font = Font(bold=True, size=11)
+            row += 1
         if isinstance(val[0], dict):
             row = escribir_tabla(ws, val, row)
         else:
             for item in val:
-                ws.cell(row=row, column=1, value=str(item)).font = Font(size=9)
+                ws.cell(row=row, column=1, value=celda(item)).font = Font(size=9)
                 row += 1
         row += 1
 
     for key, val in datos.items():
-        if not isinstance(val, dict):
+        if key.startswith("_") or not isinstance(val, dict):
             continue
-        ws.cell(row=row, column=1, value=key.replace("_", " ").capitalize()).font = Font(bold=True, size=11)
-        row += 1
+        seccion = titulo_seccion(key, nombre)
+        if seccion:
+            ws.cell(row=row, column=1, value=seccion).font = Font(bold=True, size=11)
+            row += 1
         for k, v in val.items():
             ws.cell(row=row, column=1, value=k).font = Font(bold=True, size=9)
-            ws.cell(row=row, column=2, value=str(v)).font = Font(size=9)
+            ws.cell(row=row, column=2, value=celda(v)).font = Font(size=9)
             row += 1
         row += 1
 
@@ -90,13 +96,13 @@ def _build_multisheet(sheets: Dict[str, Any]) -> bytes:
         if scalars:
             for k, v in scalars.items():
                 ws.cell(row=row, column=1, value=str(k)).font = Font(bold=True, size=9)
-                ws.cell(row=row, column=2, value=str(v)).font = Font(size=9)
+                ws.cell(row=row, column=2, value=celda(v)).font = Font(size=9)
                 row += 1
             row += 1
         for key, val in sheet_datos.items():
             if not isinstance(val, list) or not val:
                 continue
-            ws.cell(row=row, column=1, value=key.replace("_", " ").capitalize()).font = Font(bold=True, size=11)
+            ws.cell(row=row, column=1, value=etiqueta(key)).font = Font(bold=True, size=11)
             row += 1
             if isinstance(val[0], dict):
                 row = escribir_tabla(ws, val, row)

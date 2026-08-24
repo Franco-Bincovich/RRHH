@@ -5,7 +5,8 @@ import { type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { generarReporte, type TipoReporte, type VistaAusentismo } from "@/services/reportes"
+import { Card } from "@/components/ui/card"
+import { generarYDescargar, type TipoReporte, type VistaAusentismo } from "@/services/reportes"
 import type { Area } from "@/types/area"
 import type { Empresa } from "@/types/empresa"
 import { EmpresaAreaSelector } from "./EmpresaAreaSelector"
@@ -42,17 +43,17 @@ export function ReporteCard({
   const [empresaId, setEmpresaId] = useState("")
   const [areaId, setAreaId] = useState("")
   const [vista, setVista] = useState<VistaAusentismo>("ambos")
-  const [loading, setLoading] = useState(false)
+  const [bajando, setBajando] = useState<"pdf" | "excel" | null>(null)
 
   function handleEmpresaChange(v: string) {
     setEmpresaId(v)
     setAreaId("") // el área depende de la empresa: al cambiarla, se resetea
   }
 
-  async function handleGenerar() {
-    setLoading(true)
+  async function handleDescargar(formato: "pdf" | "excel") {
+    setBajando(formato)
     try {
-      await generarReporte({
+      await generarYDescargar({
         tipo: reporte.id,
         ...(reporte.usaPeriodo ? { mes, anio } : {}),
         ...(reporte.usaAnio ? { anio } : {}),
@@ -60,13 +61,13 @@ export function ReporteCard({
         ...(empresaId ? { empresa_id: empresaId } : {}),
         ...(usaArea && areaId ? { area_id: areaId } : {}),
         ...(reporte.usaVista ? { vista } : {}),
-      })
-      toast.success(`${reporte.titulo} generado exitosamente`)
-      onSuccess()
+      }, formato)
+      toast.success(`${reporte.titulo}: ${formato.toUpperCase()} descargado`)
+      onSuccess()   // el reporte queda además en el historial, para volver a bajarlo
     } catch {
       toast.error("No se pudo generar el reporte. Intentá de nuevo.")
     } finally {
-      setLoading(false)
+      setBajando(null)
     }
   }
 
@@ -75,7 +76,7 @@ export function ReporteCard({
   // levantar la superficie entera mientras el usuario elige un mes movería justo lo que está
   // por apretar. El control es "Generar".
   return (
-    <div className="flex flex-col gap-4 rounded-xl border bg-card p-5">
+    <Card padding="sm" interactive className="flex flex-col gap-4">
       <div className="flex items-start gap-3">
         <span className="shrink-0 rounded-lg bg-primary/10 p-2 text-primary">
           <Icon className="size-5" />
@@ -117,17 +118,26 @@ export function ReporteCard({
         <VistaSelector id={reporte.id} vista={vista} onVistaChange={(v) => setVista(v as VistaAusentismo)} />
       )}
 
+      {/* 🔴 DOS BOTONES Y NO UNO, Y CADA UNO BAJA EL ARCHIVO. El botón anterior decía
+          "Generar", dejaba una fila en el historial de abajo y no descargaba nada: el usuario
+          leía "generado exitosamente" y se quedaba sin el archivo que la pantalla promete.
+          El formato es parte de la acción, no un paso posterior. */}
       {canWrite && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-auto min-h-[2.75rem] w-full"
-          onClick={handleGenerar}
-          disabled={loading}
-        >
-          {loading ? "Generando…" : "Generar"}
-        </Button>
+        <div className="mt-auto flex gap-2">
+          {(["pdf", "excel"] as const).map((f) => (
+            <Button
+              key={f}
+              variant="outline"
+              size="sm"
+              className="min-h-[2.75rem] flex-1"
+              onClick={() => handleDescargar(f)}
+              disabled={bajando !== null}
+            >
+              {bajando === f ? "Generando…" : f === "pdf" ? "PDF" : "Excel"}
+            </Button>
+          ))}
+        </div>
       )}
-    </div>
+    </Card>
   )
 }

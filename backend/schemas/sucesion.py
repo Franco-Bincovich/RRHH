@@ -61,9 +61,21 @@ class HitoCreate(BaseModel):
 
 
 class HitoBodyCreate(BaseModel):
+    """Alta de un hito dentro de un plan.
+
+    🔴 `tipo` NO es opcional en la base: `planes_carrera_hitos.tipo` es NOT NULL **sin default**
+    y con un CHECK de seis valores. Este schema no lo tenía, así que el INSERT salía sin la
+    columna y Postgres lo rechazaba con **23502** → el endpoint devolvía 500 SIEMPRE (la tabla
+    tenía 0 filas, consistente con que nunca funcionó). Se expone con el vocabulario real y con
+    `"otro"` por default, que es el valor que el CHECK reserva para lo que no encaja: así el
+    alta entra aunque el formulario todavía no ofrezca el selector.
+    """
+
     titulo: str = Field(..., min_length=1, max_length=200)
     descripcion: Optional[str] = None
     fecha_objetivo: Optional[date] = None
+    tipo: Literal["capacitacion", "certificacion", "proyecto",
+                  "mentoring", "rotacion", "otro"] = "otro"
 
 
 class ReadinessUpdate(BaseModel):

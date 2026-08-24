@@ -30,9 +30,9 @@ un resultado; una fila que falta es el modo de falla que este repo ya pagó cinc
 
 | Lista | Filas | Automatizable | Sólo sobre datos sembrados | No |
 |---|---:|---:|---:|---:|
-| Endpoints | 265 | 203 | 25 | 37 |
+| Endpoints | 265 | 208 | 24 | 33 |
 | Pantallas | 46 | 41 | 0 | 5 |
-| Acciones de escritura | 139 | 86 | 25 | 28 |
+| Acciones de escritura | 139 | 91 | 23 | 25 |
 
 ### Los endpoints que no salen automatizables a secas
 
@@ -40,11 +40,11 @@ un resultado; una fila que falta es el modo de falla que este repo ya pagó cinc
 
 | ¿Automatizable? | Motivo | Endpoints |
 |---|---|---:|
-| sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH | 25 |
+| sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH | 24 |
 | no | el router no se monta: el módulo está apagado por flag del backend | 12 |
 | no | necesita el archivo real de RRHH: el parser depende de los nombres de columna, el encoding y el separador de SU planilla | 9 |
-| no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido | 7 |
 | no | depende de una casilla de Gmail viva y de un token OAuth vigente | 6 |
+| no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido | 3 |
 | no | depende de un servicio externo (LinkedIn / Zernio) | 2 |
 | no | manda un mail real desde la casilla del sistema; no se puede desenviar | 1 |
 
@@ -60,7 +60,7 @@ La columna **Caller** cruza contra los literales de path del front. `—declarad
 |---:|---|---|---|:-:|---|---|---|
 | 1 | GET | `/api/adjuntos` | dinámico (lo resuelve el service) | 👁️ | sí | sí |  |
 | 2 | POST | `/api/adjuntos` | dinámico (lo resuelve el service) | ✍️ | sí | sí |  |
-| 3 | DELETE | `/api/adjuntos/{id}` | dinámico (lo resuelve el service) | ✍️ | sí | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
+| 3 | DELETE | `/api/adjuntos/{id}` | dinámico (lo resuelve el service) | ✍️ | sí | sí |  |
 | 4 | PUT | `/api/adjuntos/{id}/principal` | dinámico (lo resuelve el service) | ✍️ | sí | sí |  |
 | 5 | GET | `/api/adjuntos/{id}/url` | dinámico (lo resuelve el service) | 👁️ | sí | sí |  |
 | 6 | GET | `/api/areas` | areas · read | 👁️ | sí | sí |  |
@@ -274,13 +274,13 @@ La columna **Caller** cruza contra los literales de path del front. `—declarad
 | 214 | GET | `/api/recategorizaciones/exportar` | recategorizaciones · read | 👁️ | sí | sí |  |
 | 215 | GET | `/api/recategorizaciones/{id}` | recategorizaciones · read | 👁️ | **—declarado** | sí |  |
 | 216 | PUT | `/api/recategorizaciones/{id}` | recategorizaciones · write | ✍️ | sí | sí |  |
-| 217 | POST | `/api/reportes/generar` | reportes · write | ✍️ | sí | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
+| 217 | POST | `/api/reportes/generar` | reportes · write | ✍️ | sí | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
 | 218 | GET | `/api/reportes/historial` | reportes · read | 👁️ | sí | sí |  |
 | 219 | GET | `/api/reportes/{reporte_id}/exportar` | reportes · read | 👁️ | sí | sí |  |
 | 220 | PUT | `/api/screening/candidatos/{candidato_id}/clasificacion` | candidatos · write | ✍️ | sí | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
-| 221 | GET | `/api/screening/criterio` | configuracion · read | 👁️ | sí | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
-| 222 | PUT | `/api/screening/criterio` | configuracion · write | ✍️ | sí | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
-| 223 | POST | `/api/screening/criterio/restaurar` | configuracion · write | ✍️ | sí | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
+| 221 | GET | `/api/screening/criterio` | configuracion · read | 👁️ | sí | sí |  |
+| 222 | PUT | `/api/screening/criterio` | configuracion · write | ✍️ | sí | sí |  |
+| 223 | POST | `/api/screening/criterio/restaurar` | configuracion · write | ✍️ | sí | sí |  |
 | 224 | POST | `/api/screening/vacantes/{vacante_id}` | candidatos · write | ✍️ | sí | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
 | 225 | GET | `/api/sucesion/analisis` | sucesion · read | 👁️ | sí | sí |  |
 | 226 | PUT | `/api/sucesion/hitos/{hito_id}/completar` | sucesion · write | ✍️ | sí | sí |  |
@@ -294,7 +294,7 @@ La columna **Caller** cruza contra los literales de path del front. `—declarad
 | 234 | POST | `/api/usuarios` | usuarios · write | ✍️ | sí | sí |  |
 | 235 | POST | `/api/usuarios/cambiar-password` | solo auth | ✍️ | sí | sí |  |
 | 236 | GET | `/api/usuarios/exportar` | usuarios · read | 👁️ | sí | sí |  |
-| 237 | DELETE | `/api/usuarios/{user_id}` | usuarios · write | ✍️ | sí | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
+| 237 | DELETE | `/api/usuarios/{user_id}` | usuarios · write | ✍️ | sí | sí |  |
 | 238 | GET | `/api/vacaciones` | vacaciones · read | 👁️ | sí | sí |  |
 | 239 | POST | `/api/vacaciones` | vacaciones · write | ✍️ | sí | sí |  |
 | 240 | GET | `/api/vacaciones-pendientes` | vacaciones · read | 👁️ | sí | sí |  |
@@ -400,7 +400,7 @@ Las **46** rutas de `app/`. ⚠️ **La columna GET dice qué endpoints ALCANZA 
 | /areas, /empresas/{} | `components/features/areas/guardarArea.ts` | `updateArea` | `PUT /api/areas/{}` | admin rrhh | reversible | sí |  |
 | /areas | `components/features/areas/useAreasAcciones.ts` | `deleteArea` | `DELETE /api/areas/{}` | admin rrhh | reversible | sí |  |
 | /assessment | `components/features/assessment/CampanaModal.tsx` | `createCampana` | `POST /api/assessment/campanas` | admin rrhh | reversible | no | el router no se monta: el módulo está apagado por flag del backend |
-| /ausencias, /empleados/{}, /offboarding, /vacaciones | `components/features/adjuntos/AdjuntosSection.tsx` | `eliminarAdjunto` | `DELETE /api/adjuntos/{}` | admin rrhh, mandos medios | 🔴 borra la fila | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
+| /ausencias, /empleados/{}, /offboarding, /vacaciones | `components/features/adjuntos/AdjuntosSection.tsx` | `eliminarAdjunto` | `DELETE /api/adjuntos/{}` | admin rrhh, mandos medios | reversible | sí |  |
 | /ausencias, /empleados/{}, /offboarding, /vacaciones | `components/features/adjuntos/AdjuntosSection.tsx` | `subirAdjunto` | `POST /api/adjuntos` | admin rrhh, mandos medios | reversible | sí |  |
 | /ausencias | `components/features/ausencias/useAusenciaForm.ts` | `crearAusenciaConAdjuntos` | `POST /api/adjuntos`<br>`POST /api/ausencias` | admin rrhh, mandos medios | reversible | sí |  |
 | /ausencias | `components/features/ausencias/useAusenciaForm.ts` | `updateAusencia` | `PUT /api/ausencias/{}` | admin rrhh, mandos medios | reversible | sí |  |
@@ -432,8 +432,8 @@ Las **46** rutas de `app/`. ⚠️ **La columna GET dice qué endpoints ALCANZA 
 | /configuracion | `components/features/configuracion/accionesConfiguracion.ts` | `guardarParametros` | `PUT /api/configuracion/parametros` | todos | reversible | sí |  |
 | /configuracion | `components/features/configuracion/accionesIntegracion.ts` | `designarRemitente` | `POST /api/integraciones/google/remitente` | todos | reversible | no | depende de una casilla de Gmail viva y de un token OAuth vigente |
 | /configuracion | `components/features/configuracion/accionesIntegracion.ts` | `disconnectIntegracion` | `DELETE /api/integraciones/{}` | todos | 🔴 borra la fila | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
-| /configuracion | `components/features/configuracion/useCriterioScreening.ts` | `restaurarCriterioScreening` | `POST /api/screening/criterio/restaurar` | todos | reversible | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
-| /configuracion | `components/features/configuracion/useCriterioScreening.ts` | `setCriterioScreening` | `PUT /api/screening/criterio` | todos | reversible | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
+| /configuracion | `components/features/configuracion/useCriterioScreening.ts` | `restaurarCriterioScreening` | `POST /api/screening/criterio/restaurar` | todos | reversible | sí |  |
+| /configuracion | `components/features/configuracion/useCriterioScreening.ts` | `setCriterioScreening` | `PUT /api/screening/criterio` | todos | reversible | sí |  |
 | /configuracion | `components/features/configuracion/useTiposAusencia.ts` | `createTipoAusencia` | `POST /api/ausencias/tipos` | todos | reversible | sí |  |
 | /configuracion | `components/features/configuracion/useTiposAusencia.ts` | `updateTipoAusencia` | `PATCH /api/ausencias/tipos/{}` | todos | reversible | sí |  |
 | /costos | `components/features/costos/ImportarNominaCSVModal.tsx` | `confirmarImportacionNomina` | `POST /api/importacion/nomina/confirmar` | admin rrhh | 🔴 persiste el lote entero del import; en evaluaciones BORRA el período anterior por CASCADE antes de escribir el nuevo | no | necesita el archivo real de RRHH: el parser depende de los nombres de columna, el encoding y el separador de SU planilla |
@@ -509,12 +509,12 @@ Las **46** rutas de `app/`. ⚠️ **La columna GET dice qué endpoints ALCANZA 
 | /proyectos/{} | `components/features/proyectos/asignarAcciones.ts` | `asignarBulk` | `POST /api/proyectos/{}/asignaciones/bulk` | admin rrhh | reversible | sí |  |
 | /recategorizaciones | `components/features/recategorizaciones/guardarRecategorizacion.ts` | `createRecategorizacion` | `POST /api/recategorizaciones` | admin rrhh | reversible | sí |  |
 | /recategorizaciones | `components/features/recategorizaciones/guardarRecategorizacion.ts` | `updateRecategorizacion` | `PUT /api/recategorizaciones/{}` | admin rrhh | reversible | sí |  |
-| /reportes | `components/features/reportes/ReporteCard.tsx` | `generarReporte` | `POST /api/reportes/generar` | admin rrhh | 🔴 llama a Claude y cuesta plata por request | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
+| /reportes | `components/features/reportes/ReporteCard.tsx` | `generarYDescargar` | `POST /api/reportes/generar` | admin rrhh | 🔴 deja el reporte en el historial y no hay endpoint que lo borre | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
 | /sucesion | `components/features/sucesion/NuevoHitoForm.tsx` | `createHito` | `POST /api/sucesion/planes/{}/hitos` | admin rrhh | reversible | no | pantalla apagada: flag del front (la página redirige a /dashboard). El backend sí responde: lo que queda sin probar es el recorrido por navegador, no el endpoint |
 | /sucesion | `components/features/sucesion/NuevoPlanModal.tsx` | `createPlanCarrera` | `POST /api/sucesion/planes` | admin rrhh | reversible | no | pantalla apagada: flag del front (la página redirige a /dashboard). El backend sí responde: lo que queda sin probar es el recorrido por navegador, no el endpoint |
 | /sucesion | `components/features/sucesion/usePlanDetalle.ts` | `completarHito` | `PUT /api/sucesion/hitos/{}/completar` | admin rrhh | reversible | no | pantalla apagada: flag del front (la página redirige a /dashboard). El backend sí responde: lo que queda sin probar es el recorrido por navegador, no el endpoint |
 | /sucesion | `components/features/sucesion/usePlanDetalle.ts` | `updateReadiness` | `PUT /api/sucesion/planes/{}/readiness` | admin rrhh | reversible | no | pantalla apagada: flag del front (la página redirige a /dashboard). El backend sí responde: lo que queda sin probar es el recorrido por navegador, no el endpoint |
-| /usuarios | `app/(dashboard)/usuarios/page.tsx` | `eliminarUsuario` | `DELETE /api/usuarios/{}` | admin rrhh | 🔴 borra la fila | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
+| /usuarios | `app/(dashboard)/usuarios/page.tsx` | `eliminarUsuario` | `DELETE /api/usuarios/{}` | admin rrhh | reversible | sí |  |
 | /usuarios | `components/features/usuarios/CrearUsuarioModal.tsx` | `crearUsuario` | `POST /api/usuarios` | admin rrhh | reversible | sí |  |
 | /vacaciones | `components/features/vacaciones/PendientesSection.tsx` | `deleteVacacionPendiente` | `DELETE /api/vacaciones-pendientes/{}` | admin rrhh, mandos medios | 🔴 borra la fila | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
 | /vacaciones | `components/features/vacaciones/PendientesSection.tsx` | `updateVacacionPendiente` | `PUT /api/vacaciones-pendientes/{}` | admin rrhh, mandos medios | reversible | sí |  |
@@ -531,7 +531,7 @@ Las **46** rutas de `app/`. ⚠️ **La columna GET dice qué endpoints ALCANZA 
 | /vacantes/{} | `components/features/vacantes/LinkedinModal.tsx` | `publicarLinkedin` | `POST /api/vacantes/{}/publicar-linkedin` | admin rrhh | 🔴 publica afuera del sistema | no | depende de un servicio externo (LinkedIn / Zernio) |
 | /vacantes/{} | `components/features/vacantes/PipelineSeleccion.tsx` | `moverCandidato` | `PUT /api/candidatos/{}/etapa` | admin rrhh | reversible | sí |  |
 | /vacantes/{} | `components/features/vacantes/PublicacionSection.tsx` | `updateVacante` | `PUT /api/vacantes/{}` | admin rrhh | reversible | sí |  |
-| /vacantes/{} | `components/features/vacantes/VacanteImagenes.tsx` | `eliminarAdjunto` | `DELETE /api/adjuntos/{}` | admin rrhh | 🔴 borra la fila | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
+| /vacantes/{} | `components/features/vacantes/VacanteImagenes.tsx` | `eliminarAdjunto` | `DELETE /api/adjuntos/{}` | admin rrhh | reversible | sí |  |
 | /vacantes/{} | `components/features/vacantes/VacanteImagenes.tsx` | `marcarAdjuntoPrincipal` | `PUT /api/adjuntos/{}/principal` | admin rrhh | reversible | sí |  |
 | /vacantes/{} | `components/features/vacantes/VacanteImagenes.tsx` | `subirAdjunto` | `POST /api/adjuntos` | admin rrhh | reversible | sí |  |
 
@@ -648,5 +648,5 @@ Importados de `backend/tests/test_callers_huerfanos.py`, no copiados: ese barrid
 | Chequeo | Resultado |
 |---|---|
 | acciones cuyo componente no cuelga de ninguna pantalla ni layout | **0** — ninguna |
-| declaraciones de baja lógica que ya no se sostienen contra el código | **0** — las 3 siguen sanas |
+| declaraciones de baja lógica que ya no se sostienen contra el código | **0** — las 5 siguen sanas |
 | verbos de escritura sin clasificar (caen en «reversible» por default) | `activa`, `area`, `asignar`, `bulk`, `cambiar-password`, `cancelar`, `certificado`, `clasificacion`, `completar`, `devolver`, `entrevista`, `escala`, `estado`, `etapa`, `hitos`, `horas`, `identificar`, `iniciar`, `licencia`, `login`, `logo`, `logout`, `nomina-empleados`, `parametros`, `preview`, `principal`, `reabrir`, `readiness`, `remitente`, `resolver`, `restaurar`, `resuelta`, `tareas`, `vacante` |

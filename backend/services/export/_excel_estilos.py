@@ -7,6 +7,8 @@ from typing import Any, List
 
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+from services.export._formato import etiqueta
+
 HEADER_FILL = PatternFill("solid", fgColor="1e293b")
 HEADER_FONT = Font(bold=True, color="FFFFFF", size=10)
 ALT_FILL = PatternFill("solid", fgColor="f8fafc")
@@ -22,7 +24,7 @@ def escribir_tabla(ws: Any, val: List[dict], row: int) -> int:
     """Escribe una lista de dicts como tabla estilada desde `row`. Devuelve la fila siguiente."""
     headers = list(val[0].keys())
     for col_idx, h in enumerate(headers, start=1):
-        cell = ws.cell(row=row, column=col_idx, value=h.replace("_", " ").capitalize())
+        cell = ws.cell(row=row, column=col_idx, value=etiqueta(h))
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
         cell.border = BORDER

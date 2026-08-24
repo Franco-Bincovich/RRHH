@@ -60,7 +60,7 @@ export function EstadoRow({ ec }: { ec: EstadoConteo }) {
 
 export function ProcesoCard({ proceso }: { proceso: ProcesoResumen }) {
   return (
-    <Card padding="sm" className="flex flex-col">
+    <Card padding="sm" interactive className="flex flex-col">
       <div className="mb-4 flex items-start justify-between gap-3">
         <h3 className="text-sm font-semibold text-foreground">{proceso.label}</h3>
         <span className="shrink-0 text-2xl font-bold tabular-nums text-foreground">

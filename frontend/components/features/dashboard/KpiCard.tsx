@@ -40,6 +40,10 @@ const TONOS: Record<TonoKpi, EstiloTono> = {
 /**
  * 🔴 EL HOVER ES CONSECUENCIA DEL LINK, NO UN ADORNO — y por eso llega recién ahora.
  *
+ * ⚠️ Las DOS ramas llevan `interactive` desde el 23/8/2026: §2 se revirtió y toda TARJETA se
+ * mueve al apuntarla, lleve o no a algún lado (ver `components/ui/card.tsx`). La rama con `href`
+ * además navega.
+ *
  * Acá vivía la nota inversa: *"sin `interactive` y sin hover, porque un KPI no lleva a ningún
  * lado — el día que un KPI navegue a su listado filtrado, esa card pasa a `<Card interactive>` y
  * ésta es la nota que hay que borrar"*. Ese día es hoy: nueve de las diez cards llevan a la
@@ -102,7 +106,7 @@ export function KpiCard({ kpi }: { kpi: KpiCardData }) {
   return kpi.href ? (
     <Card as={Link} href={kpi.href} interactive {...comun}><Contenido kpi={kpi} /></Card>
   ) : (
-    <Card {...comun}><Contenido kpi={kpi} /></Card>
+    <Card interactive {...comun}><Contenido kpi={kpi} /></Card>
   )
 }
 

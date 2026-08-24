@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import type { Proyecto, ProyectoEstado } from "@/types/proyecto"
 
@@ -69,7 +70,7 @@ export function ProyectoCard({ proyecto, canWrite, onEdit }: {
   // que la tarjeta entera navegue —es decisión de producto, no de estilo—, pasa a
   // `<Card interactive>` y "Ver detalle" se va.
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-5">
+    <Card padding="sm" interactive className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-foreground">{proyecto.nombre}</p>
@@ -104,6 +105,6 @@ export function ProyectoCard({ proyecto, canWrite, onEdit }: {
           </Button>
         )}
       </div>
-    </div>
+    </Card>
   )
 }

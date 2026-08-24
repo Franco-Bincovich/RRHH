@@ -154,7 +154,7 @@ def app_autenticada(monkeypatch):
     """
     import middleware.auth as auth_mod
 
-    monkeypatch.setattr(auth_mod, "_verificar_token", lambda *_a, **_k: _USER_ID)
+    monkeypatch.setattr(auth_mod, "_verificar_token", lambda *_a, **_k: (_USER_ID, "smoke@x.test"))
     monkeypatch.setattr(auth_mod, "estado_usuario",
                         lambda *_a: SimpleNamespace(rol="admin_rrhh", activo=True, resuelto=True))
     monkeypatch.setattr(auth_mod, "sesion_expirada", lambda *_a: False)

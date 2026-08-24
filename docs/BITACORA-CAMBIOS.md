@@ -41,6 +41,203 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-23 · Arreglos del smoke de ESCRITURA + los tres que vio Franco · commits por bloque
+
+**Qué cambió:** nueve bloques de arreglo sobre lo que encontró el smoke de escritura y sobre lo
+que Franco vio usando el sistema. Los cuatro comandos en verde: `tsc` 0 errores · `npm test`
+**1560/1560 en 135 archivos** · `npm run build` compiled successfully · `pytest -q` **4248 passed**.
+
+**🔴 /reportes no descargaba nada, y eran DOS defectos, no uno.** (a) El catálogo tenía un único
+botón "Generar" que sólo llamaba a `POST /api/reportes/generar`: dejaba una fila en el historial
+de más abajo, mostraba "generado exitosamente" y **no bajaba ningún archivo** — para tenerlo había
+que bajar hasta el historial, ubicar la fila entre las demás y apretar un segundo botón sin texto.
+Las **10 filas de `reportes_generados` de las 00:12 UTC** que el smoke anterior no supo explicar
+son exactamente eso: Franco apretando 10 tarjetas, 10 toasts de éxito, cero archivos. (b)
+`services/reportes.ts::exportarReporte` era el **único** export del sistema con su propio `fetch`
+crudo, **fuera del interceptor de refresh**: con el access token vencido los otros 26 renuevan
+solos y éste tiraba "No se pudo exportar". Ahora la tarjeta tiene **PDF** y **Excel**, cada uno
+genera y baja, y la descarga pasa por `descargarArchivo` como todas. **Verificado apretando el
+botón con Playwright** contra el build real: los dos archivos llegan al disco y abren.
+
+**🔴 Los PDF salían ilegibles y el arreglo es del MOTOR, no export por export.** `build_pdf`
+armaba las tablas con **strings pelados** y `colWidths` **iguales** (`17cm / n`). Un string en una
+celda de reportlab no se envuelve: se dibuja entero y se mete encima de la de al lado. Con 15
+columnas la columna medía 34pt y "Objetivo padre" mide 52pt. Eso es *"Carla ZabaletaSALUD"*, es
+*"semi_seniorsenior"*, y es lo que convertía "Seniority anterior" en "Senity nueva": **no era un
+typo, eran dos textos superpuestos**. Tres arreglos, todos en el motor:
+`services/export/_pdf_tabla.py` (celdas `Paragraph` que envuelven + anchos proporcionales al
+contenido + hoja **apaisada** arriba de 6 columnas) y `services/export/_formato.py`, compartido por
+los CUATRO renderers: `None` es hueco y no la palabra "None" (el PDF escribía `str(None)` mientras
+Excel y CSV dejaban vacío — el mismo dato decía cosas distintas según el formato), y el encabezado
+de sección no se repite cuando coincide con el título. **Verificación: se abrieron 41 PDF y 40
+Excel** —los 26 listados y los 14 reportes del catálogo— con un medidor que calcula el ancho real
+con `pdfmetrics.stringWidth`. **26/26 y 14/14 sanos; los 3 archivos viejos siguen dando rojo**, que
+es lo que prueba que el medidor sirve.
+
+**🔴 Los cuatro 500 permanentes, cerrados.** `PUT /api/configuracion/parametros` y
+`PUT /api/screening/criterio` hacían `upsert(on_conflict="empresa_id")` contra un índice único
+**PARCIAL**: Postgres no puede usarlo de árbitro sin su predicado y PostgREST no lo emite →
+**42P10** en cada guardado. Ahora el upsert va **por `id`**, el patrón que
+`plantilla_mail_repo.py:62-64` ya tenía resuelto y explicado; **los comentarios de los otros dos
+repos afirmaban lo contrario y se corrigieron** — un comentario que miente es lo que hizo que esto
+durara. `POST /api/sucesion/planes/{id}/hitos` fallaba con **23502** (`hitos.tipo` es NOT NULL sin
+default y `HitoBodyCreate` no lo tenía): se expone con el vocabulario real del CHECK y default
+`"otro"`. `DELETE /api/proyectos/{id}` guardaba contra `horas` pero no contra
+`proyecto_asignaciones`, que también es RESTRICT: **23503** → 500; ahora es un 409 legible.
+Consecuencia del primero, que vale decir sola: **`base_dias_habiles` (mig 085) no era configurable
+en la práctica** — la pantalla de Parámetros nunca pudo guardar, y `parametros_empresa` tenía una
+sola fila (la global) que lo confirmaba.
+
+**🔴 El PUT del legajo revivía a alguien dado de baja.** `{"estado":"activo"}` sobre alguien de
+baja devolvía 200 y lo dejaba `activo` **conservando `fecha_egreso` y `motivo_baja`**: volvía al
+listado de activos con las tres cosas a la vez y no se podía deshacer por la API. Cerrado en
+`services/_empleado_reingreso.py` (409 `EMPLEADO_DE_BAJA_NO_SE_REACTIVA`). **Lo que NO se rechaza
+es editar el resto del legajo de alguien que se fue**: corregir un DNI o un domicilio para emitir
+un certificado es legítimo y frecuente. Mismo criterio que la guarda del egreso de
+recategorizaciones: se rechaza lo imposible, no lo retroactivo.
+
+**🔴 Editar una recategorización destruía lo que la recategorización registraba.** El PUT
+recalculaba los `*_anterior` leyendo al empleado, cuyos valores actuales los escribió **esa misma
+fila**: editar sólo el motivo dejaba `categoria_anterior = categoria_nueva`, o sea "de C3 a C3".
+Nueva REGLA 3 en `services/_recategorizacion_edicion.py`: al editar, el fallback por campo es lo
+que la fila ya registró, **nunca el empleado**. ✅ **No hay filas corruptas en producción**:
+verificado, 6 recategorizaciones y ninguna editada.
+
+**🔴 Los reportes eran inatribuibles, y eran TRES mitades.** `POST /api/reportes/generar` no dejaba
+ningún evento (`auditoria` tenía CERO eventos de reportes en toda su historia);
+`routers/reportes.py` leía `request.state.user.get("email")` y `middleware/auth.py` seteaba sólo
+`{"id","rol"}`, así que el fallback ganaba siempre y las 11 filas decían "Sistema"; y
+`ReporteRepo.save` construía la respuesta **sin `empresa_id`**, así que la API contestaba
+`empresa_id: null` incluso para un reporte de una empresa concreta. Las tres arregladas: el email
+sale del claim del JWT, hay un evento por reporte, y la empresa viaja. ⚠️ El cambio de
+`_verificar_token` (ahora devuelve `(sub, email)`) obligó a actualizar **13 dobles de test**, que
+es lo correcto: un doble que no devuelve lo que devuelve el real es el modo de falla que este repo
+ya documenta cinco veces.
+
+**Y dos de clasificación del inventario.** `BAJA_LOGICA` declaraba 3 y el smoke encontró más:
+`adjuntos` y `users` salían marcados «borra la fila» y no borran la fila. Se agregaron, se creó
+`BAJA_CONDICIONAL` para las tres que son soft-con-historial/hard-sin-él (capacitaciones, inventario
+ítems, templates de onboarding — **corrección de lo que el smoke reportó**: esas tres NO son bajas
+lógicas puras), y se agregó `sospechosas_de_baja_logica()` más un test que exige que cada una esté
+clasificada, **que es la mitad que faltaba**: el barrido anterior sólo verificaba que las 3
+declaradas siguieran sanas y por construcción no podía ver las que faltaban. Además tres endpoints
+figuraban como «llama a Claude» sin llamar a Claude (`PUT`/`restaurar` del criterio de screening y
+`POST /reportes/generar` salvo `tipo="adhoc"`, oculto del catálogo). `docs/INVENTARIO-SMOKE.md`
+regenerado: **91 acciones automatizables contra 86**, y «llama a Claude» baja de 7 endpoints a 3.
+
+**Menor:** `HoraCreate` aceptaba `cliente_id`, `modalidad`, `proyecto_texto` y `tarea_texto` y
+`HorasService.cargar` no se los pasaba al repo (201 y se perdían). Se pasan, no se sacan del
+schema: las columnas existen y son las que agrupa la vista de Horas por cliente.
+
+**Decisión de producto aplicada:** TODAS las tarjetas llevan el movimiento de §2, no sólo las
+clickeables (lo revirtió Franco). Se aplicó en el primitivo y las 10 `*Card.tsx` más los nodos del
+organigrama lo toman de ahí; seis ni siquiera usaban `Card` (tenían `rounded-xl border bg-card` a
+mano) y ahora sí. Nuevo barrido `barridoTarjetas.test.ts` (nº 41) y el test de `KpiCard` que
+guardaba la regla vieja **se invirtió en vez de borrarse**.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno nuevas, sin
+dependencias, sin endpoints nuevos. ⚠️ **Nada de esto está deployado**: los arreglos de backend
+rigen cuando `sofia-backend` tome el commit y los de front cuando lo tome `sofia-front`. Verificar
+el orden de siempre (backend primero, `/health`, después el front). ⚠️ **Los cuatro endpoints que
+devolvían 500 siguen devolviéndolo en producción hasta el deploy.**
+
+---
+
+## 2026-08-23 · Smoke de ESCRITURA: las 139 acciones contra producción · sin cambios de código
+
+**Qué cambió:** nada del repo. Se ejecutaron contra `sofia-backend-pi.vercel.app` **127 de las
+139 acciones de escritura** de `docs/INVENTARIO-SMOKE.md`, con los tres roles, verificando por
+cada una TRES cosas: el status y el `code`, que la escritura ocurrió **releyendo la fila de la
+base** (PostgREST con service key, no el mismo endpoint que contestó), y que escribió **lo que
+correspondía y nada más** (snapshot completo antes/después). Todo sobre datos sembrados; cero
+escrituras sobre los 31 colaboradores reales, la vacante real, el objetivo real, las 12 áreas
+reales, las 10 cesiones ni el lote de evaluaciones.
+
+**🔴 CUATRO ENDPOINTS DE ESCRITURA QUE DEVUELVEN 500 SIEMPRE, NO A VECES.** Los cuatro estaban
+verdes en la suite y ninguno puede haber funcionado nunca en producción:
+
+1. **`PUT /api/configuracion/parametros`** y 2. **`PUT /api/screening/criterio`** — mismo bug:
+   el repo hace `upsert(..., on_conflict="empresa_id")` contra un índice único **PARCIAL**
+   (`WHERE empresa_id IS NOT NULL`). Postgres no puede inferir un índice parcial como árbitro de
+   `ON CONFLICT` sin su predicado y PostgREST no lo emite → **42P10** → 500. Medido: las dos
+   tablas tienen **una sola fila, la global**, y cero filas por empresa — consistente con que el
+   endpoint nunca haya guardado. Consecuencia: **`base_dias_habiles` (mig 085) no es configurable
+   en la práctica**, y el criterio de screening por empresa tampoco.
+   🔑 **El repo ya sabía esto**: `repositories/plantilla_mail_repo.py:62-64` explica que
+   "PostgREST no puede apuntar `on_conflict` a un índice parcial" y por eso NO lo usa. Los otros
+   dos repos tienen un comentario afirmando lo contrario. Barrido hecho: de los 7 `on_conflict`
+   del backend, **exactamente estos 2** apuntan a índices parciales; los otros 5 van contra
+   constraints reales y funcionan.
+3. **`POST /api/sucesion/planes/{id}/hitos`** — `planes_carrera_hitos.tipo` es NOT NULL sin
+   default y `HitoCreate` no tiene `tipo`: **23502** → 500. `planes_carrera_hitos` tiene 0 filas.
+4. **`DELETE /api/proyectos/{id}`** (no está entre las 139: no tiene caller en el front, pero
+   está publicado) — guarda contra `horas` con un 409 legible, pero **no contra
+   `proyecto_asignaciones`**, que también es RESTRICT: **23503** → 500. Un proyecto con gente
+   asignada y sin horas cargadas es el estado normal de cualquier proyecto.
+
+**🔴 `PUT /api/empleados/{id}` REVIVE a alguien dado de baja y deja el legajo incoherente.**
+`EstadoEditable` excluye `'baja'` para que el PUT no pueda dar de baja sin `fecha_egreso` ni
+motivo — pero **la dirección inversa está abierta**: `{"estado": "activo"}` sobre alguien de baja
+devuelve 200, y la persona queda `activo` **conservando `fecha_egreso` y `motivo_baja`**. Medido:
+aparece en el listado de activos y en su ficha con las tres cosas a la vez. No hay forma de
+revertirlo por la API (el PUT ya no puede escribir `'baja'`): se restauró por SQL.
+
+**🔴 EDITAR UNA RECATEGORIZACIÓN BORRA LO QUE LA RECATEGORIZACIÓN REGISTRABA.** El PUT recalcula
+los `*_anterior`, y cuando la fila es la PRIMERA de esa persona el recálculo lee el LEGAJO — que
+esa misma fila ya pisó vía `aplicar_al_empleado`. Medido sobre un colaborador limpio: alta
+`C1 → C3` correcta; un PUT que **sólo cambia el motivo** deja `categoria_anterior = C3`, o sea
+"de C3 a C3". El módulo no tiene DELETE, así que no se corrige por la API.
+
+**🔴 `POST /api/reportes/generar` no deja NINGÚN evento de auditoría y `generado_por` está
+muerto.** `auditoria` tiene **0** eventos de reportes en toda su historia. Y
+`routers/reportes.py:34` hace `request.state.user.get("email", "Sistema")` mientras
+`middleware/auth.py:148` setea `{"id", "rol"}` — **no hay clave `email`**, así que el fallback
+gana siempre: las 11 filas de `reportes_generados` dicen "Sistema". Un reporte de costos o de
+masa salarial es hoy **completamente inatribuible**.
+
+**Dos misclasificaciones de `docs/INVENTARIO-SMOKE.md`, las dos en la columna «por qué no»:**
+`PUT /api/screening/criterio` y `POST /api/screening/criterio/restaurar` figuran como «llama a
+Claude» y sólo escriben una fila de config; `POST /api/reportes/generar` también, y sólo llama a
+Claude con `tipo="adhoc"` —que está OCULTO del catálogo del front—, como dice el comentario del
+propio router. Las tres se probaron.
+
+**Y una en la columna «Destructivo»: `scripts/_inv_destructivo.py::BAJA_LOGICA` declara 3 bajas
+lógicas y hay 7.** Medido borrando de verdad: `adjuntos` (`estado='eliminado'`),
+`inventario_items` (`estado='baja'`), `onboarding_templates` (`activo=false`) y `users`
+(`activo=false`) se marcan «🔴 borra la fila» y **no borran la fila**. El barrido nº 37 sólo
+verifica que las 3 declaradas sigan sanas: no puede ver las que faltan.
+
+**Escrituras de menos:** `POST /api/proyectos/{id}/horas` acepta `cliente_id`, `modalidad`,
+`proyecto_texto` y `tarea_texto` en `HoraCreate` y **`HorasService.cargar` no se los pasa al
+repo**: se descartan en silencio (hoy sin impacto — el `HoraCreate` del front no los manda).
+`onboarding_progreso.completado_por` (0/5) y `offboarding_activos.recibido_por` (0/24) no las
+escribe ningún camino: cero referencias en `services/`, `repositories/` y `schemas/`.
+
+**Permisos, y esta parte salió impecable.** Con **ids REALES y cuerpos válidos** —los mismos que
+`admin_rrhh` acababa de usar con éxito, para que un gate faltante escribiera de verdad—:
+`gerencia_lectura` **62/62** con 403 `FORBIDDEN` y cero filas nuevas; `mandos_medios` **55/55**
+con 403 fuera de vacaciones y ausencias; y dentro de las suyas, escribe sobre sus subordinados y
+rebota con 404 sobre quien no tiene a cargo, también en modo consolidado. Único detalle: el ALTA
+rechaza con `403 OWNERSHIP_DENIED` donde la edición y la baja usan `404 NOT_FOUND` — verificado
+que **no filtra** (empleado ajeno, uuid inexistente y empleado real de otra empresa dan los tres
+la misma respuesta), pero es una asimetría de contrato.
+
+**Confirmado el agujero de DEUDA §1-ter:** un usuario con `must_change_password=true` entra por
+`POST /api/auth/login` (200), lee (200) y **escribe** (201, fila creada en la base). El flag no
+viaja ni en la respuesta del login: lo aplica sólo `AuthGuard.tsx` en el navegador.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno, sin
+dependencias, sin endpoints nuevos, sin archivos de producción tocados. ⚠️ **Sí hubo escrituras
+en la base de producción, y se revirtieron:** de las 55 tablas, **52 volvieron exactamente al
+conteo de partida**. Las tres que no: `auditoria` **+70** (inmutable por diseño — se borraron
+sólo los 2 eventos de una empresa fantasma que el smoke creó y que bloqueaban su propio borrado
+por FK), `reportes_generados` **+10** (🔴 **NO son del smoke**: aparecieron a las 00:12 UTC, entre
+dos lotes, sin ningún evento de auditoría y con `generado_por="Sistema"` — es el hallazgo de
+arriba: no hay forma de saber quién los generó) y `horas_proyecto` **−1**, la carga sembrada por
+la fase `barrera` que consumió la prueba de `DELETE /api/horas-cliente/{id}`.
+
+---
+
 ## 2026-08-23 · Arreglos de lo que encontró el smoke de lectura · commits pendientes (7 bloques)
 
 **Qué cambió:** los siete hallazgos del recorrido de lectura de la entrada de abajo, cada uno en

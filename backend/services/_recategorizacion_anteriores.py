@@ -49,6 +49,7 @@ from schemas.empleado import EmpleadoResponse
 from schemas.recategorizacion import RecategorizacionResponse
 
 
+
 def resolver_anteriores(previa: Optional[RecategorizacionResponse],
                         empleado: EmpleadoResponse) -> dict:
     """Los tres `*_anterior` de una recategorización. Ver REGLA 1 en el encabezado.

@@ -80,7 +80,7 @@ MALOS = ["", "no-es-un-uuid"]
 
 @pytest.fixture
 def auth(monkeypatch):
-    monkeypatch.setattr(auth_mod, "_verificar_token", lambda token, path: str(uuid4()))
+    monkeypatch.setattr(auth_mod, "_verificar_token", lambda token, path: (str(uuid4()), "smoke@x.test"))
     monkeypatch.setattr(auth_mod, "registrar_actividad", lambda uid: None)
     monkeypatch.setattr(auth_mod, "estado_usuario",
                         lambda user_id: EstadoUsuario(rol="admin_rrhh", activo=True))

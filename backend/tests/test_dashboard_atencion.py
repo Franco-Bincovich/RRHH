@@ -124,7 +124,7 @@ def como(monkeypatch, almacen):
     def _fabrica(rol: str = "admin_rrhh", usuario: str = YO,
                  empresa_header: Optional[str] = EMPRESA):
         monkeypatch.setattr(auth_mod, "_extract_token", lambda r: "token")
-        monkeypatch.setattr(auth_mod, "_verificar_token", lambda t, p: usuario)
+        monkeypatch.setattr(auth_mod, "_verificar_token", lambda t, p: (usuario, "smoke@x.test"))
         monkeypatch.setattr(auth_mod, "estado_usuario",
                             lambda uid: EstadoUsuario(rol=rol, activo=True, resuelto=True))
         monkeypatch.setattr(auth_mod, "registrar_actividad", lambda uid: None)

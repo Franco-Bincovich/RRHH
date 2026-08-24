@@ -12,6 +12,9 @@ from uuid import UUID
 
 from repositories.reporte_repo import ReporteRepo
 from schemas.reporte import HistorialItem, ReporteResponse
+from services._audit_payloads_reportes import payload_generacion_reporte
+from services._reporte_nombres import nombre_de
+from services.audit_service import AuditService
 from services.reporte_adhoc import generate_adhoc
 from services.reporte_anual import generate_anual_consolidado
 from services.reporte_generators import (
@@ -35,8 +38,12 @@ from utils.logger import logger
 
 
 class ReporteService:
-    def __init__(self, repo: Optional[ReporteRepo] = None) -> None:
+    def __init__(self, repo: Optional[ReporteRepo] = None,
+                 audit: Optional[AuditService] = None) -> None:
         self._repo = repo or ReporteRepo()
+        # Inyectable como el repo: sin esto un test que llame a `generar` pega contra la
+        # auditoría de verdad. Mismo criterio que el resto de los services del repo.
+        self._audit = audit or AuditService()
 
     def get_historial(self, empresa_id: Optional[UUID] = None) -> List[HistorialItem]:
         """
@@ -56,6 +63,7 @@ class ReporteService:
         empresa_id: Optional[UUID] = None,
         area_id: Optional[UUID] = None,
         vista: Optional[str] = None,
+        usuario_id: Optional[str] = None,
     ) -> ReporteResponse:
         """
         Genera un reporte del tipo indicado, lo persiste en el historial y lo retorna.
@@ -101,23 +109,6 @@ class ReporteService:
         if tipo not in generators:
             raise AppError(f"Tipo de reporte desconocido: {tipo}", "REPORTE_TIPO_ERROR", 400)
 
-        nombres = {
-            "headcount":         f"Headcount — {periodo_str(mes_e, anio_e)}",
-            "rotacion":          f"Rotación — {periodo_str(mes_e, anio_e)}",
-            "altas_bajas":       f"Altas y bajas — {periodo_str(mes_e, anio_e)}",
-            "distribucion":      "Distribución de plantilla",
-            "costos":            f"Costos — {periodo_str(mes_e, anio_e)}",
-            "vacantes":          "Pipeline de Vacantes",
-            "onboarding":        "Progreso de Onboarding",
-            "adhoc":             f"Análisis IA: {(prompt or '')[:60]}",
-            "anual_consolidado": f"Informe Anual {anio_e}",
-            "saldos_vacaciones": f"Saldos de vacaciones — {periodo_str(mes_e, anio_e)}",
-            "ausentismo":        f"Ausentismo por área — {periodo_str(mes_e, anio_e)}",
-            "listado_vac_aus":   f"Vacaciones y ausencias — {periodo_str(mes_e, anio_e)}",
-            "presupuesto":       f"Presupuesto vs real — {periodo_str(mes_e, anio_e)}",
-            "capacitacion":      f"Formación por área — {periodo_str(mes_e, anio_e)}",
-            "auditoria":         f"Auditoría — {periodo_str(mes_e, anio_e)}",
-        }
 
         try:
             datos = generators[tipo]()
@@ -128,7 +119,7 @@ class ReporteService:
             raise AppError("Error al generar el reporte", "REPORTE_ERROR", 500) from exc
 
         reporte = self._repo.save(
-            nombre=nombres[tipo],
+            nombre=nombre_de(tipo, mes_e, anio_e, periodo_str, prompt),
             tipo=tipo,
             datos=datos,
             generado_por=generado_por,
@@ -139,5 +130,9 @@ class ReporteService:
                 else {"mes": mes_e, "anio": anio_e}
             ),
         )
+        # 🔴 UN EVENTO POR REPORTE. Sin esto la generación no dejaba rastro en `auditoria`
+        # (cero eventos en toda la historia de la tabla) y `reportes_generados` no dice quién
+        # pidió qué. Ver `services/_audit_payloads_reportes.py`.
+        self._audit.registrar(**payload_generacion_reporte(reporte, usuario_id, area_id))
         logger.info("Reporte generado", extra={"tipo": tipo, "id": str(reporte.id)})
         return reporte

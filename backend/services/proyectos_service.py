@@ -92,10 +92,15 @@ class ProyectosService:
 
     def delete(self, id: UUID, empresa_id: Optional[UUID] = None) -> None:
         """
-        Elimina proyecto. Rechaza si tiene horas registradas.
+        Elimina proyecto. Rechaza si tiene horas registradas o gente asignada.
+
+        🔴 LAS DOS GUARDAS, no una: `horas_proyecto` y `proyecto_asignaciones` son las dos
+        ON DELETE RESTRICT. Con sólo la de horas, un proyecto con gente asignada y sin horas
+        cargadas llegaba al DELETE y salía **500** (23503) en vez de un 409 que se pueda leer.
 
         Raises:
-            AppError: PROYECTO_NOT_FOUND (404), PROYECTO_CON_HORAS (409).
+            AppError: PROYECTO_NOT_FOUND (404), PROYECTO_CON_HORAS (409),
+                      PROYECTO_CON_ASIGNACIONES (409).
         """
         if not self._repo.find_by_id(str(id), empresa_id):
             raise AppError("Proyecto no encontrado", "PROYECTO_NOT_FOUND", 404)
@@ -103,6 +108,12 @@ class ProyectosService:
             raise AppError(
                 "No se puede eliminar un proyecto con horas registradas",
                 "PROYECTO_CON_HORAS", 409,
+            )
+        if self._repo.has_asignaciones(str(id)):
+            raise AppError(
+                "No se puede eliminar un proyecto con colaboradores asignados. "
+                "Quitá primero las asignaciones.",
+                "PROYECTO_CON_ASIGNACIONES", 409,
             )
         self._repo.delete(str(id), empresa_id)
         logger.info("Proyecto eliminado", extra={"proyecto_id": str(id)})

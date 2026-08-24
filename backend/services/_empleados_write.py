@@ -13,6 +13,7 @@ from schemas.empleado import EmpleadoCreate, EmpleadoResponse, EmpleadoUpdate
 from services._audit_payloads_rrhh import payload_alta_empleado, payload_update_empleado
 from services._empleado_duplicado import duplicado_a_409
 from services._empleados_manager import ensure_manager_valido, ensure_no_ciclo_manager
+from services._empleado_reingreso import ensure_no_revive
 from services._empleados_utils import (
     empleado_or_404, ensure_area_valida, ensure_legajo_unico,
 )
@@ -100,6 +101,9 @@ def actualizar(repo: EmpleadoRepo, audit, areas, id: UUID, data: EmpleadoUpdate,
         AppError: EMAIL_CORPORATIVO_DUPLICADO · DNI_DUPLICADO · LEGAJO_DUPLICADO (409) — la
             edición choca las MISMAS unicidades que el alta: cambiarle el email o el DNI a un
             empleado puede colisionar con otro. Por eso los dos caminos comparten la traducción.
+        AppError: EMPLEADO_DE_BAJA_NO_SE_REACTIVA (409) al mandar `estado` sobre alguien de
+            baja. El RESTO del legajo de una persona que se fue sí se puede corregir; lo único
+            cerrado es revivirla. Ver `services/_empleado_reingreso.py`.
     """
     ensure_legajo_unico(repo, data.legajo, empresa_id, str(id))
     # Las tres cortan solas si su campo es None (un update parcial no toca lo que no manda).
@@ -111,6 +115,9 @@ def actualizar(repo: EmpleadoRepo, audit, areas, id: UUID, data: EmpleadoUpdate,
     ensure_no_ciclo_manager(repo, id, data.manager_id)
     if prior is None:
         prior = repo.find_by_id(str(id), empresa_id)
+    # 🔴 Va DESPUÉS de leer `prior` (necesita el estado actual) y ANTES del UPDATE: si fuera
+    # después, la escritura ya ocurrió. Ver `services/_empleado_reingreso.py`.
+    ensure_no_revive(getattr(prior, "estado", None), data.estado)
     with duplicado_a_409():
         empleado = empleado_or_404(repo.update(str(id), data, empresa_id))
     audit.registrar(**payload_update_empleado(prior, empleado, usuario_id, empleado.empresa_id))

@@ -76,7 +76,10 @@ def _verificar_token(token: str, path: str) -> Optional[str]:
         path: Ruta del request, solo para trazabilidad en el log.
 
     Returns:
-        El `sub` (UUID del usuario) si el token es válido; None si no lo es.
+        `(sub, email)` del token si es válido; `(None, None)` si no lo es. El email sale del
+        claim que firma Supabase, así que no cuesta una query — y sin él `request.state.user`
+        no tenía forma de decir QUIÉN hizo algo más allá del uuid. Ver el uso en
+        `routers/reportes.py`.
     """
     try:
         signing_key = _jwks_client.get_signing_key_from_jwt(token)
@@ -86,13 +89,13 @@ def _verificar_token(token: str, path: str) -> Optional[str]:
             algorithms=_ALGORITHMS,
             options={"verify_aud": False},
         )
-        return payload.get("sub")
+        return payload.get("sub"), payload.get("email")
     except Exception as exc:
         logger.warning(
             "Token JWT rechazado",
             extra={"path": path, "motivo": type(exc).__name__},
         )
-        return None
+        return None, None
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -109,7 +112,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 content={"error": True, "message": "No autorizado", "code": "MISSING_TOKEN"},
             )
 
-        user_id = _verificar_token(token, request.url.path)
+        user_id, email = _verificar_token(token, request.url.path)
 
         if not user_id:
             return JSONResponse(
@@ -145,7 +148,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
         registrar_actividad(user_id)
 
-        request.state.user = {"id": user_id, "rol": estado.rol}
+        # 🔴 `email` VIAJA ACÁ, y su ausencia era un bug silencioso: `routers/reportes.py`
+        # hacía `request.state.user.get("email", "Sistema")` sobre un dict que sólo tenía
+        # `id` y `rol`, así que el fallback ganaba SIEMPRE y las 11 filas de
+        # `reportes_generados` decían "Sistema". Un reporte de costos era inatribuible.
+        request.state.user = {"id": user_id, "rol": estado.rol, "email": email}
 
         request.state.empresa_id = resolver_empresa_id(
             request.headers.get("X-Empresa-Id", "").strip(), request.url.path

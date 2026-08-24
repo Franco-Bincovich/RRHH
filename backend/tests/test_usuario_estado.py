@@ -383,7 +383,7 @@ def sesion_valida(monkeypatch):
     `registrar_actividad` se falsea para que el middleware no toque la base en un test, y
     de paso queda registrado quién fue sellado: eso es lo que permite afirmar que una sesión
     vencida NO se sella (si se sellara, no vencería nunca)."""
-    monkeypatch.setattr(auth_mod, "_verificar_token", lambda token, path: UID)
+    monkeypatch.setattr(auth_mod, "_verificar_token", lambda token, path: (UID, "smoke@x.test"))
     sellados: list[str] = []
     monkeypatch.setattr(auth_mod, "registrar_actividad", sellados.append)
 

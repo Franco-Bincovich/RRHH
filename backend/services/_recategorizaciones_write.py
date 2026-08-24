@@ -33,6 +33,7 @@ from services._recategorizacion_egreso import egreso_de, ensure_efectiva_antes_d
 from services._recategorizacion_anteriores import (
     empresa_de, es_la_mas_reciente, patch_empleado, resolver_anteriores,
 )
+from services._recategorizacion_edicion import anteriores_al_editar
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -81,9 +82,13 @@ def editar(repo, empleados, empleado_service, audit, id: UUID, data: Recategoriz
            empresa_id: Optional[UUID], usuario_id: Optional[str]) -> RecategorizacionResponse:
     """Edición. Recalcula los `*_anterior` y reevalúa si corresponde pisar al colaborador.
 
-    Los `*_anterior` se recalculan SIEMPRE, no solo si cambió la fecha: mover `fecha_efectiva`
-    cambia cuál es la recategorización previa, y dejarlos como estaban dejaría el histórico
+    Los `*_anterior` se recalculan cuando HAY una recategorización previa: mover
+    `fecha_efectiva` cambia cuál es, y dejarlos como estaban dejaría el histórico
     contradiciéndose sin ninguna señal.
+
+    🔴 Cuando NO hay previa se CONSERVAN (REGLA 3 de `_recategorizacion_anteriores`).
+    Recalcularlos ahí leía al empleado, cuyos valores actuales los escribió esta misma fila:
+    editar sólo el motivo dejaba la fila diciendo "de C3 a C3".
 
     `excepto_id` va en las DOS consultas de cadena: sin él, la fila se tomaría a sí misma de
     previa (copiándose sus propios valores nuevos como anteriores) y nunca sería más reciente
@@ -102,7 +107,8 @@ def editar(repo, empleados, empleado_service, audit, id: UUID, data: Recategoriz
     # empresa (el orden de los gates: nunca delatar la existencia de un recurso ajeno).
     ensure_efectiva_antes_del_egreso(fecha, egreso_de(empleado))
     eid = str(prior.empleado_id)
-    anteriores = resolver_anteriores(repo.find_previa(eid, fecha, str(id)), empleado)
+    anteriores = anteriores_al_editar(
+        repo.find_previa(eid, fecha, str(id)), prior, empleado)
     nuevo = repo.update(str(id), data, anteriores)
     if not nuevo:
         raise AppError(*NO_ENCONTRADO)

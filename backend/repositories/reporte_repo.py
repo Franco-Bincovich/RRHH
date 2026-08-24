@@ -42,9 +42,15 @@ class ReporteRepo:
             raise AppError("Error al guardar el reporte", "REPORTE_SAVE_ERROR", 500)
 
         r = res.data[0]
+        # 🔴 `empresa_id` VA EN LA RESPUESTA. Se guardaba en la fila y se perdía al construir el
+        # schema, así que `POST /api/reportes/generar` contestaba `empresa_id: null` SIEMPRE —
+        # indistinguible de un consolidado de verdad. El campo existe en `ReporteResponse` desde
+        # que se creó; lo que faltaba era pasarlo. Lo consume la auditoría de la generación, que
+        # etiqueta el evento con la empresa de la ENTIDAD y no con la del header.
         return ReporteResponse(
             id=r["id"], nombre=r["nombre"], tipo=r["tipo"],
             datos=r["datos"], generado_por=r["generado_por"], created_at=r["created_at"],
+            empresa_id=r.get("empresa_id"),
         )
 
     def find_by_id(self, reporte_id: str) -> Optional[ReporteResponse]:
@@ -53,9 +59,15 @@ class ReporteRepo:
         if not res.data:
             return None
         r = res.data[0]
+        # 🔴 `empresa_id` VA EN LA RESPUESTA. Se guardaba en la fila y se perdía al construir el
+        # schema, así que `POST /api/reportes/generar` contestaba `empresa_id: null` SIEMPRE —
+        # indistinguible de un consolidado de verdad. El campo existe en `ReporteResponse` desde
+        # que se creó; lo que faltaba era pasarlo. Lo consume la auditoría de la generación, que
+        # etiqueta el evento con la empresa de la ENTIDAD y no con la del header.
         return ReporteResponse(
             id=r["id"], nombre=r["nombre"], tipo=r["tipo"],
             datos=r["datos"], generado_por=r["generado_por"], created_at=r["created_at"],
+            empresa_id=r.get("empresa_id"),
         )
 
     def find_historial(self, empresa_id: Optional[UUID] = None, limit: int = 50) -> List[HistorialItem]:

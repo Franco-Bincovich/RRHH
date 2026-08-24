@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Adjunto } from "@/types/adjunto"
+import { Card } from "@/components/ui/card"
 
 interface Props {
   adjunto: Adjunto
@@ -20,8 +21,10 @@ interface Props {
 export function ImagenCard({ adjunto, url, canWrite, busy, onMarcarPrincipal, onEliminar }: Props) {
   const esPrincipal = Boolean(adjunto.es_principal)
   return (
-    <div
-      className={`overflow-hidden rounded-xl border bg-card ${
+    <Card
+      padding="none"
+      interactive
+      className={`overflow-hidden ${
         esPrincipal ? "border-primary ring-2 ring-primary/40" : "border-border"
       }`}
     >
@@ -73,6 +76,6 @@ export function ImagenCard({ adjunto, url, canWrite, busy, onMarcarPrincipal, on
           </div>
         )}
       </div>
-    </div>
+    </Card>
   )
 }

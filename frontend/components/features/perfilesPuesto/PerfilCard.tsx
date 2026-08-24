@@ -50,7 +50,7 @@ export function PerfilCard({
     : perfil.modalidad ?? ""
 
   return (
-    <Card padding="sm" className="flex flex-col gap-3">
+    <Card padding="sm" interactive className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <h3 className="min-w-0 text-sm font-semibold break-words text-foreground">
           {perfil.nombre}

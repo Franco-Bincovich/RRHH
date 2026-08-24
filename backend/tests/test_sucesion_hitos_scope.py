@@ -67,7 +67,10 @@ class _PlanesRepo:
     def get_hitos(self, plan_id):
         return []
 
-    def create_hito(self, plan_id, titulo, descripcion, fecha_objetivo, empresa_id) -> HitoResponse:
+    # `tipo` con default, igual que el repo real: la columna es NOT NULL sin default en la
+    # base, así que el service SIEMPRE lo manda (ver `schemas/sucesion.HitoBodyCreate`).
+    def create_hito(self, plan_id, titulo, descripcion, fecha_objetivo, empresa_id,
+                    tipo="otro") -> HitoResponse:
         self.creados.append((str(plan_id), empresa_id))
         return HitoResponse.model_validate({
             "id": str(uuid4()), "plan_id": str(plan_id), "titulo": titulo,

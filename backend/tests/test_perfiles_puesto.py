@@ -245,7 +245,7 @@ def como(monkeypatch, almacen, auditoria):
     """
     def _fabrica(rol: str = "admin_rrhh") -> httpx.AsyncClient:
         monkeypatch.setattr(auth_mod, "_extract_token", lambda r: "token-de-prueba")
-        monkeypatch.setattr(auth_mod, "_verificar_token", lambda t, p: USUARIO)
+        monkeypatch.setattr(auth_mod, "_verificar_token", lambda t, p: (USUARIO, "smoke@x.test"))
         monkeypatch.setattr(auth_mod, "estado_usuario",
                             lambda uid: EstadoUsuario(rol=rol, activo=True, resuelto=True))
         monkeypatch.setattr(auth_mod, "registrar_actividad", lambda uid: None)

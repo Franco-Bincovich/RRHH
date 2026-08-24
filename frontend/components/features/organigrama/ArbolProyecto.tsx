@@ -4,6 +4,7 @@ import { forwardRef, useImperativeHandle, useState } from "react"
 import { GitBranch } from "lucide-react"
 import { colorByEmpresa, initials, MULTI_PROY, ORG_TREE_CSS, type EmpresaColor } from "@/utils/colorEmpresa"
 import type { EmpleadoProyectoNodoAPI, OrgProyectosResponse, ProyectoOrgNodoAPI } from "@/types/organigrama"
+import { Card } from "@/components/ui/card"
 
 export interface ArbolProyectoRef {
   expandAll: () => void
@@ -16,7 +17,7 @@ function EmpleadoNodo({ emp, color, esExterno }: {
   emp: EmpleadoProyectoNodoAPI; color: EmpresaColor; esExterno: boolean
 }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-xl border bg-card px-3 py-1.5 shadow-sm whitespace-nowrap">
+    <Card padding="none" interactive className="inline-flex items-center gap-2 px-3 py-1.5 shadow-sm whitespace-nowrap">
       <span className="flex size-6 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold"
         style={{ background: color.bg, color: color.text }}>
         {initials(emp.nombre, emp.apellido)}
@@ -39,7 +40,7 @@ function EmpleadoNodo({ emp, color, esExterno }: {
           {emp.total_proyectos} proy.
         </span>
       )}
-    </div>
+    </Card>
   )
 }
 

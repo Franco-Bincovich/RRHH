@@ -8,6 +8,9 @@ from typing import Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
+from repositories._planes_carrera_hitos import completar as hitos_completar
+from repositories._planes_carrera_hitos import crear as hitos_crear
+from repositories._planes_carrera_hitos import listar as hitos_listar
 from schemas.sucesion import HitoResponse, PlanCarreraCreate, PlanCarreraResponse
 from utils.errors import AppError
 
@@ -33,14 +36,6 @@ def _plan_row(r: dict) -> PlanCarreraResponse:
         cargo_actual=(emp.get("roles") or [emp.get("cargo")])[0], cargo_objetivo=r["cargo_objetivo"],
         fecha_objetivo=str(r["fecha_objetivo"]) if r.get("fecha_objetivo") else None,
         readiness=r.get("progreso", 0), hitos_completados=done, hitos_total=len(hitos),
-    )
-
-
-def _hito_row(r: dict) -> HitoResponse:
-    return HitoResponse(
-        id=r["id"], plan_id=r["plan_id"], titulo=r["nombre"],
-        descripcion=r.get("descripcion"), completado=r.get("estado") == "completado",
-        fecha_objetivo=str(r["fecha_objetivo"]) if r.get("fecha_objetivo") else None,
     )
 
 
@@ -82,19 +77,17 @@ class PlanesCarreraRepo:
             raise AppError("Plan no encontrado", "PLAN_NOT_FOUND", 404)
         return plan
 
+    # Las tres de HITOS delegan en `_planes_carrera_hitos` (extraídas por límite de líneas).
     def get_hitos(self, plan_id: str) -> list[HitoResponse]:
-        res = supabase_admin.table(_HIT).select("*").eq("plan_id", plan_id).execute()
-        return [_hito_row(r) for r in (res.data or [])]
+        """Los hitos de un plan. Ver `_planes_carrera_hitos.listar`."""
+        return hitos_listar(plan_id)
 
     def create_hito(self, plan_id: str, titulo: str, descripcion: Optional[str],
-                    fecha_objetivo: Optional[str], empresa_id: str) -> HitoResponse:
-        payload: dict = {k: v for k, v in {"plan_id": plan_id, "nombre": titulo, "empresa_id": empresa_id,
-                                            "descripcion": descripcion, "fecha_objetivo": fecha_objetivo}.items() if v is not None}
-        ins = supabase_admin.table(_HIT).insert(payload).execute()
-        if not ins.data:
-            raise AppError("Error al crear hito", "DB_ERROR", 500)
-        return _hito_row(ins.data[0])
+                    fecha_objetivo: Optional[str], empresa_id: str,
+                    tipo: str = "otro") -> HitoResponse:
+        """Alta de un hito. Ver `_planes_carrera_hitos.crear` (ahí está el porqué de `tipo`)."""
+        return hitos_crear(plan_id, titulo, descripcion, fecha_objetivo, empresa_id, tipo)
 
     def completar_hito(self, hito_id: str, empresa_id: Optional[UUID] = None) -> bool:
-        q = supabase_admin.table(_HIT).update({"estado": "completado", "fecha_completada": date.today().isoformat()}).eq("id", hito_id)
-        return bool(_with_empresa(q, empresa_id).execute().data)
+        """Marca el hito completado. Ver `_planes_carrera_hitos.completar`."""
+        return hitos_completar(hito_id, empresa_id)

@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { ClasificacionBadge } from "@/components/features/candidatos/ClasificacionBadge"
 import type { ClasificacionIA, EtapaPipeline } from "@/types/vacantes"
+import { Card } from "@/components/ui/card"
 
 const ETAPA_LABELS: Record<EtapaPipeline, string> = {
   postulado: "Postulado",
@@ -62,7 +63,7 @@ export function CandidatoCard({ nombre, cargoAnterior, fechaAplicacion, etapa, c
     // 🔴 SIN `cursor-pointer` ni `hover:shadow-md`: la tarjeta nunca tuvo `onClick`, así que
     // esos estilos prometían un click que no existía. Las acciones son explícitas y viven
     // debajo (`CandidatoAccionesPipeline`). Una tarjeta que miente es peor que una que no invita.
-    <div className="rounded-lg border bg-card p-3 shadow-sm">
+    <Card padding="none" interactive className="rounded-lg p-3 shadow-sm">
       <div className="flex items-start gap-3">
         <Avatar>
           <AvatarFallback>{getInitials(nombre)}</AvatarFallback>
@@ -85,6 +86,6 @@ export function CandidatoCard({ nombre, cargoAnterior, fechaAplicacion, etapa, c
         <Badge variant="outline" className={ETAPA_ESTILOS[etapa]}>{ETAPA_LABELS[etapa]}</Badge>
         <span className="whitespace-nowrap text-xs text-muted-foreground">{fechaAplicacion}</span>
       </div>
-    </div>
+    </Card>
   )
 }

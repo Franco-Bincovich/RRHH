@@ -163,6 +163,37 @@ class TestLoDeclaradoAManoSigueEnPie:
             "hacer soft-delete (y entonces el DELETE pasó a ser destructivo y hay que sacar la "
             "entrada), o la ruta se borró.")
 
+    def test_ninguna_baja_logica_se_quedo_sin_declarar(self) -> None:
+        """🔴 LA MITAD QUE FALTABA, Y POR QUÉ NO ALCANZABA CON EL TEST DE ARRIBA.
+
+        `evidencia_baja_logica()` pregunta "¿lo declarado sigue siendo cierto?" y por
+        construcción **no puede ver lo que nunca se declaró**. El smoke de escritura del
+        23/8/2026 borró de verdad los 21 DELETE del sistema y encontró DOS bajas lógicas sin
+        declarar —`adjuntos` (`estado='eliminado'`) y `users` (`activo=false`)— que el
+        inventario mostraba como «🔴 borra la fila». Un tester que lee eso no aprieta el botón,
+        o lo aprieta creyendo que rompe algo que no rompe: en las dos direcciones el documento
+        le miente justo en la columna que existe para decidir.
+
+        Esto pregunta al revés: recorre `services/`, junta los que EVIDENCIAN una baja que no
+        destruye, y exige que cada uno esté clasificado en una de las dos listas.
+        """
+        from _inv_destructivo import (
+            BAJA_CONDICIONAL, BAJA_LOGICA, sospechosas_de_baja_logica)
+        sospechosas = sospechosas_de_baja_logica()
+        # Guarda de mínimo: si el detector se rompe y devuelve [], esto pasaría en el vacío.
+        assert len(sospechosas) >= 8, (
+            f"El detector encontró sólo {len(sospechosas)} services con baja lógica; había 8 "
+            "cuando se escribió esto. Si de verdad bajaron, corregí el número; si no, el "
+            "detector se rompió y este test estaba pasando sin comparar nada.")
+        declarados = ({v[0] for v in BAJA_LOGICA.values()}
+                      | {v[0] for v in BAJA_CONDICIONAL.values()})
+        sin_declarar = sorted(set(sospechosas) - declarados)
+        assert not sin_declarar, (
+            f"Estos services dan de baja SIN borrar la fila y el inventario los muestra como "
+            f"«borra la fila»: {sin_declarar}. Declaralos en BAJA_LOGICA (si la baja es "
+            "siempre lógica) o en BAJA_CONDICIONAL (si es soft con historial y hard sin él), "
+            "con su archivo y su cita como evidencia.")
+
     def test_los_endpoints_sin_barrera_de_empresa_siguen_existiendo(self) -> None:
         from _inv_casos import SIN_BARRERA
         montadas = {(e.metodo, e.path) for e in endpoints()}

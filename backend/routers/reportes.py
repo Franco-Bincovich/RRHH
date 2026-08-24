@@ -31,7 +31,11 @@ async def generar_reporte(
     body: ReporteGenerarRequest,
     service: ReporteService = Depends(_service),
 ) -> ReporteResponse:
-    generado_por = getattr(request.state, "user", {}).get("email", "Sistema")
+    usuario = getattr(request.state, "user", {}) or {}
+    # `email` lo pone `middleware/auth.py` desde el claim del JWT. El fallback queda para los
+    # caminos sin usuario (jobs), pero ya no es lo que pasa SIEMPRE: hasta el 23/8/2026 la
+    # clave no existía en `request.state.user` y las 11 filas históricas dicen "Sistema".
+    generado_por = usuario.get("email") or "Sistema"
     # Armado manual: la empresa/área del reporte salen del BODY (form), NO del header del sidebar.
     return service.generar(
         tipo=body.tipo,
@@ -42,6 +46,7 @@ async def generar_reporte(
         empresa_id=body.empresa_id,
         area_id=body.area_id,
         vista=body.vista,
+        usuario_id=usuario.get("id"),
     )
 
 

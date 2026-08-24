@@ -80,3 +80,15 @@ class ProyectosRepo:
     def has_horas(self, proyecto_id: str) -> bool:
         res = supabase_admin.table("horas_proyecto").select("id").eq("proyecto_id", proyecto_id).limit(1).execute()
         return bool(res.data)
+
+    def has_asignaciones(self, proyecto_id: str) -> bool:
+        """¿Al proyecto le cuelga gente asignada? `proyecto_asignaciones` es ON DELETE RESTRICT.
+
+        🔴 Existe porque su ausencia era un 500. `delete` sólo miraba `has_horas`, así que un
+        proyecto CON gente y SIN horas —el estado normal de cualquier proyecto recién armado—
+        llegaba al DELETE, Postgres lo rechazaba con **23503** y el handler global lo convertía
+        en "Error interno del servidor". El de horas ya devolvía un 409 legible; éste es el
+        mismo chequeo para la otra tabla que restringe.
+        """
+        res = supabase_admin.table("proyecto_asignaciones").select("id")             .eq("proyecto_id", proyecto_id).limit(1).execute()
+        return bool(res.data)

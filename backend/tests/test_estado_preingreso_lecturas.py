@@ -140,6 +140,10 @@ _PYTHON: dict = {
         (1, "desempate del anterior: código propio EMPLEADO_PREINGRESO, no el de baja"),
     ("services/_empleado_activar.py", "ESTADO_PREINGRESO"):
         (1, "solo se activa un preingreso — 409 EMPLEADO_NO_ES_PREINGRESO"),
+    ("services/_empleado_reingreso.py", "baja"):
+        (1, "¿está de baja? — el PUT del legajo no le puede cambiar el `estado`, o sea que no "
+            "lo puede revivir (409 EMPLEADO_DE_BAJA_NO_SE_REACTIVA). El RESTO del legajo de "
+            "alguien que se fue SÍ se corrige: la guarda mira sólo el campo `estado`."),
 }
 
 

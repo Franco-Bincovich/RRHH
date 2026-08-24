@@ -102,7 +102,7 @@ class SucesionService:
         hito = self._planes_repo.create_hito(
             str(plan_id), data.titulo, data.descripcion,
             str(data.fecha_objetivo) if data.fecha_objetivo else None,
-            str(plan.empresa_id or ""),
+            str(plan.empresa_id or ""), data.tipo,
         )
         logger.info("Hito creado", extra={"plan_id": str(plan_id), "hito_id": str(hito.id)})
         return hito

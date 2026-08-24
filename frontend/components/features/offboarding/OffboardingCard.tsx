@@ -11,6 +11,7 @@ import {
   MOTIVO_LABEL, MOTIVO_VARIANT, TIPO_ACTIVO_LABEL,
 } from "@/components/features/offboarding/_offboardingLabels"
 import type { ActivoResponse, OffboardingInstancia } from "@/types/offboarding"
+import { Card } from "@/components/ui/card"
 
 /**
  * La tarjeta de UN proceso de offboarding: cabecera, progreso, checklist de activos, entrevista
@@ -39,7 +40,7 @@ export function OffboardingCard({
   const devueltos = instancia.activos.filter((a) => a.devuelto).length
 
   return (
-    <li className="rounded-xl border bg-card p-4 md:p-5">
+    <Card as="li" interactive>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-medium text-foreground">{instancia.empleado_nombre}</p>
@@ -126,6 +127,6 @@ export function OffboardingCard({
       )}
 
       <EntrevistaSalida instancia={instancia} canWrite={canWrite} onGuardado={onEntrevista} />
-    </li>
+    </Card>
   )
 }

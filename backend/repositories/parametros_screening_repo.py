@@ -26,15 +26,30 @@ class ParametrosScreeningRepo:
         res = q.maybe_single().execute()
         return res.data if res and res.data else None
 
+    def _id_propio(self, empresa_id: str) -> Optional[str]:
+        """El `id` de la fila de esa empresa, o None si todavía hereda la global."""
+        res = supabase_admin.table(_T).select("id").eq("empresa_id", empresa_id) \
+            .maybe_single().execute()
+        return (res.data or {}).get("id") if res and res.data else None
+
     def upsert(self, empresa_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Crea o pisa la fila de la empresa. Upsert y no update porque la empresa puede no tener
         fila propia todavía: hasta ahora venía siguiendo la global.
 
-        `on_conflict="empresa_id"` apunta al índice único parcial ux_parametros_screening_por_empresa.
+        🔴 EL UPSERT VA POR `id`, NUNCA CON `on_conflict="empresa_id"`. La unicidad por empresa
+        la da el índice **PARCIAL** `ux_parametros_screening_por_empresa`
+        (`WHERE empresa_id IS NOT NULL`), y Postgres no puede usar un índice parcial como
+        árbitro de `ON CONFLICT` sin repetir su predicado — que PostgREST no emite. El resultado
+        era **42P10** en cada guardado, o sea un 500 permanente: la pantalla de criterio de
+        screening nunca pudo guardar. Mismo patrón y mismo motivo que
+        `plantilla_mail_repo.guardar`, que ya lo tenía resuelto y documentado.
         """
         fila = {**data, "empresa_id": empresa_id}
-        res = supabase_admin.table(_T).upsert(fila, on_conflict="empresa_id").execute()
+        propio = self._id_propio(empresa_id)
+        if propio:
+            fila["id"] = propio
+        res = supabase_admin.table(_T).upsert(fila).execute()
         if not res.data:
             raise AppError("No se pudo guardar el criterio de screening", "DB_ERROR", 500)
         return res.data[0]

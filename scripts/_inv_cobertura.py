@@ -53,6 +53,21 @@ def _previews_con_archivo() -> Set[str]:
     return {p[:-len("/preview")] for _m, p in sube_archivo() if p.endswith("/preview")}
 
 
+def _llama_a_claude(metodo: str, path: str) -> bool:
+    """¿ESTE endpoint le pega a Anthropic? No "¿es del módulo de IA?".
+
+    `/api/screening/criterio` es la CONFIGURACIÓN del clasificador y sólo toca una fila; el que
+    clasifica es `/api/screening/vacantes/{id}` y el que corrige una clasificación ya hecha,
+    `/api/screening/candidatos/{id}/clasificacion`. Ver `services/screening_config_service.py`
+    y el comentario de `routers/reportes.py`, que ya decía «con tipo="adhoc" llama a Claude».
+    """
+    if path.endswith("/anthropic"):
+        return True
+    if path.startswith("/api/screening"):
+        return "/criterio" not in path
+    return False
+
+
 def _es_import(path: str) -> bool:
     """El upload de un import, o el `/confirmar` HERMANO de un `/preview` que sube archivo — su
     body es la salida de ese preview, que sólo existe si alguien subió la planilla.
@@ -92,8 +107,16 @@ def veredicto(metodo: str, path: str, solo_con_flag: bool,
         return Veredicto(AUTOMATIZABLE, "")
     if "zernio" in path or path.endswith("publicar-linkedin"):
         return Veredicto(NO, "depende de un servicio externo (LinkedIn / Zernio)")
-    if path.startswith("/api/screening") or path == "/api/reportes/generar" \
-            or path.endswith("/anthropic"):
+    # 🔴 EL PREFIJO DEL MÓDULO NO ALCANZA: hay que mirar QUÉ endpoint llama a Claude.
+    # Esta rama decía `path.startswith("/api/screening")` y `== "/api/reportes/generar"` a
+    # secas, y marcaba como intestables TRES endpoints que no gastan un centavo:
+    #   · PUT  /api/screening/criterio            → escribe una fila de `parametros_screening`
+    #   · POST /api/screening/criterio/restaurar  → borra esa fila
+    #   · POST /api/reportes/generar              → sólo con `tipo="adhoc"`, que está OCULTO del
+    #     catálogo del front; los otros 13 tipos son generadores deterministas
+    # Los tres se corrieron en el smoke de escritura del 23/8/2026 y los tres escriben en la
+    # base. El que sí llama es el CLASIFICADOR de CVs y el reporte adhoc.
+    if _llama_a_claude(metodo, path):
         return Veredicto(NO, "llama a Claude: cuesta plata por request y la respuesta no es "
                              "determinista, así que la aserción no puede ser sobre el contenido")
     destructivo, razon = es_destructivo(metodo, path)

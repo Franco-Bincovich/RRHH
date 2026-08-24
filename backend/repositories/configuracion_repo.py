@@ -38,10 +38,21 @@ class ConfiguracionRepo:
         Crea o pisa la fila de la empresa. Es upsert y no update porque la empresa puede no
         tener fila propia todavía: hasta ahora venía siguiendo la global.
 
-        `on_conflict="empresa_id"` apunta al índice único parcial ux_parametros_empresa_por_empresa.
+        🔴 EL UPSERT VA POR `id`, NUNCA CON `on_conflict="empresa_id"`. La unicidad por empresa
+        la da el índice **PARCIAL** `ux_parametros_empresa_por_empresa`
+        (`WHERE empresa_id IS NOT NULL`), y Postgres no puede usar un índice parcial como
+        árbitro de `ON CONFLICT` sin repetir su predicado — que PostgREST no emite. El resultado
+        era **42P10** en cada guardado, o sea un 500 permanente: la pantalla de Parámetros nunca
+        pudo guardar y `base_dias_habiles` (mig 085) no era configurable en la práctica, aunque
+        toda la cadena de ausentismo la lea de acá. Mismo patrón y mismo motivo que
+        `plantilla_mail_repo.guardar`, que ya lo tenía resuelto y documentado.
         """
         fila = {**data, "empresa_id": empresa_id}
-        res = supabase_admin.table(_PARAMS).upsert(fila, on_conflict="empresa_id").execute()
+        propio = supabase_admin.table(_PARAMS).select("id") \
+            .eq("empresa_id", empresa_id).maybe_single().execute()
+        if propio and propio.data:
+            fila["id"] = propio.data["id"]
+        res = supabase_admin.table(_PARAMS).upsert(fila).execute()
         if not res.data:
             raise AppError("No se pudo guardar la configuración", "DB_ERROR", 500)
         return res.data[0]

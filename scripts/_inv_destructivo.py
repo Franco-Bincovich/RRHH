@@ -14,6 +14,7 @@ from functools import lru_cache
 from typing import Dict, List, Set, Tuple
 
 from _inv_backend import BACKEND, _crudo
+from _inv_baja_logica import sospechosas_de_baja_logica  # noqa: F401 — reexport
 
 
 # Verbos finales de path que marcan un ACTO IRREVERSIBLE. Se indexa por el ÚLTIMO SEGMENTO y no
@@ -31,7 +32,11 @@ IRREVERSIBLES: Dict[str, str] = {
     "submit": "cierra la evaluación del token; el link queda consumido",
     "enviar": "sale un mail real a un buzón real; no se puede desenviar",
     "publicar-linkedin": "publica afuera del sistema",
-    "generar": "llama a Claude y cuesta plata por request",
+    # ⚠️ NO dice "llama a Claude", que es lo que decía y era falso para 13 de los 14 tipos: sólo
+    # `tipo="adhoc"` le pega a Anthropic, y está oculto del catálogo. Lo irreversible es otra
+    # cosa y sigue siendo cierto: el reporte queda en el historial y no hay endpoint que lo
+    # borre. Ver `_inv_cobertura._llama_a_claude`.
+    "generar": "deja el reporte en el historial y no hay endpoint que lo borre",
     "revisar": "lee la casilla de Gmail y crea candidatos a partir de lo que encuentre",
 }
 
@@ -46,14 +51,35 @@ IRREVERSIBLES: Dict[str, str] = {
 # asignaciones; hard-delete si no" (`capacitacion_service.py:86`). O sea que sobre una formación
 # recién sembrada —que por definición no tiene asignaciones— **borra de verdad**, que es justo el
 # caso del smoke. Una baja lógica CONDICIONAL no es una baja lógica: declararla acá haría que el
-# inventario diga "reversible" precisamente en el escenario en que no lo es.
+# inventario diga "reversible" precisamente en el escenario en que no lo es. Las condicionales
+# se declaran en `BAJA_CONDICIONAL`, abajo.
+#
+# 🔴 ESTA LISTA ESTUVO CORTA Y NADIE PODÍA VERLO. Declaraba 3 y el smoke de escritura del
+# 23/8/2026 encontró **2 más** borrando de verdad: `adjuntos` (`estado='eliminado'`) y `users`
+# (`activo=false` + ban en Auth) salían marcados «🔴 borra la fila» y no borraban la fila. El
+# barrido de entonces sólo verificaba que las 3 declaradas siguieran sanas, así que por
+# construcción no podía ver las que faltaban. Ahora `sospechosas_de_baja_logica()` las descubre
+# y `test_inventario_smoke.py` exige que cada una esté en UNA de las dos listas.
 BAJA_LOGICA: Dict[str, Tuple[str, str]] = {
     "/api/clientes/{}": ("services/cliente_service.py", "LA BAJA ES LÓGICA"),
     "/api/perfiles-puesto/{}": ("services/perfil_puesto_service.py", "LA BAJA ES LÓGICA"),
+    "/api/adjuntos/{}": ("services/adjunto_service.py", "Soft delete (estado='eliminado')"),
+    "/api/usuarios/{}": ("services/usuario_service.py", "baja BLANDA y REVERSIBLE"),
     "/api/areas/{}": ("services/area_service.py", "soft delete"),
 }
 
 
+
+# Bajas lógicas CONDICIONALES: soft si la fila tiene historial, hard si no. NO entran en
+# `BAJA_LOGICA` (ver arriba) pero tampoco son un descubrimiento nuevo cada vez que alguien
+# corre el barrido: se declaran acá, con la misma evidencia, para que el chequeo de completitud
+# las dé por clasificadas y siga marcando lo que de verdad no está declarado.
+BAJA_CONDICIONAL: Dict[str, Tuple[str, str]] = {
+    "/api/capacitaciones/{}": ("services/capacitacion_service.py", "hard-delete si no"),
+    "/api/inventario/items/{}": ("services/inventario_items_service.py", "hard-delete si no"),
+    "/api/onboarding/templates/{}": ("services/onboarding_templates_service.py",
+                                     "Soft delete si tiene instancias"),
+}
 
 def _clave(path: str) -> str:
     """🔴 EL PATH SE NORMALIZA ANTES DE BUSCARLO, y sin esto la tabla MIENTE en las tres filas

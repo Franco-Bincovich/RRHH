@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { Users } from "lucide-react"
+
+import { Card } from "@/components/ui/card"
 import { colorByEmpresa, initials, ORG_TREE_CSS, type EmpresaColor } from "@/utils/colorEmpresa"
 import { fetchOrgEmpresa } from "@/services/organigrama"
 import type { AreaNodoAPI, EmpleadoNodoAPI, EmpresaNodoAPI } from "@/types/organigrama"
 
 function EmpleadoNodo({ emp, color }: { emp: EmpleadoNodoAPI; color: EmpresaColor }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-xl border bg-card px-3 py-1.5 shadow-sm whitespace-nowrap">
+    <Card padding="none" interactive className="inline-flex items-center gap-2 px-3 py-1.5 shadow-sm whitespace-nowrap">
       <span className="flex size-6 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold"
         style={{ background: color.bg, color: color.text }}>
         {initials(emp.nombre, emp.apellido)}
@@ -21,19 +23,19 @@ function EmpleadoNodo({ emp, color }: { emp: EmpleadoNodoAPI; color: EmpresaColo
           <span className="text-[10px] leading-tight text-muted-foreground">{emp.cargo}</span>
         )}
       </span>
-    </div>
+    </Card>
   )
 }
 
 function AreaNodo({ area, color }: { area: AreaNodoAPI; color: EmpresaColor }) {
   return (
     <>
-      <div className="inline-flex flex-col items-center gap-0.5 rounded-xl border bg-card px-4 py-2 shadow-sm whitespace-nowrap">
+      <Card padding="none" interactive className="inline-flex flex-col items-center gap-0.5 px-4 py-2 shadow-sm whitespace-nowrap">
         <span className="text-[12.5px] font-semibold text-foreground">{area.nombre}</span>
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
           Área · {area.total_empleados}
         </span>
-      </div>
+      </Card>
       {area.empleados.length > 0 && (
         <ul>
           {area.empleados.map((emp) => (

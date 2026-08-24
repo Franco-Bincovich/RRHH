@@ -104,15 +104,21 @@ describe("el detalle", () => {
 })
 
 /**
- * 🔴 EL MOVIMIENTO ES CONSECUENCIA DEL LINK, Y ACÁ SE PRUEBA JUSTO ESO: que las dos cosas viajen
- * juntas. Un hover en la card sin destino promete un click que no existe; un destino sin hover
- * esconde el único control de la pantalla. Por eso cada aserción lleva su contraria.
+ * 🔴 EL MOVIMIENTO YA NO DEPENDE DEL LINK, Y ESTE BLOQUE SE DIO VUELTA POR ESO (23/8/2026).
+ * Acá se afirmaba lo contrario —*"sin href es un `<div>` quieto, sin hover"*— y era la decisión
+ * vigente hasta que Franco la revirtió: en una grilla, que unas tarjetas respondan al puntero y
+ * otras no se lee como que algunas están deshabilitadas. Ahora **las dos ramas se mueven** y lo
+ * único que el `href` decide es si además NAVEGA.
+ *
+ * ⚠️ La aserción no se borró, se INVIRTIÓ: si se borrara, la rama sin `href` se quedaría sin
+ * nadie mirándola y podría perder el movimiento sin que ningún test lo note. Lo que se prueba
+ * ahora es la igualdad (las dos llevan la elevación) más la diferencia real (el tag y el href).
  *
  * ⚠️ Se afirma sobre `hover:-translate-y-[3px]`, que es el literal que `card.tsx` pone en
  * `interactive` y que `decisionesVisuales.test.ts` fija contra la cita de §2. Si esa decisión
  * cambia de forma, rojea allá (por la fuente) y acá (por el consumidor), que es lo que se quiere.
  */
-describe("la card lleva a su sección sólo cuando tiene destino", () => {
+describe("toda card de KPI se mueve; el destino sólo decide si además navega", () => {
   it("con href es un <a> a esa ruta", () => {
     const html = render({ href: "/empleados?estado=activo" })
     expect(tagCard(html)).toBe("a")
@@ -123,11 +129,18 @@ describe("la card lleva a su sección sólo cuando tiene destino", () => {
     expect(claseCard(render({ href: "/vacantes" }))).toContain("hover:-translate-y-[3px]")
   })
 
-  it("EL CONTRASTE: sin href es un <div> quieto, sin hover y sin href", () => {
+  it("sin href es un <div> y NO navega, pero se mueve igual", () => {
     const html = render({})
     expect(tagCard(html)).toBe("div")
-    expect(claseCard(html)).not.toContain("hover:-translate-y")
     expect(html).not.toContain("href=")
+    expect(claseCard(html)).toContain("hover:-translate-y-[3px]")
+  })
+
+  it("EL CONTRASTE: la elevación es la MISMA con y sin destino", () => {
+    const elevacion = (h: string) =>
+      claseCard(h).split(" ").filter((c) => c.startsWith("hover:")).sort().join(" ")
+    expect(elevacion(render({}))).toBe(elevacion(render({ href: "/vacantes" })))
+    expect(elevacion(render({}))).toContain("hover:-translate-y-[3px]")
   })
 
   it("el interior no cambia: lo único que cambia es el envoltorio", () => {

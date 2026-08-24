@@ -114,7 +114,7 @@ def sesion_valida(monkeypatch):
     permisos NO se toca: corre de verdad, y por eso el rol tiene que alcanzar. La validación del
     query/path corta antes del handler, así que la base nunca se consulta.
     """
-    monkeypatch.setattr(auth_mod, "_verificar_token", lambda token, path: str(uuid4()))
+    monkeypatch.setattr(auth_mod, "_verificar_token", lambda token, path: (str(uuid4()), "smoke@x.test"))
     monkeypatch.setattr(auth_mod, "registrar_actividad", lambda uid: None)
 
     def _con(estado: EstadoUsuario):

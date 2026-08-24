@@ -3,6 +3,7 @@
 import { Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Objetivo, PrioridadObjetivo } from "@/types/objetivo"
+import { Card } from "@/components/ui/card"
 
 const PRIORIDAD_LABEL: Record<PrioridadObjetivo, string> = { baja: "Baja", media: "Media", alta: "Alta" }
 
@@ -33,7 +34,7 @@ export function ObjetivoCard({ objetivo: obj, canWrite, onEdit, onDelete, deleti
   const atrasado = isOverdue(obj.fecha_entrega, obj.estado)
 
   return (
-    <div className="rounded-lg border border-border bg-background p-3 shadow-sm">
+    <Card padding="none" interactive className="rounded-lg bg-background p-3 shadow-sm">
       <div className="mb-1.5 flex items-start justify-between gap-1">
         <p className="text-sm font-medium leading-snug text-foreground">{obj.titulo}</p>
         {canWrite && (
@@ -77,6 +78,6 @@ export function ObjetivoCard({ objetivo: obj, canWrite, onEdit, onDelete, deleti
           </span>
         )}
       </div>
-    </div>
+    </Card>
   )
 }

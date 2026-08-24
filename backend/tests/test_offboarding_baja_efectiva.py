@@ -318,7 +318,7 @@ def cliente(monkeypatch, almacen):
     módulo de origen no alcanzaría y los repos seguirían saliendo a la red.
     """
     monkeypatch.setattr(auth_mod, "_extract_token", lambda r: "token")
-    monkeypatch.setattr(auth_mod, "_verificar_token", lambda t, p: USUARIO)
+    monkeypatch.setattr(auth_mod, "_verificar_token", lambda t, p: (USUARIO, "smoke@x.test"))
     monkeypatch.setattr(auth_mod, "estado_usuario",
                         lambda uid: EstadoUsuario(rol="admin_rrhh", activo=True, resuelto=True))
     monkeypatch.setattr(auth_mod, "registrar_actividad", lambda uid: None)
