@@ -1,5 +1,6 @@
 "use client"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
@@ -66,7 +67,7 @@ export function VacanteCamposBase({
           ))}
         </Select>
         {errors.empresa_id && (
-          <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>
+          <FieldError>{errors.empresa_id}</FieldError>
         )}
       </div>
 
@@ -84,7 +85,7 @@ export function VacanteCamposBase({
           aria-required
         />
         {errors.titulo && (
-          <p className="text-xs text-destructive" role="alert">{errors.titulo}</p>
+          <FieldError>{errors.titulo}</FieldError>
         )}
       </div>
 
@@ -110,7 +111,7 @@ export function VacanteCamposBase({
           ))}
         </Select>
         {errors.area_id && (
-          <p className="text-xs text-destructive" role="alert">{errors.area_id}</p>
+          <FieldError>{errors.area_id}</FieldError>
         )}
       </div>
 

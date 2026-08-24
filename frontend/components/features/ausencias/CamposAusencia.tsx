@@ -1,5 +1,6 @@
 "use client"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -60,7 +61,7 @@ export function CamposAusencia({
                 .map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
           <option value={NUEVO_TIPO}>+ Crear tipo nuevo...</option>
         </Select>
-        {errors.tipo_id && <p className="text-xs text-destructive" role="alert">{errors.tipo_id}</p>}
+        {errors.tipo_id && <FieldError>{errors.tipo_id}</FieldError>}
       </div>
 
       {form.tipo_id === NUEVO_TIPO && (
@@ -72,7 +73,7 @@ export function CamposAusencia({
               {creandoTipo ? "..." : "Crear"}
             </Button>
           </div>
-          {errors.nuevo_tipo && <p className="text-xs text-destructive" role="alert">{errors.nuevo_tipo}</p>}
+          {errors.nuevo_tipo && <FieldError>{errors.nuevo_tipo}</FieldError>}
         </div>
       )}
 
@@ -80,12 +81,12 @@ export function CamposAusencia({
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="fecha_desde">Desde <span className="text-destructive" aria-hidden>*</span></Label>
           <Input id="fecha_desde" type="date" value={form.fecha_desde} onChange={field("fecha_desde")} aria-required aria-invalid={Boolean(errors.fecha_desde)} />
-          {errors.fecha_desde && <p className="text-xs text-destructive" role="alert">{errors.fecha_desde}</p>}
+          {errors.fecha_desde && <FieldError>{errors.fecha_desde}</FieldError>}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="fecha_hasta">Hasta <span className="text-destructive" aria-hidden>*</span></Label>
           <Input id="fecha_hasta" type="date" value={form.fecha_hasta} min={form.fecha_desde} onChange={field("fecha_hasta")} aria-required aria-invalid={Boolean(errors.fecha_hasta)} />
-          {errors.fecha_hasta && <p className="text-xs text-destructive" role="alert">{errors.fecha_hasta}</p>}
+          {errors.fecha_hasta && <FieldError>{errors.fecha_hasta}</FieldError>}
         </div>
       </div>
 

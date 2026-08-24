@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FieldError } from "@/components/ui/FieldError"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -139,7 +140,7 @@ export function CandidatoModal({ open, vacanteId, onClose, onSuccess }: Candidat
                   aria-required={required}
                 />
                 {errors[key] && (
-                  <p className="text-xs text-destructive" role="alert">{errors[key]}</p>
+                  <FieldError>{errors[key]}</FieldError>
                 )}
               </div>
             ))}

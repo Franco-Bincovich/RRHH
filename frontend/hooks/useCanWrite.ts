@@ -1,6 +1,20 @@
 import { usePathname } from "next/navigation"
 
-import { getRol, puede, seccionDeRuta, type Seccion } from "@/services/permisos"
+import { useRol } from "@/hooks/useRol"
+import { puede, seccionDeRuta, type Seccion } from "@/services/permisos"
+import type { UserRol } from "@/types/auth"
+
+/**
+ * 🔴 EL ROL SALE DE `useRol()`, NUNCA DE `getRol()` EN EL RENDER. Llamarlo directo lee
+ * localStorage, que el servidor no tiene, y produce el mismatch de hidratación que
+ * `hooks/useRol.ts` explica en detalle. Ese archivo es el único que puede leer ese store.
+ *
+ * La DECISIÓN vive aparte del hook (`decidirCanWrite`), pura y sin React, para que la matriz
+ * por rol se pueda testear sin renderizar y el hook quede con una sola responsabilidad.
+ */
+export function decidirCanWrite(rol: UserRol | null, seccion: Seccion | null): boolean {
+  return seccion ? puede(rol, seccion, "write") : true
+}
 
 /**
  * UX: ¿el rol actual puede escribir en esta sección? Solo para ocultar entry points
@@ -12,8 +26,8 @@ import { getRol, puede, seccionDeRuta, type Seccion } from "@/services/permisos"
  */
 export function useCanWrite(seccion?: Seccion): boolean {
   const pathname = usePathname()
-  const sec = seccion ?? seccionDeRuta(pathname)
-  return sec ? puede(getRol(), sec, "write") : true
+  const rol = useRol()
+  return decidirCanWrite(rol, seccion ?? seccionDeRuta(pathname))
 }
 
 /**
@@ -27,5 +41,6 @@ export function useCanWrite(seccion?: Seccion): boolean {
  * contenido no es el de la ruta en la que está.
  */
 export function useCanRead(seccion: Seccion): boolean {
-  return puede(getRol(), seccion, "read")
+  const rol = useRol()
+  return puede(rol, seccion, "read")
 }

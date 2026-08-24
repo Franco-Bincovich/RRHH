@@ -23,6 +23,10 @@ vi.mock("@/services/permisos", () => ({
   getRol: () => "un_rol",
   seccionDeRuta: () => null,
 }))
+// El rol se falsea en `useRol`, la unica pieza que lee el store del navegador: en un render de
+// servidor devuelve null a proposito (ver hooks/useRol.ts) y sin esto la seccion no se pintaria
+// nunca, con lo cual "sin permiso no renderiza" pasaria tambien con el gate borrado.
+vi.mock("@/hooks/useRol", () => ({ useRol: () => "un_rol" }))
 vi.mock("next/navigation", () => ({ usePathname: () => "/empleados/abc" }))
 
 const { HistorialSalarialSection, debeCargar } = await import(

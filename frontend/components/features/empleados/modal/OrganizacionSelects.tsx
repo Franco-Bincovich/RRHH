@@ -1,5 +1,6 @@
 import type { ChangeEvent } from "react"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { type FieldFactory, type FormData, type FormErrors } from "./_constants"
@@ -57,7 +58,7 @@ export function OrganizacionSelects({
             ))}
           </Select>
           {errors.empresa_id && (
-            <p className="text-[11px] text-destructive" role="alert">{errors.empresa_id}</p>
+            <FieldError>{errors.empresa_id}</FieldError>
           )}
         </div>
       )}
@@ -88,7 +89,7 @@ export function OrganizacionSelects({
           ))}
         </Select>
         {errors.area_id && (
-          <p className="text-[11px] text-destructive" role="alert">{errors.area_id}</p>
+          <FieldError>{errors.area_id}</FieldError>
         )}
       </div>
 

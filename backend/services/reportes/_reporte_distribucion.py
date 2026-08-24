@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from integrations.supabase_client import supabase_admin
-from services._nomina_parsers import VACIOS
+from services._nomina_parsers import VACIOS, normalizar_nombre
 from services.reportes._common import _eid
 
 _SIN = "Sin especificar"
@@ -23,18 +23,58 @@ def _agrupar(rows: List[dict], campo: str) -> List[dict]:
     empleados con `seniority = 'SIN DATOS'` de producción se cargaron cuando ese texto todavía
     no estaba en `VACIOS`, así que ya están en la base y ninguna corrección del import los toca.
 
-    ⚠️ Esto agrupa BIEN pero NO limpia el dato: la columna sigue diciendo 'SIN DATOS' y cualquier
-    otra superficie que la lea sin pasar por acá (el export de empleados, la ficha, un filtro
-    futuro) lo va a seguir mostrando. Cerrar eso es un UPDATE, y es una decisión aparte."""
+    🔴 EL AGRUPAMIENTO ES INSENSIBLE A LA CAJA Y AL ESPACIADO, Y ESO ARREGLA UN CONTEO MAL DADO.
+    Antes la clave era el valor CRUDO y el `.upper()` solo decidía si estaba vacío, así que
+    `SENIOR` y `senior` salían como DOS categorías. En producción (medido el 23/8/2026) eran 1 y
+    5: el reporte partía en dos los 6 seniors de la empresa. La causa es que la columna tiene DOS
+    escritores con vocabularios distintos —el formulario escribe minúsculas (`senior`,
+    `semi_senior`) y el import de nómina escribe el Excel tal cual, en mayúsculas (`SENIOR`,
+    `EXPERT`, `TRAINEE`)—. Dos grafías que solo difieren en la caja son la misma categoría, punto:
+    contarlas por separado es un error de aritmética, no una preferencia de formato.
+
+    🔴 QUÉ ETIQUETA SE MUESTRA CUANDO DOS GRAFÍAS SE UNIFICAN: **la más frecuente**, y ante empate
+    la menor alfabéticamente. Las dos mitades importan.
+      · *La más frecuente* es la que la organización realmente usa (senior 5 vs SENIOR 1), y sale
+        del dato: no se inventa texto. Title-case-ar la clave sería inventarlo, y acá rompería:
+        `turno` es texto libre con valores como "8 A 17 HS.", que quedarían como "8 A 17 Hs.".
+      · *El desempate alfabético* es lo que la hace DETERMINISTA. "la primera que aparezca" habría
+        sido lo obvio y está mal: la query no lleva ORDER BY, así que el mismo reporte podría
+        decir "SENIOR" un día y "senior" al siguiente sin que cambiara un solo dato.
+
+    ⚠️ ESTO ARREGLA EL CONTEO, NO EL VOCABULARIO, y la diferencia es el punto entero.
+    `tipo_contrato` tiene hoy `RELACION DE DEPENDENCIA` (30), `efectivo` (10) y `HONORARIOS` (1):
+    **ninguna normalización de caja las junta**, porque no son la misma palabra escrita distinto
+    — son vocabularios distintos, y si `efectivo` y `RELACION DE DEPENDENCIA` son la misma
+    categoría lo decide RRHH, no este archivo. Cerrar eso pide las tres cosas juntas: una lista
+    cerrada para la columna, que el import traduzca a esa lista, y un UPDATE de las filas que ya
+    están. Va con el combobox de seniority (bloque N), no acá: mientras el histórico siga en la
+    tabla, este agrupamiento tiene que seguir siendo defensivo igual.
+    """
+    # `normalizar_nombre` es la definición canónica de "la misma cadena" del repo (trim + colapso
+    # de espacios + casefold). Se importa en vez de reescribirla: dos definiciones de "mismo
+    # texto" que se separen darían dos criterios distintos sobre lo mismo. El nombre habla de
+    # nombres por su primer uso (empresas y áreas); la operación es exactamente ésta.
     conteo: dict[str, int] = {}
+    grafias: dict[str, dict[str, int]] = {}
     for r in rows:
         valor = r.get(campo)
         crudo = valor.strip() if isinstance(valor, str) else valor
-        clave = _SIN if not crudo or str(crudo).upper() in VACIOS else crudo
+        vacio = not crudo or str(crudo).upper() in VACIOS
+        etiqueta = _SIN if vacio else str(crudo)
+        clave = _SIN if vacio else normalizar_nombre(etiqueta)
         conteo[clave] = conteo.get(clave, 0) + 1
+        grafias.setdefault(clave, {})
+        grafias[clave][etiqueta] = grafias[clave].get(etiqueta, 0) + 1
+
+    def _etiqueta(clave: str) -> str:
+        """La grafía más usada del grupo; empate → la menor alfabéticamente (determinismo)."""
+        return sorted(grafias[clave].items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+
     return sorted(
-        [{"categoria": k, "total": v} for k, v in conteo.items()],
-        key=lambda x: (x["categoria"] == _SIN, -x["total"]),
+        [{"categoria": _etiqueta(k), "total": v} for k, v in conteo.items()],
+        # El tercer criterio no es decorativo: sin él, dos categorías con el mismo total salen en
+        # el orden del dict y el reporte cambia de forma entre corridas sin cambiar de datos.
+        key=lambda x: (x["categoria"] == _SIN, -x["total"], x["categoria"]),
     )
 
 

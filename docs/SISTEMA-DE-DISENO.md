@@ -107,8 +107,19 @@ las columnas. Transiciones de 160ms.
 Panel propio entre el encabezado y la tabla, nunca flotando sobre ella. Fila superior: buscador
 que ocupa el ancho libre, selectores de 30px, y un "Más filtros" para el resto. Fila inferior
 solo si hay filtros activos: contador ("2 filtros activos"), un chip por filtro con su valor y
-una ✕ para quitarlo, y "Limpiar todo". Los chips usan `--accent` con borde `--primary` — es el
-único lugar de la pantalla con relleno azul. El total filtrado se repite en la paginación.
+una ✕ para quitarlo, y "Limpiar todo". Los chips usan `--accent` con borde `--primary`. El
+total filtrado se repite en la paginación.
+
+> 🔴 **CORRECCIÓN (23/8/2026) — acá decía que el chip es "el único lugar de la pantalla con
+> relleno azul", y esa frase estaba MAL: se contradice con este mismo documento dos párrafos
+> más abajo ("página actual en sólido", §3 › Tabla) y en §3 › Modal ("primario sólido"), y
+> también con la barra de progreso. **Lo que está mal es la frase, no el código**: los tres
+> rellenos azules que existen son correctos y deliberados. Lo que el chip sí es —y era lo que
+> la frase quería decir— es el único relleno azul que NO es un control primario: usa
+> `--accent` (el azul lavado), no `--primary`. Se saca la afirmación en vez de "arreglarla"
+> porque una regla que el documento se desmiente a sí mismo no se puede defender con un test;
+> `components/ui/decisionesVisuales.test.ts` la tenía declarada como no verificable justamente
+> por eso.
 
 ### Tabla con paginación
 Filas de 46px, encabezado de 32px en la superficie secundaria con mayúsculas de 10px,

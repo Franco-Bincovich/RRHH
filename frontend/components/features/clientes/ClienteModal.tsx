@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
+import { FieldError } from "@/components/ui/FieldError"
 import { FormErrores } from "@/components/ui/FormErrores"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -107,7 +108,7 @@ export function ClienteModal({ open, onClose, onSuccess, cliente }: Props) {
               onChange={(e) => setNombre(e.target.value)}
             />
             {errores.nombre && (
-              <p className="text-sm text-destructive" role="alert">{errores.nombre}</p>
+              <FieldError>{errores.nombre}</FieldError>
             )}
           </div>
           {serverError && <p className="text-sm text-destructive">{serverError}</p>}

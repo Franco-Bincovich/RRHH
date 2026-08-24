@@ -1,5 +1,6 @@
 "use client"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -50,7 +51,7 @@ export function AreaFormFields({
             {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
           </Select>
           {errors.empresa_id && (
-            <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>
+            <FieldError>{errors.empresa_id}</FieldError>
           )}
         </div>
       )}
@@ -68,7 +69,7 @@ export function AreaFormFields({
           maxLength={100}
         />
         {errors.nombre && (
-          <p className="text-xs text-destructive" role="alert">{errors.nombre}</p>
+          <FieldError>{errors.nombre}</FieldError>
         )}
       </div>
 

@@ -1,5 +1,6 @@
 "use client"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -50,14 +51,14 @@ export function CamposVacacion({ form, errors, field, toggle }: CamposVacacionPr
           <Input id="periodo" type="number" inputMode="numeric" min={2000} max={2100} value={form.periodo}
                  onChange={field("periodo")} aria-required aria-invalid={Boolean(errors.periodo)} />
           <p className="text-xs text-muted-foreground">Año al que corresponde, puede no ser el año en que se tomó.</p>
-          {errors.periodo && <p className="text-xs text-destructive" role="alert">{errors.periodo}</p>}
+          {errors.periodo && <FieldError>{errors.periodo}</FieldError>}
         </div>
         {form.pendiente && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="dias_pendientes">Días pendientes <span className="text-destructive" aria-hidden>*</span></Label>
             <Input id="dias_pendientes" type="number" inputMode="numeric" min={1} value={form.dias_pendientes}
                    onChange={field("dias_pendientes")} aria-required aria-invalid={Boolean(errors.dias_pendientes)} />
-            {errors.dias_pendientes && <p className="text-xs text-destructive" role="alert">{errors.dias_pendientes}</p>}
+            {errors.dias_pendientes && <FieldError>{errors.dias_pendientes}</FieldError>}
           </div>
         )}
       </div>
@@ -67,12 +68,12 @@ export function CamposVacacion({ form, errors, field, toggle }: CamposVacacionPr
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fecha_desde">Desde <span className="text-destructive" aria-hidden>*</span></Label>
             <Input id="fecha_desde" type="date" value={form.fecha_desde} onChange={field("fecha_desde")} aria-required aria-invalid={Boolean(errors.fecha_desde)} />
-            {errors.fecha_desde && <p className="text-xs text-destructive" role="alert">{errors.fecha_desde}</p>}
+            {errors.fecha_desde && <FieldError>{errors.fecha_desde}</FieldError>}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fecha_hasta">Hasta <span className="text-destructive" aria-hidden>*</span></Label>
             <Input id="fecha_hasta" type="date" value={form.fecha_hasta} min={form.fecha_desde} onChange={field("fecha_hasta")} aria-required aria-invalid={Boolean(errors.fecha_hasta)} />
-            {errors.fecha_hasta && <p className="text-xs text-destructive" role="alert">{errors.fecha_hasta}</p>}
+            {errors.fecha_hasta && <FieldError>{errors.fecha_hasta}</FieldError>}
           </div>
         </div>
       )}

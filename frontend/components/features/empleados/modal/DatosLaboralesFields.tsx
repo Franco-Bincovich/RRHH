@@ -1,5 +1,6 @@
 import type { ChangeEvent } from "react"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { Label } from "@/components/ui/label"
 import { RolesInput } from "@/components/ui/RolesInput"
 import { Select } from "@/components/ui/select"
@@ -55,7 +56,7 @@ export function DatosLaboralesFields({
           onChange={onRolesChange}
         />
         {errors.roles && (
-          <p className="mt-1.5 text-[11px] text-destructive" role="alert">{errors.roles}</p>
+          <FieldError>{errors.roles}</FieldError>
         )}
       </div>
 

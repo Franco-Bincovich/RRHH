@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { Menu, X, Building2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { CLASES_PANEL_SIDEBAR } from "@/components/layout/sidebarClases"
 import { Separator } from "@/components/ui/separator"
 import { UserMenu } from "@/components/layout/UserMenu"
 import { EmpresaSelector } from "@/components/layout/EmpresaSelector"
@@ -77,8 +78,8 @@ export function Sidebar() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-sidebar ring-1 ring-sidebar-border transition-transform duration-200",
-          "lg:relative lg:z-auto lg:translate-x-0",
+          // La superficie del panel (vidrio de §2) y su porqué viven en `sidebarClases.ts`.
+          CLASES_PANEL_SIDEBAR,
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >

@@ -1,5 +1,6 @@
 "use client"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -39,7 +40,7 @@ export function CamposEvento({ form, errores, onCampo }: Props) {
           onChange={(e) => onCampo("nombre", e.target.value)}
         />
         {errores.nombre && (
-          <p className="text-sm text-destructive" role="alert">{errores.nombre}</p>
+          <FieldError>{errores.nombre}</FieldError>
         )}
       </div>
 
@@ -53,7 +54,7 @@ export function CamposEvento({ form, errores, onCampo }: Props) {
           onChange={(e) => onCampo("fecha", e.target.value)}
         />
         {errores.fecha && (
-          <p className="text-sm text-destructive" role="alert">{errores.fecha}</p>
+          <FieldError>{errores.fecha}</FieldError>
         )}
       </div>
 
@@ -75,7 +76,7 @@ export function CamposEvento({ form, errores, onCampo }: Props) {
           Configuración.
         </p>
         {errores.diasAviso && (
-          <p className="text-sm text-destructive" role="alert">{errores.diasAviso}</p>
+          <FieldError>{errores.diasAviso}</FieldError>
         )}
       </div>
 
@@ -87,7 +88,7 @@ export function CamposEvento({ form, errores, onCampo }: Props) {
           onChange={(e) => onCampo("descripcion", e.target.value)}
         />
         {errores.descripcion && (
-          <p className="text-sm text-destructive" role="alert">{errores.descripcion}</p>
+          <FieldError>{errores.descripcion}</FieldError>
         )}
       </div>
 

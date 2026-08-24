@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Pencil } from "lucide-react"
 
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
-import { ErrorState } from "@/components/ui/ErrorState"
+import { ErrorState, esNoEncontrado } from "@/components/ui/ErrorState"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { EmpresaModal } from "@/components/features/empresas/EmpresaModal"
@@ -31,17 +31,19 @@ export default function EmpresaDetailPage() {
 
   const [empresa, setEmpresa] = useState<Empresa | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  // El error se guarda ENTERO, no como booleano: `ErrorState` distingue el 404 (que es
+  // tambien la respuesta de un recurso de otra empresa) mirando el ApiError.
+  const [error, setError] = useState<unknown>(null)
   const [activeTab, setActiveTab] = useState<Tab>("info")
   const [editModalOpen, setEditModalOpen] = useState(false)
 
   async function load() {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       setEmpresa(await fetchEmpresa(id))
-    } catch {
-      setError(true)
+    } catch (e) {
+      setError(e)
     } finally {
       setLoading(false)
     }
@@ -67,7 +69,12 @@ export default function EmpresaDetailPage() {
         <Button variant="ghost" className="mb-4 -ml-2" onClick={() => router.back()}>
           <ArrowLeft className="mr-1 size-4" /> Volver
         </Button>
-        <ErrorState description="No se pudo cargar la empresa." action={load} />
+        <ErrorState
+          error={error}
+          description={esNoEncontrado(error) ? undefined : "No se pudo cargar la empresa."}
+          action={load}
+          onVolver={() => router.push("/empresas")}
+        />
       </div>
     )
   }

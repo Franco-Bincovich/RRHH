@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -47,19 +48,29 @@ export function UserMenu() {
         </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
-        {user && (
-          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-            {ROL_LABEL[user.rol]}
-          </DropdownMenuLabel>
-        )}
-        <DropdownMenuItem onClick={() => router.push("/configuracion")}>
-          <Settings className="size-4" />
-          Configuración
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.push("/cambiar-password")}>
-          <KeyRound className="size-4" />
-          Cambiar contraseña
-        </DropdownMenuItem>
+        {/* 🔴 EL LABEL VA DENTRO DE UN GROUP, Y NO ES DECORATIVO. `DropdownMenuLabel` es
+            `Menu.GroupLabel` de Base UI, que se registra contra el contexto de su `Menu.Group`:
+            sin un Group arriba LANZA ("MenuGroupRootContext is missing"), el popup no llega a
+            renderizarse y el menu entero no abre. Era el unico uso de este componente en todo el
+            front y el unico dropdown que fallaba, con lo cual Configuracion, Cambiar contraseña
+            y —lo grave— Cerrar sesion quedaban inalcanzables, y el logout no tiene otra puerta.
+            El Group abarca las dos acciones de cuenta, que es lo que el label encabeza; "Cerrar
+            sesion" queda afuera, despues del separador. Lo vigila dropdownMenuLabel.test.tsx. */}
+        <DropdownMenuGroup>
+          {user && (
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+              {ROL_LABEL[user.rol]}
+            </DropdownMenuLabel>
+          )}
+          <DropdownMenuItem onClick={() => router.push("/configuracion")}>
+            <Settings className="size-4" />
+            Configuración
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/cambiar-password")}>
+            <KeyRound className="size-4" />
+            Cambiar contraseña
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={handleLogout}>
           <LogOut className="size-4" />

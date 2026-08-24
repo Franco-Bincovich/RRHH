@@ -1,5 +1,6 @@
 "use client"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -39,7 +40,7 @@ export function EmpresaFormFields({ form, errors, onField }: {
           aria-required
         />
         {errors.nombre && (
-          <p className="text-xs text-destructive" role="alert">{errors.nombre}</p>
+          <FieldError>{errors.nombre}</FieldError>
         )}
       </div>
 
@@ -58,7 +59,7 @@ export function EmpresaFormFields({ form, errors, onField }: {
             aria-invalid={Boolean(errors.cuit)}
           />
           {errors.cuit && (
-            <p className="text-xs text-destructive" role="alert">{errors.cuit}</p>
+            <FieldError>{errors.cuit}</FieldError>
           )}
         </div>
       </div>

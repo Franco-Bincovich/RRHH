@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
+import { FieldError } from "@/components/ui/FieldError"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -135,14 +136,14 @@ export function CapacitacionModal({ open, onClose, onSuccess, editing }: Props) 
                   <option value="">Seleccionar empresa</option>
                   {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
                 </Select>
-                {errors.empresa_id && <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>}
+                {errors.empresa_id && <FieldError>{errors.empresa_id}</FieldError>}
               </div>
             )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="cap_nombre">Nombre <span className="text-destructive" aria-hidden>*</span></Label>
               <Input id="cap_nombre" value={form.nombre} onChange={field("nombre")} aria-required aria-invalid={Boolean(errors.nombre)} placeholder="ej. Seguridad informática" />
-              {errors.nombre && <p className="text-xs text-destructive" role="alert">{errors.nombre}</p>}
+              {errors.nombre && <FieldError>{errors.nombre}</FieldError>}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -153,7 +154,7 @@ export function CapacitacionModal({ open, onClose, onSuccess, editing }: Props) 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="cap_horas">Duración (hs) <span className="text-muted-foreground text-xs font-normal">(opcional)</span></Label>
                 <Input id="cap_horas" type="number" min="0" step="0.5" value={form.duracion_horas} onChange={field("duracion_horas")} placeholder="ej. 8" aria-invalid={Boolean(errors.duracion_horas)} />
-                {errors.duracion_horas && <p className="text-xs text-destructive" role="alert">{errors.duracion_horas}</p>}
+                {errors.duracion_horas && <FieldError>{errors.duracion_horas}</FieldError>}
               </div>
             </div>
 

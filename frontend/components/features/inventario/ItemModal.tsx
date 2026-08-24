@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { FieldError } from "@/components/ui/FieldError"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -111,19 +112,19 @@ export function ItemModal({ open, onClose, onSuccess, editing }: Props) {
                   <option value="">Seleccionar empresa</option>
                   {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
                 </Select>
-                {errors.empresa_id && <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>}
+                {errors.empresa_id && <FieldError>{errors.empresa_id}</FieldError>}
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="item_nombre">Nombre <span className="text-destructive" aria-hidden>*</span></Label>
                 <Input id="item_nombre" value={form.nombre} onChange={field("nombre")} aria-required aria-invalid={Boolean(errors.nombre)} placeholder="ej. MacBook Pro 14" />
-                {errors.nombre && <p className="text-xs text-destructive" role="alert">{errors.nombre}</p>}
+                {errors.nombre && <FieldError>{errors.nombre}</FieldError>}
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="item_tipo">Tipo <span className="text-destructive" aria-hidden>*</span></Label>
                 <Input id="item_tipo" value={form.tipo} onChange={field("tipo")} aria-required aria-invalid={Boolean(errors.tipo)} placeholder="ej. Notebook" />
-                {errors.tipo && <p className="text-xs text-destructive" role="alert">{errors.tipo}</p>}
+                {errors.tipo && <FieldError>{errors.tipo}</FieldError>}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -134,7 +135,7 @@ export function ItemModal({ open, onClose, onSuccess, editing }: Props) {
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="item_costo">Costo <span className="text-xs text-muted-foreground font-normal">(opcional)</span></Label>
                 <Input id="item_costo" type="number" min="0" step="0.01" value={form.costo} onChange={field("costo")} aria-invalid={Boolean(errors.costo)} />
-                {errors.costo && <p className="text-xs text-destructive" role="alert">{errors.costo}</p>}
+                {errors.costo && <FieldError>{errors.costo}</FieldError>}
               </div>
             </div>
             <div className="flex flex-col gap-1.5">

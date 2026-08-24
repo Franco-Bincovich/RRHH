@@ -41,6 +41,46 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-23 · Arreglos de lo que encontró el smoke de lectura · commits pendientes (7 bloques)
+
+**Qué cambió:** los siete hallazgos del recorrido de lectura de la entrada de abajo, cada uno en
+su commit.
+
+1. 🔴 **Barrera de empresa que faltaba.** `PUT /api/onboarding/{instancia_id}/tareas/{tarea_id}/completar`
+   no valía la empresa: con el header de la empresa A y la instancia de la B devolvía **200 y
+   completaba la tarea ajena**. El `empresa_id` no llegaba ni al router (el handler no tomaba
+   `Request`). Arreglado en la **Forma A** — el filtro va en el WHERE del UPDATE, así que el 404
+   y la no-escritura son el mismo hecho. Sale el **mismo `TAREA_NOT_FOUND` 404** que un id
+   inexistente, como manda el contrato. Se barrió el sistema entero por el mismo modo de falla:
+   **es el único caso real** — de los otros 3 endpoints de escritura sin `Request`, dos crean
+   (la empresa va en el body) y el tercero es `PUT /api/empresa/{id}`, donde la empresa ES el
+   recurso. Queda un barrido permanente (`tests/test_routers_escritura_request.py`).
+2. **Hidratación (React #418) en 20 pantallas.** El rol pasa a leerse con `useSyncExternalStore`
+   en un primitivo nuevo, `frontend/hooks/useRol.ts`; `useCanWrite`, `useCanRead` y `Can.tsx` lo
+   consumen y ninguno vuelve a llamar a `getRol()` en el render.
+3. **El menú de usuario no abría.** `DropdownMenuLabel` es `Menu.GroupLabel` de Base UI y lanza
+   sin un `<DropdownMenuGroup>` arriba — Cerrar sesión estaba inalcanzable y no tiene otra puerta.
+4. **El 404 decía "Algo salió mal"** y ofrecía un "Reintentar" imposible. `ErrorState` distingue
+   el 404 y ofrece "Volver"; el texto manda a revisar el selector de empresa **sin confirmar** que
+   el recurso sea de otra empresa, que es lo que el contrato de la barrera exige.
+5. **/objetivos** pasa sus acciones al `PageHeader`, como las otras 20 pantallas.
+6. **`SENIOR` y `senior` se contaban como dos categorías** en el reporte de distribución (y en el
+   KPI del dashboard, que reusa el mismo generador). En producción eran 1 y 5: partía en dos los
+   6 seniors. Ahora agrupa sin distinguir caja ni espaciado.
+7. **Sistema de diseño:** el fondo con las dos manchas de §2 (azul 9%, verde 7%), el vidrio del
+   sidebar, y el mensaje de error por campo unificado en 11px con un primitivo (`FieldError`).
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, sin variables de entorno nuevas,
+sin dependencias nuevas, sin buckets, sin endpoints nuevos (el único endpoint tocado ya existía y
+sólo cambió su firma interna), sin cambios de auth ni de claims, sin procesos de fondo, sin
+dependencias de URL ni de dominio.
+
+> ⚠️ **Lo único a saber para el porteo:** `frontend/app/globals.css` usa `color-mix()` para las
+> manchas de fondo y el sidebar usa `backdrop-filter` bajo `supports-backdrop-filter:` (con el
+> opaco de base). Las dos son CSS de cliente, no tocan el build ni el runtime del servidor.
+
+---
+
 ## 2026-08-23 · Recorrido de lectura de las 46 pantallas × 3 roles · commit pendiente
 
 **Qué cambió:** nada de código. Es la corrida del recorrido con Playwright contra

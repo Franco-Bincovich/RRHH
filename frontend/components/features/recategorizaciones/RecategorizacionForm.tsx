@@ -1,3 +1,4 @@
+import { FieldError } from "@/components/ui/FieldError"
 import { EmpleadoCombobox } from "@/components/features/shared/EmpleadoCombobox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -61,7 +62,7 @@ export function RecategorizacionForm({
           </p>
         )}
         {errores.empleadoId && (
-          <p className="text-sm text-destructive" role="alert">{errores.empleadoId}</p>
+          <FieldError>{errores.empleadoId}</FieldError>
         )}
       </div>
 
@@ -86,7 +87,7 @@ export function RecategorizacionForm({
       <CampoNuevo id="recat-categoria" label="Categoría nueva" anterior={original?.categoria_anterior}
                   value={form.categoriaNueva} onChange={(v) => onChange("categoriaNueva", v)} />
       {errores.cambios && (
-        <p className="text-sm text-destructive" role="alert">{errores.cambios}</p>
+        <FieldError>{errores.cambios}</FieldError>
       )}
 
       <div className="space-y-1.5">
@@ -102,7 +103,7 @@ export function RecategorizacionForm({
           onChange={(e) => onChange("motivo", e.target.value)}
         />
         {errores.motivo && (
-          <p className="text-sm text-destructive" role="alert">{errores.motivo}</p>
+          <FieldError>{errores.motivo}</FieldError>
         )}
       </div>
 

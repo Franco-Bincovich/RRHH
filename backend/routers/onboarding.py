@@ -72,7 +72,8 @@ async def iniciar_onboarding(
 async def completar_tarea(
     instancia_id: UUID,
     tarea_id: UUID,
+    request: Request,
     service: OnboardingService = Depends(_service),
 ) -> dict:
-    service.completar_tarea(instancia_id, tarea_id)
+    service.completar_tarea(instancia_id, tarea_id, get_empresa_id(request))
     return {"ok": True}

@@ -1,5 +1,6 @@
 "use client"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
@@ -68,13 +69,13 @@ export function ObjetivoFormFields({
             <option value="">Seleccionar empresa</option>
             {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
           </Select>
-          {errors.empresa_id && <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>}
+          {errors.empresa_id && <FieldError>{errors.empresa_id}</FieldError>}
         </div>
       )}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="obj_titulo">Título <span className="text-destructive" aria-hidden>*</span></Label>
         <Input id="obj_titulo" value={form.titulo} onChange={field("titulo")} aria-required aria-invalid={Boolean(errors.titulo)} placeholder="ej. Actualizar políticas de licencias" />
-        {errors.titulo && <p className="text-xs text-destructive" role="alert">{errors.titulo}</p>}
+        {errors.titulo && <FieldError>{errors.titulo}</FieldError>}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
@@ -83,7 +84,7 @@ export function ObjetivoFormFields({
             <option value="">{usuarios.length === 0 ? "Cargando..." : "Seleccionar usuario"}</option>
             {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nombre} {u.apellido}</option>)}
           </Select>
-          {errors.responsable_id && <p className="text-xs text-destructive" role="alert">{errors.responsable_id}</p>}
+          {errors.responsable_id && <FieldError>{errors.responsable_id}</FieldError>}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="obj_prioridad">Prioridad</Label>

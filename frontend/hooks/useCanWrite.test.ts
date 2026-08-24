@@ -1,22 +1,15 @@
-// useCanWrite se ejercita como función pura: usePathname y la sesión están mockeados,
-// así que no hay dispatcher de React. Llamarlo en bucle es seguro acá (no en componentes).
-/* eslint-disable react-hooks/rules-of-hooks */
 import { describe, expect, it, vi } from "vitest"
 
 import { puede, seccionDeRuta } from "@/services/permisos"
 import type { UserRol } from "@/types/auth"
 
-// usePathname y la sesión se mockean para poder ejercitar el hook como función pura
-// (useCanWrite solo compone usePathname + getRol + puede; ningún hook real de React).
-let mockPath = "/empleados"
-let mockRol: UserRol | null = "admin_rrhh"
+// usePathname se mockea porque `useCanWrite` lo usa; la DECISIÓN se ejercita sobre
+// `decidirCanWrite`, que es pura y no toca React. El hook en sí ya no se puede llamar en
+// bucle: desde el arreglo de hidratación usa useSyncExternalStore, o sea un hook real.
+// Que el rol salga del store de forma segura para la hidratación lo cubre hidratacion.test.tsx.
+vi.mock("next/navigation", () => ({ usePathname: () => "/empleados" }))
 
-vi.mock("next/navigation", () => ({ usePathname: () => mockPath }))
-vi.mock("@/services/api", () => ({
-  getSession: () => (mockRol ? { user: { rol: mockRol } } : null),
-}))
-
-import { useCanWrite } from "@/hooks/useCanWrite"
+const { decidirCanWrite } = await import("@/hooks/useCanWrite")
 
 const ROLES: UserRol[] = ["admin_rrhh", "gerencia_lectura", "mandos_medios"]
 
@@ -61,33 +54,26 @@ describe("seccionDeRuta", () => {
   })
 })
 
-describe("useCanWrite", () => {
+describe("decidirCanWrite", () => {
   it("sección explícita: respeta la matriz por rol", () => {
     for (const rol of ROLES) {
-      mockRol = rol
-      expect(useCanWrite("empleados")).toBe(puede(rol, "empleados", "write"))
-      expect(useCanWrite("vacaciones")).toBe(puede(rol, "vacaciones", "write"))
+      expect(decidirCanWrite(rol, "empleados")).toBe(puede(rol, "empleados", "write"))
+      expect(decidirCanWrite(rol, "vacaciones")).toBe(puede(rol, "vacaciones", "write"))
     }
   })
 
-  it("sin argumento deriva la sección del pathname", () => {
-    mockPath = "/inventario"
-    mockRol = "admin_rrhh"
-    expect(useCanWrite()).toBe(true)
-    mockRol = "gerencia_lectura"
-    expect(useCanWrite()).toBe(false)
+  it("la sección derivada del pathname es la que decide", () => {
+    expect(decidirCanWrite("admin_rrhh", seccionDeRuta("/inventario"))).toBe(true)
+    expect(decidirCanWrite("gerencia_lectura", seccionDeRuta("/inventario"))).toBe(false)
   })
 
-  it("ruta no gateada → true para cualquier rol", () => {
-    mockPath = "/configuracion"
+  it("ruta no gateada (sección null) → true para cualquier rol", () => {
     for (const rol of ROLES) {
-      mockRol = rol
-      expect(useCanWrite()).toBe(true)
+      expect(decidirCanWrite(rol, seccionDeRuta("/configuracion"))).toBe(true)
     }
   })
 
   it("rol nulo → no puede escribir en sección gateada", () => {
-    mockRol = null
-    expect(useCanWrite("empleados")).toBe(false)
+    expect(decidirCanWrite(null, "empleados")).toBe(false)
   })
 })

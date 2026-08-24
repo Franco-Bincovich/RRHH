@@ -26,6 +26,11 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 const sesion = vi.fn()
 vi.mock("@/services/api", () => ({ getSession: () => sesion() }))
+// El rol se falsea en `useRol` y NO en `puede`: `useRol` es la unica pieza que lee un store del
+// navegador, y en un render de servidor es null a proposito (ver hooks/useRol.ts). Sin esta
+// costura todos los bloques gateados desapareceran del markup y el archivo quedaria vacuo:
+// pasaria con cualquier rol y con el gate borrado. `puede` sigue siendo el de verdad.
+vi.mock("@/hooks/useRol", () => ({ useRol: () => sesion()?.user?.rol ?? null }))
 vi.mock("next/navigation", () => ({
   usePathname: () => "/configuracion",
   useRouter: () => ({ push: vi.fn() }),

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { AvisoError } from "@/components/ui/AvisoError"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -88,11 +89,7 @@ export function LoginForm() {
           aria-describedby={errores.username ? "username-error" : undefined}
           className="min-h-[2.75rem]"
         />
-        {errores.username && (
-          <p id="username-error" className="text-xs text-destructive" role="alert">
-            {errores.username}
-          </p>
-        )}
+        <FieldError id="username-error">{errores.username}</FieldError>
       </div>
 
       <PasswordField

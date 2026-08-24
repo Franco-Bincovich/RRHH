@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { FieldError } from "@/components/ui/FieldError"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -92,7 +93,7 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
                 <option value="">Seleccionar empresa</option>
                 {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
               </Select>
-              {errors.empresa_id && <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>}
+              {errors.empresa_id && <FieldError>{errors.empresa_id}</FieldError>}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="asig_item">Ítem disponible <span className="text-destructive" aria-hidden>*</span></Label>
@@ -100,7 +101,7 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
                 <option value="">{!form.empresa_id ? "Seleccioná una empresa primero" : loadingItems ? "Cargando..." : items.length === 0 ? "Sin ítems disponibles" : "Seleccionar ítem"}</option>
                 {items.map((i) => <option key={i.id} value={i.id}>{i.nombre}{i.numero_serie ? ` — ${i.numero_serie}` : ""}</option>)}
               </Select>
-              {errors.item_id && <p className="text-xs text-destructive" role="alert">{errors.item_id}</p>}
+              {errors.item_id && <FieldError>{errors.item_id}</FieldError>}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="asig_emp">Colaborador <span className="text-destructive" aria-hidden>*</span></Label>
@@ -113,7 +114,7 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
                   setErrors((p) => ({ ...p, empleado_id: undefined }))
                 }}
               />
-              {errors.empleado_id && <p className="text-xs text-destructive" role="alert">{errors.empleado_id}</p>}
+              {errors.empleado_id && <FieldError>{errors.empleado_id}</FieldError>}
             </div>
           </div>
           {serverError && <p className="mt-2 text-sm text-destructive" role="alert">{serverError}</p>}

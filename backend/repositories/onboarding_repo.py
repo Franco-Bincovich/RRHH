@@ -61,9 +61,14 @@ class OnboardingRepo:
             ]).execute()
         return self.find_instancia_by_empleado(empleado_id) or instancia_row(ins.data[0], [])
 
-    def completar_tarea(self, instancia_id: str, tarea_id: str) -> bool:
-        res = supabase_admin.table(PROGRESO).update({"estado": "completado", "fecha_completada": datetime.utcnow().isoformat()}).eq("instancia_id", instancia_id).eq("tarea_id", tarea_id).execute()
-        return bool(res.data)
+    def completar_tarea(self, instancia_id: str, tarea_id: str, empresa_id: Optional[UUID] = None) -> bool:
+        """Marca completada la tarea. La barrera de empresa va EN EL WHERE (Forma A): una
+        instancia ajena no matchea ninguna fila y el UPDATE no escribe nada, así que el 404 de
+        arriba y la no-escritura son el MISMO hecho, no dos chequeos que se pueden desincronizar.
+        `onboarding_progreso.empresa_id` es NOT NULL, así que el filtro no puede perder filas
+        legacy."""
+        q = supabase_admin.table(PROGRESO).update({"estado": "completado", "fecha_completada": datetime.utcnow().isoformat()}).eq("instancia_id", instancia_id).eq("tarea_id", tarea_id)
+        return bool(with_empresa(q, empresa_id).execute().data)
 
     def get_default_template(self, empresa_id: Optional[UUID] = None, user_id: Optional[str] = None,
                              rol: Optional[str] = None) -> Optional[TemplateResponse]:

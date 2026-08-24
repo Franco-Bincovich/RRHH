@@ -547,7 +547,7 @@ No salen de recorrer la superficie: son **afirmaciones sobre el comportamiento**
 | **contraseña provisoria que nunca vence** | entrar por API (POST /api/auth/login + cualquier endpoint) con un usuario que tiene must_change_password=true y ver que el sistema LO DEJA HACER TODO. Hoy pasa: el flag lo aplica solo AuthGuard.tsx:29, en el navegador | medido el 23/8/2026 al sembrar los tres usuarios de prueba del smoke. Anotado en docs/DEUDA-TECNICA.md §1-ter | 1 | sí | los tres usuarios de smk.* ya tienen el flag bajo; para probarlo hay que crear uno nuevo y NO cambiarle la contraseña |
 | **los tres roles, uno por uno** | el mismo recorrido con smk.admin, smk.gerencia y smk.mando: que gerencia_lectura reciba 403 en TODA escritura, que mandos_medios reciba 403 fuera de vacaciones/ausencias, y que dentro de las suyas vea SOLO a sus subordinados | docs/SMOKE-TEST.md declaraba como su límite más grande que los 4 usuarios de producción son admin_rrhh. Las credenciales las genera la fase `usuarios` de scripts/semilla_smoke.py | 3 | sí, sólo sobre datos sembrados | el corte de ownership depende de los manager_id sembrados sobre SMK-xx |
 | **bugs abiertos del recorrido** | clic en el nombre del usuario · los filtros de objetivos salen desalineados · un 404 de la API se muestra como "Algo salió mal" · SENIOR y senior se cuentan como dos categorías en Distribución de plantilla | recorrido manual con Franco (23/8/2026). Es el único origen de este documento que no se deriva del repo | 4 | parcial | el de Distribución es un test de backend; los otros tres son visuales o de interacción y hoy no hay jsdom en la suite del front |
-| **sistema de diseño §2 y §3** | las decisiones punto por punto, incluidas las que el barrido declaró no verificables y las DOS que están sin construir (ver la tabla de abajo) | docs/SISTEMA-DE-DISENO.md §2 y §3 + components/ui/decisionesVisuales.test.ts | 23 | parcial | 15 las verifica el barrido por clase CSS; 6 están declaradas no verificables desde el código; 2 no están construidas |
+| **sistema de diseño §2 y §3** | las decisiones punto por punto, incluidas las que el barrido declaró no verificables y las DOS que están sin construir (ver la tabla de abajo) | docs/SISTEMA-DE-DISENO.md §2 y §3 + components/ui/decisionesVisuales.test.ts | 23 | parcial | 17 las verifica el barrido por clase CSS; 4 están declaradas no verificables desde el código; 2 no están construidas |
 
 ### Lo que queda FUERA de las dos familias de arriba
 
@@ -591,7 +591,7 @@ No salen de recorrer la superficie: son **afirmaciones sobre el comportamiento**
 
 ### Sistema de diseño §2 y §3, punto por punto
 
-**15** decisiones las verifica `decisionesVisuales.test.ts` por clase CSS contra el primitivo donde viven, con su cita del documento. Se listan acá para que el recorrido manual no las repita.
+**17** decisiones las verifica `decisionesVisuales.test.ts` por clase CSS contra el primitivo donde viven, con su cita del documento. Se listan acá para que el recorrido manual no las repita.
 
 | § | Decisión | La cubre un barrido |
 |---|---|---|
@@ -609,10 +609,10 @@ No salen de recorrer la superficie: son **afirmaciones sobre el comportamiento**
 | §3 | el modal de formulario: blur de 28px, scrim al 35% y tope de 560px | sí |
 | §3 | el campo del modal de formulario mide 34px de `md` para arriba | sí |
 | §3 | el campo con foco: borde `--ring` y anillo de 3px, de fábrica en el primitivo | sí |
+| §2 | el sidebar es de vidrio, con el opaco de base bajo `supports-backdrop-filter:` | sí |
+| §3 | el mensaje de error POR CAMPO mide 11px, y lo decide un único primitivo | sí |
 | §3 | el esqueleto usa un shimmer de 1,2s, no el `animate-pulse` de 2s | sí |
 | §3 | las acciones por fila siempre visibles | **no — declarada no verificable desde el código** |
-| §3 | el chip es el único relleno azul de la pantalla | **no — declarada no verificable desde el código** |
-| §2 | el fondo con manchas de color, azul al 9% y verde al 7% | **no — declarada no verificable desde el código** |
 | §6 | el KPI que requiere acción se despega con el fondo, no con un número en color | **no — declarada no verificable desde el código** |
 | §3 | el título del modal explica la consecuencia, y el error dice qué corregir | **no — declarada no verificable desde el código** |
 | §3 | el vacío explica con los valores reales de los filtros | **no — declarada no verificable desde el código** |

@@ -27,7 +27,9 @@ export default function EmpleadoDetailPage() {
 
   const [empleado, setEmpleado] = useState<Empleado | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  // Entero y no booleano: `ErrorState` necesita el ApiError para distinguir el 404, que es
+  // tambien lo que responde un legajo de otra empresa.
+  const [error, setError] = useState<unknown>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [offboardingOpen, setOffboardingOpen] = useState(false)
 
@@ -37,10 +39,10 @@ export default function EmpleadoDetailPage() {
     if (!id) return
     let cancelled = false
     setLoading(true)
-    setError(false)
+    setError(null)
     fetchEmpleado(id)
       .then((data) => { if (!cancelled) setEmpleado(data) })
-      .catch(() => { if (!cancelled) setError(true) })
+      .catch((e) => { if (!cancelled) setError(e) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [id])
@@ -53,7 +55,7 @@ export default function EmpleadoDetailPage() {
   if (loading) return <LoadingSkeleton />
 
   if (error || !empleado) {
-    return <ErrorState action={() => router.push("/empleados")} />
+    return <ErrorState error={error} onVolver={() => router.push("/empleados")} />
   }
 
   return (

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
+import { FieldError } from "@/components/ui/FieldError"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -126,7 +127,7 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
                 <option value="">Seleccionar empresa</option>
                 {empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
               </Select>
-              {errors.empresa_id && <p className="text-xs text-destructive" role="alert">{errors.empresa_id}</p>}
+              {errors.empresa_id && <FieldError>{errors.empresa_id}</FieldError>}
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -141,7 +142,7 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
                   </option>
                 ))}
               </Select>
-              {errors.capacitacion_id && <p className="text-xs text-destructive" role="alert">{errors.capacitacion_id}</p>}
+              {errors.capacitacion_id && <FieldError>{errors.capacitacion_id}</FieldError>}
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -155,7 +156,7 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
                   setErrors((p) => ({ ...p, empleado_id: undefined }))
                 }}
               />
-              {errors.empleado_id && <p className="text-xs text-destructive" role="alert">{errors.empleado_id}</p>}
+              {errors.empleado_id && <FieldError>{errors.empleado_id}</FieldError>}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

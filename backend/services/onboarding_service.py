@@ -83,21 +83,29 @@ class OnboardingService:
         return iniciar(self._repo, self._templates_repo, self._empleado_repo,
                        empleado_id, template_id, empresa_id, user_id, rol)
 
-    def completar_tarea(self, instancia_id: UUID, tarea_id: UUID) -> bool:
+    def completar_tarea(self, instancia_id: UUID, tarea_id: UUID,
+                        empresa_id: Optional[UUID] = None) -> bool:
         """
         Marca una tarea de onboarding como completada.
+
+        La barrera de empresa la aplica el repo EN EL WHERE (Forma A): una instancia de otra
+        empresa no matchea, el UPDATE no escribe y sale el MISMO 404 que un id inexistente —
+        mismo status, mismo code, mismo mensaje. Un 403 o un mensaje propio confirmarían que la
+        instancia existe y es de otro, que es el oráculo de enumeración que la Fase 2 cerró.
 
         Args:
             instancia_id: UUID de la instancia de onboarding.
             tarea_id: UUID de la tarea a completar.
+            empresa_id: empresa activa del request. None = consolidado, no restringe.
 
         Returns:
             True si la tarea fue marcada como completada.
 
         Raises:
-            AppError: TAREA_NOT_FOUND (404) si la combinación instancia/tarea no existe.
+            AppError: TAREA_NOT_FOUND (404) si la combinación instancia/tarea no existe o la
+                instancia es de otra empresa.
         """
-        ok = self._repo.completar_tarea(str(instancia_id), str(tarea_id))
+        ok = self._repo.completar_tarea(str(instancia_id), str(tarea_id), empresa_id)
         if not ok:
             raise AppError("Tarea no encontrada en esta instancia", "TAREA_NOT_FOUND", 404)
         logger.info(

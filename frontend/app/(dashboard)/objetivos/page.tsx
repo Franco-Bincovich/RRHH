@@ -92,24 +92,32 @@ export default function ObjetivosPage() {
             ? "Tablero de tareas del equipo de Capital Humano"
             : `${total} ${total === 1 ? "objetivo principal" : "objetivos principales"} · tablero del equipo de Capital Humano`
         }
+        action={
+          <ObjetivosAcciones
+            canWrite={canWrite}
+            filtros={filtros}
+            sinEmpresa={!f.empresaDestino}
+            onImportar={() => setImportOpen(true)}
+            nuevoBtn={nuevoBtn}
+          />
+        }
       />
 
       {/* La VISTA va arriba de todo y fuera del panel de filtros: no es un recorte más sobre el
           mismo conjunto, es a cuál de los dos conjuntos se está mirando. */}
       <TipoObjetivoTabs vistas={f.vistas} valor={f.tipoFiltro} onCambio={f.setTipoFiltro} />
 
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        {/* `panel`: la forma completa del patrón de filtros (caja propia, "Más filtros" y los
-            chips de la fila inferior). */}
-        <div className="min-w-[18rem] flex-1"><FiltersBar campos={f.campos} panel disabled={loading} /></div>
-        <ObjetivosAcciones
-          canWrite={canWrite}
-          filtros={filtros}
-          sinEmpresa={!f.empresaDestino}
-          onImportar={() => setImportOpen(true)}
-          nuevoBtn={nuevoBtn}
-        />
-      </div>
+      {/* `panel`: la forma completa del patrón de filtros (caja propia, "Más filtros" y los
+          chips de la fila inferior).
+
+          🔴 LA BARRA VA SOLA Y A TODO EL ANCHO, como en /empleados, que es la pantalla piloto
+          del patrón. Antes compartía una fila con las acciones y eso rompía dos cosas a la vez:
+          las acciones del encabezado vivían abajo del encabezado en vez de adentro (o sea que
+          /objetivos era la única pantalla donde "Nuevo" no estaba donde está en las otras 20), y
+          el `flex-1` con `min-w` metía el panel en una columna propia, con lo cual su caja
+          arrancaba corrida y `TipoObjetivoTabs` —que sí va a todo el ancho— quedaba 13px a la
+          izquierda del panel. Alinear no era mover las tabs: era sacar la columna. */}
+      <FiltersBar campos={f.campos} panel disabled={loading} />
 
       <ObjetivosVistas
         vista={vista} onVista={setVista} loading={loading} error={error} onReintentar={load}

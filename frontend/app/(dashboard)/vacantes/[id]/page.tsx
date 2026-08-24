@@ -31,7 +31,8 @@ export default function VacanteDetailPage() {
   const [vacante, setVacante] = useState<Vacante | null>(null)
   const [candidatos, setCandidatos] = useState<Candidato[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  // Entero y no booleano: `ErrorState` necesita el ApiError para distinguir el 404.
+  const [error, setError] = useState<unknown>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [linkedinModalOpen, setLinkedinModalOpen] = useState(false)
   const canWrite = useCanWrite()
@@ -40,13 +41,13 @@ export default function VacanteDetailPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    setError(false)
+    setError(null)
     try {
       const [v, cs] = await Promise.all([fetchVacante(id), fetchCandidatos(id)])
       setVacante(v)
       setCandidatos(cs)
-    } catch {
-      setError(true)
+    } catch (e) {
+      setError(e)
     } finally {
       setLoading(false)
     }
@@ -56,7 +57,7 @@ export default function VacanteDetailPage() {
 
   if (loading) return <VacanteSkeleton />
 
-  if (error) return <ErrorState action={load} />
+  if (error) return <ErrorState error={error} action={load} onVolver={() => router.push("/vacantes")} />
 
   if (!vacante) {
     return (

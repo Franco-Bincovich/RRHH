@@ -115,6 +115,40 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /*
+   * FONDO CON COLOR, SUAVE (docs/SISTEMA-DE-DISENO.md §2): dos manchas muy diluidas, azul al
+   * 9% y verde al 7%. Hasta acá el fondo era un color plano y §2 era la única decisión de
+   * superficie que no estaba construida.
+   *
+   * 🔴 LOS PORCENTAJES SON EL RESULTADO DE UNA MEDICIÓN, NO UN GUSTO. §2 deja escrito que
+   * con la azul al 15% el texto secundario daba 4,18:1 y no pasaba. Subirlos vuelve a romper el
+   * contraste que `app/contrasteTokens.test.ts` defiende sobre los tokens — y ese test NO puede
+   * ver esto: mide pares de tokens, no lo que queda cuando una mancha se pinta encima. O sea que
+   * el único control de estos dos números es el comentario que estás leyendo.
+   *
+   * 🔴 VA EN UN PSEUDOELEMENTO FIJO Y NO EN `background-attachment: fixed` DEL BODY. Los dos
+   * dan el mismo dibujo, pero `background-attachment: fixed` obliga al navegador a repintar el
+   * fondo en cada scroll, y §2 se preocupa justamente por el costo de scrollear una tabla de
+   * 400 filas. Un pseudoelemento `position: fixed` se compone una vez y no participa del scroll.
+   * `z-index: -1` lo deja detrás del contenido pero DELANTE del color de fondo del canvas, que
+   * es dónde tiene que estar; `pointer-events: none` para que no se coma un click.
+   *
+   * `color-mix` toma los tokens de `paleta.css`, así que las manchas cambian solas con el tema
+   * en vez de tener una copia oscura escrita a mano.
+   */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      radial-gradient(60rem 42rem at 8% -12%,
+        color-mix(in oklab, var(--primary) 9%, transparent), transparent 70%),
+      radial-gradient(52rem 38rem at 96% 4%,
+        color-mix(in oklab, var(--success) 7%, transparent), transparent 70%);
+  }
   html {
     @apply font-sans;
   }

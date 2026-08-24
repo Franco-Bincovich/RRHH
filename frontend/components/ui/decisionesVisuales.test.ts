@@ -173,6 +173,45 @@ const DECISIONES: Decision[] = [
     archivo: "components/ui/input.tsx",
     debe: ["focus-visible:border-ring", "focus-visible:ring-3"],
   },
+  // ── §2 · Fondo y vidrio (construidos el 23/8/2026) ─────────────────────────
+  {
+    seccion: "§2",
+    cita: "Manchas muy diluidas: azul al 9%, verde al 7%.",
+    // 🔴 ESTABA EN `NO_VERIFICABLE` — y la razón escrita ahí era falsa. Decía que lo cubría
+    // `contrasteTokens.test.ts`; ese archivo mide PARES DE TOKENS y no sabía nada de este fondo,
+    // que además NO EXISTÍA: el body era un color plano. O sea que la decisión de §2 que más
+    // fácil se ve a simple vista era la única que nadie miraba. Es exactamente el agujero que
+    // este archivo dice cerrar.
+    que: "el fondo tiene las dos manchas de §2, con SUS porcentajes (azul 9%, verde 7%)",
+    archivo: "app/globals.css",
+    debe: ["var(--primary) 9%", "var(--success) 7%", "body::before"],
+    // 15% es el valor que §2 deja escrito como el que NO pasaba de contraste.
+    noDebe: ["var(--primary) 15%"],
+  },
+  {
+    seccion: "§2",
+    cita: "**Vidrio SOLO en el sidebar y en los modales.**",
+    // 🔴 TAMBIÉN NUEVA: §2 nombra DOS lugares y sólo uno estaba construido. `VIDRIO_PERMITIDO`
+    // (abajo) listó durante meses cuatro archivos y NINGUNO era el sidebar, sin que eso rojeara:
+    // ese barrido pregunta "¿quién usa vidrio de más?" y nunca "¿quién lo tiene de menos?".
+    que: "el sidebar es de vidrio, con el opaco de base bajo `supports-backdrop-filter:`",
+    archivo: "components/layout/sidebarClases.ts",
+    debe: [
+      "supports-backdrop-filter:bg-sidebar/85",
+      "supports-backdrop-filter:backdrop-blur-xl",
+      "bg-sidebar ",
+    ],
+  },
+  // ── §3 · Validación en dos niveles ─────────────────────────────────────
+  {
+    seccion: "§3",
+    cita: "mensaje de 11px que dice **qué corregir**",
+    // El mensaje por campo medía 12px en 32 lugares y 14px en 8. Ahora hay un solo primitivo.
+    que: "el mensaje de error POR CAMPO mide 11px, y lo decide un único primitivo",
+    archivo: "components/ui/FieldError.tsx",
+    debe: ["text-[11px]", "text-destructive", 'role="alert"'],
+    noDebe: ["text-xs", "text-sm"],
+  },
   // ── §3 · Vacío y carga ───────────────────────────────────────────────────────
   {
     seccion: "§3",
@@ -193,12 +232,6 @@ const NO_VERIFICABLE: Record<string, string> = {
     "Es la AUSENCIA de un patrón (revelar en hover) repartida por 31 pantallas. Un barrido por " +
     "`group-hover:` marcaría también los íconos que sólo cambian de COLOR al apuntar, que es " +
     "justo lo que la regla pide que hagan.",
-  "§3 · el chip es el único relleno azul de la pantalla":
-    "Verificable sólo comparando pantalla renderizada contra intención: `bg-primary` legítimo hay " +
-    "en el botón primario, en la barra de progreso y en la página actual de la paginación.",
-  "§2 · el fondo con manchas de color, azul al 9% y verde al 7%":
-    "Vive en el CSS de fondo de la app, y lo que lo justifica es el contraste del texto que va " +
-    "encima: eso ya lo mide `app/contrasteTokens.test.ts`, que es el test que corresponde.",
   "§6 · el KPI que requiere acción se despega con el fondo, no con un número en color":
     "Ya lo fija `dashboardBloques.test.tsx` sobre el markup real (el wash en el contenedor y no " +
     "en el <p>). Repetirlo acá sería una segunda definición de la misma regla.",
@@ -268,6 +301,12 @@ const DUENO_DEL_HOVER = "components/ui/card.tsx"
 
 /** Vidrio: §2 lo permite en el sidebar y en los modales, y en ningún otro lado. */
 const VIDRIO_PERMITIDO: Record<string, string> = {
+  // 🔴 EL SIDEBAR FALTÓ EN ESTA LISTA DURANTE MESES SIN QUE NADA ROJEARA, y es la lección
+  // del 23/8/2026: este barrido pregunta "¿quién usa vidrio DE MÁS?" y por construcción no
+  // puede preguntar "¿quién lo tiene DE MENOS?". La allowlist estaba completa y correcta con
+  // cuatro archivos mientras el primero de los dos lugares que §2 nombra seguía siendo opaco.
+  // Por eso el "de menos" se cubre con una DECISIÓN declarada arriba, no acá.
+  "components/layout/sidebarClases.ts": "El sidebar. §2 lo nombra como uno de los DOS lugares con vidrio.",
   "components/ui/dialog.tsx": "El scrim del diálogo. §2: vidrio en los modales.",
   "components/ui/dialogClases.ts": "El popup del modal de formulario, con su blur de 28px (§3).",
   "components/features/sucesion/PlanDetallePanel.tsx":
@@ -282,7 +321,7 @@ describe("Barrido: las decisiones visuales de §2 y §3 están en el código", (
   it("cada decisión declarada sigue escrita en el sistema de diseño", () => {
     // Primero la FUENTE. Si §2 se reescribe, este archivo tiene que releerse antes de que su
     // aserción de código siga pasando: una regla que el documento ya no dice no se defiende.
-    expect(DECISIONES.length).toBeGreaterThanOrEqual(14)
+    expect(DECISIONES.length).toBeGreaterThanOrEqual(17)
     const perdidas = DECISIONES.filter((d) => !DOC.includes(d.cita.replace(/\s+/g, " "))).map(
       (d) => `${d.seccion} · ${d.que} → la cita ya no está en el documento: "${d.cita}"`,
     )
@@ -349,7 +388,7 @@ describe("Barrido: las decisiones visuales de §2 y §3 están en el código", (
   it("el vidrio sigue siendo sólo del sidebar y de los modales", () => {
     const conVidrio = ARCHIVOS.filter((f) => codigoDe(f).includes("backdrop-blur"))
     // Guarda de mínimo: si el escaneo se rompiera, "no hay vidrio de más" pasaría sin abrir nada.
-    expect(conVidrio.length).toBeGreaterThanOrEqual(3)
+    expect(conVidrio.length).toBeGreaterThanOrEqual(4)
     expect(
       conVidrio.filter((f) => !(f in VIDRIO_PERMITIDO)),
       "§2: el vidrio va SOLO en el sidebar y en los modales. En una tarjeta de grilla no " +
@@ -373,7 +412,15 @@ describe("Barrido: las decisiones visuales de §2 y §3 están en el código", (
 
   it("lo que este barrido no puede ver está declarado con su motivo", () => {
     // No es decorativo: es lo que impide que "no está en el barrido" se lea como "no rige".
-    expect(Object.keys(NO_VERIFICABLE).length).toBeGreaterThanOrEqual(5)
+    // Bajó de 5 a 4 el 23/8/2026, y la dirección importa: NO se descartó nada, salieron DOS
+    // entradas porque dejaron de ser no verificables. El fondo con manchas pasó a ser una
+    // decisión con aserción propia (y su motivo viejo era falso: decía que lo cubría
+    // `contrasteTokens.test.ts`, que mide pares de tokens y no sabía nada de ese fondo — que
+    // además no existía). Y "el chip es el único relleno azul" salió porque la frase se sacó
+    // del documento: se contradecía con "página actual en sólido" y con "primario sólido" del
+    // mismo §3. Una regla que el documento se desmiente a sí mismo no es no-verificable: no es
+    // una regla.
+    expect(Object.keys(NO_VERIFICABLE).length).toBeGreaterThanOrEqual(4)
     for (const [regla, motivo] of Object.entries(NO_VERIFICABLE)) {
       expect(regla.startsWith("§"), `${regla} tiene que nombrar su sección`).toBe(true)
       expect(motivo.length, `${regla} no explica por qué no se puede verificar`).toBeGreaterThan(40)

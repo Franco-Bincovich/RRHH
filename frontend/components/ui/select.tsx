@@ -3,6 +3,7 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 
+import { FieldError } from "@/components/ui/FieldError"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
@@ -115,16 +116,14 @@ function Select({
       {label ? <Label htmlFor={selectId}>{label}</Label> : null}
       {control}
       {/*
-       * `role="alert"` para que el lector de pantalla lo anuncie al aparecer, y `aria-describedby`
-       * en el control para que también se lea al enfocarlo. Los dos, porque cubren dos momentos
-       * distintos: el error que aparece mientras el foco está en otro lado, y el que ya estaba
-       * cuando llegás al campo.
+       * El mensaje lo pinta `FieldError`, el primitivo único del segundo nivel de validación
+       * (11px, §3): así este select no tiene su propia copia del tamaño. El `role="alert"` lo
+       * pone el primitivo —para que el lector de pantalla lo anuncie al aparecer— y el `id` se
+       * le pasa para colgarlo del `aria-describedby` del control, que lo lee al enfocarlo. Los
+       * dos hacen falta: cubren el error que aparece con el foco en otro lado y el que ya
+       * estaba cuando llegás al campo.
        */}
-      {error ? (
-        <p id={errorId} role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
+      <FieldError id={errorId}>{error}</FieldError>
     </div>
   )
 }
