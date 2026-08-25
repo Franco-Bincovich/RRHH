@@ -41,6 +41,98 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-25 · Cierre de los arreglos del smoke (once bloques) · commits por bloque
+
+**Qué cambió:** once de los doce bloques que dejó el smoke. Los cuatro comandos en verde:
+`pytest -q` **4279 passed** · `tsc` 0 errores · `npm test` **1643/1643 en 149 archivos** ·
+`npm run build` compiled successfully.
+
+**Impacto en infraestructura: NINGUNO.** Sin migraciones, sin variables de entorno nuevas, sin
+dependencias, sin buckets, sin endpoints nuevos ni públicos, sin procesos de fondo, sin cambios
+de autenticación ni de dominios. Todo lo de abajo es código sobre lo que ya está desplegado.
+
+**🔴 (1) Los once borrados que no dejaban rastro ya emiten evento.** Áreas, horas de proyecto,
+integraciones, plantillas de mail, proyectos, asignaciones de proyecto, ítems de inventario,
+formaciones, asignaciones de formación, plantillas de onboarding y sus tareas. Como
+`tests/test_auditoria_coherente.py` exige que un módulo que audita ALGO audite TODO, cerrarlos
+arrastró el CRUD entero de esos módulos: **31 escrituras** y 7 archivos de payloads nuevos. La
+deuda declarada del barrido nº 42 quedó en **cero**.
+⚠️ **Lo único que un dev de infra necesita saber de esto:** `auditoria` va a recibir bastantes
+más filas por día que antes (todas las escrituras de once módulos que hasta hoy no escribían
+ninguna). No cambia el schema ni los índices; sí cambia el volumen.
+
+**🔑 Tres repos cambiaron su tipo de retorno** para que la baja pueda auditarse sin una query
+extra ni una ventana entre leer y borrar: `plantilla_mail_repo.borrar` y
+`onboarding_templates_repo.delete_tarea` devuelven **la fila borrada** (PostgREST ya la retorna
+en `.data`) en vez de un bool, y `onboarding_templates_repo.delete_template` devuelve
+`"logica"`/`"fisica"` en vez de `True` —el evento tiene que decir cuál de las dos hizo—.
+`horas_repo.find_proyecto_id` se **borró**: quedó sin callers al reemplazarlo por la fila entera.
+
+**(2 y 3) Botones que no podían funcionar.** En la vista consolidada, diez acciones respondían
+400 con un mensaje correcto —y eso era el problema: el sistema lo sabía de antemano y las ofrecía
+igual—. Ahora se deshabilitan con el motivo A LA VISTA (`components/ui/AccionBloqueada`), y el
+barrido nº 46 **lee `backend/routers/*.py`** para descubrir solo qué endpoints exigen empresa
+concreta: un `require_empresa_id` nuevo entra al alcance sin tocar el test.
+
+**(4) "Contratar" vive donde se mueve la etapa.** El botón existía sólo en el panel de
+`/candidatos` mientras las etapas se mueven en la ficha de la vacante: el circuito cruzaba tres
+pantallas. Ahora está también en la columna *Oferta* del tablero. Al hacerlo apareció que
+`types/vacantes.Candidato` **no declaraba `estado`** aunque el backend lo manda desde A4.1 — la
+misma falla silenciosa que `clasificacion_ia` documenta tres campos más abajo.
+
+**(5) Ningún alta confirmaba nada.** De los **30 modales de formulario, 29 tenían cero
+`toast.success`**. Helper compartido `avisarGuardado` + barrido nº 47.
+
+**(6) `/horas` con el flag apagado le echaba la culpa al legajo del empleado.** Verificado
+ejecutando: con `HORAS_PUBLICO_ENABLED=false`, `POST /api/horas-publico/identificar` devuelve
+**401 `MISSING_TOKEN`**, byte por byte igual que cualquier ruta inexistente. La página de Next se
+sirve igual (no sabe del flag), así que alguien entra, tipea su DNI y leía *"No autorizado"* más
+*"puede que tu usuario todavía no esté habilitado"*. Ahora se distingue por el `code` —no por el
+status, porque los dos rechazos del flujo son 401— y dice que la pantalla no está en servicio.
+⚠️ **Para infra: el día que se encienda el flag, esto no cambia nada** — la rama nueva sólo corre
+cuando el backend responde como una ruta desconocida.
+🔴 **Corregido en CLAUDE.md un detalle que estaba mal**, en la sección de assessment: decía que
+con el router desmontado la ruta devuelve "el 404 de plataforma". No: el `AuthMiddleware` corre
+ANTES del router, así que un request sin token recibe **401**. La conclusión del párrafo se
+sostiene —es indistinguible de una ruta inexistente— pero el status a esperar es 401.
+
+**(7) `mandos_medios` disparaba un 403 por cada navegación.** El selector de empresa del sidebar
+—presente en TODAS las pantallas— pedía `/api/empresas`, que ese rol no puede leer, más cuatro
+catálogos en los filtros de /vacaciones y /ausencias. Los cinco tragados por un `.catch`.
+**No se amplió ningún permiso**: eso es decisión de producto y tomarla para callar unos 403 sería
+el peor modo. Barrido nº 48.
+
+**(8) `/usuarios` tenía un TERCER gate que contradecía al modelo.** Rebotaba a `gerencia_lectura`
+pese a que `utils/permisos.py`, `services/permisos.ts` y `routers/usuarios.py` le dan lectura.
+Rige el modelo; la escritura sigue gateada aparte. Barrido nº 49.
+
+**🔴 (9) 97 controles por debajo del mínimo táctil de 44px, en 8 pantallas.** Arreglado en los
+primitivos: `button.tsx` (sus 8 variantes), el nuevo `AccionFila` —que reemplaza **9 copias
+literales** de `const ACCION_CLASS`— y `PISO_TACTIL` para los 11 botones crudos con caja propia.
+**Nada se agranda en desktop**: todo es `md:` sobre el tamaño del diseño. Barrido nº 50.
+
+**(10) El selector de filas por página estaba en 4 de 17 listados**, y faltaba justo en
+`/auditoria`, que tiene 25 páginas. Cableados los 13 restantes. El reseteo a la página 1 pasó al
+propio `<Pagination>`: con 17 consumidores, una regla que cada uno copia es una que alguno
+olvida. Y nueve `useEffect` tenían `page` en sus deps sin `pageSize` — no habrían recargado.
+
+**(11) La paginación en la URL: analizado, NO hecho.** Choca con cómo `/empleados` siembra sus
+filtros (`useState(() => searchParams.get(...))` lee UNA vez y nunca escribe; para que el Atrás
+funcione, el valor tiene que DERIVARSE de la URL en cada render). Queda escrito en
+`docs/DEUDA-TECNICA.md` §0.nueva y en el hook, **con la advertencia de que la media medida
+—sólo la página a la URL— es la opción mala**: un link compartido desde un listado filtrado
+aterriza en la página N del listado sin filtrar.
+
+**(12) Cierres chicos.** El modal de `/onboarding/templates` era **el único de 114 escrito a
+mano** (dos `<div className="fixed">` con `role="dialog"`): no cerraba con Escape, y tampoco
+tenía trampa de foco, bloqueo de scroll ni devolución del foco. Migrado al primitivo. La identidad
+de las 4 tablas que navegaban por `onClick` es ahora un `<Link>` real (molde: `EmpresasTable` —
+un `<tr>` no puede ser un `<a>`). Y los **cuatro `confirm()` del navegador** que quedaban
+—adjuntos, imágenes de vacante, quitar del proyecto, borrar horas— pasaron a `<ConfirmDialog>`:
+dos de ellos además tapaban el mensaje del backend con un genérico adivinado.
+
+---
+
 ## 2026-08-25 · Los arreglos que hacen daño · commits por bloque
 
 **Qué cambió:** siete bloques, todos sobre cosas que ya se cobraron un dato o lo pueden hacer.

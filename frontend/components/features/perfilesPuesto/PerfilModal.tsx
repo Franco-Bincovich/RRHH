@@ -12,6 +12,7 @@ import type { CamposPerfilResponse, PerfilPuesto } from "@/types/perfilPuesto"
 import { PerfilFormCampos } from "./PerfilFormCampos"
 import { valoresIniciales } from "./_perfilCampos"
 import { guardarPerfil, mensajeDeError, type ErroresPerfil } from "./guardarPerfil"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 /**
  * Alta y edición de un perfil de puesto.
@@ -60,6 +61,7 @@ export function PerfilModal({
         setErrores(errs)
         return
       }
+      avisarGuardado("Perfil de puesto", "m", isEdit)
       onSuccess()
     } catch (e2) {
       // El mensaje del backend se conserva: el 409 explica que el nombre es único en TODO el

@@ -65,7 +65,16 @@ BAJA_LOGICA: Dict[str, Tuple[str, str]] = {
     "/api/perfiles-puesto/{}": ("services/perfil_puesto_service.py", "LA BAJA ES LÓGICA"),
     "/api/adjuntos/{}": ("services/adjunto_service.py", "Soft delete (estado='eliminado')"),
     "/api/usuarios/{}": ("services/usuario_service.py", "baja BLANDA y REVERSIBLE"),
-    "/api/areas/{}": ("services/area_service.py", "soft delete"),
+    # 🔴 `/api/areas/{}` SIGUE APUNTANDO A `area_service.py` AUNQUE SU BAJA YA NO VIVA AHÍ.
+    # El 25/8/2026, al sumarle los tres eventos de auditoría, ese archivo pasó de 130 a 164 y sus
+    # escrituras se extrajeron a `_areas_write.py`. La baja no cambió —`area_repo.delete` sigue
+    # haciendo `update({"activo": False})`— pero el detector de `_inv_baja_logica.py` **saltea
+    # los módulos `_*.py`**, así que dejar la cita sólo en el write path lo volvía invisible: el
+    # inventario habría vuelto a mostrar la ruta como «🔴 borra la fila». Por eso el delegador de
+    # `area_service.py` conserva la cita, con esa razón escrita en su docstring.
+    # 🚩 Disparador para arreglar el detector en vez de duplicar la cita: que un segundo módulo
+    # necesite lo mismo. Ahí la salida buena es que siga la delegación.
+    "/api/areas/{}": ("services/area_service.py", "La baja es LÓGICA"),
 }
 
 

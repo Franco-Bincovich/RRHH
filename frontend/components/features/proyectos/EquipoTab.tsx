@@ -1,6 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { ApiError } from "@/services/api"
+import { avisarHecho } from "@/components/features/shared/avisoGuardado"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { confirmarQuitarDelProyecto } from "@/components/features/shared/confirmaciones"
+import { useConfirmacion } from "@/components/features/shared/useConfirmacion"
 import { Plus, Trash2, Pencil } from "lucide-react"
 import { toast } from "sonner"
 
@@ -21,6 +26,8 @@ interface Props {
 
 export function EquipoTab({ proyectoId, proyectoEmpresaId, canWrite }: Props) {
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
+  const aQuitar = useConfirmacion<Asignacion>()
+  const [quitando, setQuitando] = useState<string | null>(null)
   const [loading, setLoading]           = useState(true)
   const [assignOpen, setAssignOpen]     = useState(false)
   const [editing, setEditing]           = useState<Asignacion | null>(null)
@@ -41,10 +48,14 @@ export function EquipoTab({ proyectoId, proyectoEmpresaId, canWrite }: Props) {
     setEditing(null); await load()
   }
 
+  // 🔴 El mensaje del backend se muestra TAL CUAL. El genérico que había acá —"No se puede
+  // quitar: tiene horas registradas"— adivinaba el motivo: el 409 real dice cuál es, y los otros
+  // errores (404, red) quedaban etiquetados como horas cargadas cuando no lo eran.
   async function handleDelete(asig: Asignacion) {
-    if (!confirm(`¿Quitar a ${asig.empleado_nombre ?? "este colaborador"} del proyecto?`)) return
-    try { await deleteAsignacion(proyectoId, asig.id); toast.success("Asignación eliminada"); await load() }
-    catch { toast.error("No se puede quitar: tiene horas registradas.") }
+    setQuitando(asig.id)
+    try { await deleteAsignacion(proyectoId, asig.id); avisarHecho("Colaborador quitado del proyecto"); await load() }
+    catch (e) { toast.error(e instanceof ApiError ? e.message : "No se pudo quitar al colaborador.") }
+    finally { setQuitando(null) }
   }
 
   if (loading) return (
@@ -94,7 +105,7 @@ export function EquipoTab({ proyectoId, proyectoEmpresaId, canWrite }: Props) {
                       <Pencil className="size-3.5" />
                     </Button>
                     <Button variant="ghost" size="icon" className="size-8 text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(a)}>
+                      onClick={() => aQuitar.pedir(a)}>
                       <Trash2 className="size-3.5" />
                     </Button>
                   </div>
@@ -112,6 +123,18 @@ export function EquipoTab({ proyectoId, proyectoEmpresaId, canWrite }: Props) {
 
       <AsignacionModal open={editing !== null} asignacion={editing}
         onClose={() => setEditing(null)} onSave={handleEditSave} />
+
+      <ConfirmDialog
+        open={aQuitar.abierto}
+        onClose={aQuitar.cerrar}
+        onConfirm={() => {
+          const x = aQuitar.pendiente
+          aQuitar.cerrar()
+          if (x) void handleDelete(x)
+        }}
+        loading={quitando !== null}
+        {...confirmarQuitarDelProyecto(aQuitar.pendiente ?? {})}
+      />
     </div>
   )
 }

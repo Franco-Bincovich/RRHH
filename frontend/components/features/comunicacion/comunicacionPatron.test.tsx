@@ -31,7 +31,7 @@ const PLANTILLA = {
 
 function card(editable: boolean) {
   return renderToStaticMarkup(
-    <PlantillaCard plantilla={PLANTILLA} editable={editable} onEditar={() => {}} onEnviar={() => {}} />,
+    <PlantillaCard bloqueo={null} plantilla={PLANTILLA} editable={editable} onEditar={() => {}} onEnviar={() => {}} />,
   )
 }
 

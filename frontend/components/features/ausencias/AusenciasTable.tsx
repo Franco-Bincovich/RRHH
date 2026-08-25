@@ -7,6 +7,7 @@
  * acá no hay una sola clase de las del patrón. Molde: `BajasTable` / `EmpleadosTable`.
  */
 import { Paperclip, Pencil, Trash2 } from "lucide-react"
+import { AccionFila } from "@/components/ui/AccionFila"
 import type { ReactNode } from "react"
 
 import { ErrorState } from "@/components/ui/ErrorState"
@@ -49,9 +50,6 @@ function formatFecha(s: string): string {
  * contraste. El rojo del borrado también aparece recién al apuntar: en reposo, diez filas con un
  * ícono rojo cada una leen como diez errores.
  */
-const ACCION_CLASS =
-  "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
-
 export function AusenciasTable({
   items, loading, error, showEmpresa, canWrite, deletingId, onRetry, onEdit, onDelete, onDocs,
   chips, onLimpiarTodo, accionVacio,
@@ -110,17 +108,17 @@ export function AusenciasTable({
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => onDocs(a)} aria-label={`Documentos de la ausencia de ${a.empleado_nombre ?? "el colaborador"}`} className={`${ACCION_CLASS} group-hover:text-primary`}>
+                  <AccionFila onClick={() => onDocs(a)} aria-label={`Documentos de la ausencia de ${a.empleado_nombre ?? "el colaborador"}`}>
                     <Paperclip className="size-4" aria-hidden="true" />
-                  </button>
+                  </AccionFila>
                   {canWrite && (
                     <>
-                      <button type="button" onClick={() => onEdit(a)} aria-label={`Editar la ausencia de ${a.empleado_nombre ?? "el colaborador"}`} className={`${ACCION_CLASS} group-hover:text-primary`}>
+                      <AccionFila onClick={() => onEdit(a)} aria-label={`Editar la ausencia de ${a.empleado_nombre ?? "el colaborador"}`}>
                         <Pencil className="size-4" aria-hidden="true" />
-                      </button>
-                      <button type="button" onClick={() => onDelete(a)} disabled={deletingId === a.id} aria-label={`Eliminar la ausencia de ${a.empleado_nombre ?? "el colaborador"}`} className={`${ACCION_CLASS} group-hover:text-destructive`}>
+                      </AccionFila>
+                      <AccionFila tono="destructivo" onClick={() => onDelete(a)} disabled={deletingId === a.id} aria-label={`Eliminar la ausencia de ${a.empleado_nombre ?? "el colaborador"}`}>
                         <Trash2 className="size-4" aria-hidden="true" />
-                      </button>
+                      </AccionFila>
                     </>
                   )}
                 </div>

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { updateAsignacion } from "@/services/capacitaciones"
 import type { Asignacion, AsignacionUpdate } from "@/types/capacitacion"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   open: boolean
@@ -36,6 +37,7 @@ export function EstadoModal({ open, asignacion, onClose, onSuccess }: Props) {
         fecha_completado: fechaCompletado || undefined,
       }
       await updateAsignacion(asignacion.id, payload)
+      avisarGuardado("Asignación", "f", true)
       onSuccess()
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Error al actualizar")

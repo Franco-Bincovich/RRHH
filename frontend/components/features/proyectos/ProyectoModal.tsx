@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/select"
 import { fetchEmpresas } from "@/services/empresas"
 import type { Empresa } from "@/types/empresa"
 import type { Proyecto, ProyectoCreate, ProyectoEstado, ProyectoUpdate } from "@/types/proyecto"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 type SavePayload = ProyectoCreate | ProyectoUpdate
 
@@ -60,6 +61,7 @@ export function ProyectoModal({ open, proyecto, onClose, onSave }: Props) {
         fecha_inicio: fechaInicio || undefined, fecha_fin: fechaFin || undefined,
       }
       await onSave(isEdit ? base : { ...base, empresa_id })
+      avisarGuardado("Proyecto", "m", isEdit)
     } catch {
       toast.error("No se pudo guardar el proyecto. Intentá de nuevo.")
     } finally { setSaving(false) }

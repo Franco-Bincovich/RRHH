@@ -10,6 +10,7 @@ import { IniciarOnboardingFields } from "./IniciarOnboardingFields"
 import { fetchTemplates, iniciarOnboarding } from "@/services/onboarding"
 import type { Empleado } from "@/types/empleado"
 import type { OnboardingInstancia, OnboardingTemplate } from "@/types/onboarding"
+import { avisarHecho } from "@/components/features/shared/avisoGuardado"
 
 /**
  * El modal de "Iniciar onboarding": elegir la persona y el template con el que arranca su proceso.
@@ -75,6 +76,9 @@ export function IniciarOnboardingModal({ activos, onClose, onSuccess }: IniciarO
     setError(null)
     try {
       const instancia = await iniciarOnboarding(selectedId, selectedTemplateId || undefined)
+      // No es un alta de una fila que el usuario ve en una tabla: es el arranque de un
+      // proceso. Por eso el mensaje nombra el acto y no la entidad.
+      avisarHecho("Onboarding iniciado")
       onSuccess(instancia)
     } catch {
       setError("No se pudo iniciar el onboarding. Verificá que el colaborador no tenga uno activo.")

@@ -3,6 +3,7 @@
 import { useState } from "react"
 
 import { EmptyState } from "@/components/ui/EmptyState"
+import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs"
 import { PageHeader } from "@/components/layout/PageHeader"
@@ -12,7 +13,7 @@ import { MetricasPanel } from "@/components/features/evaluaciones/reportes/Metri
 import { EvaluadosResultadosPanel } from "@/components/features/evaluaciones/resultados/EvaluadosResultadosPanel"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import { useLotesEvaluaciones } from "@/hooks/useLotesEvaluaciones"
-import { ClipboardList } from "lucide-react"
+import { ClipboardList, Upload } from "lucide-react"
 
 type Tab = "metricas" | "evaluados" | "importar" | "importaciones"
 
@@ -32,13 +33,29 @@ export default function EvaluacionesPage() {
   // 🔴 SE LLAMA `sinResultados` Y NO `sinCiclos`: la variable nombraba el concepto que este
   // módulo justamente NO tiene. Ver el 🔴 del selector de abajo.
   const sinResultados = !cargando && !loteId
+  /**
+   * 🔴 EL VACÍO LLEVA A LA ACCIÓN, NO SÓLO LA NOMBRA (25/8/2026). La descripción decía *"Importá
+   * los dos archivos desde la pestaña «Importar resultados»"* y no ofrecía nada: mandaba a buscar
+   * una pestaña estando el `setTab` a tres líneas de distancia. Es el mismo defecto que en
+   * /proximos-ingresos, donde el error decía "corregí la fecha en el legajo" desde una pantalla
+   * que no tenía cómo abrirlo.
+   *
+   * Sin permiso de escritura NO se ofrece —importar es una escritura— y ahí el texto es el otro:
+   * dice qué va a pasar cuando alguien lo haga, que es lo único accionable para ese rol.
+   */
   const vacio = (
     <EmptyState
       icon={<ClipboardList />}
       title="Todavía no hay resultados importados"
       description={canWrite
-        ? "Importá los dos archivos de un período desde la pestaña “Importar resultados”."
+        ? "Los resultados se calculan afuera y se importan: hacen falta los dos archivos del período."
         : "Cuando Capital Humano importe los resultados de un período, vas a ver acá las métricas."}
+      action={canWrite ? (
+        <Button className="min-h-11" onClick={() => setTab("importar")}>
+          <Upload />
+          Importar resultados
+        </Button>
+      ) : undefined}
     />
   )
 

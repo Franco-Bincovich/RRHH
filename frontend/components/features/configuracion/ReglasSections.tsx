@@ -8,6 +8,7 @@ import { CampoNumero } from "@/components/features/configuracion/_campos"
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
 import { useConfiguracion } from "@/components/features/configuracion/useConfiguracion"
 import { VacacionesReglas } from "@/components/features/configuracion/VacacionesReglas"
+import { AccionBloqueada } from "@/components/ui/AccionBloqueada"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Parametros, TramoEscala } from "@/types/configuracion"
@@ -29,7 +30,11 @@ import type { Parametros, TramoEscala } from "@/types/configuracion"
  *
  * `editable` viene de afuera: quién puede escribir lo decide la página, no este componente.
  */
-export function ReglasSections({ editable }: { editable: boolean }) {
+export function ReglasSections({ editable, motivoBloqueo }: {
+  editable: boolean
+  /** Por qué HOY no se puede guardar (vista consolidada), o `null`. Lo decide la página. */
+  motivoBloqueo: string | null
+}) {
   const { config, loading, error, ocupado, guardarParametros, guardarEscala } = useConfiguracion()
   const [params, setParams] = useState<Parametros | null>(null)
   const [tramos, setTramos] = useState<TramoEscala[]>([])
@@ -65,6 +70,7 @@ export function ReglasSections({ editable }: { editable: boolean }) {
         onTramos={setTramos}
         escalaPropia={config?.escala.es_propia ?? false}
         editable={editable}
+        motivoBloqueo={motivoBloqueo}
         guardandoParams={Boolean(ocupado.parametros)}
         guardandoEscala={Boolean(ocupado.escala)}
         onGuardarParams={() => params && guardarParametros(params)}
@@ -91,12 +97,16 @@ export function ReglasSections({ editable }: { editable: boolean }) {
               sufijo="días"
             />
             {editable && (
-              <Button
-                onClick={() => guardarParametros(params)}
-                disabled={Boolean(ocupado.parametros)}
-              >
-                {ocupado.parametros ? "Guardando…" : "Guardar"}
-              </Button>
+              <AccionBloqueada motivo={motivoBloqueo}>
+                {(bloqueada) => (
+                  <Button
+                    onClick={() => guardarParametros(params)}
+                    disabled={bloqueada || Boolean(ocupado.parametros)}
+                  >
+                    {ocupado.parametros ? "Guardando…" : "Guardar"}
+                  </Button>
+                )}
+              </AccionBloqueada>
             )}
           </div>
         )}
@@ -107,6 +117,7 @@ export function ReglasSections({ editable }: { editable: boolean }) {
         fallback={fallback}
         onCampo={onCampo}
         editable={editable}
+        motivoBloqueo={motivoBloqueo}
         guardando={Boolean(ocupado.parametros)}
         onGuardar={() => params && guardarParametros(params)}
       />

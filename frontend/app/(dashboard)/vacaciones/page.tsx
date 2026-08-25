@@ -12,7 +12,7 @@ import { VacacionesModal } from "@/components/features/vacaciones/VacacionesModa
 import { VacacionesTable } from "@/components/features/vacaciones/VacacionesTable"
 import { VacacionesVistaMapa } from "@/components/features/vacaciones/VacacionesVistaMapa"
 import { useFiltrosVacaciones } from "@/components/features/vacaciones/useFiltrosVacaciones"
-import { useVacacionesLista, PAGE_SIZE } from "@/components/features/vacaciones/useVacacionesLista"
+import { useVacacionesLista, PAGE_SIZE_INICIAL } from "@/components/features/vacaciones/useVacacionesLista"
 import { AdjuntosDialog } from "@/components/features/adjuntos/AdjuntosDialog"
 import { PendientesSection } from "@/components/features/vacaciones/PendientesSection"
 import { exportarVacaciones } from "@/services/vacaciones"
@@ -28,6 +28,7 @@ type Vista = "lista" | "mapa"
 export default function VacacionesPage() {
   const canWrite = useCanWrite()
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [vista, setVista] = useState<Vista>("lista")
   const [modalOpen, setModalOpen] = useState(false)
   const [docsFor, setDocsFor] = useState<SolicitudVacaciones | null>(null)
@@ -36,7 +37,7 @@ export default function VacacionesPage() {
 
   const { empresaActivaId, filtros, campos } = useFiltrosVacaciones(() => setPage(1))
   const { solicitudes, loading, error, total, cancelingId, load, handleCancel } =
-    useVacacionesLista(filtros, page)
+    useVacacionesLista(filtros, page, pageSize)
 
   const chips = chipsDeCampos(campos)
 
@@ -103,7 +104,7 @@ export default function VacacionesPage() {
 
       {/*
        * 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS, no sólo cuando hay más de una página. Antes aparecía
-       * con `total > PAGE_SIZE`: con pocos registros y un filtro puesto, la pantalla dejaba de
+       * con `total > pageSize`: con pocos registros y un filtro puesto, la pantalla dejaba de
        * decir cuántos resultados había justo cuando el filtro es lo que hay que entender. El
        * total que muestra es el TOTAL FILTRADO del backend, no `solicitudes.length`.
        *
@@ -111,7 +112,8 @@ export default function VacacionesPage() {
        * la fila. Paginar un calendario no significa nada.
        */}
       {!loading && !error && vista === "lista" && solicitudes.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize}
+                    onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
 
       {vista === "lista" && <PendientesSection showEmpresa={!empresaActivaId} refreshKey={pendientesKey} />}

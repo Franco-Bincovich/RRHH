@@ -16,6 +16,7 @@
  */
 import { useEffect, useState } from "react"
 
+import { useCatalogoPermitido } from "@/hooks/useCatalogoPermitido"
 import { fetchAreas } from "@/services/areas"
 import { fetchEmpleadosSeleccionables } from "@/services/empleados"
 import { getEmpresaActivaId } from "@/services/empresaStore"
@@ -27,6 +28,12 @@ import type { Empresa } from "@/types/empresa"
 import type { Proyecto } from "@/types/proyecto"
 
 export function useOpcionesVacaciones(empresaFiltro: string) {
+  // 🔴 Un catálogo que el rol no puede leer no se pide: `mandos_medios` SÍ ve esta pantalla pero
+  // NO tiene lectura de empresas, áreas ni proyectos, así que cada carga eran tres 403 tragados
+  // por los `.catch`. Ver `hooks/useCatalogoPermitido`.
+  const puedeEmpresas = useCatalogoPermitido("empresa")
+  const puedeAreas = useCatalogoPermitido("areas")
+  const puedeProyectos = useCatalogoPermitido("proyectos")
   const [empresaActivaId, setEmpresaActivaId] = useState<string | null>(null)
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [areas, setAreas] = useState<Area[]>([])
@@ -36,17 +43,19 @@ export function useOpcionesVacaciones(empresaFiltro: string) {
   useEffect(() => {
     const id = getEmpresaActivaId()
     setEmpresaActivaId(id)
-    if (!id) fetchEmpresas().then((r) => setEmpresas(r.items.filter((e) => e.activa))).catch(() => {})
-  }, [])
+    if (!id && puedeEmpresas) fetchEmpresas().then((r) => setEmpresas(r.items.filter((e) => e.activa))).catch(() => {})
+  }, [puedeEmpresas])
 
   useEffect(() => {
     const empId = empresaActivaId || empresaFiltro || undefined
-    fetchAreas(empId).then(setAreas).catch(() => setAreas([]))
+    if (puedeAreas) fetchAreas(empId).then(setAreas).catch(() => setAreas([]))
     // El selector no necesita etiquetaProyecto: hoy no hay nombres de proyecto repetidos
     // entre empresas. Si algún día los hay, reusar el patrón de shared/filtros.ts.
-    fetchProyectos({ empresaIdOverride: empId })
-      .then((r) => setProyectos(r.items)).catch(() => setProyectos([]))
-  }, [empresaActivaId, empresaFiltro])
+    if (puedeProyectos) {
+      fetchProyectos({ empresaIdOverride: empId })
+        .then((r) => setProyectos(r.items)).catch(() => setProyectos([]))
+    }
+  }, [empresaActivaId, empresaFiltro, puedeAreas, puedeProyectos])
 
   useEffect(() => {
     const empId = empresaActivaId || empresaFiltro

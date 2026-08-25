@@ -1,6 +1,7 @@
 "use client"
 
 import { ChevronRight } from "lucide-react"
+import Link from "next/link"
 import type { ReactNode } from "react"
 
 import { ErrorState } from "@/components/ui/ErrorState"
@@ -73,7 +74,18 @@ export function VacantesTable({
         <TableBody>
           {vacantes.map((vacante) => (
             <TableRow key={vacante.id} className="group cursor-pointer" onClick={() => onAbrir(vacante.id)}>
-              <TableCell className="font-medium">{vacante.titulo}</TableCell>
+              {/* 🔴 LA IDENTIDAD ES UN <Link> DE VERDAD, no sólo el `onClick` de la fila. Molde:
+                  `EmpresasTable`, la única tabla que ya lo hacía. Un `<tr>` NO puede ser un `<a>`
+                  —HTML inválido, y React lo rechaza— así que el ancla va en la celda que nombra
+                  al registro. El `onClick` de la fila SE QUEDA: es la comodidad de clickear
+                  cualquier parte. Lo que agrega el link es lo que el `onClick` no puede dar —
+                  abrir en pestaña nueva, copiar la dirección, y llegar con Tab. */}
+              <TableCell className="font-medium">
+                <Link href={`/vacantes/${vacante.id}`} onClick={(e) => e.stopPropagation()}
+                      className="hover:text-primary hover:underline">
+                  {vacante.titulo}
+                </Link>
+              </TableCell>
               {mostrarEmpresa && (
                 <TableCell className="text-muted-foreground">{vacante.empresa_nombre ?? "—"}</TableCell>
               )}

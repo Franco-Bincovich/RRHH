@@ -25,7 +25,8 @@ from utils.logger import logger
 
 
 def asignar_bulk(asignar_uno: Callable, proyectos_repo, proyecto_id: UUID,
-                 data: AsignacionBulkCreate, empresa_id: Optional[UUID] = None) -> AsignacionBulkResult:
+                 data: AsignacionBulkCreate, empresa_id: Optional[UUID] = None,
+                 usuario_id: Optional[str] = None) -> AsignacionBulkResult:
     """
     Alta multi-selección: valida el proyecto UNA vez y asigna empleado por empleado.
     Éxito parcial (patrón nómina): no aborta; clasifica en asignados / errores por empleado.
@@ -39,11 +40,12 @@ def asignar_bulk(asignar_uno: Callable, proyectos_repo, proyecto_id: UUID,
     """
     if not proyectos_repo.find_by_id(str(proyecto_id), empresa_id):
         raise AppError("Proyecto no encontrado", "PROYECTO_NOT_FOUND", 404)
-    return clasificar(asignar_uno, proyecto_id, data.empleado_ids, data)
+    return clasificar(asignar_uno, proyecto_id, data.empleado_ids, data, usuario_id)
 
 
 def clasificar(asignar_uno: Callable, proyecto_id: UUID, empleado_ids: List[UUID],
-               data: Union[AsignacionBulkCreate, AsignacionAreaCreate]) -> AsignacionBulkResult:
+               data: Union[AsignacionBulkCreate, AsignacionAreaCreate],
+               usuario_id: Optional[str] = None) -> AsignacionBulkResult:
     """Asigna cada empleado y agrupa el resultado. NO valida el proyecto: lo hace el caller.
 
     🔴 ES LA ÚNICA CLASIFICACIÓN DEL MÓDULO, y por eso está separada de `asignar_bulk`: la
@@ -60,8 +62,12 @@ def clasificar(asignar_uno: Callable, proyecto_id: UUID, empleado_ids: List[UUID
     errores: List[AsignacionBulkError] = []
     for eid in empleado_ids:
         try:
+            # `usuario_id` viaja hasta acá para que CADA asignación quede auditada con su autor:
+            # asignar un área de 13 personas emite 13 eventos, y un evento sin autor no contesta
+            # la pregunta por la que existe.
             asignados.append(asignar_uno(proyecto_id, eid, data.rol, data.valor_hora,
-                                         data.fecha_desde, data.fecha_hasta))
+                                         data.fecha_desde, data.fecha_hasta,
+                                         usuario_id=usuario_id))
         except AppError as exc:
             # 🔴 El duplicado NO es un error: es la operación siendo idempotente. Se distingue
             # por el CODE y no por el texto del mensaje — un mensaje se reescribe y nadie se
@@ -75,7 +81,8 @@ def clasificar(asignar_uno: Callable, proyecto_id: UUID, empleado_ids: List[UUID
 
 
 def asignar_area(asignar_uno: Callable, proyectos_repo, areas_repo, proyecto_id: UUID,
-                 data: AsignacionAreaCreate, empresa_id: Optional[UUID] = None) -> AsignacionBulkResult:
+                 data: AsignacionAreaCreate, empresa_id: Optional[UUID] = None,
+                 usuario_id: Optional[str] = None) -> AsignacionBulkResult:
     """Asigna al proyecto TODOS los empleados de un área, resueltos en este momento (FOTO).
 
     Reusa `clasificar`, la misma del alta manual: los tres grupos salen idénticos.
@@ -126,4 +133,4 @@ def asignar_area(asignar_uno: Callable, proyectos_repo, areas_repo, proyecto_id:
             "El área no tiene colaboradores para asignar. Revisá que tengan el área cargada en su ficha.",
             "AREA_SIN_EMPLEADOS", 422)
 
-    return clasificar(asignar_uno, proyecto_id, [UUID(e) for e in empleado_ids], data)
+    return clasificar(asignar_uno, proyecto_id, [UUID(e) for e in empleado_ids], data, usuario_id)

@@ -1,6 +1,7 @@
 "use client"
 
 import { Plus, Trash2 } from "lucide-react"
+import { PISO_TACTIL, PISO_TACTIL_ICONO } from "@/components/ui/AccionFila"
 
 import { AddTareaForm } from "@/components/features/onboarding/AddTareaForm"
 import { InlineEdit } from "@/components/features/onboarding/InlineEdit"
@@ -55,7 +56,7 @@ export function SemanaSection({
           <button
             type="button"
             onClick={onToggleAgregar}
-            className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={`${PISO_TACTIL} flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
           >
             <Plus className="size-3.5" />
             Agregar tarea
@@ -99,7 +100,7 @@ export function SemanaSection({
                   onClick={() => onEliminarTarea(tarea)}
                   disabled={deletingId === tarea.id}
                   aria-label="Eliminar tarea"
-                  className="flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  className={`${PISO_TACTIL_ICONO} flex min-h-8 min-w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50`}
                 >
                   <Trash2 className="size-3.5" />
                 </button>

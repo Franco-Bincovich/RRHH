@@ -15,9 +15,9 @@ import { toast } from "sonner"
 import { fetchVacaciones, cancelarVacacion, type VacacionesFiltros } from "@/services/vacaciones"
 import type { SolicitudVacaciones } from "@/types/vacaciones"
 
-export const PAGE_SIZE = 20
+export const PAGE_SIZE_INICIAL = 20
 
-export function useVacacionesLista(filtros: VacacionesFiltros, page: number) {
+export function useVacacionesLista(filtros: VacacionesFiltros, page: number, pageSize: number) {
   const [solicitudes, setSolicitudes] = useState<SolicitudVacaciones[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -28,7 +28,7 @@ export function useVacacionesLista(filtros: VacacionesFiltros, page: number) {
     setLoading(true)
     setError(false)
     try {
-      const data = await fetchVacaciones(filtros, page, PAGE_SIZE)
+      const data = await fetchVacaciones(filtros, page, pageSize)
       setSolicitudes(data.items)
       setTotal(data.total)
     } catch {
@@ -37,7 +37,7 @@ export function useVacacionesLista(filtros: VacacionesFiltros, page: number) {
       setLoading(false)
     }
     // filtros es un objeto nuevo en cada render; se serializa para no re-fetchear de más.
-  }, [JSON.stringify(filtros), page])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(filtros), page, pageSize])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 

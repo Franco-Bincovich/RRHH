@@ -4,6 +4,8 @@ import { useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ContratarCandidatoButton } from "@/components/features/candidatos/ContratarCandidatoButton"
+import { EstadoCandidatoBadge } from "@/components/features/candidatos/EstadoCandidatoBadge"
 import { CandidatoAccionesPipeline } from "@/components/features/screening/CandidatoAccionesPipeline"
 import { CandidatoCard } from "@/components/features/vacantes/CandidatoCard"
 import { formatFecha } from "@/components/features/shared/fechas"
@@ -12,10 +14,9 @@ import type { Candidato, EtapaPipeline } from "@/types/vacantes"
 
 import { ETAPA_COLUMN_BG, ETAPA_DOT, ETAPA_LABELS, ETAPAS } from "./_pipelineEtapas"
 
-/** "Analista · Acme" o "Sin datos": lo que el candidato hacía antes, para ubicarlo sin abrir el CV. */
-function cargoAnterior(c: Candidato): string {
-  return [c.cargo_anterior, c.empresa_anterior].filter(Boolean).join(" · ") || "Sin datos"
-}
+/** "Analista · Acme" o "Sin datos": lo que hacía antes, para ubicarlo sin abrir el CV. */
+const cargoAnterior = (c: Candidato): string =>
+  [c.cargo_anterior, c.empresa_anterior].filter(Boolean).join(" · ") || "Sin datos"
 
 /**
  * El tablero de selección de una vacante: una columna por etapa, las tarjetas de los candidatos y
@@ -89,6 +90,38 @@ export function PipelineSeleccion({ candidatos, canWrite, onMovido, onRecargar }
                     />
                     {/* Ver CV + corregir la clasificación SIN salir de esta pantalla. */}
                     <CandidatoAccionesPipeline candidato={c} onCambio={onRecargar} />
+
+                    {/* 🔴 CÓMO TERMINÓ, no sólo hasta dónde llegó: `etapa_pipeline` no se toca
+                        al contratar ni al descartar (es la métrica del embudo), así que sin este
+                        chip "Oferta" muestra igual al que sigue en carrera y al que ya se fue.
+                        No pinta nada si el estado es `activo` — ver `EstadoCandidatoBadge`. */}
+                    {c.estado !== "activo" && (
+                      <div className="mt-1"><EstadoCandidatoBadge estado={c.estado} /></div>
+                    )}
+                    {/*
+                     * 🔴 "CONTRATAR" VIVE ACÁ DESDE EL 25/8/2026, Y ESTE ES EL PUNTO DEL CAMBIO.
+                     * Antes el botón existía SÓLO en el panel de detalle de /candidatos, y las
+                     * etapas se mueven acá: el circuito completo —mover a Oferta, ir a otra
+                     * pantalla, encontrar a la persona, abrir su panel, contratar— cruzaba tres
+                     * pantallas y nada en esta ficha lo indicaba.
+                     *
+                     * De las dos salidas posibles se eligió ÉSTA (el botón donde se movió la
+                     * etapa) y no "que la ficha lo indique", por tres razones:
+                     *   · Contratar es la CONSECUENCIA inmediata de mover a alguien a Oferta, y
+                     *     quien mueve la tarjeta es quien toma esa decisión. La acción pertenece
+                     *     al lugar donde se decide.
+                     *   · Un cartel que explica dónde está el botón es peor que el botón: deja
+                     *     el recorrido de tres pantallas y le suma texto.
+                     *   · No duplica nada: es el MISMO componente que usa /candidatos, con la
+                     *     misma condición (`oferta` + `activo`), que el backend revalida igual.
+                     * El de /candidatos NO se saca: ahí se llega por persona y no por búsqueda, y
+                     * es la única puerta para un candidato sin vacante viva. */}
+                    {canWrite && etapa === "oferta" && c.estado === "activo" && (
+                      <div className="mt-1">
+                        <ContratarCandidatoButton candidato={c} onContratado={onRecargar} />
+                      </div>
+                    )}
+
                     {canWrite && siguiente && (
                       <Button
                         variant="ghost"

@@ -46,12 +46,12 @@ async def listar(request: Request) -> PlantillasListResponse:
 @router.put("", response_model=PlantillaResponse, dependencies=[_WRITE])
 async def guardar(body: PlantillaUpsert, request: Request) -> PlantillaResponse:
     """Crea o edita. Rechaza una variable que el contexto no declara (422)."""
-    return PlantillasService().guardar(body, require_empresa_id(request))
+    return PlantillasService().guardar(body, require_empresa_id(request), request.state.user.get("id"))
 
 
 @router.delete("/{id}", status_code=204, dependencies=[_WRITE])
 async def borrar(id: UUID, request: Request) -> None:
-    PlantillasService().borrar(id, require_empresa_id(request))
+    PlantillasService().borrar(id, require_empresa_id(request), request.state.user.get("id"))
 
 
 @router.post("/preview", response_model=PreviewResponse, dependencies=[_READ, _VER_EMPLEADOS])

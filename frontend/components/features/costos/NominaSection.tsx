@@ -14,7 +14,7 @@ import { COLUMNAS_NOMINA } from "@/components/features/costos/_grillaNomina"
 import { EditarNominaModal } from "@/components/features/costos/EditarNominaModal"
 import { MESES_LARGOS, pesos } from "@/components/features/costos/formatos"
 import { useEdicionNomina } from "@/components/features/costos/useEdicionNomina"
-import { PAGE_SIZE, useNominaLista } from "@/components/features/costos/useNominaLista"
+import { useNominaLista } from "@/components/features/costos/useNominaLista"
 import { exportarNomina } from "@/services/costos"
 
 /**
@@ -129,11 +129,12 @@ export function NominaSection({ mes, anio, canWrite, mostrarEmpresa, onGuardado 
             )}
           </Table>
 
-          {/* 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS (era `n.total > PAGE_SIZE`) y sólo después de
+          {/* 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS (era `n.total > pageSize`) y sólo después de
               cargar: sin la guarda, al cambiar de mes la barra queda mostrando el total del
               período ANTERIOR sobre el esqueleto. El total es el del backend, no `filas.length`. */}
           {!n.loading && n.filas.length > 0 && (
-            <Pagination page={n.page} total={n.total} pageSize={PAGE_SIZE} onPageChange={n.setPage} />
+            <Pagination page={n.page} total={n.total} pageSize={n.pageSize}
+                        onPageSizeChange={n.setPageSize} onPageChange={n.setPage} />
           )}
         </>
       )}

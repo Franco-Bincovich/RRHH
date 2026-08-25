@@ -15,7 +15,7 @@ import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { exportarInventarioAsignaciones, fetchAsignaciones } from "@/services/inventario"
 import type { Asignacion } from "@/types/inventario"
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_INICIAL = 20
 
 export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
@@ -24,6 +24,7 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
   const [asignarModal, setAsignarModal] = useState(false)
   const [devolviendo, setDevolviendo] = useState<Asignacion | null>(null)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [total, setTotal] = useState(0)
   // 🔴 Cambiar cualquier filtro vuelve a la página 1 (invariante 4 del bloque B): filtrar
   // parado en la 7 pediría una página que el resultado nuevo no tiene y la tabla saldría
@@ -34,13 +35,13 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
   const load = useCallback(async () => {
     setLoading(true); setError(false)
     try {
-      const data = await fetchAsignaciones(filtros, page, PAGE_SIZE)
+      const data = await fetchAsignaciones(filtros, page, pageSize)
       // El total sale del wrapper del backend, NUNCA de `data.items.length`.
       setAsignaciones(data.items); setTotal(data.total)
     } catch { setError(true) }
     finally { setLoading(false) }
     // filtros es un objeto nuevo por render; se serializa para no re-fetchear de más.
-  }, [JSON.stringify(filtros), page])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(filtros), page, pageSize])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -70,11 +71,11 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
         ) : undefined}
       />
 
-      {/* 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS (era `total > PAGE_SIZE`) y sólo después de cargar:
+      {/* 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS (era `total > pageSize`) y sólo después de cargar:
           sin la guarda, la barra queda mostrando el total del pedido ANTERIOR sobre el esqueleto.
           El total es el del backend, no `asignaciones.length`. */}
       {!loading && !error && asignaciones.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
 
       <AsignarModal open={asignarModal} onClose={() => setAsignarModal(false)} onSuccess={() => { setAsignarModal(false); load() }} />

@@ -1,6 +1,5 @@
 """
-Servicio de horas de proyecto (carga interna por RRHH).
-Flujo: router → service → repository → DB
+Servicio de horas de proyecto (carga interna por RRHH). Flujo: router → service → repository → DB
 
 Reglas:
   - valor_hora_snapshot se congela desde proyecto_asignaciones.valor_hora al insertar.
@@ -15,8 +14,12 @@ from repositories.horas_repo import HorasRepo
 from repositories.proyecto_asignaciones_repo import AsignacionesRepo
 from repositories.proyectos_repo import ProyectosRepo
 from schemas.horas import HoraCreate, HoraListResponse, HoraResponse
+from services._audit_payloads_horas import payload_baja_hora
+from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
+
+_NO_ENCONTRADA = ("Registro de horas no encontrado", "HORA_NOT_FOUND", 404)
 
 
 class HorasService:
@@ -26,10 +29,12 @@ class HorasService:
         asig_repo: Optional[AsignacionesRepo] = None,
         proyectos_repo: Optional[ProyectosRepo] = None,
         totales=None,
+        audit: Optional[AuditService] = None,
     ) -> None:
         self._repo = repo or HorasRepo()
         self._asig = asig_repo or AsignacionesRepo()
         self._proyectos = proyectos_repo or ProyectosRepo()
+        self._audit = audit or AuditService()
         # Inyectable como los otros tres. Llamar a `totales_de_proyecto` directo dejaba una
         # dependencia que ningún test podía interceptar: los fakes cubrían los repos y esta se
         # colaba hasta la red de verdad. Si una dependencia nueva no entra por el constructor,
@@ -109,15 +114,37 @@ class HorasService:
         })
         return row
 
-    def delete(self, hora_id: UUID, empresa_id: Optional[UUID] = None) -> None:
-        """Elimina un registro de horas (única forma de corregir un error). Valida ownership: proyecto dueño debe coincidir con empresa_id."""
-        # Resolver el proyecto padre para validar ownership antes de borrar
-        proyecto_id = self._repo.find_proyecto_id(str(hora_id))
-        if not proyecto_id:
-            raise AppError("Registro de horas no encontrado", "HORA_NOT_FOUND", 404)
+    def delete(self, hora_id: UUID, empresa_id: Optional[UUID] = None,
+               usuario_id: Optional[str] = None) -> None:
+        """Elimina un registro de horas. Valida ownership: el proyecto dueño debe coincidir con
+        empresa_id.
+
+        🔴 ES LA ÚNICA FORMA DE CORREGIR UNA HORA CARGADA —la edición no existe por decisión de
+        producto— y hasta el 25/8/2026 no dejaba rastro, sobre el dato que FACTURA. El evento se
+        arma con la fila VIVA (después del DELETE no hay nada que fotografiar) y se registra
+        DESPUÉS del borrado. Mismo orden que `_objetivos_write.eliminar`.
+
+        🔑 EL PRIOR REEMPLAZÓ AL `find_proyecto_id` (borrado del repo por quedarse sin callers):
+        la fila trae el `proyecto_id` que valida la empresa Y lo que el evento fotografía, en UNA
+        query en vez de dos.
+
+        Args:
+            hora_id: Carga a borrar.
+            empresa_id: Empresa del request. None = consolidado.
+            usuario_id: Operador, para la trazabilidad del evento.
+
+        Raises: AppError HORA_NOT_FOUND (404) — no existe, no tiene proyecto, o es de otra empresa.
+        """
+        prior = self._repo.find_by_id(str(hora_id))
+        # Sin proyecto no se alcanza por esta ruta (carga directa del link público) — mismo 404.
+        if not prior or not prior.proyecto_id:
+            raise AppError(*_NO_ENCONTRADA)
         # 404 (no 403) — no revelar que el recurso existe en otra empresa
-        if not self._proyectos.find_by_id(proyecto_id, empresa_id):
-            raise AppError("Registro de horas no encontrado", "HORA_NOT_FOUND", 404)
+        if not self._proyectos.find_by_id(str(prior.proyecto_id), empresa_id):
+            raise AppError(*_NO_ENCONTRADA)
         if not self._repo.delete(str(hora_id)):
-            raise AppError("Registro de horas no encontrado", "HORA_NOT_FOUND", 404)
+            raise AppError(*_NO_ENCONTRADA)
+        # La empresa del evento sale de la ENTIDAD, nunca del header (Vista vs Acción).
+        self._audit.registrar(**payload_baja_hora(
+            prior, usuario_id, str(prior.empresa_id) if prior.empresa_id else None))
         logger.info("Horas eliminadas", extra={"hora_id": str(hora_id)})

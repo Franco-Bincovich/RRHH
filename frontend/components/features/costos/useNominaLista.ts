@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react"
 import { fetchNominaMes } from "@/services/costos"
 import type { Nomina } from "@/types/costo"
 
-export const PAGE_SIZE = 20
+export const PAGE_SIZE_INICIAL = 20
 
 /**
  * El detalle de nómina de un período: su página y su total.
@@ -22,6 +22,7 @@ export function useNominaLista(mes: number, anio: number) {
   const [filas, setFilas] = useState<Nomina[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
@@ -29,7 +30,7 @@ export function useNominaLista(mes: number, anio: number) {
     setLoading(true)
     setError(false)
     try {
-      const data = await fetchNominaMes(mes, anio, page, PAGE_SIZE)
+      const data = await fetchNominaMes(mes, anio, page, pageSize)
       setFilas(data.items)
       setTotal(data.total)
     } catch {
@@ -37,7 +38,7 @@ export function useNominaLista(mes: number, anio: number) {
     } finally {
       setLoading(false)
     }
-  }, [mes, anio, page])
+  }, [mes, anio, page, pageSize])
 
   useEffect(() => { load() }, [load])
 
@@ -45,5 +46,5 @@ export function useNominaLista(mes: number, anio: number) {
   // nuevo puede no tener, y la tabla saldría vacía sobre un mes que sí tiene nómina.
   useEffect(() => { setPage(1) }, [mes, anio])
 
-  return { filas, total, page, setPage, loading, error, load }
+  return { filas, total, page, pageSize, setPageSize, setPage, loading, error, load }
 }

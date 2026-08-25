@@ -17,7 +17,7 @@ import { fetchVacantes } from "@/services/vacantes"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { EstadoVacante, Vacante } from "@/types/vacantes"
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_INICIAL = 20
 
 export default function VacantesPage() {
   const router = useRouter()
@@ -26,6 +26,7 @@ export default function VacantesPage() {
   const [vacantes, setVacantes] = useState<Vacante[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -41,7 +42,7 @@ export default function VacantesPage() {
     setLoading(true)
     setError(false)
     try {
-      const data = await fetchVacantes(estadoFiltro || undefined, empresaOverride, page, PAGE_SIZE)
+      const data = await fetchVacantes(estadoFiltro || undefined, empresaOverride, page, pageSize)
       setVacantes(data.items)
       // El total sale del wrapper del backend, NUNCA de `data.items.length`.
       setTotal(data.total)
@@ -50,7 +51,7 @@ export default function VacantesPage() {
     } finally {
       setLoading(false)
     }
-  }, [estadoFiltro, empresaOverride, page])
+  }, [estadoFiltro, empresaOverride, page, pageSize])
 
   useEffect(() => {
     load()
@@ -97,12 +98,12 @@ export default function VacantesPage() {
 
       {/*
        * 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS, no sólo cuando hay más de una página. Antes aparecía
-       * con `total > PAGE_SIZE` y además SIN esperar a que terminara la carga, así que la barra
+       * con `total > pageSize` y además SIN esperar a que terminara la carga, así que la barra
        * se dibujaba sobre el esqueleto con el total del pedido anterior. El total que muestra es
        * el TOTAL FILTRADO del backend, no `vacantes.length`.
        */}
       {!loading && !error && vacantes.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
 
       {/* Los mails que no matchearon: se releen de la casilla, no hay estado propio. */}

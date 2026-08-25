@@ -11,6 +11,7 @@ import { EMPTY_VACANTE, payloadVacante, validateVacante } from "@/components/fea
 import type { VacanteFormData, VacanteFormErrors } from "@/components/features/vacantes/vacanteForm"
 import { createVacante } from "@/services/vacantes"
 import { getEmpresaActivaId } from "@/services/empresaStore"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 /**
  * Alta de vacante. Orquestador: estado del form, carga de catálogos, handlers y submit.
@@ -73,6 +74,7 @@ export function VacanteModal({ open, onClose, onSuccess }: VacanteModalProps) {
     setServerError("")
     try {
       await createVacante(payloadVacante(form))
+      avisarGuardado("Búsqueda", "f", false)
       onSuccess()
     } catch {
       setServerError("Ocurrió un error al guardar. Intentá de nuevo.")

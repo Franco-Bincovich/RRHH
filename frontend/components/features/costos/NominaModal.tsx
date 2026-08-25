@@ -18,6 +18,7 @@ import { cargarNomina } from "@/services/costos"
 import { fetchEmpleados } from "@/services/empleados"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Empleado } from "@/types/empleado"
+import { avisarHecho } from "@/components/features/shared/avisoGuardado"
 
 const MESES_LARGOS = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -135,6 +136,8 @@ export function NominaModal({ open, onClose, onSuccess }: NominaModalProps) {
     if (failed.length > 0) {
       setError(`Error al guardar: ${failed.join(", ")}`)
     } else {
+      // Carga en LOTE (una fila por empleado), no un alta: por eso el mensaje propio.
+      avisarHecho(`Nómina de ${mes}/${anio} cargada`)
       onSuccess()
     }
   }

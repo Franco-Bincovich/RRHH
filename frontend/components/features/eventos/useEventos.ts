@@ -7,7 +7,7 @@ import { cargarEventos } from "@/components/features/eventos/cargarEventos"
 import { setEventoResuelta } from "@/services/eventos"
 import type { Evento } from "@/types/evento"
 
-export const PAGE_SIZE = 20
+export const PAGE_SIZE_INICIAL = 20
 
 /**
  * El listado de la agenda: página, filtro de resueltos y el toggle de cada fila.
@@ -25,6 +25,7 @@ export function useEventos() {
   const [eventos, setEventos] = useState<Evento[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   /*
@@ -37,9 +38,9 @@ export function useEventos() {
   const incluirResueltas = resueltosFiltro === "todos"
 
   const load = useCallback(
-    () => cargarEventos({ incluirResueltas }, page, PAGE_SIZE,
+    () => cargarEventos({ incluirResueltas }, page, pageSize,
                         { setEventos, setTotal, setLoading, setError }),
-    [incluirResueltas, page],
+    [incluirResueltas, page, pageSize],
   )
   useEffect(() => { void load() }, [load])
 
@@ -53,7 +54,7 @@ export function useEventos() {
   }
 
   return {
-    eventos, total, page, setPage, loading, error, load,
+    eventos, total, page, pageSize, setPageSize, setPage, loading, error, load,
     resueltosFiltro,
     // 🔴 El setter que la pantalla le pasa al filtro VUELVE A LA PÁGINA 1 (invariante 4 del
     // bloque B). Vive acá y no en la página justamente por eso: mientras el filtro y el `setPage`

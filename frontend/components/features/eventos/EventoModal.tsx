@@ -13,6 +13,7 @@ import {
   guardarEvento, type ErroresEvento, type FormEvento,
 } from "@/components/features/eventos/guardarEvento"
 import type { Evento } from "@/types/evento"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   open: boolean
@@ -76,6 +77,7 @@ export function EventoModal({ open, onClose, onSuccess, evento }: Props) {
         setErrores(errs)
         return
       }
+      avisarGuardado("Recordatorio", "m", isEdit)
       onSuccess()
     } catch (e2) {
       setServerError(mensajeDeError(e2))

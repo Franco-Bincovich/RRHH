@@ -6,6 +6,7 @@
  * AsignacionesTab, que estaba en 211 líneas contra un límite de 150.
  */
 import { Pencil, Trash2 } from "lucide-react"
+import { AccionFila } from "@/components/ui/AccionFila"
 import type { ReactNode } from "react"
 
 import { CertificadoCell } from "@/components/features/capacitaciones/CertificadoCell"
@@ -47,9 +48,6 @@ interface AsignacionesCapTableProps {
   /** Qué ofrecer cuando NO hay filtros y tampoco datos. `undefined` sin permiso. */
   accionVacio?: ReactNode
 }
-
-const ACCION_CLASS =
-  "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
 
 export function AsignacionesCapTable({
   asignaciones, loading, error, canWrite, mostrarEmpresa, deletingId,
@@ -119,16 +117,14 @@ export function AsignacionesCapTable({
                 {/* 🔴 SIEMPRE VISIBLES, sólo cambian de color al apuntar (§3). El rojo del
                     borrado aparece recién con el mouse en la fila. */}
                 <div className="flex justify-end gap-1">
-                  <button type="button" onClick={() => onEditarEstado(a)}
-                    aria-label={`Cambiar el estado de ${a.empleado_nombre ?? a.nombre_libre ?? "la asignación"}`}
-                    className={`${ACCION_CLASS} group-hover:text-primary`}>
+                  <AccionFila onClick={() => onEditarEstado(a)}
+                    aria-label={`Cambiar el estado de ${a.empleado_nombre ?? a.nombre_libre ?? "la asignación"}`}>
                     <Pencil className="size-4" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={() => onEliminar(a.id)} disabled={deletingId === a.id}
-                    aria-label={`Eliminar la asignación de ${a.empleado_nombre ?? a.nombre_libre ?? "la fila"}`}
-                    className={`${ACCION_CLASS} group-hover:text-destructive`}>
+                  </AccionFila>
+                  <AccionFila tono="destructivo" onClick={() => onEliminar(a.id)} disabled={deletingId === a.id}
+                    aria-label={`Eliminar la asignación de ${a.empleado_nombre ?? a.nombre_libre ?? "la fila"}`}>
                     <Trash2 className="size-4" aria-hidden="true" />
-                  </button>
+                  </AccionFila>
                 </div>
               </TableCell>
             )}

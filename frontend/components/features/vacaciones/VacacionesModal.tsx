@@ -19,6 +19,7 @@ import {
   type VacacionFormData, type VacacionFormErrors,
 } from "./vacacionesForm"
 import type { SaldoVacaciones } from "@/types/vacaciones"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface VacacionesModalProps {
   open: boolean
@@ -87,6 +88,7 @@ export function VacacionesModal({ open, onClose, onSuccess }: VacacionesModalPro
       // a vacaciones_pendientes (ver backend/migrations/083).
       if (form.pendiente) await createVacacionPendiente(payloadPendiente(form))
       else await createVacacion(payloadTomada(form))
+      avisarGuardado("Licencia", "f", false)
       onSuccess()
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Ocurrió un error al guardar")

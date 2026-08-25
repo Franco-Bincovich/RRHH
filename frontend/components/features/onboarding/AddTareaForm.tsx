@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { PISO_TACTIL } from "@/components/ui/AccionFila"
 
 import { addTarea } from "@/services/onboarding"
 import type { Semana } from "@/components/features/onboarding/_templates_ui"
@@ -66,7 +67,7 @@ export function AddTareaForm({ templateId, semana, nextOrden, onAdded, onCancel 
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={`${PISO_TACTIL} rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
         >
           Cancelar
         </button>
@@ -74,7 +75,7 @@ export function AddTareaForm({ templateId, semana, nextOrden, onAdded, onCancel 
           type="button"
           onClick={handleAdd}
           disabled={!titulo.trim() || saving}
-          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={`${PISO_TACTIL} rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
         >
           {saving ? "Agregando…" : "Agregar tarea"}
         </button>

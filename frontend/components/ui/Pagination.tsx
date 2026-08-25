@@ -15,9 +15,17 @@ interface PaginationProps {
   pageSize: number
   onPageChange: (page: number) => void
   /**
-   * Filas por página. OPCIONAL a propósito: los consumidores que pasan un `PAGE_SIZE` constante
-   * no muestran el selector y siguen funcionando sin tocarlos. Quien lo pase se hace cargo de
-   * volver a `page = 1` — cambiar el tamaño con `page` alto puede caer fuera del nuevo total.
+   * Filas por página. Sigue siendo OPCIONAL —hay listados que no paginan de verdad— pero desde
+   * el 25/8/2026 lo pasan los 14 que sí, y hasta entonces lo tenían **4 de 12**: faltaba justo en
+   * /auditoria, que con 25 páginas es donde más se necesita.
+   *
+   * 🔴 EL RESETEO A `page = 1` LO HACE ESTE COMPONENTE, no el consumidor. Antes acá decía "quien
+   * lo pase se hace cargo de volver a page = 1", y con 4 consumidores eso era una regla que cada
+   * uno cumplía copiando `{ setPageSize(n); setPage(1) }`; con 14 es una regla que alguno va a
+   * olvidar, y el síntoma es feo y silencioso: pasar de 100 a 20 filas estando en la página 9
+   * deja pidiendo una página que ya no existe, o sea una tabla vacía sobre un filtro con datos.
+   * Es la misma invariante que el bloque B fijó para los filtros ("`page` se resetea a 1 al
+   * cambiar cualquier filtro"), resuelta en el mismo lugar donde vive el control.
    */
   onPageSizeChange?: (pageSize: number) => void
 }
@@ -58,7 +66,12 @@ export function Pagination({ page, total, pageSize, onPageChange, onPageSizeChan
               size="sm" className="w-auto"
               value={pageSize}
               aria-label="Filas por página"
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              onChange={(e) => {
+                onPageSizeChange(Number(e.target.value))
+                // Ver el porqué en el docstring de la prop: la página 9 de 20 filas no existe
+                // cuando el tamaño pasa a 100.
+                onPageChange(1)
+              }}
             >
               {OPCIONES_TAMANO.map((n) => (
                 <option key={n} value={n}>{n}</option>

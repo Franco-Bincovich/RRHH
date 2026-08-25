@@ -19,6 +19,7 @@ import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Empresa } from "@/types/empresa"
 import type { Area } from "@/types/area"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface AreaModalProps {
   open: boolean
@@ -78,6 +79,7 @@ export function AreaModal({ open, onClose, onSuccess, area, empresaId }: AreaMod
         setErrors(errs)
         return
       }
+      avisarGuardado("Área", "f", isEdit)
       onSuccess()
     } catch {
       setServerError("Ocurrió un error al guardar. Intentá de nuevo.")

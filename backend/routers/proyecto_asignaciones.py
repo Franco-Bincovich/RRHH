@@ -35,7 +35,7 @@ async def asignar_empleado(
     proyecto_id: UUID, request: Request, body: AsignacionCreate,
     service: AsignacionesService = Depends(_svc),
 ) -> AsignacionResponse:
-    return service.asignar(proyecto_id, body, get_empresa_id(request))
+    return service.asignar(proyecto_id, body, get_empresa_id(request), usuario_id=request.state.user.get("id"))
 
 
 @router.post("/{proyecto_id}/asignaciones/bulk", response_model=AsignacionBulkResult, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -43,7 +43,7 @@ async def asignar_bulk(
     proyecto_id: UUID, request: Request, body: AsignacionBulkCreate,
     service: AsignacionesService = Depends(_svc),
 ) -> AsignacionBulkResult:
-    return service.asignar_bulk(proyecto_id, body, get_empresa_id(request))
+    return service.asignar_bulk(proyecto_id, body, get_empresa_id(request), request.state.user.get("id"))
 
 
 @router.post("/{proyecto_id}/asignaciones/area", response_model=AsignacionBulkResult, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -58,7 +58,7 @@ async def asignar_area(
     Lo que sí se comparte es la CLASIFICACIÓN del resultado (ver `_asignaciones_bulk`).
 
     Devuelve los mismos tres grupos que el bulk manual: creadas, ya asignados y errores."""
-    return service.asignar_area(proyecto_id, body, get_empresa_id(request))
+    return service.asignar_area(proyecto_id, body, get_empresa_id(request), request.state.user.get("id"))
 
 
 @router.put("/{proyecto_id}/asignaciones/{asig_id}", response_model=AsignacionResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -66,7 +66,7 @@ async def update_asignacion(
     proyecto_id: UUID, asig_id: UUID, body: AsignacionUpdate, request: Request,
     service: AsignacionesService = Depends(_svc),
 ) -> AsignacionResponse:
-    return service.update(asig_id, body, get_empresa_id(request))
+    return service.update(asig_id, body, get_empresa_id(request), request.state.user.get("id"))
 
 
 @router.delete("/{proyecto_id}/asignaciones/{asig_id}", status_code=200, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -74,5 +74,5 @@ async def delete_asignacion(
     proyecto_id: UUID, asig_id: UUID, request: Request,
     service: AsignacionesService = Depends(_svc),
 ) -> dict:
-    service.delete(asig_id, get_empresa_id(request))
+    service.delete(asig_id, get_empresa_id(request), request.state.user.get("id"))
     return {"ok": True}

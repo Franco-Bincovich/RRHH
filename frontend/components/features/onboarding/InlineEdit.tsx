@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { PISO_TACTIL, PISO_TACTIL_ICONO } from "@/components/ui/AccionFila"
 import { Check, Pencil, X } from "lucide-react"
 import { toast } from "sonner"
 
@@ -98,7 +99,7 @@ export function InlineEdit({ value, onSave, className = "", multiline = false, p
           onClick={handleSave}
           disabled={saving}
           aria-label="Guardar"
-          className="flex min-h-8 min-w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={`${PISO_TACTIL_ICONO} flex min-h-8 min-w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
         >
           <Check className="size-3.5" />
         </button>
@@ -106,7 +107,7 @@ export function InlineEdit({ value, onSave, className = "", multiline = false, p
           type="button"
           onClick={() => setEditing(false)}
           aria-label="Cancelar"
-          className="flex min-h-8 min-w-8 items-center justify-center rounded-lg border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={`${PISO_TACTIL_ICONO} flex min-h-8 min-w-8 items-center justify-center rounded-lg border hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
         >
           <X className="size-3.5" />
         </button>

@@ -18,7 +18,7 @@ import { exportarRecategorizaciones } from "@/services/recategorizaciones"
 import { useCanRead, useCanWrite } from "@/hooks/useCanWrite"
 import type { Recategorizacion } from "@/types/recategorizacion"
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_INICIAL = 20
 
 /**
  * La planilla de RECATEGORIZACIONES: el registro de cambios de rol, seniority o categoría.
@@ -44,6 +44,7 @@ export default function RecategorizacionesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<Recategorizacion | undefined>(undefined)
 
@@ -51,7 +52,7 @@ export default function RecategorizacionesPage() {
     useFiltrosRecategorizaciones(() => setPage(1))
 
   const load = useCallback(
-    () => cargarRecategorizaciones(filtros, page, PAGE_SIZE,
+    () => cargarRecategorizaciones(filtros, page, pageSize,
                                    { setItems, setTotal, setLoading, setError }),
     [filtros, page],
   )
@@ -115,7 +116,7 @@ export default function RecategorizacionesPage() {
       />
 
       {!loading && !error && items.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
 
       {canWrite && (

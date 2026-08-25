@@ -10,6 +10,7 @@ import {
 import { crearAusenciaConAdjuntos, updateAusencia } from "@/services/ausencias"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Ausencia } from "@/types/ausencias"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 /**
  * Estado y handlers del formulario de ausencia. El componente queda con el markup.
@@ -60,6 +61,7 @@ export function useAusenciaForm(open: boolean, editing: Ausencia | null | undefi
     try {
       if (editing) await updateAusencia(editing.id, toAusenciaUpdate(form))
       else { const { fallidos } = await crearAusenciaConAdjuntos(toAusenciaCreate(form), pendientes); if (fallidos > 0) toast.warning(`La ausencia se registró, pero ${fallidos} documento(s) no se pudo adjuntar. Reintentá desde "Documentos" en el listado.`) }
+      avisarGuardado("Ausencia", "f", Boolean(editing))
       onSuccess()
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Ocurrió un error al guardar")

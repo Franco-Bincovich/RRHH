@@ -1,6 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { confirmarEliminarImagen } from "@/components/features/shared/confirmaciones"
+import { useConfirmacion } from "@/components/features/shared/useConfirmacion"
 import { toast } from "sonner"
 import { ImageIcon } from "lucide-react"
 
@@ -25,6 +28,7 @@ const ACCEPT = ".jpg,.jpeg,.png,.webp"
  * Reusa el sistema de adjuntos (entidad="vacante"). La principal es la placa de LinkedIn. */
 export function VacanteImagenes({ vacanteId }: { vacanteId: string }) {
   const [imagenes, setImagenes] = useState<Adjunto[]>([])
+  const aEliminar = useConfirmacion<Adjunto>()
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -73,7 +77,6 @@ export function VacanteImagenes({ vacanteId }: { vacanteId: string }) {
   }
 
   async function handleEliminar(a: Adjunto) {
-    if (!confirm(`¿Eliminar "${a.nombre_archivo}"? Esta acción no se puede deshacer.`)) return
     setBusyId(a.id)
     try {
       await eliminarAdjunto(a.id)
@@ -118,12 +121,24 @@ export function VacanteImagenes({ vacanteId }: { vacanteId: string }) {
                 canWrite={canWrite}
                 busy={busyId === a.id}
                 onMarcarPrincipal={() => handlePrincipal(a.id)}
-                onEliminar={() => handleEliminar(a)}
+                onEliminar={() => aEliminar.pedir(a)}
               />
             ))}
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={aEliminar.abierto}
+        onClose={aEliminar.cerrar}
+        onConfirm={() => {
+          const x = aEliminar.pendiente
+          aEliminar.cerrar()
+          if (x) void handleEliminar(x)
+        }}
+        loading={busyId !== null}
+        {...confirmarEliminarImagen(aEliminar.pendiente ?? {})}
+      />
     </Card>
   )
 }

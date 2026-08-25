@@ -9,7 +9,7 @@ import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { AreaModal } from "@/components/features/areas/AreaModal"
 import { AreasTabla } from "@/components/features/areas/AreasTabla"
 import { construirCampos } from "@/components/features/areas/_camposAreas"
-import { PAGE_SIZE, useAreas } from "@/components/features/areas/useAreas"
+import { useAreas } from "@/components/features/areas/useAreas"
 import { useAreasAcciones } from "@/components/features/areas/useAreasAcciones"
 import { AreaEliminarDialog } from "@/components/features/areas/AreaEliminarDialog"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
@@ -21,7 +21,8 @@ import { useCanWrite } from "@/hooks/useCanWrite"
 export default function AreasPage() {
   const canWrite = useCanWrite()
   const {
-    areas, total, page, setPage, loading, error, search, setSearch, buscado, load,
+    areas, total, page, pageSize, setPageSize, setPage, loading, error, search, setSearch,
+    buscado, load,
   } = useAreas()
   // El ABM recarga la lista al crear, editar o borrar: las tres cambian el TOTAL, no sólo las
   // filas que se ven.
@@ -83,7 +84,7 @@ export default function AreasPage() {
 
       {/*
        * 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS, no sólo cuando hay más de una página (era
-       * `total > PAGE_SIZE`): es lo que dice cuántos resultados dio la búsqueda, y ese número es
+       * `total > pageSize`): es lo que dice cuántos resultados dio la búsqueda, y ese número es
        * el que importa justo cuando hay una búsqueda puesta.
        * ⚠️ Y VA DETRÁS DE `!loading`: hasta ahora esta pantalla no podía dibujar el pie sobre el
        * esqueleto porque el `return` temprano de la carga se llevaba la página entera. Al mover
@@ -91,7 +92,8 @@ export default function AreasPage() {
        * la barra quedaría mostrando el total del pedido ANTERIOR mientras carga el nuevo.
        */}
       {!loading && !error && areas.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize}
+                    onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
 
       <AreaModal

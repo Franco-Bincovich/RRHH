@@ -5,6 +5,7 @@ import { Building2, ChevronsUpDown } from "lucide-react"
 
 import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { useCatalogoPermitido } from "@/hooks/useCatalogoPermitido"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId, setEmpresaActivaId } from "@/services/empresaStore"
 import type { Empresa } from "@/types/empresa"
@@ -12,17 +13,24 @@ import type { Empresa } from "@/types/empresa"
 /**
  * Selector de empresa activa. Persiste en localStorage vía empresaStore.
  * Al cambiar, recarga la página para que todos los listados usen la nueva empresa.
+ *
+ * 🔴 NO PIDE `/api/empresas` SI EL ROL NO PUEDE LEERLAS. Este componente vive en TODAS las
+ * pantallas, y `mandos_medios` no tiene `Seccion.EMPRESA + READ`: hasta el 25/8/2026 eso era un
+ * **403 por cada navegación**, tragado por el `.catch` y visible sólo en la consola. Ver
+ * `hooks/useCatalogoPermitido`, donde está por qué la salida no es ampliarle el permiso.
  */
 export function EmpresaSelector() {
+  const puedeLeerEmpresas = useCatalogoPermitido("empresa")
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [current, setCurrent] = useState<string>("todas")
 
   useEffect(() => {
     setCurrent(getEmpresaActivaId() ?? "todas")
+    if (!puedeLeerEmpresas) return
     fetchEmpresas()
       .then((res) => setEmpresas(res.items.filter((e) => e.activa)))
       .catch(() => {})
-  }, [])
+  }, [puedeLeerEmpresas])
 
   if (empresas.length === 0) return null
 

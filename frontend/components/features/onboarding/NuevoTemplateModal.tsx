@@ -1,12 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { X } from "lucide-react"
 
-import { createTemplate } from "@/services/onboarding"
-import type { OnboardingTemplate } from "@/types/onboarding"
-import type { Empresa } from "@/types/empresa"
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
+import { createTemplate } from "@/services/onboarding"
+import type { Empresa } from "@/types/empresa"
+import type { OnboardingTemplate } from "@/types/onboarding"
 
 interface NuevoTemplateModalProps {
   empresas: Empresa[]
@@ -16,14 +23,32 @@ interface NuevoTemplateModalProps {
 }
 
 /**
- * Alta de un template de onboarding. Autocontenido: hace su propio POST y devuelve el
- * template creado por `onSuccess`.
+ * Alta de un template de onboarding. Autocontenido: hace su propio POST y devuelve el template
+ * creado por `onSuccess`.
  *
- * El selector de empresa solo aparece cuando el topbar está en "Todas": crear es una ACCIÓN,
- * así que la empresa viaja como parámetro explícito del form (no por el header X-Empresa-Id).
- * Con una empresa activa se usa esa; ver el principio Vista vs Acción en CLAUDE.md.
+ * ═══════════════════════════════════════════════════════════════════════════════════
+ * 🔴 ERA EL ÚNICO MODAL DEL PRODUCTO ESCRITO A MANO. MIGRADO AL PRIMITIVO EL 25/8/2026.
+ * ═══════════════════════════════════════════════════════════════════════════════════
+ * Antes esto eran dos `<div className="fixed">` sueltos con `role="dialog"` puesto a mano. El
+ * síntoma reportado fue **que no cerraba con Escape, el único de 114**, pero Escape era apenas
+ * lo visible: un modal a mano tampoco tiene **trampa de foco** (con Tab se sale del diálogo y se
+ * navega la página de atrás, que está `aria-hidden` para el lector de pantalla), ni **bloqueo del
+ * scroll** del body, ni **devuelve el foco** al control que lo abrió al cerrarse. Las cuatro cosas
+ * las trae `Dialog` (Base UI) y ninguna se ve mirando la pantalla — por eso el bug se reportó como
+ * "no cierra con Escape" y no como "este modal es inaccesible".
+ *
+ * 🔑 Y ADEMÁS SE LLEVÓ EL RESTO DEL PATRÓN GRATIS: `patron="formulario"` pone el ancho de 560px,
+ * el `max-h` en `dvh` (no `vh`, que en mobile cuenta la barra de direcciones) y el scroll en el
+ * CUERPO y no en el popup — o sea que el título y los botones no se van con el scroll. Los campos
+ * pasaron a `Input`/`Textarea`/`Select`, que traen los 34px y el piso táctil de 44px abajo de `md`.
+ *
+ * El selector de empresa solo aparece cuando el topbar está en "Todas": crear es una ACCIÓN, así
+ * que la empresa viaja como parámetro explícito del form (no por el header `X-Empresa-Id`). Con
+ * una empresa activa se usa esa; ver el principio Vista vs Acción en CLAUDE.md.
  */
-export function NuevoTemplateModal({ empresas, empresaActivaId, onClose, onSuccess }: NuevoTemplateModalProps) {
+export function NuevoTemplateModal({
+  empresas, empresaActivaId, onClose, onSuccess,
+}: NuevoTemplateModalProps) {
   const [nombre, setNombre] = useState("")
   const [descripcion, setDescripcion] = useState("")
   const [empresaId, setEmpresaId] = useState<string>(empresaActivaId ?? empresas[0]?.id ?? "")
@@ -40,43 +65,31 @@ export function NuevoTemplateModal({ empresas, empresaActivaId, onClose, onSucce
         empresa_id: empresaId,
         descripcion: descripcion.trim() || undefined,
       })
+      avisarGuardado("Plantilla de onboarding", "f", false)
       onSuccess(t)
     } catch {
-      setError("No se pudo crear el template. Intentá de nuevo.")
+      setError("No se pudo crear la plantilla. Intentá de nuevo.")
       setGuardando(false)
     }
   }
 
   return (
-    <>
-      <div className="fixed inset-0 z-50 bg-black/40" aria-hidden="true" onClick={onClose} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-nuevo-tmpl"
-        className="fixed inset-x-4 top-1/2 z-50 -translate-y-1/2 rounded-2xl bg-background p-6 shadow-2xl ring-1 ring-border sm:inset-auto sm:left-1/2 sm:w-[28rem] sm:-translate-x-1/2"
-      >
-        <div className="mb-5 flex items-center justify-between gap-2">
-          <h2 id="modal-nuevo-tmpl" className="text-base font-semibold text-foreground">
-            Nuevo template
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="flex min-h-9 min-w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
+    <Dialog open onOpenChange={(o: boolean) => { if (!o) onClose() }}>
+      <DialogContent patron="formulario">
+        <DialogHeader>
+          <DialogTitle>Nueva plantilla de onboarding</DialogTitle>
+          {/* Una línea que explica la CONSECUENCIA, no lo que el modal es (§3): lo que no se
+              deduce mirando los campos es que la plantilla nace VACÍA y pública. */}
+          <DialogDescription>
+            Nace vacía: las tareas se agregan después, desde su ficha. Queda visible para el resto
+            del equipo hasta que su autor la vuelva privada.
+          </DialogDescription>
+        </DialogHeader>
 
         <div className="space-y-4">
-          {/* Selector de empresa — solo visible cuando topbar = "Todas" */}
           {!empresaActivaId && empresas.length > 0 && (
             <div>
-              <label htmlFor="tmpl-empresa" className="mb-1.5 block text-sm font-medium text-foreground">
-                Empresa
-              </label>
+              <Label htmlFor="tmpl-empresa" className="mb-1.5 block text-sm">Empresa</Label>
               <Select
                 id="tmpl-empresa"
                 value={empresaId}
@@ -90,53 +103,44 @@ export function NuevoTemplateModal({ empresas, empresaActivaId, onClose, onSucce
           )}
 
           <div>
-            <label htmlFor="tmpl-nombre" className="mb-1.5 block text-sm font-medium text-foreground">
-              Nombre
-            </label>
-            <input
+            <Label htmlFor="tmpl-nombre" className="mb-1.5 block text-sm">Nombre</Label>
+            <Input
               id="tmpl-nombre"
-              type="text"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               placeholder="ej. Onboarding Técnico"
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
+
           <div>
-            <label htmlFor="tmpl-desc" className="mb-1.5 block text-sm font-medium text-foreground">
-              Descripción <span className="text-muted-foreground font-normal">(opcional)</span>
-            </label>
-            <textarea
+            <Label htmlFor="tmpl-desc" className="mb-1.5 block text-sm">
+              Descripción <span className="font-normal text-muted-foreground">(opcional)</span>
+            </Label>
+            <Textarea
               id="tmpl-desc"
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
               rows={3}
-              placeholder="Descripción del template..."
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              placeholder="Para qué sirve esta plantilla…"
             />
           </div>
+
+          {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
         </div>
 
-        {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={guardando}>
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={handleGuardar}
             disabled={!nombre.trim() || !empresaId || guardando}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           >
-            {guardando ? "Creando…" : "Crear template"}
-          </button>
-        </div>
-      </div>
-    </>
+            {guardando ? "Creando…" : "Crear plantilla"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

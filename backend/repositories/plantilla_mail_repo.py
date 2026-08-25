@@ -39,6 +39,16 @@ class PlantillaMailRepo:
                 .maybe_single().execute())
         return glob.data if glob else None
 
+    def find_by_id(self, id_: UUID) -> Optional[dict]:
+        """La plantilla de ese id, o None.
+
+        🔑 NO se resuelve con `find(clave, empresa_id)`: aquélla busca por CLAVE y cae a la
+        global si la empresa no tiene la suya, así que al editar una propia devolvería la GLOBAL
+        como "estado anterior" y el diff de auditoría mostraría cambios que nadie hizo. El upsert
+        va por `id`, y el prior tiene que salir del mismo id."""
+        res = supabase_admin.table(_TABLE).select("*").eq("id", str(id_)).maybe_single().execute()
+        return res.data if (res and res.data) else None
+
     def listar(self, empresa_id: Optional[UUID] = None) -> List[dict]:
         """Las plantillas visibles para una empresa: las suyas + las globales que no pisó.
 
@@ -66,10 +76,17 @@ class PlantillaMailRepo:
         res = supabase_admin.table(_TABLE).upsert(fila).execute()
         return (res.data or [None])[0]
 
-    def borrar(self, id_: UUID, empresa_id: Optional[UUID] = None) -> bool:
-        """Borra una plantilla DE LA EMPRESA. Con `empresa_id` provisto nunca toca una global:
-        borrar la global desde una empresa la sacaría para todas las demás."""
+    def borrar(self, id_: UUID, empresa_id: Optional[UUID] = None) -> Optional[dict]:
+        """Borra una plantilla DE LA EMPRESA y DEVUELVE LA FILA BORRADA (None si no borró nada).
+        Con `empresa_id` provisto nunca toca una global: borrar la global desde una empresa la
+        sacaría para todas las demás.
+
+        🔑 DEVUELVE LA FILA Y NO UN BOOL: `plantillas_mail` no tiene versionado, así que el
+        cuerpo que RRHH escribió no sobrevive en ningún otro lado — el evento de auditoría de la
+        baja es el único respaldo. PostgREST ya retorna lo borrado en `.data`, así que la foto
+        sale gratis y sin ventana entre leer y borrar. Sigue siendo falsy cuando no borra nada,
+        que es como lo lee el service."""
         q = supabase_admin.table(_TABLE).delete().eq("id", str(id_))
         if empresa_id:
             q = q.eq("empresa_id", str(empresa_id))
-        return bool(q.execute().data)
+        return (q.execute().data or [None])[0]

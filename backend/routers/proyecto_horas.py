@@ -44,5 +44,5 @@ async def delete_hora(
     proyecto_id: UUID, hora_id: UUID, request: Request,
     service: HorasService = Depends(_svc),
 ) -> dict:
-    service.delete(hora_id, get_empresa_id(request))
+    service.delete(hora_id, get_empresa_id(request), request.state.user.get("id"))
     return {"ok": True}

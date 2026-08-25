@@ -5,6 +5,7 @@ import { BellRing } from "lucide-react"
 
 import { CampoNumero } from "@/components/features/configuracion/_campos"
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
+import { AccionBloqueada } from "@/components/ui/AccionBloqueada"
 import { Button } from "@/components/ui/button"
 import type { Parametros } from "@/types/configuracion"
 
@@ -15,6 +16,8 @@ export interface AvisosReglasProps {
   fallback: ReactNode
   onCampo: (campo: keyof Parametros, valor: number) => void
   editable: boolean
+  /** Por qué HOY no se puede guardar (vista consolidada), o `null`. Lo decide la página. */
+  motivoBloqueo: string | null
   guardando: boolean
   onGuardar: () => void
 }
@@ -76,9 +79,13 @@ export function AvisosReglas(p: AvisosReglasProps) {
           </p>
 
           {p.editable && (
-            <Button onClick={p.onGuardar} disabled={p.guardando}>
-              {p.guardando ? "Guardando…" : "Guardar"}
-            </Button>
+            <AccionBloqueada motivo={p.motivoBloqueo}>
+              {(bloqueada) => (
+                <Button onClick={p.onGuardar} disabled={bloqueada || p.guardando}>
+                  {p.guardando ? "Guardando…" : "Guardar"}
+                </Button>
+              )}
+            </AccionBloqueada>
           )}
         </div>
       )}

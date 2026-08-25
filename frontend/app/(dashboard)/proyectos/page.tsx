@@ -18,7 +18,7 @@ import { createProyecto, exportarProyectos, updateProyecto } from "@/services/pr
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Proyecto, ProyectoCreate, ProyectoUpdate } from "@/types/proyecto"
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_INICIAL = 20
 
 export default function ProyectosPage() {
   const canWrite = useCanWrite()
@@ -28,6 +28,7 @@ export default function ProyectosPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing]     = useState<Proyecto | null>(null)
   const [page, setPage]           = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [total, setTotal]         = useState(0)
   // 🔴 Cambiar cualquier filtro vuelve a la página 1 (invariante 4 del bloque B): filtrar parado
   // en la 7 pediría una página que el resultado nuevo no tiene y la grilla saldría vacía sobre
@@ -39,9 +40,9 @@ export default function ProyectosPage() {
   // La carga vive en cargarProyectos: apaga el loading en un finally y se testea sin renderizar
   // (vitest corre sin jsdom, así que acá adentro no habría forma de verificarlo).
   const load = useCallback(async () => {
-    await cargarProyectos(filtros, { setProyectos, setLoading, setError, setTotal }, page, PAGE_SIZE)
+    await cargarProyectos(filtros, { setProyectos, setLoading, setError, setTotal }, page, pageSize)
     // filtros es un objeto nuevo por render; se serializa para no re-fetchear de más.
-  }, [JSON.stringify(filtros), page])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(filtros), page, pageSize])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -104,7 +105,7 @@ export default function ProyectosPage() {
 
       {/*
        * 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS, no sólo cuando hay más de una página (era
-       * `total > PAGE_SIZE`): es lo que dice cuántos resultados dio el filtro.
+       * `total > pageSize`): es lo que dice cuántos resultados dio el filtro.
        * 🔴 Y VA DETRÁS DE `!loading && !error`, QUE ES EL BUG QUE ESTA PANTALLA TENÍA: sin esa
        * guarda la barra se dibujaba SOBRE el esqueleto, con el `total` del pedido ANTERIOR — o
        * sea, mientras cargaba el resultado de un filtro nuevo, el pie seguía afirmando el conteo
@@ -112,7 +113,7 @@ export default function ProyectosPage() {
        * El total que muestra es el TOTAL FILTRADO del backend, no `proyectos.length`.
        */}
       {!loading && !error && proyectos.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
 
       <ProyectoModal open={modalOpen} proyecto={editing}

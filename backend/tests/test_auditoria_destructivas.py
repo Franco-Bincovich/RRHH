@@ -70,39 +70,22 @@ _SIN_EVENTO_DECLARADAS: dict[str, str] = {
         "terminar hay configuración, no un vacío. Mismo caso que `set_escala`.",
 
     # ── DEUDA REAL — el usuario borra desde una pantalla y no queda rastro ────
-    # 🔴 ESTOS ONCE SON EL MISMO AGUJERO QUE SE COBRÓ EL OBJETIVO DE KARSTEC. Se declaran, no se
-    # tapan: la tanda del 24/8/2026 arregló objetivos —que era el caso con incidente— y dejó el
-    # resto INVENTARIADO en vez de arreglarlo a medias sin decidir el payload de cada uno. El
-    # trabajo de cerrarlos es una tanda propia, con este archivo como lista de tareas.
-    "services/area_service.py::AreaService.delete_area":
-        "🔴 DEUDA. Borrar un área desde /areas no deja evento. Es de los más caros de perder: "
-        "`empleados.area_id` la referencia, así que el borrado afecta legajos.",
-    "services/capacitacion_service.py::CapacitacionService.delete":
-        "🔴 DEUDA. Baja de una capacitación del catálogo desde /capacitaciones, sin evento.",
-    "services/asignacion_service.py::AsignacionService.delete":
-        "🔴 DEUDA. Desasignar una capacitación a una persona; se pierde que estuvo asignada.",
-    "services/asignaciones_service.py::AsignacionesService.delete":
-        "🔴 DEUDA. Desasignar a alguien de un proyecto, sin evento.",
-    "services/proyectos_service.py::ProyectosService.delete":
-        "🔴 DEUDA. Borrar un proyecto desde /proyectos, sin evento.",
-    "services/inventario_items_service.py::InventarioItemsService.delete":
-        "🔴 DEUDA. Borrar un ítem de inventario desde /inventario, sin evento.",
-    "services/horas_service.py::HorasService.delete":
-        "🔴 DEUDA, y de las peores: borra una carga de HORAS, que es el dato que factura. La "
-        "vista por cliente ofrece el borrado y la edición NO existe a propósito (la carga es "
-        "irreversible por decisión de producto) — o sea que el borrado es la única forma de "
-        "cambiar una hora cargada, y no deja rastro.",
-    "services/onboarding_templates_service.py::OnboardingTemplatesService.delete_template":
-        "🔴 DEUDA. Borrar una plantilla de onboarding entera, sin evento.",
-    "services/_onboarding_templates_tareas.py::delete_tarea":
-        "🔴 DEUDA. Borrar una tarea de una plantilla de onboarding, sin evento.",
-    "services/plantillas_service.py::PlantillasService.borrar":
-        "🔴 DEUDA. Borrar una plantilla de mail editable, sin evento. El texto que RRHH escribió "
-        "desaparece y no hay versión anterior de la que sacarlo.",
-    "services/integracion_service.py::IntegracionService.disconnect":
-        "🔴 DEUDA. Desconectar una integración (Gmail, Anthropic, Zernio) borra la credencial. "
-        "Que alguien haya desconectado la casilla del sistema es justo lo que hay que poder "
-        "averiguar cuando los mails dejan de salir.",
+    # 🟢 VACÍA DESDE EL 25/8/2026. Acá vivían ONCE entradas: las once escrituras que borraban
+    # desde una pantalla sin dejar evento, el mismo agujero que se cobró el objetivo de Karstec.
+    # Se cerraron todas en la tanda de "los arreglos que quedaron del smoke": áreas, horas de
+    # proyecto, integraciones, plantillas de mail, proyectos, asignaciones de proyecto, ítems de
+    # inventario, formaciones, asignaciones de formación, plantillas de onboarding y sus tareas.
+    #
+    # 🔴 CERRARLAS NO FUE "AGREGAR ONCE `audit.registrar`". El barrido nº 8
+    # (`test_auditoria_coherente`) exige que un módulo que audita ALGO audite TODO, así que cada
+    # baja arrastró el CRUD entero de su módulo: son 31 escrituras y 8 archivos de payloads
+    # nuevos (`_audit_payloads_areas`, `_integraciones`, `_plantillas_mail`, `_proyectos`,
+    # `_capacitaciones`, `_inventario`, `_onboarding_templates`, más el `_horas` que ya existía).
+    # Eso es lo que la regla del nº 8 compra, y por qué no se podían cerrar "a medias".
+    #
+    # ⚠️ NO SE BORRA ESTE BLOQUE DE COMENTARIO AUNQUE EL DICT NO TENGA DEUDA. La lista vuelve a
+    # llenarse el día que alguien agregue un borrado sin evento, y el test de abajo exige que
+    # cada entrada diga si es HIGIENE o DEUDA justamente para que esa distinción no se diluya.
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -169,10 +152,17 @@ class TestTodoBorradoFisicoDejaRastro:
         Sin esto, la lista se degrada sola: alcanza con que alguien declare la próxima deuda con
         el tono de una higiene para que deje de ser un pendiente y pase a ser una decisión. El
         test no juzga la clasificación —eso lo hace quien lee— pero sí exige que el archivo siga
-        distinguiéndolas, que es lo que lo mantiene siendo un inventario y no un cajón."""
+        distinguiéndolas, que es lo que lo mantiene siendo un inventario y no un cajón.
+
+        🟢 `deuda` PUEDE ESTAR VACÍA Y ESO NO ES UN FALLO — desde el 25/8/2026 lo está. Hasta ese
+        día el test exigía `assert deuda` para cazar que alguien "diluyera la marca" reetiquetando
+        una deuda como higiene. Esa exigencia dejó de tener sentido en el momento en que las once
+        deudas se cerraron de verdad: mantenerla obligaría a inventar una deuda para que el test
+        pase, que es exactamente el incentivo contrario al que se buscaba. Lo que SÍ se conserva
+        —y es lo que cierra el agujero— es que toda entrada declare su clase: una deuda nueva no
+        puede entrar sin decir que lo es."""
         deuda = [k for k, v in _SIN_EVENTO_DECLARADAS.items() if "DEUDA" in v]
         higiene = [k for k, v in _SIN_EVENTO_DECLARADAS.items() if "HIGIENE" in v]
-        assert deuda, "ninguna declaración marcada como DEUDA: ¿se arreglaron todas, o se diluyó la marca?"
         assert higiene, "ninguna declaración marcada como HIGIENE"
         sin_clase = [k for k in _SIN_EVENTO_DECLARADAS if k not in set(deuda) | set(higiene)]
         assert not sin_clase, (

@@ -16,7 +16,7 @@ import { useCandidatos } from "@/hooks/useCandidatos"
 import { LeyendaDescarte } from "@/components/features/candidatos/ClasificacionBadge"
 import type { CandidatoConGrupo, FiltroClasificacion } from "@/types/candidato"
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_INICIAL = 20
 
 export default function CandidatosPage() {
   // 🔴 Los dos filtros viajan al backend, NO se aplican sobre el array: el export usa el mismo
@@ -25,6 +25,7 @@ export default function CandidatosPage() {
   const [asignacionFiltro, setAsignacionFiltro] = useState("")
   const [clasificacion, setClasificacion] = useState("")
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
 
   const campos = construirCampos({
     asignacionFiltro, setAsignacionFiltro, clasificacion, setClasificacion,
@@ -41,7 +42,7 @@ export default function CandidatosPage() {
   }), [asignacionFiltro, clasificacion])
 
   const { candidatos, total, conteoPorGrupo, loading, error, refetch } =
-    useCandidatos(filtros, page, PAGE_SIZE)
+    useCandidatos(filtros, page, pageSize)
   const grupos = useMemo(() => agruparCandidatos(candidatos, conteoPorGrupo),
                          [candidatos, conteoPorGrupo])
   const [seleccionado, setSeleccionado] = useState<CandidatoConGrupo | null>(null)
@@ -80,12 +81,12 @@ export default function CandidatosPage() {
        * Los grupos se arman DENTRO de la página: la paginación es plana y va al pie de todos, no
        * adentro de cada búsqueda.
        * 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS, no sólo cuando hay más de una página. Antes aparecía
-       * con `total > PAGE_SIZE`, así que con un filtro puesto la pantalla dejaba de decir cuántos
+       * con `total > pageSize`, así que con un filtro puesto la pantalla dejaba de decir cuántos
        * resultados había justo cuando el filtro es lo que hay que entender. El total que muestra
        * es el TOTAL FILTRADO del backend, no `candidatos.length`.
        */}
       {!loading && !error && candidatos.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
 
       <CandidatoDetailPanel

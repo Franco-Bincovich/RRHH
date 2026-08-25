@@ -1,6 +1,7 @@
 "use client"
 
 import { ErrorCarga } from "@/components/ui/ErrorCarga"
+import { PISO_TACTIL } from "@/components/ui/AccionFila"
 import type { Empleado } from "@/types/empleado"
 
 /**
@@ -62,7 +63,7 @@ export function ResultadosEmpleados({
           <li key={e.id}>
             <button
               type="button"
-              className="w-full px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+              className={`${PISO_TACTIL} w-full px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:bg-muted focus-visible:outline-none`}
               onClick={() => onElegir(e)}
             >
               {e.nombre} {e.apellido}

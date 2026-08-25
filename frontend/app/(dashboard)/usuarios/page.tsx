@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
@@ -14,17 +13,24 @@ import { CrearUsuarioModal } from "@/components/features/usuarios/CrearUsuarioMo
 import { PasswordRevealModal } from "@/components/features/usuarios/PasswordRevealModal"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import {
-  eliminarUsuario,
-  exportarUsuarios,
-  fetchUsuarios,
-  type CrearUsuarioResult,
-  type UsuarioOption,
+  eliminarUsuario, exportarUsuarios, fetchUsuarios,
+  type CrearUsuarioResult, type UsuarioOption,
 } from "@/services/usuarios"
-import { getRol, primeraRutaPermitida, puede } from "@/services/permisos"
+import { getRol, puede } from "@/services/permisos"
 import type { UserRol } from "@/types/auth"
 
+/**
+ * 🔴 EL GATE DE ESTA PANTALLA ERA UN TERCERO Y CONTRADECÍA A LOS OTROS DOS. Hasta el 25/8/2026
+ * acá vivía un guard admin-only (`puede(rol, "usuarios", "write")` + `router.replace`) que
+ * rebotaba a `gerencia_lectura`, contra lo que dicen los tres lugares donde el modelo está
+ * escrito: `utils/permisos.py`, `services/permisos.ts` y `routers/usuarios.py`, que gatea el
+ * listado con `USUARIOS + READ`. **Rige el modelo y el guard se fue**, por tres razones: (1)
+ * `gerencia_lectura` es "lectura en todo, escritura en nada" y esa excepción no la decidió nadie;
+ * (2) no protegía nada —el backend ya le sirve `GET /api/usuarios` a ese rol—; (3) la escritura
+ * sigue gateada aparte, con `esAdmin`. Quién ENTRA lo decide el AuthGuard, como en todas las
+ * demás. Lo vigila `components/layout/gatesDePagina.test.ts`.
+ */
 export default function UsuariosPage() {
-  const router = useRouter()
   const [rol, setRol] = useState<UserRol | null>(null)
   const [checked, setChecked] = useState(false)
   const [usuarios, setUsuarios] = useState<UsuarioOption[]>([])
@@ -35,17 +41,13 @@ export default function UsuariosPage() {
   const [aEliminar, setAEliminar] = useState<UsuarioOption | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  // Sólo para la ESCRITURA (alta y baja). Entrar a mirar lo decide el AuthGuard — ver arriba.
   const esAdmin = rol !== null && puede(rol, "usuarios", "write")
 
-  // Guard admin-only en cliente (el backend es la autoridad real, 403). No-admin → redirect.
   useEffect(() => {
-    const r = getRol()
-    setRol(r)
+    setRol(getRol())
     setChecked(true)
-    if (r !== null && !puede(r, "usuarios", "write")) {
-      router.replace(primeraRutaPermitida(r) ?? "/dashboard")
-    }
-  }, [router])
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -59,9 +61,10 @@ export default function UsuariosPage() {
     }
   }
 
+  // 🔑 Carga para TODO el que llegó, no sólo para el admin: `gerencia_lectura` viene a leer.
   useEffect(() => {
-    if (esAdmin) void load()
-  }, [esAdmin])
+    if (checked) void load()
+  }, [checked])
 
   async function confirmarEliminar() {
     if (!aEliminar) return
@@ -77,14 +80,17 @@ export default function UsuariosPage() {
     }
   }
 
-  if (!checked || !esAdmin) return null
+  // Sólo se espera a saber el rol. El rebote se fue: quién entra lo decide el AuthGuard.
+  if (!checked) return null
 
-  const crearBtn = (
+  // `null` sin permiso de escritura: el mismo criterio que `useCanWrite` en el resto del
+  // producto — una acción que siempre terminaría en 403 no se ofrece.
+  const crearBtn = esAdmin ? (
     <Button className="min-h-11" onClick={() => setModalOpen(true)}>
       <Plus />
       Crear usuario
     </Button>
-  )
+  ) : null
 
   return (
     <div>
@@ -115,32 +121,27 @@ export default function UsuariosPage() {
         loading={loading}
         error={error}
         onRetry={load}
-        onDelete={setAEliminar}
+        onDelete={esAdmin ? setAEliminar : undefined}
         deletingId={deletingId}
-        accionVacio={crearBtn}
+        accionVacio={crearBtn ?? undefined}
       />
 
       <CrearUsuarioModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        open={modalOpen} onClose={() => setModalOpen(false)}
         onCreated={(r) => { setModalOpen(false); setCreado(r) }}
       />
 
       <PasswordRevealModal
-        open={creado !== null}
-        username={creado?.username ?? ""}
+        open={creado !== null} username={creado?.username ?? ""}
         password={creado?.password_temporal ?? ""}
         onClose={() => { setCreado(null); void load() }}
       />
 
       {aEliminar && (
         <ConfirmDialog
-          open
-          onClose={() => setAEliminar(null)}
-          onConfirm={confirmarEliminar}
-          title="Eliminar usuario"
+          open onClose={() => setAEliminar(null)} onConfirm={confirmarEliminar}
+          title="Eliminar usuario" confirmLabel="Sí, eliminar"
           description={`Vas a eliminar el usuario ${aEliminar.nombre} ${aEliminar.apellido}. No se puede deshacer.`}
-          confirmLabel="Sí, eliminar"
           loading={deletingId === aEliminar.id}
         />
       )}

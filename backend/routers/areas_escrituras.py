@@ -52,7 +52,7 @@ async def update_area(
     request: Request,
     service: AreaService = Depends(_service),
 ) -> AreaResponse:
-    return service.update_area(id, body, _empresa_str(request))
+    return service.update_area(id, body, _empresa_str(request), request.state.user.get("id"))
 
 
 @router.delete("/{id}", status_code=204, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -61,4 +61,4 @@ async def delete_area(
     request: Request,
     service: AreaService = Depends(_service),
 ) -> None:
-    service.delete_area(id, _empresa_str(request))
+    service.delete_area(id, _empresa_str(request), request.state.user.get("id"))

@@ -15,6 +15,7 @@ import {
   guardarCliente, MAX_NOMBRE, type ErroresCliente,
 } from "@/components/features/clientes/guardarCliente"
 import type { Cliente } from "@/types/cliente"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   open: boolean
@@ -63,6 +64,7 @@ export function ClienteModal({ open, onClose, onSuccess, cliente }: Props) {
         setErrores(errs)
         return
       }
+      avisarGuardado("Cliente", "m", isEdit)
       onSuccess()
     } catch (e2) {
       // El mensaje del backend se conserva: "Ya existe un cliente con ese nombre" le dice al

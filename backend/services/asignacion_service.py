@@ -4,28 +4,35 @@ Flujo: router → service → repository → DB
 empresa_id heredado del empleado; empleado y curso deben ser de la misma empresa.
 Al pasar a 'completado', fecha_completado se auto-setea. Certs en bucket 'documentos' privado.
 """
-import uuid as _uuid
 from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from integrations import storage
 from repositories.asignacion_repo import AsignacionRepo
 from repositories.capacitacion_repo import CapacitacionRepo
 from schemas.capacitacion import AsignacionCreate, AsignacionListResponse, AsignacionResponse, AsignacionUpdate
+from services._asignacion_certificado import subir as _subir_certificado
+from services._asignacion_certificado import url_firmada as _url_certificado
+from services._audit_payloads_capacitaciones import (
+    payload_alta_asignacion_capacitacion, payload_baja_asignacion_capacitacion,
+    payload_update_asignacion_capacitacion,
+)
 from services._capacitaciones_export import construir_filas_export
 from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
 from services._paginacion import cantidad_paginas
+from services.audit_service import AuditService
 from services.export import Descarga, build_export
 from utils.errors import AppError
 from utils.logger import logger
 
 _VALID_ESTADOS = ("pendiente", "en_curso", "completado")
-_ALLOWED_TYPES = ("application/pdf", "image/jpeg", "image/png", "image/webp")
 
 
 class AsignacionService:
-    def __init__(self, repo: Optional[AsignacionRepo] = None, cap_repo: Optional[CapacitacionRepo] = None) -> None:
+    def __init__(self, repo: Optional[AsignacionRepo] = None,
+                 cap_repo: Optional[CapacitacionRepo] = None,
+                 audit: Optional[AuditService] = None) -> None:
+        self._audit = audit or AuditService()
         self._repo = repo or AsignacionRepo()
         self._cap_repo = cap_repo or CapacitacionRepo()
 
@@ -76,15 +83,18 @@ class AsignacionService:
             raise
         except Exception:
             raise AppError("El colaborador ya tiene esta formación asignada", "YA_ASIGNADO", 409)
+        self._audit.registrar(**payload_alta_asignacion_capacitacion(row, created_by))
         logger.info("Capacitación asignada", extra={"asignacion_id": row.id, "created_by": created_by})
         return row
 
-    def update_estado(self, id: UUID, data: AsignacionUpdate, empresa_id: Optional[UUID] = None) -> AsignacionResponse:
+    def update_estado(self, id: UUID, data: AsignacionUpdate, empresa_id: Optional[UUID] = None,
+                      usuario_id: Optional[str] = None) -> AsignacionResponse:
         """
         Actualiza estado y/o fechas. Al pasar a 'completado', auto-setea fecha_completado=hoy si no viene.
         Raises: ASIGNACION_NOT_FOUND (404), ESTADO_INVALIDO (422).
         """
-        if not self._repo.find_by_id(str(id), empresa_id):
+        prior = self._repo.find_by_id(str(id), empresa_id)   # el "antes" del diff
+        if not prior:
             raise AppError("Asignación no encontrada", "ASIGNACION_NOT_FOUND", 404)
         payload: dict = {}
         if data.estado is not None:
@@ -103,37 +113,33 @@ class AsignacionService:
             if getattr(data, campo) is not None:
                 payload[campo] = getattr(data, campo)
         updated = self._repo.update(str(id), empresa_id, payload)
+        self._audit.registrar(**payload_update_asignacion_capacitacion(prior, updated, usuario_id))
         logger.info("Asignación actualizada", extra={"asignacion_id": str(id)})
         return updated  # type: ignore[return-value]
 
-    def delete(self, id: UUID, empresa_id: Optional[UUID] = None) -> None:
-        """Elimina asignación (hard delete). Raises ASIGNACION_NOT_FOUND (404)."""
-        if not self._repo.find_by_id(str(id), empresa_id):
+    def delete(self, id: UUID, empresa_id: Optional[UUID] = None,
+               usuario_id: Optional[str] = None) -> None:
+        """Elimina la asignación (hard delete, sin guardas).
+
+        🔴 Lo que se pierde es el HISTORIAL DE FORMACIÓN de esa persona: estado, fechas y la ruta
+        del certificado —cuyo objeto queda huérfano en el bucket, porque el path vivía sólo acá—.
+        El evento se arma con la fila viva y se registra después del borrado.
+
+        Raises: ASIGNACION_NOT_FOUND (404).
+        """
+        prior = self._repo.find_by_id(str(id), empresa_id)
+        if not prior:
             raise AppError("Asignación no encontrada", "ASIGNACION_NOT_FOUND", 404)
         self._repo.delete(str(id), empresa_id)
+        self._audit.registrar(**payload_baja_asignacion_capacitacion(prior, usuario_id))
         logger.info("Asignación eliminada", extra={"asignacion_id": str(id)})
 
-    def upload_certificado(self, id: str, empresa_id: Optional[UUID], content: bytes, filename: str, content_type: str) -> AsignacionResponse:
-        """
-        Sube certificado al bucket privado 'documentos'. Guarda la ruta (path) en certificado_url.
-        Para descargar usar get_certificado_signed_url. Raises: ASIGNACION_NOT_FOUND (404), INVALID_FILE_TYPE (400).
-        """
-        if not self._repo.find_by_id(id, empresa_id):
-            raise AppError("Asignación no encontrada", "ASIGNACION_NOT_FOUND", 404)
-        if content_type not in _ALLOWED_TYPES:
-            raise AppError("Solo se permiten PDF o imágenes (JPG, PNG, WEBP)", "INVALID_FILE_TYPE", 400)
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "pdf"
-        path = f"certificados/{id}/{_uuid.uuid4()}.{ext}"
-        storage.subir(storage.DOCUMENTOS, path, content, content_type)
-        updated = self._repo.update(id, empresa_id, {"certificado_url": path})
-        logger.info("Certificado subido", extra={"asignacion_id": id, "path": path})
-        return updated  # type: ignore[return-value]
+    def upload_certificado(self, id: str, empresa_id: Optional[UUID], content: bytes, filename: str,
+                           content_type: str, usuario_id: Optional[str] = None) -> AsignacionResponse:
+        """Adjunta el comprobante. Ver `_asignacion_certificado.subir`."""
+        return _subir_certificado(self._repo, self._audit, id, empresa_id, content, filename,
+                                  content_type, usuario_id)
 
     def get_certificado_signed_url(self, id: str, empresa_id: Optional[UUID] = None) -> str:
-        """Genera URL firmada (3600 s) para descargar el certificado. Raises: ASIGNACION_NOT_FOUND, SIN_CERTIFICADO (404)."""
-        row = self._repo.find_by_id(id, empresa_id)
-        if not row:
-            raise AppError("Asignación no encontrada", "ASIGNACION_NOT_FOUND", 404)
-        if not row.certificado_url:
-            raise AppError("Esta asignación no tiene certificado", "SIN_CERTIFICADO", 404)
-        return storage.url_firmada(storage.DOCUMENTOS, row.certificado_url)
+        """URL firmada de descarga. Ver `_asignacion_certificado.url_firmada`."""
+        return _url_certificado(self._repo, id, empresa_id)

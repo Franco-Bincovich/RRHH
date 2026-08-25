@@ -1,12 +1,12 @@
 """
 Repositorio de templates de onboarding — CRUD de templates y tareas.
-Interfaz: get_templates · get_template · create_template · update_template
-          delete_template · add_tarea · update_tarea · delete_tarea
+Interfaz: get_templates · get_template · create_template · update_template · delete_template ·
+add_tarea · update_tarea · delete_tarea
 
-Las primitivas compartidas viven en tres satélites: `_row` (tablas, SELECT y mappers),
-`_filtros` (empresa y visibilidad) y `_write` (las filas que se insertan). Las lecturas componen `with_empresa` y `with_visibilidad` sobre
-la misma query, empresa primero; la regla de cada uno está escrita en su función y no se repite
-acá, para que no puedan divergir.
+Las primitivas compartidas viven en tres satélites: `_row` (tablas, SELECT y mappers), `_filtros`
+(empresa y visibilidad) y `_write` (las filas que se insertan). Las lecturas componen
+`with_empresa` y `with_visibilidad` sobre la misma query, empresa primero; la regla de cada uno
+está escrita en su función y no se repite acá, para que no puedan divergir.
 """
 from typing import Optional
 from uuid import UUID
@@ -68,14 +68,15 @@ class OnboardingTemplatesRepo:
         res = supabase_admin.table(TEMPLATES).update(data).eq("id", template_id).eq("activo", True).execute()
         return self.get_template(template_id, None, user_id, rol) if res.data else None
 
-    def delete_template(self, template_id: str) -> bool:
-        """Soft delete si tiene instancias; hard delete si no."""
+    def delete_template(self, template_id: str) -> str:
+        """Soft si tiene instancias, hard si no. Devuelve `"logica"`/`"fisica"` y no `True`: el
+        evento tiene que decir cuál fue, y repreguntarlo sería otra query y una carrera."""
         has_inst = bool(supabase_admin.table(INSTANCIAS).select("id").eq("template_id", template_id).limit(1).execute().data)
         if has_inst:
             supabase_admin.table(TEMPLATES).update({"activo": False}).eq("id", template_id).execute()
         else:
             supabase_admin.table(TEMPLATES).delete().eq("id", template_id).execute()
-        return True
+        return "logica" if has_inst else "fisica"
 
     def add_tarea(self, template_id: str, data: dict, empresa_id: str) -> TareaResponse:
         """Agrega una tarea al template, heredando el empresa_id de la plantilla."""
@@ -92,7 +93,8 @@ class OnboardingTemplatesRepo:
         res = supabase_admin.table(TAREAS).update(payload).eq("id", tarea_id).execute()
         return tarea(res.data[0]) if res.data else None
 
-    def delete_tarea(self, tarea_id: str) -> bool:
-        """Elimina una tarea del template."""
-        supabase_admin.table(TAREAS).delete().eq("id", tarea_id).execute()
-        return True
+    def delete_tarea(self, tarea_id: str) -> Optional[dict]:
+        """Elimina una tarea y DEVUELVE LA FILA BORRADA (None si no borró). PostgREST la retorna
+        en `.data`: la foto del evento sale gratis y sin ventana entre leer y borrar."""
+        res = supabase_admin.table(TAREAS).delete().eq("id", tarea_id).execute()
+        return (res.data or [None])[0]

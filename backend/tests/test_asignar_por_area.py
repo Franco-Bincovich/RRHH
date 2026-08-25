@@ -90,8 +90,14 @@ class _Asignador:
         self._ya = {str(e) for e in ya_asignados}
         self._baja = {str(e) for e in de_baja}
         self.creadas: list = []
+        # 🔑 Se GUARDA el autor con el que se llamó a cada alta, no se descarta: es lo único que
+        # puede desmentir que `usuario_id` se pierda en el camino y las 13 asignaciones de un
+        # área queden auditadas sin autor.
+        self.autores: list = []
 
-    def __call__(self, proyecto_id, empleado_id, rol, valor_hora, fecha_desde, fecha_hasta):
+    def __call__(self, proyecto_id, empleado_id, rol, valor_hora, fecha_desde, fecha_hasta,
+                 usuario_id=None):
+        self.autores.append(usuario_id)
         eid = str(empleado_id)
         if eid in self._ya:
             raise AppError("El empleado ya está asignado a este proyecto", "ASIGNACION_DUPLICADA", 409)

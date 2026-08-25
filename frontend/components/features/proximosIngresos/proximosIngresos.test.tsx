@@ -13,7 +13,7 @@ vi.mock("@/services/api", () => ({ apiFetch, descargarArchivo }))
 import { fetchEmpleados } from "@/services/empleados"
 
 import { ProximosIngresosTable } from "./ProximosIngresosTable"
-import { filtrosProximosIngresos, textoFaltan } from "./_proximosIngresos"
+import { filtrosProximosIngresos, motivoNoSePuedeConfirmar, textoFaltan } from "./_proximosIngresos"
 
 /**
  * (a) y (e) de /proximos-ingresos: que la lista salga ordenada por SU fecha y que el vacío hable
@@ -148,12 +148,24 @@ describe("(e) el vacío usa los valores reales de los filtros", () => {
   })
 })
 
-describe("la columna de acciones existe solo para quien puede escribir", () => {
-  it("sin `onActivar` no hay botón de confirmar ni columna que lo sostenga", () => {
-    // Un botón que siempre termina en 403 es peor que no ofrecerlo.
+describe("el botón de escribir se gatea; el link de leer no", () => {
+  it("sin `onActivar` no hay botón de confirmar, pero la columna y el legajo siguen", () => {
+    /*
+     * Un botón que siempre termina en 403 es peor que no ofrecerlo. Pero el acceso a la ficha es
+     * LECTURA: ocultar la columna entera le sacaba a `gerencia_lectura` la referencia de qué
+     * está mirando.
+     *
+     * 🔑 ESE ACCESO CAMBIÓ DE LUGAR EN LA MISMA TANDA. Primero se agregó como un link "Ver
+     * legajo" en la columna de acciones —la pantalla no tenía NINGUNA forma de abrir la ficha,
+     * pese a que el error de confirmar manda a "corregí la fecha en su legajo"— y después, al
+     * unificar el patrón de /empresas, el NOMBRE de la columna 1 pasó a ser el link. Con los dos
+     * eran dos accesos al mismo lugar en la misma fila; quedó el de la identidad, que es donde
+     * el usuario lo busca. Lo que se afirma es el acceso, no dónde estaba.
+     */
     const html = tabla({ onActivar: undefined })
     expect(html).not.toContain("Confirmar ingreso")
-    expect((html.match(/<th[ >]/g) ?? []).length).toBe(5)
+    expect((html.match(/href="\/empleados\//g) ?? []).length).toBe(PADRON.length)
+    expect((html.match(/<th[ >]/g) ?? []).length).toBe(6)
   })
 
   it("con `onActivar` hay un botón por fila", () => {
@@ -167,5 +179,51 @@ describe("la columna de acciones existe solo para quien puede escribir", () => {
     const html = tabla({ activandoId: "2" })
     expect(html).toContain("Confirmando...")
     expect((html.match(/Confirmando\.\.\./g) ?? []).length).toBe(1)
+  })
+})
+
+describe("no se ofrece confirmar un ingreso que el backend va a rechazar", () => {
+  /**
+   * 🔴 INVIERTE LA DECISIÓN QUE ESTABA ESCRITA EN `ProximosIngresosTable` ("EL BOTÓN NO SE
+   * DESHABILITA POR FECHA"). El porqué está en `motivoNoSePuedeConfirmar`; acá se fija el
+   * comportamiento. Lo que lo motivó, medido: las SEIS filas de la pantalla tenían fecha futura
+   * y las seis daban 400.
+   *
+   * ⚠️ Estos casos prueban la FUNCIÓN y no el render, a propósito: la tabla arma su padrón con
+   * fechas fijas y "futuro" depende de cuándo corra la suite, así que un test de markup se
+   * volvería verde o rojo según el día. `diasHasta` ya acepta el "hoy" por parámetro justamente
+   * para esto.
+   */
+  it("con fecha futura hay motivo, y dice la fecha Y la salida", () => {
+    const motivo = motivoNoSePuedeConfirmar(14, "2026-09-08")
+    expect(motivo).toContain("2026-09-08")
+    // La segunda mitad es la que resuelve el caso real: alguien que ya está trabajando.
+    expect(motivo).toContain("corregí la fecha en su legajo")
+  })
+
+  it("hoy y los días ya pasados NO tienen motivo: son justo las filas que hay que confirmar", () => {
+    expect(motivoNoSePuedeConfirmar(0, "2026-08-25")).toBeNull()
+    expect(motivoNoSePuedeConfirmar(-3, "2026-08-22")).toBeNull()
+  })
+
+  it("una fecha ilegible NO bloquea", () => {
+    // Bloquear por una fecha que no se pudo leer dejaría la fila muerta sin ninguna salida
+    // desde la pantalla. El backend es el que sabe.
+    expect(motivoNoSePuedeConfirmar(null, "")).toBeNull()
+  })
+})
+
+describe("desde acá se llega al legajo", () => {
+  it("cada fila tiene un link real a la ficha, no solo el click de la fila", () => {
+    /**
+     * 🔴 El propio mensaje de error manda a "corregí la fecha en su legajo" y hasta el
+     * 25/8/2026 esta pantalla no tenía cómo abrirlo: la fila navegaba con `onClick`, que no se
+     * ve, no se alcanza por teclado y no se puede abrir en una pestaña nueva. El link vive en el
+     * NOMBRE, que es el patrón de `EmpresasTable` — un `<tr>` no puede ser un `<a>`.
+     */
+    const html = tabla()
+    for (const emp of PADRON) {
+      expect(html).toContain(`href="/empleados/${emp.id}"`)
+    }
   })
 })

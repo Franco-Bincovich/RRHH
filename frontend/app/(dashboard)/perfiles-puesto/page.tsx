@@ -25,7 +25,7 @@ import type { CamposPerfilResponse, PerfilPuesto } from "@/types/perfilPuesto"
 
 // 12 y no 20: son tarjetas de tres columnas, así que 12 llena exactamente cuatro filas y 20
 // dejaría una última fila coja. El backend topea `page_size` en 100.
-const PAGE_SIZE = 12
+const PAGE_SIZE_INICIAL = 12
 
 /**
  * El catálogo de PERFILES DE PUESTO: las plantillas con las que se arma un aviso de búsqueda.
@@ -48,6 +48,7 @@ export default function PerfilesPuestoPage() {
   const [error, setError] = useState<string | null>(null)
   const [catalogos, setCatalogos] = useState<CamposPerfilResponse | null>(null)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [modalOpen, setModalOpen] = useState(false)
   const [editando, setEditando] = useState<PerfilPuesto | undefined>(undefined)
 
@@ -55,7 +56,7 @@ export default function PerfilesPuestoPage() {
   const chips = chipsDeCampos(campos)
 
   const load = useCallback(
-    () => cargarPerfiles(filtros, page, PAGE_SIZE, { setPerfiles, setTotal, setLoading, setError }),
+    () => cargarPerfiles(filtros, page, pageSize, { setPerfiles, setTotal, setLoading, setError }),
     [filtros, page],
   )
   useEffect(() => { void load() }, [load])
@@ -116,7 +117,7 @@ export default function PerfilesPuestoPage() {
 
       {!loading && !error && perfiles.length > 0 && (
         <Pagination
-          page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage}
+          page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage}
         />
       )}
 

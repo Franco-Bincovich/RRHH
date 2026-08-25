@@ -13,6 +13,7 @@ import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { InventarioItem, InventarioItemCreate, InventarioItemUpdate } from "@/types/inventario"
 import type { Empresa } from "@/types/empresa"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   open: boolean
@@ -93,6 +94,7 @@ export function ItemModal({ open, onClose, onSuccess, editing }: Props) {
         }
         await createItem(payload)
       }
+      avisarGuardado("Ítem", "m", isEdit)
       onSuccess()
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Ocurrió un error al guardar")

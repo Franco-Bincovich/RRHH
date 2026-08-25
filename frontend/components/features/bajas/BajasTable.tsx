@@ -6,6 +6,7 @@
  * `FilasEsqueleto`, `TablaVacia`, `ErrorState`): acá no hay una sola clase de las del patrón.
  */
 import { ChevronRight } from "lucide-react"
+import Link from "next/link"
 import type { ReactNode } from "react"
 
 import { ErrorState } from "@/components/ui/ErrorState"
@@ -56,7 +57,18 @@ export function BajasTable({
         <TableBody>
           {items.map((emp) => (
             <TableRow key={emp.id} className="group cursor-pointer" onClick={() => onRowClick(emp.id)}>
-              <TableCell className="font-medium">{emp.nombre} {emp.apellido}</TableCell>
+              {/* 🔴 LA IDENTIDAD ES UN <Link> DE VERDAD, no sólo el `onClick` de la fila. Molde:
+                  `EmpresasTable`, la única tabla que ya lo hacía. Un `<tr>` NO puede ser un `<a>`
+                  —HTML inválido, y React lo rechaza— así que el ancla va en la celda que nombra
+                  al registro. El `onClick` de la fila SE QUEDA: es la comodidad de clickear
+                  cualquier parte. Lo que agrega el link es lo que el `onClick` no puede dar —
+                  abrir en pestaña nueva, copiar la dirección, y llegar con Tab. */}
+              <TableCell className="font-medium">
+                <Link href={`/empleados/${emp.id}`} onClick={(e) => e.stopPropagation()}
+                      className="hover:text-primary hover:underline">
+                  {emp.nombre} {emp.apellido}
+                </Link>
+              </TableCell>
               {showEmpresa && <TableCell className="text-muted-foreground">{emp.empresa_nombre ?? "—"}</TableCell>}
               {/*
                * 🔴 UNA FILA SIN `fecha_egreso` SALE PRIMERA Y ESO ESTÁ BIEN. El orden es

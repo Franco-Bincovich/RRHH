@@ -10,7 +10,7 @@ import { AuditDetailModal } from "@/components/features/auditoria/AuditDetailMod
 import { fetchAuditoria } from "@/services/auditoria"
 import type { AuditLog } from "@/types/auditoria"
 
-const PAGE_SIZE = 10
+const PAGE_SIZE_INICIAL = 10
 
 /**
  * Sección autoabastecida: historial de cambios de un empleado en su ficha.
@@ -21,6 +21,7 @@ export function HistorialCambiosSection({ empleadoId }: { empleadoId: string }) 
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [detalle, setDetalle] = useState<AuditLog | null>(null)
@@ -30,12 +31,12 @@ export function HistorialCambiosSection({ empleadoId }: { empleadoId: string }) 
     let cancelled = false
     setLoading(true)
     setError(false)
-    fetchAuditoria({ entidad: "empleado", registro_id: empleadoId, page, page_size: PAGE_SIZE })
+    fetchAuditoria({ entidad: "empleado", registro_id: empleadoId, page, page_size: pageSize })
       .then((res) => { if (!cancelled) { setLogs(res.items); setTotal(res.total) } })
       .catch(() => { if (!cancelled) setError(true) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [empleadoId, page])
+  }, [empleadoId, page, pageSize])
 
   return (
     <Section title="Historial de cambios">
@@ -54,8 +55,8 @@ export function HistorialCambiosSection({ empleadoId }: { empleadoId: string }) 
         ) : (
           <>
             <AuditTable logs={logs} onVerDetalle={setDetalle} />
-            {total > PAGE_SIZE && (
-              <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+            {total > pageSize && (
+              <Pagination page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage} />
             )}
           </>
         )}

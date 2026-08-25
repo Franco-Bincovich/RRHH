@@ -1,6 +1,7 @@
 "use client"
 
 import { Check, Pencil, RotateCcw, Trash2 } from "lucide-react"
+import { AccionFila } from "@/components/ui/AccionFila"
 import type { ReactNode } from "react"
 
 import { ErrorState } from "@/components/ui/ErrorState"
@@ -39,9 +40,6 @@ interface Props {
   /** Qué ofrecer cuando NO hay filtros y tampoco datos: el alta. `undefined` sin permiso. */
   accionVacio?: ReactNode
 }
-
-const ACCION_CLASS =
-  "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
 /**
  * Tabla de la agenda. PRESENTACIONAL: sin fetch ni lógica de negocio.
@@ -116,22 +114,18 @@ export function EventosTabla({
                       borrado aparece recién con el mouse en la fila: en reposo, una columna de
                       tachos rojos se lee como una lista de errores. */}
                   <div className="flex justify-end gap-1">
-                    <button
-                      type="button"
+                    <AccionFila
                       aria-label={`${e.resuelta ? "Reabrir" : "Resolver"} ${e.nombre}`}
                       onClick={() => onResuelta(e, !e.resuelta)}
-                      className={`${ACCION_CLASS} group-hover:text-primary`}
                     >
                       {e.resuelta ? <RotateCcw className="size-4" aria-hidden="true" /> : <Check className="size-4" aria-hidden="true" />}
-                    </button>
-                    <button type="button" aria-label={`Editar ${e.nombre}`} onClick={() => onEdit(e)}
-                      className={`${ACCION_CLASS} group-hover:text-primary`}>
+                    </AccionFila>
+                    <AccionFila aria-label={`Editar ${e.nombre}`} onClick={() => onEdit(e)}>
                       <Pencil className="size-4" aria-hidden="true" />
-                    </button>
-                    <button type="button" aria-label={`Eliminar ${e.nombre}`} onClick={() => onDelete(e)}
-                      className={`${ACCION_CLASS} group-hover:text-destructive`}>
+                    </AccionFila>
+                    <AccionFila tono="destructivo" aria-label={`Eliminar ${e.nombre}`} onClick={() => onDelete(e)}>
                       <Trash2 className="size-4" aria-hidden="true" />
-                    </button>
+                    </AccionFila>
                   </div>
                 </TableCell>
               )}

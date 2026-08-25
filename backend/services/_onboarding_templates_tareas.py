@@ -21,12 +21,15 @@ from typing import Optional
 from uuid import UUID
 
 from schemas.onboarding import TareaCreate, TareaResponse, TareaUpdate
+from services._audit_payloads_onboarding_templates import (
+    payload_alta_tarea_template, payload_baja_tarea_template, payload_update_tarea_template,
+)
 from services._template_scope import ensure_template_accesible
 from utils.errors import AppError
 from utils.logger import logger
 
 
-def add_tarea(repo, template_id: UUID, data: TareaCreate, empresa_id: Optional[UUID] = None,
+def add_tarea(repo, audit, template_id: UUID, data: TareaCreate, empresa_id: Optional[UUID] = None,
               user_id: Optional[str] = None, rol: Optional[str] = None) -> TareaResponse:
     """
     Agrega una tarea a un template existente.
@@ -39,11 +42,12 @@ def add_tarea(repo, template_id: UUID, data: TareaCreate, empresa_id: Optional[U
     """
     tmpl = ensure_template_accesible(repo, template_id, empresa_id, user_id, rol)
     tarea = repo.add_tarea(str(template_id), data.model_dump(), str(tmpl.empresa_id))
+    audit.registrar(**payload_alta_tarea_template(tarea, user_id, str(tmpl.empresa_id)))
     logger.info("Tarea agregada al template", extra={"template_id": str(template_id), "tarea_id": str(tarea.id)})
     return tarea
 
 
-def update_tarea(repo, template_id: UUID, tarea_id: UUID, data: TareaUpdate,
+def update_tarea(repo, audit, template_id: UUID, tarea_id: UUID, data: TareaUpdate,
                  empresa_id: Optional[UUID] = None, user_id: Optional[str] = None,
                  rol: Optional[str] = None) -> TareaResponse:
     """
@@ -56,14 +60,20 @@ def update_tarea(repo, template_id: UUID, tarea_id: UUID, data: TareaUpdate,
         AppError: TEMPLATE_NOT_FOUND (404) si no lo alcanza por empresa o por visibilidad.
         AppError: TAREA_NOT_FOUND (404) si la tarea no existe.
     """
-    ensure_template_accesible(repo, template_id, empresa_id, user_id, rol)  # gate antes de escribir
+    tmpl = ensure_template_accesible(repo, template_id, empresa_id, user_id, rol)  # gate antes de escribir
+    # 🔑 El "antes" del diff sale de la lista que YA trajo el gate: `get_template` devuelve la
+    # plantilla con sus tareas, así que releer la tarea sería una query para un dato en memoria.
+    prior = next((t for t in (tmpl.tareas or []) if str(t.id) == str(tarea_id)), None)
     tarea = repo.update_tarea(str(tarea_id), data.model_dump(exclude_none=True))
     if not tarea:
         raise AppError("Tarea no encontrada", "TAREA_NOT_FOUND", 404)
+    if prior:
+        audit.registrar(**payload_update_tarea_template(
+            prior, tarea, user_id, str(tmpl.empresa_id)))
     return tarea
 
 
-def delete_tarea(repo, template_id: UUID, tarea_id: UUID, empresa_id: Optional[UUID] = None,
+def delete_tarea(repo, audit, template_id: UUID, tarea_id: UUID, empresa_id: Optional[UUID] = None,
                  user_id: Optional[str] = None, rol: Optional[str] = None) -> bool:
     """
     Elimina una tarea del template, previa validación sobre el template padre.
@@ -71,7 +81,12 @@ def delete_tarea(repo, template_id: UUID, tarea_id: UUID, empresa_id: Optional[U
     Raises:
         AppError: TEMPLATE_NOT_FOUND (404) si no lo alcanza por empresa o por visibilidad.
     """
-    ensure_template_accesible(repo, template_id, empresa_id, user_id, rol)  # gate antes del borrado
-    repo.delete_tarea(str(tarea_id))
+    tmpl = ensure_template_accesible(repo, template_id, empresa_id, user_id, rol)  # gate antes del borrado
+    # 🔴 BORRADO FÍSICO: el título y la descripción que alguien escribió a mano desaparecen y
+    # `onboarding_tareas` no tiene versionado. El repo devuelve la fila borrada —PostgREST la
+    # retorna— así que la foto es exactamente lo que se fue, sin una query extra.
+    prior = repo.delete_tarea(str(tarea_id))
+    if prior:
+        audit.registrar(**payload_baja_tarea_template(prior, user_id, str(tmpl.empresa_id)))
     logger.info("Tarea eliminada", extra={"template_id": str(template_id), "tarea_id": str(tarea_id)})
     return True

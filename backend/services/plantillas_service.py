@@ -7,6 +7,11 @@ El envío vive en `mail_envio_service.py`: son dos responsabilidades y juntas no
 `_render.render` es uno solo y no sabe si lo que devuelve se va a mandar o a mostrar. Si fueran
 dos, divergen — es la lección de los filtros duplicados front/back, que este repo ya pagó.
 
+## 🔴 AUDITA SUS DOS ESCRITURAS (25/8/2026)
+El disparador fue la baja (barrido nº 42: "el texto que RRHH escribió desaparece y no hay versión
+anterior de la que sacarlo"), y el barrido nº 8 obliga a que el guardado también. Ver
+`_audit_payloads_plantillas_mail`.
+
 ## Preview con datos REALES, ejemplo como fallback
 Con datos inventados los huecos reales —el empleado sin área cargada, `manager_id` en 0/19— NO SE
 VEN, y son justamente el problema que hoy existe. Por eso el default es elegir un empleado. El
@@ -28,18 +33,23 @@ from schemas.plantillas import (
     PlantillaResponse, PlantillasListResponse, PlantillaUpsert, PreviewRequest, PreviewResponse,
 )
 from services._envio_libre import plantilla_usa_variables
+from services._plantillas_write import borrar as _borrar
+from services._plantillas_write import guardar as _guardar
 from services.mailer._markdown import a_html
-from services.mailer._render import contexto_valido, datos_de_ejemplo, render, variables_invalidas
+from services.mailer._render import datos_de_ejemplo, render
 from services.mailer._variables import CONTEXTOS
+from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
 
 
 class PlantillasService:
     def __init__(self, repo: Optional[PlantillaMailRepo] = None,
-                 empleado_repo: Optional[EmpleadoRepo] = None) -> None:
+                 empleado_repo: Optional[EmpleadoRepo] = None,
+                 audit: Optional[AuditService] = None) -> None:
         self._repo = repo or PlantillaMailRepo()
         self._empleados = empleado_repo or EmpleadoRepo()
+        self._audit = audit or AuditService()
 
     def listar(self, empresa_id: Optional[UUID] = None) -> PlantillasListResponse:
         """Las plantillas visibles: las de la empresa + las globales que no pisó.
@@ -50,40 +60,14 @@ class PlantillasService:
         items = [_a_response(f) for f in self._repo.listar(empresa_id)]
         return PlantillasListResponse(items=items, contextos={k: list(v) for k, v in CONTEXTOS.items()})
 
-    def guardar(self, data: PlantillaUpsert, empresa_id: UUID) -> PlantillaResponse:
-        """Crea o edita una plantilla DE LA EMPRESA. Valida el contexto y las variables.
+    def guardar(self, data: PlantillaUpsert, empresa_id: UUID,
+                usuario_id: Optional[str] = None) -> PlantillaResponse:
+        """Crea o edita una plantilla de la empresa. Ver `_plantillas_write.guardar`."""
+        return _guardar(self._repo, self._audit, data, empresa_id, _a_response, usuario_id)
 
-        🔴 Siempre escribe con el `empresa_id` del request, aunque se esté editando una global:
-        editar la global desde una empresa la cambiaría para TODAS. Lo que pasa es que se crea la
-        versión propia de esta empresa, que a partir de ahí pisa a la global (ver el repo).
-
-        Raises:
-            AppError: PLANTILLA_CONTEXTO_INVALIDO (422) si el contexto no está en el catálogo.
-            AppError: PLANTILLA_VARIABLES_INVALIDAS (422) con la lista de las que sobran.
-        """
-        if not contexto_valido(data.contexto):
-            raise AppError(f"Contexto desconocido: {data.contexto}",
-                           "PLANTILLA_CONTEXTO_INVALIDO", 422)
-        malas = variables_invalidas(data.contexto, data.asunto, data.cuerpo)
-        if malas:
-            raise AppError(
-                "Estas variables no existen para este tipo de mail: " + ", ".join(malas)
-                + ". Usá el listado de variables disponibles.",
-                "PLANTILLA_VARIABLES_INVALIDAS", 422)
-        fila = {"clave": data.clave, "contexto": data.contexto, "asunto": data.asunto,
-                "cuerpo": data.cuerpo, "activa": data.activa, "empresa_id": str(empresa_id)}
-        if data.id:
-            fila["id"] = str(data.id)
-        guardada = self._repo.guardar(fila)
-        if not guardada:
-            raise AppError("No se pudo guardar la plantilla", "PLANTILLA_SAVE_ERROR", 500)
-        logger.info("Plantilla de mail guardada", extra={"clave": data.clave})
-        return _a_response(guardada)
-
-    def borrar(self, id_: UUID, empresa_id: UUID) -> None:
-        """Borra una plantilla de la empresa. Nunca una global (lo impide el repo)."""
-        if not self._repo.borrar(id_, empresa_id):
-            raise AppError("Plantilla no encontrada", "PLANTILLA_NOT_FOUND", 404)
+    def borrar(self, id_: UUID, empresa_id: UUID, usuario_id: Optional[str] = None) -> None:
+        """Borra una plantilla de la empresa. Ver `_plantillas_write.borrar`."""
+        _borrar(self._repo, self._audit, id_, empresa_id, usuario_id)
 
     def preview(self, data: PreviewRequest, empresa_id: Optional[UUID] = None) -> PreviewResponse:
         """Renderiza sin enviar. Con el empleado elegido, o con datos de ejemplo.

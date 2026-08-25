@@ -15,6 +15,7 @@ import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Capacitacion, CapacitacionCreate, CapacitacionUpdate } from "@/types/capacitacion"
 import type { Empresa } from "@/types/empresa"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   open: boolean
@@ -111,6 +112,7 @@ export function CapacitacionModal({ open, onClose, onSuccess, editing }: Props) 
         }
         await createCapacitacion(payload)
       }
+      avisarGuardado("Formación", "f", isEditing)
       onSuccess()
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Ocurrió un error al guardar")

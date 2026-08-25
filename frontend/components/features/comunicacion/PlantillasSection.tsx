@@ -9,9 +9,11 @@ import { PlantillaModal } from "@/components/features/comunicacion/PlantillaModa
 import { usePlantillas } from "@/components/features/comunicacion/usePlantillas"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { GrillaTarjetas } from "@/components/ui/GrillaTarjetas"
+import { AccionBloqueada } from "@/components/ui/AccionBloqueada"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useEmpresaConcreta } from "@/hooks/useEmpresaConcreta"
 import type { Plantilla } from "@/types/plantillas"
 
 /**
@@ -45,16 +47,30 @@ import type { Plantilla } from "@/types/plantillas"
  */
 export function PlantillasSection({ editable }: { editable: boolean }) {
   const { items, contextos, loading, recargar } = usePlantillas()
+  // 🔴 GUARDAR UNA PLANTILLA ES SOBRE UNA EMPRESA (`require_empresa_id` en `routers/plantillas`),
+  // así que en la vista consolidada el modal se abriría para fallar con 400 al guardar. Se
+  // bloquea el ENTRY POINT y no el botón de guardar del modal: abrir un formulario que no se
+  // puede enviar es peor que no poder abrirlo, porque el usuario ya escribió el texto.
+  const { motivo: motivoSinEmpresa } = useEmpresaConcreta()
   const [abierta, setAbierta] = useState<Plantilla | null>(null)
   const [nueva, setNueva] = useState(false)
   const [enviando, setEnviando] = useState<Plantilla | null>(null)
 
   const open = nueva || abierta !== null
   const nuevaBtn = (
-    <Button variant="outline" className="min-h-11 gap-1.5" onClick={() => setNueva(true)}>
-      <Plus className="size-4" />
-      Nueva plantilla
-    </Button>
+    <AccionBloqueada motivo={motivoSinEmpresa}>
+      {(bloqueada) => (
+        <Button
+          variant="outline"
+          className="min-h-11 gap-1.5"
+          disabled={bloqueada}
+          onClick={() => setNueva(true)}
+        >
+          <Plus className="size-4" />
+          Nueva plantilla
+        </Button>
+      )}
+    </AccionBloqueada>
   )
 
   return (
@@ -98,6 +114,7 @@ export function PlantillasSection({ editable }: { editable: boolean }) {
               plantilla={p}
               editable={editable}
               onEditar={setAbierta}
+              bloqueo={motivoSinEmpresa}
               onEnviar={setEnviando}
             />
           ))}

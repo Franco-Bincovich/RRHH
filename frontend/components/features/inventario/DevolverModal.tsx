@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select } from "@/components/ui/select"
 import { devolverItem } from "@/services/inventario"
 import type { Asignacion, DevolucionRequest, EstadoDevolucion } from "@/types/inventario"
+import { avisarHecho } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   asignacion: Asignacion
@@ -27,6 +28,7 @@ export function DevolverModal({ asignacion, onClose, onSuccess }: Props) {
     try {
       const payload: DevolucionRequest = { estado_devolucion: estado, notas: notas.trim() || undefined }
       await devolverItem(asignacion.id, payload)
+      avisarHecho("Devolución registrada")
       onSuccess()
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Error al registrar la devolución")

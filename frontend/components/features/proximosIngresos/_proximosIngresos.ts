@@ -17,7 +17,7 @@ export const COLUMNAS: Columna[] = [
   { clave: "faltan", label: "Faltan", ancho: "w-[13%]" },
   // Acá el encabezado SÍ va vacío pero la columna es ancha: lleva un botón con texto
   // ("Confirmar ingreso"), no un ícono. El nombre accesible lo pone `Encabezado`.
-  { clave: "acciones", label: "", ancho: "w-[180px]" },
+  { clave: "acciones", label: "", ancho: "w-[190px]" },
 ]
 
 /**
@@ -40,6 +40,43 @@ export function textoFaltan(dias: number | null): { texto: string; destacado: bo
   if (dias === -1) return { texto: "Ayer", destacado: true }
   if (dias < 0) return { texto: `Hace ${-dias} días`, destacado: true }
   return { texto: `En ${dias} días`, destacado: false }
+}
+
+/**
+ * Por qué HOY no se puede confirmar el ingreso de esta fila, o `null` si sí se puede.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════════
+ * 🔴 ESTO INVIERTE LO QUE `ProximosIngresosTable` TENÍA ESCRITO EN MAYÚSCULAS.
+ * ═══════════════════════════════════════════════════════════════════════════════════
+ * Ahí decía *"EL BOTÓN NO SE DESHABILITA POR FECHA. Se podría —`diasHasta` ya está calculado dos
+ * líneas arriba— y sería peor: un botón muerto no dice por qué lo está"*. El argumento valía
+ * contra un `disabled` PELADO. Lo que no contemplaba es el costo del botón vivo, que el smoke del
+ * 25/8/2026 midió: **las SEIS filas de la pantalla tenían fecha futura y las seis daban 400**. O
+ * sea que el 100% de los botones ofrecidos no podía funcionar, y enterarse costaba seis clicks
+ * con seis viajes al servidor.
+ *
+ * La salida no es ninguno de los dos extremos: es deshabilitar CON el motivo a la vista. Acá el
+ * motivo se puede escribir entero porque esta función lo devuelve como texto, y la fila además
+ * ya lo muestra en la columna "Faltan" ("En 14 días"), que es la misma información en la misma
+ * línea. Ver `components/ui/AccionBloqueada`.
+ *
+ * 🔑 EL TEXTO REPITE EL DEL BACKEND (`INGRESO_AUN_NO_OCURRIO`) porque tiene que decir lo MISMO:
+ * la fecha que falta Y la salida —corregir la fecha en el legajo si la persona entró antes—. Sin
+ * la segunda mitad, el usuario que tiene a alguien ya trabajando queda sin saber qué hacer, y ese
+ * es justamente el caso que trae a esta pantalla.
+ *
+ * ⚠️ ES UNA FUNCIÓN PURA Y NO UN `if` EN EL JSX, por lo mismo que `filtrosProximosIngresos`: es
+ * una decisión de producto y así se puede afirmar sin renderizar nada, que es lo único que vitest
+ * puede hacer sin jsdom.
+ *
+ * @param dias lo que devuelve `diasHasta`: negativo = ya pasó, 0 = hoy, `null` = fecha ilegible.
+ */
+export function motivoNoSePuedeConfirmar(dias: number | null, fechaIngreso: string): string | null {
+  // `null` = la fecha no se pudo leer. NO se bloquea: el backend es el que sabe, y bloquear por
+  // una fecha ilegible dejaría la fila muerta sin ninguna salida desde la pantalla.
+  if (dias === null || dias <= 0) return null
+  return `Todavía no llegó la fecha de ingreso (${fechaIngreso}). Si la persona entró antes de lo `
+    + `previsto, corregí la fecha en su legajo y después confirmá el ingreso.`
 }
 
 /**

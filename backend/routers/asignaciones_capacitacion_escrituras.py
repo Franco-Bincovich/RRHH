@@ -46,12 +46,12 @@ async def update_asignacion(
     body: AsignacionUpdate,
     service: AsignacionService = Depends(_svc),
 ) -> AsignacionResponse:
-    return service.update_estado(id, body, get_empresa_id(request))
+    return service.update_estado(id, body, get_empresa_id(request), request.state.user.get("id"))
 
 
 @router.delete("/{id}", status_code=200, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def delete_asignacion(id: UUID, request: Request, service: AsignacionService = Depends(_svc)) -> dict:
-    service.delete(id, get_empresa_id(request))
+    service.delete(id, get_empresa_id(request), request.state.user.get("id"))
     return {"ok": True}
 
 
@@ -67,4 +67,5 @@ async def upload_certificado(
     return service.upload_certificado(
         str(id), get_empresa_id(request),
         content, file.filename or "certificado", file.content_type or "application/pdf",
+        request.state.user.get("id"),
     )

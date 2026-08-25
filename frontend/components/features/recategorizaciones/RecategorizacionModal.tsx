@@ -17,6 +17,7 @@ import {
   type ErroresRecategorizacion, type FormRecategorizacion,
 } from "./guardarRecategorizacion"
 import { useUltimaRecategorizacion } from "./useUltimaRecategorizacion"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 /**
  * Alta y edición de una recategorización.
@@ -73,6 +74,7 @@ export function RecategorizacionModal({
         setErrores(errs)
         return
       }
+      avisarGuardado("Recategorización", "f", isEdit)
       onSuccess()
     } catch (e2) {
       setServerError(mensajeDeError(e2))

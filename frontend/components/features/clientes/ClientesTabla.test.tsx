@@ -81,20 +81,25 @@ describe("ClientesTabla — gate de escritura", () => {
      * la prop, así que `not.toContain("disabled")` es una aserción que NO PUEDE FALLAR NUNCA —
      * por eso los tests de arriba miran el TEXTO del aria-label.
      *
-     * Las acciones de esta tabla ya no son `Button` de shadcn: son `<button>` planos con las
-     * clases del patrón (siempre visibles, cambian de color al apuntar), y esas clases no
-     * incluyen ninguna variante `disabled:`. O sea que la trampa **ya no está en este markup**.
+     * Después la tabla dejó de usar `Button` y pasó a `<button>` planos SIN variantes
+     * `disabled:`, así que la trampa desapareció de este markup y este test lo afirmaba.
      *
-     * El test no se borra: se parte en las dos mitades que ahora son verdad, porque la conclusión
-     * —mirar el aria-label y no la palabra "disabled"— sigue siendo la correcta y ahora lo es por
-     * un motivo distinto. La primera mitad conserva la demostración de la trampa sobre el
-     * componente que la produce; la segunda fija que esta tabla ya no la tiene.
+     * 🔴 Y EL 25/8/2026 VOLVIÓ, por el camino contrario: esos `<button>` planos eran nueve copias
+     * de la misma clase (`const ACCION_CLASS`) con los controles de fila en 32px, y se
+     * reemplazaron por el primitivo `<AccionFila>` para subirlos a 44px abajo de `md`. El
+     * primitivo SÍ trae `disabled:pointer-events-none disabled:opacity-50` — como corresponde,
+     * es lo que hace que un botón deshabilitado se vea deshabilitado.
+     *
+     * O sea que la trampa vale otra vez acá, y la conclusión nunca cambió: **mirar el
+     * aria-label, no la palabra "disabled"**. El test conserva las dos mitades porque el ida y
+     * vuelta es la lección — la aserción cómoda dejó de poder fallar dos veces, por dos motivos
+     * opuestos, y las dos veces el texto era lo único que probaba algo.
      */
-    // 1. La trampa sigue existiendo donde nació: shadcn emite `disabled:` sin que nadie lo pida.
+    // 1. La trampa existe donde nació: shadcn emite `disabled:` sin que nadie lo pida.
     expect(renderToStaticMarkup(<Button>Cualquiera</Button>)).toContain("disabled:")
-    // 2. Y esta tabla ya no emite ninguna, así que un `not.toContain("disabled")` acá pasaría
-    //    igual con el gate borrado — por eso las aserciones de arriba miran el aria-label.
-    expect(render([ACTIVO], true)).not.toContain("disabled:")
+    // 2. Y esta tabla volvió a emitirla, ahora vía `<AccionFila>`: un `not.toContain("disabled")`
+    //    acá pasaría con el gate borrado — por eso las aserciones de arriba miran el aria-label.
+    expect(render([ACTIVO], true)).toContain("disabled:")
   })
 })
 

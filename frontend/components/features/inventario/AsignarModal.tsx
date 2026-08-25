@@ -12,6 +12,7 @@ import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { AsignacionCreate, InventarioItem } from "@/types/inventario"
 import type { Empresa } from "@/types/empresa"
+import { avisarHecho } from "@/components/features/shared/avisoGuardado"
 
 interface Props { open: boolean; onClose: () => void; onSuccess: () => void }
 
@@ -75,6 +76,7 @@ export function AsignarModal({ open, onClose, onSuccess }: Props) {
     try {
       const payload: AsignacionCreate = { item_id: form.item_id, empleado_id: form.empleado_id }
       await asignarItem(payload)
+      avisarHecho("Ítem asignado")
       onSuccess()
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Ocurrió un error al asignar")

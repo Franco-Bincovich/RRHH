@@ -10,6 +10,7 @@ import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Objetivo, ObjetivoCreate, ObjetivoUpdate, UserItem } from "@/types/objetivo"
 import type { Empresa } from "@/types/empresa"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface Props { open: boolean; onClose: () => void; onSuccess: () => void; editing?: Objetivo | null }
 
@@ -107,6 +108,7 @@ export function ObjetivoModal({ open, onClose, onSuccess, editing }: Props) {
         }
         await createObjetivo(payload)
       }
+      avisarGuardado("Objetivo", "m", isEdit)
       onSuccess()
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Ocurrió un error al guardar")

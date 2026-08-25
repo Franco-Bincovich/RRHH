@@ -15,7 +15,7 @@ import {
 import type { VacacionPendiente } from "@/types/vacaciones"
 import { PendientesTable } from "./PendientesTable"
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_INICIAL = 20
 
 interface PendientesSectionProps {
   showEmpresa: boolean
@@ -36,6 +36,7 @@ export function PendientesSection({ showEmpresa, refreshKey }: PendientesSection
   const [items, setItems] = useState<VacacionPendiente[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -44,7 +45,7 @@ export function PendientesSection({ showEmpresa, refreshKey }: PendientesSection
     setLoading(true)
     setError(false)
     try {
-      const data = await fetchVacacionesPendientes(page, PAGE_SIZE)
+      const data = await fetchVacacionesPendientes(page, pageSize)
       setItems(data.items)
       setTotal(data.total)
     } catch {
@@ -52,7 +53,7 @@ export function PendientesSection({ showEmpresa, refreshKey }: PendientesSection
     } finally {
       setLoading(false)
     }
-  }, [page, refreshKey])
+  }, [page, pageSize, refreshKey])
 
   useEffect(() => { load() }, [load])
 
@@ -117,7 +118,7 @@ export function PendientesSection({ showEmpresa, refreshKey }: PendientesSection
           cuántos registros hay, y ese número es el que importa cuando el saldo no cierra. El
           total es el del backend, no `items.length`. */}
       {!loading && !error && items.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
     </section>
   )

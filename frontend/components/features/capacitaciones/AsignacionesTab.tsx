@@ -15,7 +15,7 @@ import { Pagination } from "@/components/ui/Pagination"
 import { fetchAsignaciones, deleteAsignacion, exportarCapacitaciones } from "@/services/capacitaciones"
 import type { Asignacion } from "@/types/capacitacion"
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_INICIAL = 20
 
 export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
   const [asignaciones, setAsignaciones] = useState<Asignacion[]>([])
@@ -25,6 +25,7 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
   const [estadoModal, setEstadoModal] = useState<Asignacion | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [total, setTotal] = useState(0)
   // 🔴 Cambiar cualquier filtro vuelve a la página 1 (invariante 4 del bloque B): filtrar
   // parado en la 7 pediría una página que el resultado nuevo no tiene y la tabla saldría
@@ -36,7 +37,7 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
     setLoading(true)
     setError(false)
     try {
-      const data = await fetchAsignaciones(filtros, page, PAGE_SIZE)
+      const data = await fetchAsignaciones(filtros, page, pageSize)
       // El total sale del wrapper del backend, NUNCA de `data.items.length`.
       setAsignaciones(data.items); setTotal(data.total)
     } catch {
@@ -45,7 +46,7 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
       setLoading(false)
     }
     // filtros es un objeto nuevo en cada render; se serializa para no re-fetchear de más.
-  }, [JSON.stringify(filtros), page])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(filtros), page, pageSize])  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
@@ -97,7 +98,7 @@ export function AsignacionesTab({ canWrite }: { canWrite: boolean }) {
        * `asignaciones.length`.
        */}
       {!loading && !error && asignaciones.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
 
       <AsignacionModal

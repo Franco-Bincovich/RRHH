@@ -12,6 +12,66 @@
 
 ---
 
+## 0.nueva 🟠 EL ATRÁS DEL NAVEGADOR NO RESPETA LA PAGINACIÓN (analizado el 25/8/2026, NO hecho)
+
+**Decisión tomada: no se hace hoy.** Se analizó en la tanda de cierre del smoke, se eligió no
+tocarlo —toca los 12 listados y su mecanismo de filtros— y queda escrito acá para no volver a
+analizarlo de cero. Las dos mitades del problema son distintas y las dos importan.
+
+### La mitad que se ve: no se puede compartir una página ni volver con el Atrás
+
+Estando en la página 3 de un listado, la URL sigue diciendo `/empleados`. Mandarle ese link a
+alguien lo deja en la página 1, y apretar Atrás sale de la pantalla en vez de volver a la página
+2. Lo mismo en los 17 listados que paginan.
+
+### La mitad que lo explica: SEMBRAR no es lo mismo que DERIVAR
+
+Hoy `/empleados` **sí** lee la querystring, pero de una sola forma:
+
+```ts
+const [sinManagerFiltro, setSinManagerFiltro] = useState(() => semilla(searchParams.get("sin_manager")))
+```
+
+Eso es una **siembra**: corre en el primer render y a partir de ahí manda el select. Está bien
+elegido para lo que existe —un link de ENTRADA, el de la alerta agregada del dashboard— y la
+alternativa ingenua sería peor: si el valor se releyera en cada render, cambiar el filtro a mano
+quedaría peleando contra la URL.
+
+Pero **una siembra no puede sostener el botón Atrás**. Atrás cambia la URL; para que eso cambie lo
+que se ve, el valor tiene que **derivarse** de la URL en cada render. Son dos mecanismos distintos
+sobre la misma querystring, y por eso esto no es "agregar un parámetro más".
+
+### La salida correcta: filtros Y página derivados de la URL
+
+Un solo mecanismo en los 17 listados: `page`, `page_size` y cada filtro salen de `searchParams` en
+cada render, y cambiarlos es un `router.push`. Se borra la siembra `useState(() => ...)`.
+
+Lo que cuesta, y por qué es una tanda propia y no un efecto colateral:
+- Toca los **7 hooks `useFiltros*`** y los 17 consumidores de `<Pagination>`.
+- Toca la **invariante 4 del bloque B** ("`page` se resetea a 1 al cambiar cualquier filtro"), que
+  hoy vive en el cableado `onFiltroChange → () => setPage(1)`. Con todo en la URL, ese reseteo
+  pasa a ser parte de la escritura de la querystring.
+- Toca el **debounce del search**: hoy commitea el valor y resetea la página en el mismo tick para
+  que salga un solo fetch. Escribiendo la URL, un `push` por tecla sería un historial inservible;
+  el debounce tiene que seguir siendo el que decide cuándo se escribe.
+- Pide su **barrido**, con la misma forma que el nº 30: todo listado que pagina lee su página de
+  la URL.
+
+### 🔴 LA MITAD —SÓLO LA PÁGINA A LA URL— ES LA OPCIÓN MALA. NO ELEGIRLA POR BARATA.
+
+Es la que va a parecer razonable dentro de seis meses: "pongamos `?page=3` y listo, son dos
+líneas". **Deja el sistema mixto**: la página viaja en la querystring y los filtros no. La
+consecuencia no es que falte algo, es que la función MIENTE — un link compartido desde un listado
+filtrado aterriza en la página 3 del listado **sin filtrar**, o sea le muestra al que lo recibe
+datos distintos de los que el que lo mandó estaba mirando, sin ningún aviso. Una función de
+compartir que devuelve otra cosa es peor que no tener función de compartir.
+
+**🚩 Disparador:** que alguien de RRHH necesite mandar por mail el link a un corte concreto. Ese
+día se hace la completa, con `useFiltrosEmpleados.ts` (que tiene la misma nota) como punto de
+partida.
+
+---
+
 ## 0.pre 🔴 LO QUE ENCONTRÓ EL SMOKE DE §5 CONTRA PRODUCCIÓN (23/8/2026)
 
 Las dos familias del punto 5 de `docs/INVENTARIO-SMOKE.md` —**id inexistente** e **id de otra

@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { PISO_TACTIL } from "@/components/ui/AccionFila"
 import { Check, Search } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
@@ -91,6 +92,7 @@ function Opcion({ selected, onClick, children }: { selected: boolean; onClick: (
       role="option"
       aria-selected={selected}
       className={cn(
+        PISO_TACTIL,
         "flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted",
         selected && "bg-muted/60",
       )}

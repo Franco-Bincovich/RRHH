@@ -11,6 +11,7 @@ import { ScreeningSection } from "@/components/features/configuracion/ScreeningS
 import { TiposAusenciaSection } from "@/components/features/configuracion/TiposAusenciaSection"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { useCanRead, useCanWrite } from "@/hooks/useCanWrite"
+import { useEmpresaConcreta } from "@/hooks/useEmpresaConcreta"
 
 /**
  * 🔴 NINGUNA SECCIÓN ARRANCA DESPLEGADA — cambió el 23/8/2026. Acá había `["password", "perfil"]`
@@ -52,6 +53,13 @@ export default function ConfiguracionPage() {
   const puedeIntegraciones = useCanWrite("integraciones")
   const puedeLeerReglas = useCanRead("configuracion")
   const puedeEditarReglas = useCanWrite("configuracion")
+  // 🔴 CUARTO GATE, y se decide acá por lo mismo que los otros tres. Las reglas y el criterio de
+  // screening se guardan SOBRE UNA EMPRESA (`require_empresa_id` en el backend), así que en la
+  // vista consolidada esos botones no pueden funcionar: hasta el 25/8/2026 se ofrecían
+  // habilitados y devolvían 400 después del click. No se OCULTAN como integraciones —el valor
+  // se sigue pudiendo leer, y elegir la empresa es algo que el usuario puede hacer— sino que se
+  // bloquean con el motivo a la vista. Ver `AccionBloqueada`.
+  const { motivo: motivoSinEmpresa } = useEmpresaConcreta()
 
   return (
     <>
@@ -75,12 +83,15 @@ export default function ConfiguracionPage() {
             <>
               {/* Las plantillas de mail se fueron a /comunicacion el 7/8/2026: desde ahí ahora
                   se MANDAN mails, y eso es operación, no configuración. */}
-              <ReglasSections editable={puedeEditarReglas} />
+              <ReglasSections editable={puedeEditarReglas} motivoBloqueo={motivoSinEmpresa} />
+              {/* Tipos de ausencia NO recibe el motivo: crear uno en consolidado crea un tipo
+                  GLOBAL, que es el comportamiento declarado del service (`create_tipo`), no un
+                  error. Es la única escritura de esta pantalla que sí funciona sin empresa. */}
               <TiposAusenciaSection editable={puedeEditarReglas} />
               {/* Mismo criterio de gate que las otras reglas: en solo lectura sin permiso de
                   escritura. El criterio con el que se preseleccionan CVs es información que
                   explica por qué un candidato quedó marcado como quedó. */}
-              <ScreeningSection editable={puedeEditarReglas} />
+              <ScreeningSection editable={puedeEditarReglas} motivoBloqueo={motivoSinEmpresa} />
             </>
           )}
           {puedeIntegraciones && <IntegracionesSection />}

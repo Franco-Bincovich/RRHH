@@ -12,6 +12,7 @@ import type { Empresa, EmpresaCreate } from "@/types/empresa"
 
 import { EmpresaFormFields } from "./EmpresaFormFields"
 import { EMPTY_EMPRESA, validarEmpresa, type EmpresaFormData, type EmpresaFormErrors } from "./empresaForm"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 /**
  * Alta y edición de una empresa. ORQUESTADOR: el ciclo de vida del formulario (abrir, escribir,
@@ -89,6 +90,7 @@ export function EmpresaModal({ open, onClose, onSuccess, empresa }: EmpresaModal
       } else {
         result = await createEmpresa(payload)
       }
+      avisarGuardado("Empresa", "f", isEdit)
       onSuccess(result)
     } catch (err) {
       setServerError(

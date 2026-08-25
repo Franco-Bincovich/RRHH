@@ -14,7 +14,7 @@ import { exportarAuditoria, fetchAuditoria, type AuditoriaFiltros } from "@/serv
 import { fetchUsuarios, type UsuarioOption } from "@/services/usuarios"
 import type { AuditLog } from "@/types/auditoria"
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_INICIAL = 20
 
 /**
  * El log de auditoría. Solo lectura: el sistema escribe estos eventos, no el usuario.
@@ -27,6 +27,7 @@ export default function AuditoriaPage() {
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [usuarios, setUsuarios] = useState<UsuarioOption[]>([])
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null)
   const [loading, setLoading] = useState(true)
@@ -68,7 +69,7 @@ export default function AuditoriaPage() {
     setLoading(true)
     setError(false)
     try {
-      const data = await fetchAuditoria({ ...filtros, page, page_size: PAGE_SIZE })
+      const data = await fetchAuditoria({ ...filtros, page, page_size: pageSize })
       setLogs(data.items)
       // El total sale del wrapper del backend, NUNCA de `data.items.length`.
       setTotal(data.total)
@@ -77,7 +78,7 @@ export default function AuditoriaPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, filtros])
+  }, [page, pageSize, filtros])
 
   useEffect(() => { load() }, [load])
 
@@ -121,7 +122,7 @@ export default function AuditoriaPage() {
        * ser explícita. El total que muestra es el TOTAL FILTRADO del backend, no `logs.length`.
        */}
       {!loading && !error && logs.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
 
       <AuditDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />

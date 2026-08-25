@@ -10,12 +10,13 @@ import {
 import { Button } from "@/components/ui/button"
 import { ContratarFormFields } from "@/components/features/candidatos/ContratarFormFields"
 import {
-  validar, sinErrores, type ErroresContratar, type FormContratar,
+  validar, sinErrores,
+  type CandidatoContratable, type ErroresContratar, type FormContratar,
 } from "@/components/features/candidatos/_contratarForm"
 import { ApiError } from "@/services/api"
 import { contratarCandidato } from "@/services/candidatos"
 import { fetchRolesConocidos } from "@/services/empleados"
-import type { CandidatoConGrupo } from "@/types/candidato"
+
 
 /**
  * El puente candidato → empleado: crea el legajo en `preingreso` a partir de la búsqueda.
@@ -45,7 +46,7 @@ import type { CandidatoConGrupo } from "@/types/candidato"
  * genérico obligaría a adivinar cuál de los seis fue, y en el del email además a buscar dónde.
  */
 export function ContratarCandidatoButton(
-  { candidato, onContratado }: { candidato: CandidatoConGrupo; onContratado: () => void },
+  { candidato, onContratado }: { candidato: CandidatoContratable; onContratado: () => void },
 ) {
   const hoy = new Date().toISOString().slice(0, 10)
   const [open, setOpen] = useState(false)

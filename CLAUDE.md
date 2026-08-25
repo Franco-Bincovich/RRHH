@@ -289,7 +289,7 @@ backend/
 │                          router NUEVO exige dividirlo primero (ver "Líneas" más abajo).
 ├── config/settings.py   ← única fuente de config y env (Settings() se instancia en import)
 ├── routers/             ← 81 archivos (límite 80 líneas cada uno)
-├── services/            ← 243 archivos de lógica de negocio (271 con submódulos: export/ 10,
+├── services/            ← 254 archivos de lógica de negocio (282 con submódulos: export/ 10,
 │                          mailer/ 6, reportes/ 12) (límite 150)
 │   ├── _empleado_scope.py     ← barrera de empresa/ownership sobre el empleado target (Fase 2)
 │   ├── _adjunto_padres.py     ← resolver de la entidad padre de un adjunto (Fase 2)
@@ -941,7 +941,7 @@ compilación real de Tailwind/Turbopack** — directivas mal ubicadas, imports d
 cliente, CSS que no resuelve.
 
 `next dev` con Turbopack transpila sin type-check → un error de tipo pasa desapercibido en
-desarrollo pero **`next build` falla**. `vitest` cubre 1593 tests en 139 archivos, pero **la mayor
+desarrollo pero **`next build` falla**. `vitest` cubre 1643 tests en 149 archivos, pero **la mayor
 parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Si aparece un error en
 cualquiera de los tres, es tuyo.**
 
@@ -968,7 +968,7 @@ Hay **tres módulos apagados a propósito**. En los tres el código está **ente
 
 #### 1. Assessment — apagado en el FRONT **y en el BACKEND**
 - **Backend (Bloque A1):** `settings.assessment_enabled: bool = False`. **Dos puntos leen el flag:**
-  - `main.py:135` — el router **no se monta**. Toda la superficie del módulo (incluidas sus **2 rutas públicas sin auth**) deja de existir para FastAPI y devuelve el **404 de plataforma, idéntico a cualquier ruta inexistente** — nunca un 403 ni un mensaje que confirme que el módulo está ahí.
+  - `main.py:135` — el router **no se monta**. Toda la superficie del módulo (incluidas sus **2 rutas públicas sin auth**) deja de existir para FastAPI. ⚠️ **Corregido el 25/8/2026: lo que devuelve NO es "el 404 de plataforma".** El `AuthMiddleware` corre ANTES del router, así que un request sin token recibe **401 `MISSING_TOKEN`** — y eso está bien, porque es exactamente lo que devuelve **cualquier ruta inexistente** (`/api/lo-que-sea` sin token también da 401 `MISSING_TOKEN`, verificado ejecutando). La conclusión del párrafo se sostiene —el módulo es indistinguible de una ruta que no existe— pero el status que hay que esperar es 401, no 404. Nunca un 403 ni un mensaje que confirme que el módulo está ahí.
   - `middleware/auth.py:64` — `_is_public` gatea el regex de las rutas públicas con el mismo flag. **Gatear las dos cosas es lo que hace que se comporten como una ruta cualquiera**: si solo se desmontara el router, dejarlas saltear el auth cambiaría el 401 por un 404, y esa diferencia contra el resto de las rutas desconocidas delataría que están contempladas de forma especial.
   - ⚠️ Ahí vivía además `_ASSESSMENT_FE_RE = r"^/assessment/[^/]+$"`, **borrado a propósito**: era un bypass de auth que no matcheaba nada (el backend monta assessment en `/api/assessment`).
   - Los **rate limits de las rutas públicas quedan puestos aunque el flag esté en `false`**, para que encenderlo no reabra el agujero.
@@ -1087,10 +1087,19 @@ shadcn), y **CERO hooks > 80**. 🔴 **REMEDIDO EL 21/8/2026 sobre los 650 archi
 cerrar el bloque B.** Venía de 28 el 12/8; los 16 que salieron los cortaron las tandas del bloque
 B, una pantalla por vez. Los 11 que quedan, de mayor a menor (**remedidos el 25/8/2026**, con
 `.Count` y `-LiteralPath`):
-`ImportarNominaCSVModal.tsx` **377** · `NominaModal.tsx` 284 · `AIPanel.tsx` 249 ·
-`EmpresaAreasTab.tsx` 206 · `CapacitacionModal.tsx` 190 · `OnboardingChecklist.tsx` 186 ·
-`AsignacionModal.tsx` 186 · `CandidatoModal.tsx` 183 · `ArbolProyecto.tsx` 171 ·
-`ItemModal.tsx` 161 · `MapaVacaciones.tsx` 152.
+`ImportarNominaCSVModal.tsx` **377** · `NominaModal.tsx` 287 · `AIPanel.tsx` 249 ·
+`EmpresaAreasTab.tsx` 206 · `CapacitacionModal.tsx` 192 · `AsignacionModal.tsx` 188 ·
+`OnboardingChecklist.tsx` 186 · `CandidatoModal.tsx` 185 · `ArbolProyecto.tsx` 172 ·
+`ItemModal.tsx` 163 · `MapaVacaciones.tsx` 152.
+> ⚠️ **CINCO de esos once crecieron entre 1 y 3 líneas el 25/8/2026, estando ya sobre el límite,
+> y hay que decirlo en vez de esconderlo.** Los cuatro modales (`NominaModal` +3,
+> `CapacitacionModal` +2, `AsignacionModal` +2, `CandidatoModal` +2, `ItemModal` +2) sumaron la
+> línea del `avisarGuardado`/`avisarHecho` que cierra el bloque 5 —**ninguno de los 30 modales
+> del producto confirmaba un alta**— y `ArbolProyecto` +1 el `PISO_TACTIL` del bloque 9.
+> **Es el mismo precedente que `CandidatoModal` sentó el 24/8 y sigue sin ser una licencia:** la
+> alternativa era dejar cinco pantallas sin la confirmación que las otras 25 sí tienen, o sea
+> conservar exactamente el bug que la tanda vino a cerrar para no sumar dos líneas. El corte de
+> los once sigue pendiente y su molde sigue siendo `AreaModal`/`ClienteModal`.
 > ⚠️ **`CandidatoModal.tsx` creció DOS líneas el 24/8/2026** (181 → 183) al migrar su regex de
 > email al validador compartido. Es el único de los once que esta tanda tocó, y se lo tocó
 > estando ya sobre el límite: era una de las TRES copias del mismo regex con tres mensajes
@@ -1163,10 +1172,10 @@ contra el catálogo el 12/8/2026).
 - **Backend: 4278 passed** en **213 archivos `test_*.py`** (+ **22 helpers** `tests/_*.py`, que no son tests — 235 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 25/8/2026, en la tanda de "los arreglos que hacen daño". Los TRES archivos nuevos son uno por unidad: `test_objetivos_auditoria.py` (los cuatro eventos del CRUD de objetivos), `test_auditoria_destructivas.py` (barrido nº 42) y `test_semilla_alcanza_lo_que_se_escribe.py` (barrido nº 43) — un archivo de test cubre UN módulo. Los DOS helpers nuevos son sus motores: `_barrido_destructivas.py` y `_barrido_tablas.py`. 🟢 Estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
   > ⚠️ **`test_identificacion_publica.py::TestElPisoDeTiempo::test_el_exito_espera_el_piso` es FLAKY en Windows y no es del código.** Mide `perf_counter() - t0 >= 0.12` contra el piso de tiempo del rechazo único; con la suite entera corriendo dio **0.11951** (falla por medio milisegundo) y **sola pasa**. La granularidad del timer de Windows es ~15.6 ms, así que un `asyncio.sleep(0.12)` puede devolver apenas por debajo. Si aparece en rojo, correr ese archivo solo antes de diagnosticar nada. 🚩 Salida cuando moleste: comparar contra el piso menos una tolerancia, no contra el piso exacto.
   > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → 4115 (el cliente real bloqueado bajo tests) → 4120 (`motivo_baja` sale por la API, el hermano de `fecha_egreso`) → 4155 (los KPIs de §6 + la masa salarial deduplicada) → 4198 (el cierre del deslogueo en /vacantes: el barrido de codes 401, la clasificación del fallo de renovación de Google y los tests del interceptor, que no tenía ninguno) → 4200 (el barrido de `maybe_single()`, que nació del 500 permanente de `POST /api/offboarding`) → 4205 (la guarda del egreso en recategorizaciones) → 4218 (el barrido que sostiene `docs/INVENTARIO-SMOKE.md`: 13 tests en un archivo, seis de ellos comparando el documento contra el código en las dos direcciones) → 4244 (el smoke de lectura: la barrera de empresa que faltaba en `PUT /api/onboarding/{id}/tareas/{id}/completar` con su barrido de routers sin `Request`, y el agrupamiento insensible a la caja del reporte de distribución) → 4248 (los arreglos del smoke de ESCRITURA: la guarda del reingreso, la del proyecto con asignaciones, el `tipo` del hito y la completitud de `BAJA_LOGICA`) → **4278** (los arreglos que hacen daño: la auditoría del CRUD de objetivos —el módulo que borraba desde la UI sin dejar rastro— más los dos barridos que nacen de ahí, el de borrados físicos sin evento y el de `ORDEN` contra lo que el código escribe). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
-- **Front: `npm test` (= `vitest run`) — 1593 tests en 139 archivos, verdes.** *(Windows, 25/8/2026, la tanda de "los arreglos que hacen daño". Los CUATRO archivos nuevos son uno por unidad: `components/ui/barridoConfirmacion.test.ts` (nº 44 — toda acción que borra pasa por ConfirmDialog), `components/ui/limpiarTodoRestituye.test.ts` (nº 45 — un filtro con valor siempre tiene chip), `components/features/shared/confirmaciones.test.ts` (el TEXTO de cada confirmación, que es lo único de un diálogo que esta suite puede ver sin jsdom) y `components/features/candidatos/estadoCandidato.test.tsx` (la tarjeta dice cómo TERMINÓ el candidato, no sólo dónde llegó). La tanda anterior dejó 1560 en 135, arreglando lo que encontró el smoke de lectura. Los CUATRO archivos nuevos son uno por unidad: `hooks/hidratacionPermisos.test.tsx` (el render de servidor de los primitivos de permiso es fail-closed aunque haya sesión), `components/ui/dropdownMenuLabel.test.tsx` (el label del dropdown vive dentro de un group — sin eso el menú no abre), `components/ui/ErrorState.test.tsx` (el 404 no es "algo salió mal") y `components/ui/fieldError.test.tsx` (el mensaje por campo mide 11px y lo decide un solo primitivo). La tanda anterior dejó 1528 en 130, al cablear los KPIs del dashboard a su pantalla, sumar el selector de vista de objetivos y cerrar todos los desplegables. Los CUATRO archivos nuevos son uno por unidad: `components/features/dashboard/_destinosKpi.test.ts` (a dónde lleva cada KPI y quién puede llegar), `components/ui/barridoAcordeones.test.ts` (ningún desplegable nace desplegado, con sus dos excepciones declaradas), y los dos del selector de vista de objetivos (`TipoObjetivoTabs.test.tsx` y `_filtrosObjetivos.test.ts`, que existen separados porque uno cubre el control y el otro el cable que lleva lo elegido a la query — el segundo nació de una mutación que sobrevivió). La tanda anterior dejó 1477 en 126, al sumar el hover de tarjeta de §2 y el barrido que lo hubiera cazado. El archivo nuevo es uno solo, `components/ui/decisionesVisuales.test.ts`, y no cubre una pantalla sino una CLASE de decisión: lo que §2 y §3 deciden sobre superficie, densidad y movimiento, contra los primitivos donde eso vive. La tanda anterior dejó 1451 en 123, al cerrar el bloque B con las CUATRO pantallas de afuera de `(dashboard)` —/login, /horas, /evaluacion/[token] y /cambiar-password—. El archivo nuevo es uno solo, `app/pantallasPublicas.test.tsx`, y cubre a las cuatro juntas: son la unidad de esa tanda y comparten los mismos cuatro ejes (estados compartidos, mensajes por campo, touch targets de 44px y el bug de huso). La tanda anterior dejó 1425 en 122, al cerrar el patrón de ficha en las CINCO pantallas que faltaban —/vacantes/[id], /proyectos/[id], /empresas/[id], /assessment/[id] y /onboarding/templates/[id]— más el barrido de paginación. Los seis archivos nuevos son uno por ficha (`barra<Entidad>.test.tsx`, junto a la barra que prueban) y `components/ui/barridoPaginacion.test.ts`. La tanda anterior dejó 1360 en 116, al propagar los patrones del bloque B3 a las NUEVE pantallas que quedaban: /objetivos, /onboarding, /onboarding/templates, /offboarding, /horas-por-cliente, /procesos, /organigrama, /sucesion y /assessment. Con esta tanda el bloque B3 cubre el front entero. Los nueve archivos nuevos son uno por pantalla, que es el criterio del repo: un archivo de test cubre UNA pantalla — por eso /onboarding y /onboarding/templates tienen uno cada una aunque compartan carpeta. Las tandas anteriores dejaron 1271 en 107 (/auditoria, /eventos, /costos, /inventario, /capacitaciones, /evaluaciones, /comunicacion), 1187 en 100 (/areas, /clientes, /empresas, /usuarios, /periodos, /proyectos) y 1128 en 94 (/ausencias, /vacaciones, /candidatos, /vacantes, /equipo); antes de eso, 1071 en 89 al cerrar el dashboard de §6. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Front: `npm test` (= `vitest run`) — 1643 tests en 149 archivos, verdes.** *(Windows, 25/8/2026, la tanda de "los arreglos que hacen daño". Los CUATRO archivos nuevos son uno por unidad: `components/ui/barridoConfirmacion.test.ts` (nº 44 — toda acción que borra pasa por ConfirmDialog), `components/ui/limpiarTodoRestituye.test.ts` (nº 45 — un filtro con valor siempre tiene chip), `components/features/shared/confirmaciones.test.ts` (el TEXTO de cada confirmación, que es lo único de un diálogo que esta suite puede ver sin jsdom) y `components/features/candidatos/estadoCandidato.test.tsx` (la tarjeta dice cómo TERMINÓ el candidato, no sólo dónde llegó). La tanda anterior dejó 1560 en 135, arreglando lo que encontró el smoke de lectura. Los CUATRO archivos nuevos son uno por unidad: `hooks/hidratacionPermisos.test.tsx` (el render de servidor de los primitivos de permiso es fail-closed aunque haya sesión), `components/ui/dropdownMenuLabel.test.tsx` (el label del dropdown vive dentro de un group — sin eso el menú no abre), `components/ui/ErrorState.test.tsx` (el 404 no es "algo salió mal") y `components/ui/fieldError.test.tsx` (el mensaje por campo mide 11px y lo decide un solo primitivo). La tanda anterior dejó 1528 en 130, al cablear los KPIs del dashboard a su pantalla, sumar el selector de vista de objetivos y cerrar todos los desplegables. Los CUATRO archivos nuevos son uno por unidad: `components/features/dashboard/_destinosKpi.test.ts` (a dónde lleva cada KPI y quién puede llegar), `components/ui/barridoAcordeones.test.ts` (ningún desplegable nace desplegado, con sus dos excepciones declaradas), y los dos del selector de vista de objetivos (`TipoObjetivoTabs.test.tsx` y `_filtrosObjetivos.test.ts`, que existen separados porque uno cubre el control y el otro el cable que lleva lo elegido a la query — el segundo nació de una mutación que sobrevivió). La tanda anterior dejó 1477 en 126, al sumar el hover de tarjeta de §2 y el barrido que lo hubiera cazado. El archivo nuevo es uno solo, `components/ui/decisionesVisuales.test.ts`, y no cubre una pantalla sino una CLASE de decisión: lo que §2 y §3 deciden sobre superficie, densidad y movimiento, contra los primitivos donde eso vive. La tanda anterior dejó 1451 en 123, al cerrar el bloque B con las CUATRO pantallas de afuera de `(dashboard)` —/login, /horas, /evaluacion/[token] y /cambiar-password—. El archivo nuevo es uno solo, `app/pantallasPublicas.test.tsx`, y cubre a las cuatro juntas: son la unidad de esa tanda y comparten los mismos cuatro ejes (estados compartidos, mensajes por campo, touch targets de 44px y el bug de huso). La tanda anterior dejó 1425 en 122, al cerrar el patrón de ficha en las CINCO pantallas que faltaban —/vacantes/[id], /proyectos/[id], /empresas/[id], /assessment/[id] y /onboarding/templates/[id]— más el barrido de paginación. Los seis archivos nuevos son uno por ficha (`barra<Entidad>.test.tsx`, junto a la barra que prueban) y `components/ui/barridoPaginacion.test.ts`. La tanda anterior dejó 1360 en 116, al propagar los patrones del bloque B3 a las NUEVE pantallas que quedaban: /objetivos, /onboarding, /onboarding/templates, /offboarding, /horas-por-cliente, /procesos, /organigrama, /sucesion y /assessment. Con esta tanda el bloque B3 cubre el front entero. Los nueve archivos nuevos son uno por pantalla, que es el criterio del repo: un archivo de test cubre UNA pantalla — por eso /onboarding y /onboarding/templates tienen uno cada una aunque compartan carpeta. Las tandas anteriores dejaron 1271 en 107 (/auditoria, /eventos, /costos, /inventario, /capacitaciones, /evaluaciones, /comunicacion), 1187 en 100 (/areas, /clientes, /empresas, /usuarios, /periodos, /proyectos) y 1128 en 94 (/ausencias, /vacaciones, /candidatos, /vacantes, /equipo); antes de eso, 1071 en 89 al cerrar el dashboard de §6. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
   > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
   > 🔴 **Y APARECIÓ UN CUARTO ROJO DE WINDOWS, DE LA MISMA FAMILIA, arreglado el 20/8/2026.** `claudeMdNoMiente.test.ts` lanzaba el hijo con `execFileSync("node_modules/.bin/vitest")`, que **en Windows es un script de shell SIN extensión**: `ENOENT`. O sea que el barrido que existe para que estos números no mientan estaba **rojo en la Lenovo y verde en la Mac**, y por eso el front venía declarando 896/75 con 941/79 medidos. Ahora se lanza con `process.execPath` + `node_modules/vitest/vitest.mjs`. 🔑 **La regla que deja: un test que lanza un proceso usa el ejecutable de node que ya está corriendo, nunca un lanzador de `.bin/`.**
-- **Son 45 barridos estructurales conocidos** (26 backend + 19 front), renumerados el 19/8/2026 —
+- **Son 50 barridos estructurales conocidos** (26 backend + 24 front), renumerados el 19/8/2026 —
   la lista anterior tenía dos numeraciones distintas conviviendo (1–11 y 12–15 fuera de orden) y
   le faltaban 3 barridos que ya existían. **Cada uno cubre automáticamente lo que se agregue
   después, y todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una
@@ -1432,6 +1441,85 @@ contra el catálogo el 12/8/2026).
       catálogo VACÍO y el filtro puesto —con el catálogo lleno, que es como se testearía
       "naturalmente", el bug no existe y el test pasaría con el código roto—; el segundo barre el
       árbol, así que el campo condicionado número 32 entra solo.
+  46. 🔴 **`frontend/components/ui/barridoEmpresaConcreta.test.ts`** (25/8/2026) — **toda acción
+      del front que llama a un endpoint que EXIGE una empresa concreta está bloqueada en la vista
+      consolidada, con el motivo A LA VISTA.** 🔑 Lo que lo motivó: en "Todas las empresas" los
+      tres «Guardar» de /configuracion respondían **400 con un mensaje correcto**, y eso era el
+      problema — el sistema sabía de antemano que la acción no podía funcionar y la ofrecía igual,
+      así que la única forma de enterarse era apretarla. Buscando esos tres aparecieron **ocho**
+      acciones iguales en cuatro pantallas. 🔴 **No tiene lista escrita a mano de endpoints: LEE
+      `backend/routers/*.py`**, se queda con los handlers cuyo cuerpo llama a `require_empresa_id`
+      y resuelve el path de su decorador. Duplicar esa lista del lado del front sería el mismo
+      espejo manual que `permisos.ts` ↔ `permisos.py` viene pagando; leer el archivo real es más
+      feo y no puede divergir (mismo criterio que `test_espejo_permisos.py`, que hace el viaje al
+      revés). Es por texto y no por AST —no hay parser de Python acá— así que **enmascara
+      comentarios y docstrings**: `routers/mail_historial.py` nombra `require_empresa_id` para
+      explicar por qué NO lo usa. Verifica además que el motivo del front diga lo MISMO que el
+      del backend. Verificado por mutación en las dos direcciones. El primitivo es
+      `components/ui/AccionBloqueada.tsx`, que **invierte** la decisión escrita en
+      `ProximosIngresosTable` (*"EL BOTÓN NO SE DESHABILITA POR FECHA"*): aquel argumento valía
+      contra un `disabled` PELADO, y la salida no es dejarlo vivo sino deshabilitar CON el motivo
+      escrito al lado.
+  47. 🔴 **`frontend/components/ui/barridoAvisoGuardado.test.ts`** (25/8/2026) — **todo modal de
+      formulario CONFIRMA cuando el guardado sale bien.** Medido: de los **30 modales del
+      producto, 29 tenían CERO `toast.success`**; el único era `CesionModal`. Los ERRORES sí se
+      mostraban y `sonner` ya estaba montado — no faltaba infraestructura, faltaba la mitad buena
+      del par. 🔴 **Su primera versión tenía un falso VERDE y quedó escrito en el archivo**:
+      recorría el grafo de imports HACIA ARRIBA, y sacándole el aviso a `EventoModal` seguía en
+      verde porque `app/(dashboard)/eventos/page.tsx` tiene un `toast.success` **del borrado** —
+      la confirmación de OTRA acción tapando la que falta. Ahora el salto va sólo hacia ABAJO (lo
+      que el modal importa, porque varios delegan el submit a un hook) y la señal aceptada es el
+      HELPER compartido, no `toast.success` a secas. 15 excepciones declaradas con su razón: los
+      4 imports por Excel ya terminan en un panel de resultado, el alta de usuario tiene la
+      contraseña temporal de un solo uso, el lote de asignaciones tiene sus tres grupos. El helper
+      es `components/features/shared/avisoGuardado.ts`, y el **género es un parámetro explícito**
+      porque "Área creada" y "Cliente creado" no se derivan de la palabra sin heurísticas que
+      fallan justo con `el área` y `el ítem`.
+  48. **`frontend/components/ui/barridoCatalogosGateados.test.ts`** (25/8/2026) — **nadie pide un
+      CATÁLOGO que su rol no puede leer.** `mandos_medios` disparaba un **403 por cada
+      navegación**: el selector de empresa del sidebar —presente en TODAS las pantallas— pedía
+      `GET /api/empresas`, que ese rol no puede leer, y los filtros de /vacaciones y /ausencias
+      pedían áreas y proyectos. Los cinco detrás de un `.catch(() => {})`, o sea invisibles salvo
+      en la consola. 🔑 **El eje es DÓNDE puede pasar, no quién pide un catálogo**: la primera
+      versión barría a todos los consumidores y marcaba **18 archivos, casi todos falsos
+      positivos** (modales de /inventario, /objetivos, /periodos… pantallas que sólo alcanzan
+      roles que leen todo). El alcance real es `components/layout/` más las features de las
+      secciones de un rol angosto, y **se DERIVA leyendo `MANDOS_MEDIOS_SECCIONES` de
+      `permisos.ts`**: el día que esa constante crezca, las carpetas nuevas entran solas. ⚠️ El
+      barrido NO decide si el permiso está bien: ampliárselo a `mandos_medios` para que las
+      llamadas no fallen es decisión de producto, y tomarla de rebote para callar unos 403 sería
+      el peor modo.
+  49. 🔴 **`frontend/components/layout/gatesDePagina.test.ts`** (25/8/2026) — **ninguna PÁGINA
+      decide sola quién puede entrar.** `app/(dashboard)/usuarios/page.tsx` tenía un TERCER gate
+      —`router.replace()` condicionado a `write`— que rebotaba a `gerencia_lectura`, contra lo que
+      dicen los tres lugares donde el modelo está escrito (`utils/permisos.py`,
+      `services/permisos.ts` y `routers/usuarios.py`, que gatea el listado con `USUARIOS + READ`).
+      🔴 **Y había un test que lo FIJABA**: `usuariosPatron.test.tsx` exigía por escrito el literal
+      `puede(r, "usuarios", "write")` en la página, así que el guard equivocado estaba protegido
+      por una aserción — mismo caso que `dialog.test.tsx`, que protegía la regresión de los 20
+      modales con `max-h-[90vh]` hasta que se dio vuelta. El eje es **un rebote de ruta que mira
+      el ROL**, no "toda página que llama a `puede()`" (eso marcaría a las decenas que gatean
+      BOTONES, que es lo correcto). Cuatro excepciones declaradas, y la razón válida es que el
+      motivo NO sea el rol: /sucesion y /assessment redirigen porque el módulo está APAGADO,
+      /login porque es la puerta y /cambiar-password porque redirige al TERMINAR. Verificado por
+      mutación: devolviéndole el guard a /usuarios, rojea nombrándolo.
+  50. 🔴 **`frontend/components/ui/barridoTouchTarget.test.ts`** (25/8/2026) — **ningún control
+      queda por debajo del mínimo táctil de 44px en pantalla chica.** Medido: **97 controles en 8
+      pantallas**, y el reparto explica por qué se arregla en los primitivos: los de ENCABEZADO ya
+      median 44 **pero porque cada uno traía su `min-h-11` escrito a mano** (el que se olvidara
+      quedaba chico y nadie se enteraba); los de FILA median 32 con su clase **copiada literal en
+      9 archivos** como `const ACCION_CLASS`, en dos variantes; y "Ver detalle" de /auditoria
+      median **24**, el control más chico del producto y el único acceso al detalle en la pantalla
+      donde el detalle ES el contenido. Es el mismo modo de falla que los 81 `<select>` con 29
+      constantes copiadas. **La regla la escribió primero `select.tsx` (`h-11 md:h-[30px]`)** y
+      ahora la comparten `button.tsx` (sus 8 variantes), el primitivo nuevo `AccionFila` y las
+      clases `PISO_TACTIL`/`PISO_TACTIL_ICONO` para los 11 botones crudos con caja propia. 🔑 **No
+      agranda la caja en desktop** —todo es `md:` sobre el tamaño del diseño— así que las filas de
+      46px y los selectores de 30px de §3 quedan idénticos. El eje es "un `<button>` que decide su
+      propia caja", no "todo `<button>`: preguntar lo segundo marcaría los links de texto y los
+      disparadores que se estiran con su contenido. Suma el barrido de reimplementación (nadie
+      copia `ACCION_CLASS`, misma forma que `barridoSelect`). Excepciones: **ninguna**. Verificado
+      por mutación en las dos mitades.
 
   > ⚠️ **Esta lista es una FOTO, compilada por grep del marcador "BARRIDO ESTRUCTURAL" + memoria
   > de sesión, no una re-auditoría exhaustiva de cada archivo.** Puede faltar alguno con un

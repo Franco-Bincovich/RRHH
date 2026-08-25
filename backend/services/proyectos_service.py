@@ -14,6 +14,10 @@ from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
 from services._paginacion import cantidad_paginas
 from services._proyectos_export import construir_filas_export
 from services.export import Descarga, build_export
+from services._audit_payloads_proyectos import (
+    payload_alta_proyecto, payload_baja_proyecto, payload_update_proyecto,
+)
+from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -21,8 +25,10 @@ _ESTADOS = {"activo", "pausado", "cerrado", "cancelado"}
 
 
 class ProyectosService:
-    def __init__(self, repo: Optional[ProyectosRepo] = None) -> None:
+    def __init__(self, repo: Optional[ProyectosRepo] = None,
+                 audit: Optional[AuditService] = None) -> None:
         self._repo = repo or ProyectosRepo()
+        self._audit = audit or AuditService()
 
     def get_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None,
                 area_id: Optional[UUID] = None, page: int = 1, page_size: int = 20) -> ProyectoListResponse:
@@ -57,7 +63,7 @@ class ProyectosService:
             raise AppError("Proyecto no encontrado", "PROYECTO_NOT_FOUND", 404)
         return row
 
-    def create(self, data: ProyectoCreate) -> ProyectoResponse:
+    def create(self, data: ProyectoCreate, usuario_id: Optional[str] = None) -> ProyectoResponse:
         """
         Crea un proyecto para la empresa dueña indicada en el body.
 
@@ -69,17 +75,20 @@ class ProyectosService:
         if data.estado not in _ESTADOS:
             raise AppError(f"Estado inválido: {data.estado}", "ESTADO_INVALIDO", 422)
         row = self._repo.save(data)
+        self._audit.registrar(**payload_alta_proyecto(row, usuario_id))
         logger.info("Proyecto creado", extra={"proyecto_id": str(row.id)})
         return row
 
-    def update(self, id: UUID, data: ProyectoUpdate, empresa_id: Optional[UUID] = None) -> ProyectoResponse:
+    def update(self, id: UUID, data: ProyectoUpdate, empresa_id: Optional[UUID] = None,
+               usuario_id: Optional[str] = None) -> ProyectoResponse:
         """
         Actualización parcial. empresa_id (dueña) no es modificable.
 
         Raises:
             AppError: PROYECTO_NOT_FOUND (404), ESTADO_INVALIDO (422).
         """
-        if not self._repo.find_by_id(str(id), empresa_id):
+        prior = self._repo.find_by_id(str(id), empresa_id)  # el "antes" del diff, en la misma query
+        if not prior:
             raise AppError("Proyecto no encontrado", "PROYECTO_NOT_FOUND", 404)
         if data.estado and data.estado not in _ESTADOS:
             raise AppError(f"Estado inválido: {data.estado}", "ESTADO_INVALIDO", 422)
@@ -87,10 +96,12 @@ class ProyectosService:
         for k, v in data.model_dump(exclude_none=True).items():
             patch[k] = str(v) if hasattr(v, "isoformat") else v
         updated = self._repo.update(str(id), patch, empresa_id)
+        self._audit.registrar(**payload_update_proyecto(prior, updated, usuario_id))
         logger.info("Proyecto actualizado", extra={"proyecto_id": str(id)})
         return updated  # type: ignore[return-value]
 
-    def delete(self, id: UUID, empresa_id: Optional[UUID] = None) -> None:
+    def delete(self, id: UUID, empresa_id: Optional[UUID] = None,
+               usuario_id: Optional[str] = None) -> None:
         """
         Elimina proyecto. Rechaza si tiene horas registradas o gente asignada.
 
@@ -102,7 +113,8 @@ class ProyectosService:
             AppError: PROYECTO_NOT_FOUND (404), PROYECTO_CON_HORAS (409),
                       PROYECTO_CON_ASIGNACIONES (409).
         """
-        if not self._repo.find_by_id(str(id), empresa_id):
+        prior = self._repo.find_by_id(str(id), empresa_id)  # la foto del evento, con la fila viva
+        if not prior:
             raise AppError("Proyecto no encontrado", "PROYECTO_NOT_FOUND", 404)
         if self._repo.has_horas(str(id)):
             raise AppError(
@@ -116,4 +128,5 @@ class ProyectosService:
                 "PROYECTO_CON_ASIGNACIONES", 409,
             )
         self._repo.delete(str(id), empresa_id)
+        self._audit.registrar(**payload_baja_proyecto(prior, usuario_id))
         logger.info("Proyecto eliminado", extra={"proyecto_id": str(id)})

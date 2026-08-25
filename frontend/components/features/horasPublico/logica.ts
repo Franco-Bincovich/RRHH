@@ -127,8 +127,38 @@ export function esSesionMuerta(e: unknown): boolean {
   return e instanceof ApiError && e.code === "SESION_INVALIDA"
 }
 
-/** El mensaje del backend, tal cual. Ver el encabezado de `services/horasPublico.ts`. */
+/**
+ * 🔴 ESTA PANTALLA PUEDE ESTAR SERVIDA Y EL MÓDULO APAGADO, Y HAY QUE DECIRLO.
+ *
+ * `HORAS_PUBLICO_ENABLED=false` (el default, y el estado real hoy) gatea DOS cosas del backend:
+ * el router no se monta Y las rutas salen de `PUBLIC_ROUTES`. La consecuencia es que
+ * `POST /api/horas-publico/identificar` sale por el AuthMiddleware con **401 `MISSING_TOKEN`**,
+ * exactamente igual que `/api/una-ruta-que-no-existe` (verificado ejecutando: mismo status, mismo
+ * code, mismo body). El front de Next, en cambio, SÍ sirve `/horas`: es una página estática que
+ * no sabe nada del flag.
+ *
+ * Sin esta distinción, un empleado que entra veía **"No autorizado"** —el mensaje genérico del
+ * middleware— acompañado de `AYUDA_IDENTIFICACION`, que le echa la culpa a su legajo ("puede que
+ * tu usuario todavía no esté habilitado"). Le pedía que llame a Capital Humano por un problema
+ * que no tiene y que ellos no pueden resolver mirando su ficha.
+ *
+ * ⚠️ NO ABRE NINGÚN ORÁCULO. `MISSING_TOKEN` es lo que devuelve CUALQUIER ruta desconocida, así
+ * que reconocerlo no dice nada sobre ningún DNI ni confirma que el módulo exista — de hecho el
+ * front no puede distinguir "apagado" de "no existe", y para quien mira la pantalla las dos cosas
+ * significan lo mismo: hoy no hay nadie del otro lado. El rechazo único de la identificación
+ * (`IDENTIFICACION_INVALIDA`) queda intacto.
+ */
+export function esModuloApagado(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 401 && e.code === "MISSING_TOKEN"
+}
+
+export const MENSAJE_MODULO_APAGADO =
+  "La carga de horas todavía no está habilitada. No es un problema con tu documento: "
+  + "avisale a Capital Humano que la pantalla no está en servicio."
+
+/** El mensaje del backend, tal cual — salvo cuando el módulo está apagado (ver arriba). */
 export function mensajeDeError(e: unknown): string {
+  if (esModuloApagado(e)) return MENSAJE_MODULO_APAGADO
   return e instanceof ApiError ? e.message : "No pudimos conectarnos. Revisá tu internet."
 }
 

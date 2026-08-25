@@ -10,6 +10,7 @@
  * orquestador, que es quien tiene el service y el toast de error.
  */
 import { History, Pencil, Trash2 } from "lucide-react"
+import { AccionFila } from "@/components/ui/AccionFila"
 import type { ReactNode } from "react"
 
 import { ErrorState } from "@/components/ui/ErrorState"
@@ -43,9 +44,6 @@ interface ItemsInvTableProps {
   /** Qué ofrecer cuando NO hay filtros y tampoco datos: el alta. `undefined` sin permiso. */
   accionVacio?: ReactNode
 }
-
-const ACCION_CLASS =
-  "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
 
 export function ItemsInvTable({
   items, loading, error, canWrite, mostrarEmpresa, deletingId,
@@ -93,21 +91,31 @@ export function ItemsInvTable({
                     incluso sin permiso de escritura: es una LECTURA, y la sección la tiene todo
                     el que llega a esta pestaña. */}
                 <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => onHistorial(item)} aria-label={`Historial de ${item.nombre}`}
-                    className={`${ACCION_CLASS} group-hover:text-primary`}>
+                  <AccionFila onClick={() => onHistorial(item)} aria-label={`Historial de ${item.nombre}`}>
                     <History className="size-4" aria-hidden="true" />
-                  </button>
+                  </AccionFila>
                   {canWrite && (
                     <>
-                      <button type="button" onClick={() => onEditar(item)} aria-label={`Editar ${item.nombre}`}
-                        className={`${ACCION_CLASS} group-hover:text-primary`}>
+                      <AccionFila onClick={() => onEditar(item)} aria-label={`Editar ${item.nombre}`}>
                         <Pencil className="size-4" aria-hidden="true" />
-                      </button>
-                      <button type="button" onClick={() => onEliminar(item)} disabled={deletingId === item.id}
-                        aria-label={`Eliminar ${item.nombre}`}
-                        className={`${ACCION_CLASS} group-hover:text-destructive`}>
-                        <Trash2 className="size-4" aria-hidden="true" />
-                      </button>
+                      </AccionFila>
+                      {/*
+                        * 🔴 UN ÍTEM ASIGNADO NO SE PUEDE BORRAR, y la pantalla ya lo sabe: el
+                        * backend responde 409 `ITEM_ASIGNADO` ("Primero registrá su devolución")
+                        * y el `estado` está DOS COLUMNAS a la izquierda, en un badge. Ofrecer el
+                        * botón habilitado convertía un dato que ya está en la fila en un viaje al
+                        * servidor. El motivo va en `title` sobre el wrapper —un <AccionFila tono="destructivo" disabled>
+                        * no dispara eventos de mouse— y a la vista lo dice el badge de estado.
+                        */}
+                      <span title={item.estado === "asignado"
+                        ? "Está asignado a alguien. Registrá su devolución antes de eliminarlo."
+                        : undefined}>
+                        <AccionFila tono="destructivo" onClick={() => onEliminar(item)}
+                          disabled={deletingId === item.id || item.estado === "asignado"}
+                          aria-label={`Eliminar ${item.nombre}`}>
+                          <Trash2 className="size-4" aria-hidden="true" />
+                        </AccionFila>
+                      </span>
                     </>
                   )}
                 </div>

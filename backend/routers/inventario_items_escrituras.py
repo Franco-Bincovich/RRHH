@@ -48,7 +48,7 @@ async def update_item(
     id: UUID, request: Request, body: ItemUpdate,
     service: InventarioItemsService = Depends(_svc),
 ) -> ItemResponse:
-    return service.update(id, body, get_empresa_id(request))
+    return service.update(id, body, get_empresa_id(request), request.state.user.get("id"))
 
 
 @router.delete("/{id}", status_code=200, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -56,5 +56,5 @@ async def delete_item(
     id: UUID, request: Request,
     service: InventarioItemsService = Depends(_svc),
 ) -> dict:
-    service.delete(id, get_empresa_id(request))
+    service.delete(id, get_empresa_id(request), request.state.user.get("id"))
     return {"ok": True}

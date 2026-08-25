@@ -1,6 +1,7 @@
 "use client"
 
 import { forwardRef, useImperativeHandle, useState } from "react"
+import { PISO_TACTIL } from "@/components/ui/AccionFila"
 import { GitBranch } from "lucide-react"
 import { colorByEmpresa, initials, MULTI_PROY, ORG_TREE_CSS, type EmpresaColor } from "@/utils/colorEmpresa"
 import type { EmpleadoProyectoNodoAPI, OrgProyectosResponse, ProyectoOrgNodoAPI } from "@/types/organigrama"
@@ -52,7 +53,7 @@ function ProyectoNodo({ proyecto, expanded, onToggle, empresasOrden }: {
     <>
       <button
         onClick={onToggle}
-        className="inline-flex cursor-pointer items-center gap-2 rounded-xl border-t-[3px] bg-card px-4 py-2 shadow-sm whitespace-nowrap transition-colors hover:bg-muted/50"
+        className={`${PISO_TACTIL} inline-flex cursor-pointer items-center gap-2 rounded-xl border-t-[3px] bg-card px-4 py-2 shadow-sm whitespace-nowrap transition-colors hover:bg-muted/50`}
         style={{ borderTopColor: proyColor.dot }}>
         <span className="text-[10px] text-muted-foreground">{expanded ? "▾" : "▸"}</span>
         <span className="flex flex-col items-start">

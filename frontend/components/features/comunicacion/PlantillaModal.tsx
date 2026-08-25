@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import { guardarPlantilla, previewPlantilla } from "@/services/plantillas"
 import type { Plantilla, PreviewResponse } from "@/types/plantillas"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   open: boolean
@@ -67,6 +68,7 @@ export function PlantillaModal({ open, plantilla, contextos, onClose, onSuccess 
     setError(null)
     try {
       await guardarPlantilla({ id: plantilla?.es_global ? undefined : plantilla?.id, clave, contexto, asunto, cuerpo })
+      avisarGuardado("Plantilla", "f", Boolean(plantilla))
       onSuccess()
     } catch (e) {
       // El 422 de variable inválida llega acá con la lista de las que sobran: es el mensaje

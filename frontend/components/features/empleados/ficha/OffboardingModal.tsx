@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
 import { iniciarOffboarding } from "@/services/offboarding"
 import type { MotivoEgreso } from "@/types/offboarding"
+import { avisarHecho } from "@/components/features/shared/avisoGuardado"
 
 const MOTIVOS_OFFBOARDING: { label: string; value: MotivoEgreso }[] = [
   { label: "Renuncia", value: "renuncia" },
@@ -39,6 +40,8 @@ export function OffboardingModal({ open, empleadoId, onClose, onSuccess }: Offbo
     setError(null)
     try {
       await iniciarOffboarding({ empleado_id: empleadoId, motivo })
+      // Acto, no alta de una fila que se ve en una tabla: por eso nombra lo que pasó.
+      avisarHecho("Offboarding iniciado")
       onSuccess()
     } catch {
       setError("No se pudo iniciar el offboarding. Verificá si ya tiene uno activo.")

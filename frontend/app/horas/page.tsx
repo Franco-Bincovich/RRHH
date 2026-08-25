@@ -13,8 +13,8 @@ import { SemanaTabla } from "@/components/features/horasPublico/SemanaTabla"
 import { useSesionHoras } from "@/components/features/horasPublico/useSesionHoras"
 import {
   AYUDA_IDENTIFICACION, FORM_HORAS_VACIO, FORM_LICENCIA_VACIO, HORAS_ASUMIDAS, bodyHoras,
-  bodyLicencia, esSesionMuerta, mensajeDeError, normalizarDni, validarHoras, validarLicencia,
-  type Modo,
+  bodyLicencia, esModuloApagado, esSesionMuerta, mensajeDeError, normalizarDni, validarHoras,
+  validarLicencia, type Modo,
 } from "@/components/features/horasPublico/logica"
 import { cargarHoras, cargarLicencia, identificar } from "@/services/horasPublico"
 
@@ -22,17 +22,20 @@ import { cargarHoras, cargarLicencia, identificar } from "@/services/horasPublic
  * Carga de horas — PANTALLA PÚBLICA. La usa un empleado SIN cuenta en el sistema.
  *
  * 🔴 VIVE FUERA DE `(dashboard)` A PROPÓSITO: sin sidebar, sin selector de empresa y sin
- * AuthGuard. Molde: `app/evaluacion/[token]`, la pantalla pública de assessment. Meterla bajo
- * `(dashboard)` la haría redirigir a `/login` a alguien que nunca va a tener usuario.
+ * AuthGuard. Molde: `app/evaluacion/[token]`. Meterla bajo `(dashboard)` haría redirigir a
+ * `/login` a alguien que nunca va a tener usuario.
  *
  * 🔴 CUANDO LA SESIÓN MUERE (401 `SESION_INVALIDA`), se vuelve al paso del DNI y se muestra el
  * mensaje del backend. Dejar el formulario en pantalla sería dejar a la persona completándolo
  * para que cada envío falle. Se distingue por el CODE y no por el status: el rechazo del DNI
  * también es 401, y confundirlos borraría una sesión sana por un dígito mal tipeado.
  *
- * ⚠️ EL MÓDULO ESTÁ APAGADO por `HORAS_PUBLICO_ENABLED=false` en el backend: el router no se monta
- * y las rutas salen de `PUBLIC_ROUTES`. Esta pantalla se mantiene igual, pero hoy no responde
- * nadie del otro lado. El flag no se toca desde acá.
+ * 🔴 EL MÓDULO ESTÁ APAGADO por `HORAS_PUBLICO_ENABLED=false` en el backend: el router no se
+ * monta y las rutas salen de `PUBLIC_ROUTES`. Esta pantalla se sigue sirviendo igual —es una
+ * página de Next, que no sabe nada del flag— así que alguien puede entrar y tipear su DNI. Lo que
+ * recibe entonces es un **401 `MISSING_TOKEN`**, idéntico al de cualquier ruta inexistente, y
+ * hasta el 25/8/2026 se mostraba como "No autorizado" + la ayuda que culpa al legajo. Ahora se
+ * distingue (ver `esModuloApagado`). El flag no se toca desde acá.
  */
 export default function HorasPublicoPage() {
   const s = useSesionHoras()
@@ -43,6 +46,9 @@ export default function HorasPublicoPage() {
   const [errores, setErrores] = useState<Record<string, string>>({})
   const [ok, setOk] = useState("")
   const [enviando, setEnviando] = useState(false)
+  // 401 MISSING_TOKEN = el backend contestó como una ruta inexistente: el módulo está apagado y
+  // la ayuda de identificación miente. Ver `esModuloApagado`.
+  const [apagado, setApagado] = useState(false)
 
   async function onIdentificar(e: React.FormEvent) {
     e.preventDefault()
@@ -52,7 +58,8 @@ export default function HorasPublicoPage() {
       setDni("")
       await s.abrir(r.token, r.nombre)
     } catch (err) {
-      s.setError(mensajeDeError(err))
+      // El módulo apagado NO es un problema del DNI: la ayuda que culpa al legajo se apaga.
+      s.setError(mensajeDeError(err)); setApagado(esModuloApagado(err))
     } finally { setEnviando(false) }
   }
 
@@ -78,8 +85,7 @@ export default function HorasPublicoPage() {
       }
       await s.refrescar(s.token)
     } catch (err) {
-      if (esSesionMuerta(err)) s.cerrar(mensajeDeError(err))
-      else s.setError(mensajeDeError(err))
+      if (esSesionMuerta(err)) s.cerrar(mensajeDeError(err)); else s.setError(mensajeDeError(err))
     } finally { setEnviando(false) }
   }
 
@@ -94,7 +100,7 @@ export default function HorasPublicoPage() {
         <div className="mb-4">
           {/* La ayuda fija va SÓLO en el paso del DNI: es el rechazo único del backend, que no
               distingue "no existe" de "tu empresa no tiene clientes". Ver `AYUDA_IDENTIFICACION`. */}
-          <AvisoError ayuda={!s.token ? AYUDA_IDENTIFICACION : undefined}>{s.error}</AvisoError>
+          <AvisoError ayuda={!s.token && !apagado ? AYUDA_IDENTIFICACION : undefined}>{s.error}</AvisoError>
         </div>
       )}
       {ok && (

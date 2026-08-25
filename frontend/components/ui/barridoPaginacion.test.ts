@@ -269,3 +269,30 @@ describe("Barrido: una tabla de datos con total lleva su paginación", () => {
     expect(INFRACTORES.map((c) => c.tabla)).toEqual([])
   })
 })
+
+describe("todo listado que pagina deja elegir cuántas filas ver", () => {
+  /**
+   * 🔴 SE SUMA ACÁ Y NO EN UN BARRIDO NUEVO porque es la MISMA unidad: quien monta `<Pagination>`
+   * es quien tiene que ofrecer el selector. Partirlo en dos archivos daría dos listas de
+   * excepciones sobre el mismo conjunto, que divergen en el primer cambio.
+   *
+   * Lo que lo motivó (25/8/2026): el selector estaba en **4 de 12 listados**, y faltaba justo en
+   * /auditoria, que con 25 páginas es donde más falta hace — ahí el único modo de barrer el
+   * histórico era apretar "siguiente" veinticinco veces. Se cablearon los 17 que paginan.
+   *
+   * ⚠️ Reusa `EXCEPCIONES`, la MISMA lista del barrido de arriba, en vez de tener la suya: la
+   * única excepción es la misma y por el mismo motivo —`objetivos/ListView` no pagina, así que no
+   * tiene tamaño de página que elegir— y el día que objetivos pagine hay UN solo lugar donde
+   * sacarla. Dos listas sobre el mismo conjunto divergen en el primer cambio.
+   */
+  it("quien monta <Pagination> pasa onPageSizeChange", () => {
+    const mudos = ARCHIVOS
+      .filter(montaPaginacion)
+      .filter((f) => !codigo(f).includes("onPageSizeChange"))
+      .filter((f) => !(f in EXCEPCIONES))
+    expect(mudos,
+      "Estos paginan y no dejan elegir cuántas filas ver. Pasale `onPageSizeChange` al " +
+      "`<Pagination>`: el reseteo a la página 1 lo hace el propio primitivo.",
+    ).toEqual([])
+  })
+})

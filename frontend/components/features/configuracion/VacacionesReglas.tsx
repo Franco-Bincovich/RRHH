@@ -7,6 +7,7 @@ import { CampoMes, CampoNumero } from "@/components/features/configuracion/_camp
 import { ConfigSection } from "@/components/features/configuracion/ConfigSection"
 import { EscalaAntiguedad } from "@/components/features/configuracion/EscalaAntiguedad"
 import { Badge } from "@/components/ui/badge"
+import { AccionBloqueada } from "@/components/ui/AccionBloqueada"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import type { Parametros, TramoEscala } from "@/types/configuracion"
@@ -21,6 +22,8 @@ export interface VacacionesReglasProps {
   onTramos: (t: TramoEscala[]) => void
   escalaPropia: boolean
   editable: boolean
+  /** Por qué HOY no se puede guardar (vista consolidada), o `null`. Lo decide la página. */
+  motivoBloqueo: string | null
   guardandoParams: boolean
   guardandoEscala: boolean
   onGuardarParams: () => void
@@ -46,14 +49,13 @@ export function VacacionesReglas(p: VacacionesReglasProps) {
           <h3 className="mb-2 text-sm font-medium">Días por antigüedad</h3>
           <EscalaAntiguedad tramos={p.tramos} onChange={p.onTramos} editable={p.editable} />
           {p.editable && (
-            <Button
-              size="sm"
-              className="mt-3"
-              onClick={p.onGuardarEscala}
-              disabled={p.guardandoEscala}
-            >
-              {p.guardandoEscala ? "Guardando…" : "Guardar escala"}
-            </Button>
+            <AccionBloqueada motivo={p.motivoBloqueo} className="mt-3">
+              {(bloqueada) => (
+                <Button size="sm" onClick={p.onGuardarEscala} disabled={bloqueada || p.guardandoEscala}>
+                  {p.guardandoEscala ? "Guardando…" : "Guardar escala"}
+                </Button>
+              )}
+            </AccionBloqueada>
           )}
         </div>
 
@@ -125,9 +127,13 @@ export function VacacionesReglas(p: VacacionesReglasProps) {
         </div>
 
         {p.editable && (
-          <Button onClick={p.onGuardarParams} disabled={p.guardandoParams}>
-            {p.guardandoParams ? "Guardando…" : "Guardar reglas"}
-          </Button>
+          <AccionBloqueada motivo={p.motivoBloqueo}>
+            {(bloqueada) => (
+              <Button onClick={p.onGuardarParams} disabled={bloqueada || p.guardandoParams}>
+                {p.guardandoParams ? "Guardando…" : "Guardar reglas"}
+              </Button>
+            )}
+          </AccionBloqueada>
         )}
       </div>
       )}

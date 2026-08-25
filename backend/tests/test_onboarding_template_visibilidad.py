@@ -123,8 +123,11 @@ class _RepoQueFiltra:
         return TareaResponse(id=UUID(str(tarea_id)), template_id=PRIV_A_YO, titulo="X", semana=1, orden=1)
 
     def delete_tarea(self, tarea_id):
+        """Devuelve LA FILA BORRADA, como el repo real — ver el fake hermano de
+        `test_onboarding_templates_scope.py`."""
         self.escrituras.append(("delete_tarea", str(tarea_id)))
-        return True
+        return {"id": str(tarea_id), "template_id": str(PRIV_A_YO), "titulo": "X",
+                "semana": 1, "orden": 1}
 
 
 def _svc(repo=None):

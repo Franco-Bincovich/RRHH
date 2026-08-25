@@ -55,10 +55,10 @@ async def get_proyecto(
 
 @router.post("", response_model=ProyectoResponse, status_code=201, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
 async def create_proyecto(
-    body: ProyectoCreate,
+    body: ProyectoCreate, request: Request,
     service: ProyectosService = Depends(_svc),
 ) -> ProyectoResponse:
-    return service.create(body)
+    return service.create(body, request.state.user.get("id"))
 
 
 @router.put("/{id}", response_model=ProyectoResponse, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -66,7 +66,7 @@ async def update_proyecto(
     id: UUID, request: Request, body: ProyectoUpdate,
     service: ProyectosService = Depends(_svc),
 ) -> ProyectoResponse:
-    return service.update(id, body, get_empresa_id(request))
+    return service.update(id, body, get_empresa_id(request), request.state.user.get("id"))
 
 
 @router.delete("/{id}", status_code=200, dependencies=[Depends(require_permission(SECCION, Accion.WRITE))])
@@ -74,5 +74,5 @@ async def delete_proyecto(
     id: UUID, request: Request,
     service: ProyectosService = Depends(_svc),
 ) -> dict:
-    service.delete(id, get_empresa_id(request))
+    service.delete(id, get_empresa_id(request), request.state.user.get("id"))
     return {"ok": True}

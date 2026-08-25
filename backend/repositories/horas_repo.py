@@ -64,14 +64,12 @@ class HorasRepo:
                  .eq("idempotencia", idempotencia).execute().data or [])
         return build(filas)[0] if filas else None
 
-    def find_proyecto_id(self, hora_id: str) -> Optional[str]:
-        """Retorna proyecto_id del registro de horas. None si no existe O si no tiene proyecto
-        (carga directa): el caller trata los dos casos igual, y es correcto — una carga sin
-        proyecto no se alcanza por la ruta /proyectos/{id}/horas."""
-        res = supabase_admin.table(_T).select("proyecto_id").eq("id", hora_id).maybe_single().execute()
-        if not (res and res.data and res.data.get("proyecto_id")):
-            return None
-        return str(res.data["proyecto_id"])
+    def find_by_id(self, id: str) -> Optional[HoraResponse]:
+        """Una carga por id, o None. Existe para que la BAJA pueda auditarse: después del DELETE
+        no queda fila que fotografiar, y el evento es lo único que va a quedar de esa hora — que
+        es el dato que factura. Sin recorte por empresa: el caller ya validó el proyecto padre."""
+        filas = supabase_admin.table(_T).select("*").eq("id", id).execute().data or []
+        return build(filas)[0] if filas else None
 
     def delete(self, id: str) -> bool:
         return bool(supabase_admin.table(_T).delete().eq("id", id).execute().data)

@@ -17,13 +17,19 @@ from services._inventario_items_export import construir_filas_export
 from services._paginacion import cantidad_paginas
 from services._limite_export import LIMITE_FILAS_EXPORT, verificar_limite_export
 from services.export import Descarga, build_export
+from services._audit_payloads_inventario import (
+    payload_alta_item, payload_baja_item, payload_update_item,
+)
+from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
 
 
 class InventarioItemsService:
-    def __init__(self, repo: Optional[InventarioItemsRepo] = None) -> None:
+    def __init__(self, repo: Optional[InventarioItemsRepo] = None,
+                 audit: Optional[AuditService] = None) -> None:
         self._repo = repo or InventarioItemsRepo()
+        self._audit = audit or AuditService()
 
     def get_all(self, empresa_id: Optional[UUID] = None, estado: Optional[str] = None,
                 area_id: Optional[UUID] = None, page: int = 1, page_size: int = 20) -> ItemListResponse:
@@ -62,23 +68,28 @@ class InventarioItemsService:
         if not data.tipo.strip():
             raise AppError("El tipo es requerido", "TIPO_REQUERIDO", 422)
         row = self._repo.save(data)
+        self._audit.registrar(**payload_alta_item(row, created_by))
         logger.info("Ítem de inventario creado", extra={"item_id": row.id, "created_by": created_by})
         return row
 
-    def update(self, id: UUID, data: ItemUpdate, empresa_id: Optional[UUID] = None) -> ItemResponse:
+    def update(self, id: UUID, data: ItemUpdate, empresa_id: Optional[UUID] = None,
+               usuario_id: Optional[str] = None) -> ItemResponse:
         """
         Actualización parcial de un ítem.
 
         Raises:
             AppError: ITEM_NOT_FOUND (404).
         """
-        if not self._repo.find_by_id(str(id), empresa_id):
+        prior = self._repo.find_by_id(str(id), empresa_id)   # el "antes" del diff
+        if not prior:
             raise AppError("Ítem no encontrado", "ITEM_NOT_FOUND", 404)
         updated = self._repo.update(str(id), data, empresa_id)
+        self._audit.registrar(**payload_update_item(prior, updated, usuario_id))
         logger.info("Ítem actualizado", extra={"item_id": str(id)})
         return updated  # type: ignore[return-value]
 
-    def delete(self, id: UUID, empresa_id: Optional[UUID] = None) -> None:
+    def delete(self, id: UUID, empresa_id: Optional[UUID] = None,
+               usuario_id: Optional[str] = None) -> None:
         """
         Soft-delete (estado='baja') si tiene historial; hard-delete si no tiene asignaciones.
 
@@ -94,9 +105,13 @@ class InventarioItemsService:
                 "No se puede eliminar un ítem asignado. Primero registrá su devolución.",
                 "ITEM_ASIGNADO", 409,
             )
-        if self._repo.has_asignaciones(str(id)):
-            self._repo.set_estado(str(id), "baja")
-            logger.info("Ítem dado de baja (tiene historial)", extra={"item_id": str(id)})
-        else:
+        fisico = not self._repo.has_asignaciones(str(id))
+        if fisico:
             self._repo.delete(str(id), empresa_id)
             logger.info("Ítem eliminado", extra={"item_id": str(id)})
+        else:
+            self._repo.set_estado(str(id), "baja")
+            logger.info("Ítem dado de baja (tiene historial)", extra={"item_id": str(id)})
+        # 🔴 `fisico` VA AL EVENTO: con borrado físico, este payload es el único lugar donde
+        # queda el `numero_serie` del equipo. Ver el payload.
+        self._audit.registrar(**payload_baja_item(row, fisico, usuario_id))

@@ -96,8 +96,14 @@ class _Repo:
         })
 
     def delete_tarea(self, tarea_id):
+        """Devuelve LA FILA BORRADA, como el repo real (PostgREST la retorna en `.data`).
+
+        🔴 No devuelve `True`: el service audita la baja con esta fila, y un fake que devolviera
+        un booleano dejaría el evento sin nada que fotografiar — el título y la descripción que
+        alguien escribió a mano son justo lo que desaparece."""
         self.tareas_borradas.append(str(tarea_id))
-        return True
+        return {"id": str(tarea_id), "template_id": str(PROPIO), "titulo": "X",
+                "semana": 1, "orden": 1}
 
 
 def _svc(repo=None):

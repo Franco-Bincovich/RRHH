@@ -17,6 +17,7 @@ import { CvField } from "@/components/features/vacantes/CvField"
 import { createCandidato } from "@/services/vacantes"
 import type { CandidatoCreate } from "@/types/vacantes"
 import { validarEmail } from "@/components/features/shared/validacionEmail"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface CandidatoModalProps {
   open: boolean
@@ -107,6 +108,7 @@ export function CandidatoModal({ open, vacanteId, onClose, onSuccess }: Candidat
         empresa_anterior: form.empresa_anterior.trim() || undefined,
       }
       await createCandidato(vacanteId, payload, cvFile)
+      avisarGuardado("Candidato", "m", false)
       onSuccess()
     } catch {
       setServerError("Ocurrió un error al guardar. Intentá de nuevo.")

@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { toast } from "sonner"
 
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -9,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { actualizarCesion, crearCesion } from "@/services/cesiones"
 import type { Cesion } from "@/types/cesion"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   open: boolean
@@ -43,7 +43,7 @@ export function CesionModal({ open, empleadoId, cesion, onClose, onSuccess }: Pr
       const data = { fecha, empresa_cesion: empresa.trim() }
       if (cesion) await actualizarCesion(cesion.id, data)
       else await crearCesion(empleadoId, data)
-      toast.success(cesion ? "Cesión actualizada" : "Cesión agregada")
+      avisarGuardado("Cesión", "f", Boolean(cesion))
       onSuccess()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "No se pudo guardar la cesión.")

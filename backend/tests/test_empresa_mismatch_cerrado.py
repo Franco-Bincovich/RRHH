@@ -41,7 +41,7 @@ from uuid import uuid4
 
 import pytest
 
-from schemas.capacitacion import AsignacionCreate
+from schemas.capacitacion import AsignacionCreate, AsignacionResponse
 from services.asignacion_service import AsignacionService
 from utils.errors import AppError
 
@@ -62,7 +62,14 @@ class _FakeAsignacionRepo:
     def save(self, cap_id, emp_id, empresa_id, *_a, **_kw):
         # `**_kw` absorbe los cuatro keyword-only de la mig 116 (proyecto/anio/mes/nombre_libre):
         # este fake mira la EMPRESA, no el payload — de eso se ocupa test_capacitacion_columnas_http.
-        return SimpleNamespace(id=str(uuid4()), empresa_id=empresa_id)
+        # 🔑 DEVUELVE EL SCHEMA REAL Y NO UN SimpleNamespace: desde que el alta emite evento de
+        # auditoría, el payload proyecta la fila sobre sus campos, y un doble suelto con dos
+        # atributos no puede desmentir que el evento salga vacío. Se ARMA con lo recibido, no con
+        # una constante prefabricada.
+        return AsignacionResponse.model_validate({
+            "id": str(uuid4()), "empresa_id": str(empresa_id), "capacitacion_id": str(cap_id),
+            "empleado_id": str(emp_id), "estado": "pendiente",
+            "created_at": "2026-01-01T00:00:00Z"})
 
 
 class _FakeCapacitacionRepo:

@@ -16,6 +16,7 @@ import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { AsignacionCreate, Capacitacion } from "@/types/capacitacion"
 import type { Empresa } from "@/types/empresa"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   open: boolean
@@ -103,6 +104,7 @@ export function AsignacionModal({ open, onClose, onSuccess }: Props) {
         fecha_limite: form.fecha_limite || undefined,
       }
       await createAsignacion(payload)
+      avisarGuardado("Asignación", "f", false)
       onSuccess()
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Ocurrió un error al asignar")

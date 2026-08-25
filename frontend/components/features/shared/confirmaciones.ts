@@ -160,3 +160,70 @@ export function confirmarCerrarPeriodo(p: {
     confirmLabel: "Cerrar el período",
   }
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LAS CUATRO QUE SEGUÍAN EN EL `confirm()` DEL NAVEGADOR (25/8/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 El barrido nº 44 las daba por cubiertas y NO lo estaban: su grafo sube un salto desde el
+// archivo que borra, y en las cuatro había un `<ConfirmDialog>` de OTRA acción en la pantalla
+// que las tapaba. Es el mismo falso verde que se midió y se cerró en el barrido nº 47.
+// El porqué de reemplazar el `confirm()` nativo está escrito en `app/(dashboard)/periodos/page.tsx`:
+// no se puede nombrar la consecuencia, el botón dice "Aceptar", y el navegador lo puede suprimir.
+
+/** Quitar a un colaborador de un proyecto. Borrado FÍSICO de la asignación. */
+export function confirmarQuitarDelProyecto(a: {
+  empleado_nombre?: string | null; rol?: string | null
+}): TextoConfirmacion {
+  const quien = persona(a.empleado_nombre)
+  const rol = a.rol?.trim() ? ` como ${a.rol.trim()}` : ""
+  return {
+    title: "Quitar del proyecto",
+    description: `¿Quitar a ${quien}${rol} de este proyecto? Se pierde el rol y el valor hora `
+      + "pactados, y volver a asignarla no los recupera. Las horas ya cargadas no se tocan: si "
+      + "tiene alguna, la baja se rechaza.",
+    confirmLabel: "Quitar del proyecto",
+  }
+}
+
+/**
+ * Borrar una carga de horas de un proyecto. Borrado FÍSICO **del dato que factura**, y la única
+ * forma de corregir una carga: la edición no existe, por decisión de producto.
+ */
+export function confirmarEliminarHoras(h: {
+  horas?: number | null; fecha?: string | null; empleado_nombre?: string | null
+}): TextoConfirmacion {
+  const cuanto = h.horas != null ? `${h.horas} h` : "la carga"
+  const cuando = h.fecha ? ` del ${fechaLegible(h.fecha)}` : ""
+  return {
+    title: "Eliminar la carga de horas",
+    description: `¿Eliminar ${cuanto}${cuando} de ${persona(h.empleado_nombre)}? Es la única `
+      + "forma de corregir una carga —no se puede editar— y no se puede deshacer. El costo del "
+      + "proyecto se recalcula sin esas horas.",
+    confirmLabel: "Eliminar la carga",
+  }
+}
+
+/** Borrar un adjunto. Borrado LÓGICO de la fila; el archivo queda en el bucket. */
+export function confirmarEliminarAdjunto(a: {
+  nombre_archivo?: string | null
+}): TextoConfirmacion {
+  return {
+    title: "Eliminar el archivo",
+    description: `¿Eliminar ${a.nombre_archivo?.trim() || "este archivo"}? Deja de figurar acá y `
+      + "no se puede deshacer desde la pantalla.",
+    confirmLabel: "Eliminar el archivo",
+  }
+}
+
+/** Borrar una imagen de una vacante. */
+export function confirmarEliminarImagen(a: {
+  nombre_archivo?: string | null
+}): TextoConfirmacion {
+  return {
+    title: "Eliminar la imagen",
+    description: `¿Eliminar ${a.nombre_archivo?.trim() || "esta imagen"}? Si la búsqueda ya se `
+      + "publicó, el aviso publicado no cambia. No se puede deshacer.",
+    confirmLabel: "Eliminar la imagen",
+  }
+}

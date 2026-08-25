@@ -102,6 +102,23 @@ export interface VacanteUpdate {
   conocimientos_tecnicos?: string | null
 }
 
+/**
+ * Si la POSTULACIÓN sigue viva. Espejo de `EstadoCandidato` (`backend/schemas/candidato.py`), que
+ * a su vez espeja el CHECK `candidatos_estado_check`.
+ *
+ * 🔴 VIVE ACÁ Y NO EN `types/candidato.ts`, donde estaba hasta el 25/8/2026. Se mudó al necesitarlo
+ * el tablero de la vacante: `types/candidato.ts` YA importa de este archivo (`ClasificacionIA`,
+ * `EtapaPipeline`, `OrigenClasificacion`) y los re-exporta, así que dejarlo allá habría creado la
+ * dependencia en la dirección contraria además de la que ya existe. El re-export de allá mantiene
+ * a todos sus consumidores sin tocar.
+ *
+ * 🔴 ES OTRO EJE QUE `etapa_pipeline`, no una versión suya. La etapa dice DÓNDE está la persona en
+ * el proceso; el estado dice SI sigue en carrera. Alguien descartado en entrevista técnica
+ * conserva la etapa en la que se cayó, que es lo que permite medir en qué punto se cae la gente.
+ * Por eso el puente a empleado exige LAS DOS: etapa `oferta` y estado `activo`.
+ */
+export type EstadoCandidato = "activo" | "descartado" | "contratado" | "en_espera"
+
 export interface Candidato {
   id: string
   vacante_id: string
@@ -111,6 +128,15 @@ export interface Candidato {
   cargo_anterior: string | null
   empresa_anterior: string | null
   etapa_pipeline: EtapaPipeline
+  /**
+   * 🔴 SI LA POSTULACIÓN SIGUE VIVA — el OTRO eje, y sin él el tablero no puede ofrecer
+   * "Contratar". El backend ya lo mandaba (el endpoint del pipeline usa el mismo
+   * `CandidatoResponse`, que lo declara desde A4.1); este tipo no lo declaraba, así que llegaba
+   * por HTTP y el front lo descartaba. Es LA MISMA falla silenciosa que estas líneas documentan
+   * tres campos más abajo para `clasificacion_ia`, y se pagó igual: el tablero mostraba idénticos
+   * a alguien en oferta que sigue en carrera y a alguien que la rechazó.
+   */
+  estado: EstadoCandidato
   score_ia: number | null
   /**
    * Resultado del filtro de descarte (mig 100). El backend ya lo mandaba —el endpoint del

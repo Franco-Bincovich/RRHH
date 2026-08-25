@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { PISO_TACTIL } from "@/components/ui/AccionFila"
 import { Lock, Users } from "lucide-react"
 import { toast } from "sonner"
 
@@ -58,7 +59,7 @@ export function VisibilidadToggle({ templateId, esPublica, puedeCambiar, onCambi
             : "Solo la ves vos. Clic para compartirla."
           : "Solo quien la creó puede cambiar esto."
       }
-      className={`flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+      className={`${PISO_TACTIL} flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         esPublica ? "text-muted-foreground" : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
       } ${puedeCambiar ? "hover:bg-muted" : "cursor-default opacity-70"}`}
     >

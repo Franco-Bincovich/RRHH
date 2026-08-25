@@ -1,6 +1,7 @@
 "use client"
 
 import { Pencil, Trash2 } from "lucide-react"
+import { AccionFila } from "@/components/ui/AccionFila"
 import type { ReactNode } from "react"
 
 import { TablaVacia } from "@/components/ui/TablaVacia"
@@ -39,9 +40,6 @@ interface Props {
   /** Qué ofrecer cuando NO hay filtros y tampoco datos: el alta. `undefined` sin permiso. */
   accionVacio?: ReactNode
 }
-
-const ACCION_CLASS =
-  "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
 
 /**
  * La vista Lista del tablero de objetivos. Dueña de su carga y de su vacío; el ERROR se queda en
@@ -113,14 +111,13 @@ export function ListView({
                     <TableCell className="text-right">
                       {/* 🔴 SIEMPRE VISIBLES, sólo cambian de color al apuntar (§3). */}
                       <div className="flex justify-end gap-1">
-                        <button type="button" onClick={() => onEdit(obj)} aria-label={`Editar ${obj.titulo}`}
-                          className={`${ACCION_CLASS} group-hover:text-primary`}>
+                        <AccionFila onClick={() => onEdit(obj)} aria-label={`Editar ${obj.titulo}`}>
                           <Pencil className="size-4" aria-hidden="true" />
-                        </button>
-                        <button type="button" onClick={() => onDelete(obj)} disabled={deletingId === obj.id}
-                          aria-label={`Eliminar ${obj.titulo}`} className={`${ACCION_CLASS} group-hover:text-destructive`}>
+                        </AccionFila>
+                        <AccionFila tono="destructivo" onClick={() => onDelete(obj)} disabled={deletingId === obj.id}
+                          aria-label={`Eliminar ${obj.titulo}`}>
                           <Trash2 className="size-4" aria-hidden="true" />
-                        </button>
+                        </AccionFila>
                       </div>
                     </TableCell>
                   )}

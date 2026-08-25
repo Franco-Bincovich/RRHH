@@ -116,24 +116,22 @@ const EXCEPCIONES: Record<string, string> = {
     "que es una TERCERA copia del mismo diálogo de 'Eliminar área' — la misma acción que " +
     "/areas, con dos implementaciones distintas. 🚩 Salida: la misma unificación de arriba.",
 
-  // ── NATIVO: confirman con la caja del navegador ────────────────────────────
-  "components/features/adjuntos/AdjuntosSection.tsx":
-    "NATIVO. Borra un adjunto con `confirm()` del navegador. 🔴 Es el que descubrió que la " +
-    "unidad no podía ser transitiva: pasaba en verde colgado del ConfirmDialog de la pantalla " +
-    "que lo contiene, que confirma otra cosa.",
-  "components/features/proyectos/EquipoTab.tsx":
-    "NATIVO. Quitar a alguien de un proyecto, con `confirm()`. ⚠️ Puede chocar con " +
-    "ASIGNACION_CON_HORAS (409) si la persona tiene horas cargadas, así que el texto tendría " +
-    "algo real que decir.",
-  "components/features/proyectos/HorasTab.tsx":
-    "NATIVO. Borra una carga de horas del proyecto con `confirm()`. 🔴 Es la MISMA acción que " +
-    "`horasCliente/DetalleEmpleadoModal`, que no confirma nada: el mismo dato —el que factura— " +
-    "se borra de dos formas distintas según por qué pantalla se entre. 🔑 Lo cazó la regla del " +
-    "`confirm()` nativo y no el eje principal, porque `deleteHora` es un `export function` sin " +
-    "`async` y el detector pedía `export async function`. El detector se arregló; la entrada " +
-    "queda como registro de que las dos reglas se cubren mutuamente.",
-  "components/features/vacantes/VacanteImagenes.tsx":
-    "NATIVO. Borra una imagen de la vacante con `confirm()`.",
+  // ── 🟢 NATIVO: VACÍO DESDE EL 25/8/2026 ────────────────────────────────────
+  // Acá vivían CUATRO entradas: `AdjuntosSection`, `EquipoTab`, `HorasTab` y `VacanteImagenes`
+  // confirmaban con la caja del navegador. Se migraron las cuatro a `<ConfirmDialog>` con su
+  // texto en `shared/confirmaciones.ts` (`confirmarEliminarAdjunto`, `confirmarQuitarDelProyecto`,
+  // `confirmarEliminarHoras`, `confirmarEliminarImagen`). El porqué de no dejar el `confirm()`
+  // nativo está en `app/(dashboard)/periodos/page.tsx`: no puede nombrar la consecuencia, su
+  // botón dice "Aceptar" y el navegador lo puede suprimir.
+  //
+  // 🔑 DOS COSAS SALIERON DE ESA MIGRACIÓN Y NO SE PIERDEN. (1) `EquipoTab` y `HorasTab` tapaban
+  // el mensaje del backend con un genérico ADIVINADO ("No se puede quitar: tiene horas
+  // registradas") que etiquetaba como horas cargadas también al 404 y a la red caída; ahora sale
+  // el `message` del `ApiError`. (2) `HorasTab` quedaba en 171/150 al sumar el diálogo y se
+  // partió: la fila se fue a `HoraFila.tsx`.
+  //
+  // ⚠️ EL BLOQUE DE COMENTARIO NO SE BORRA aunque no queden entradas: la regla del `confirm()`
+  // nativo sigue viva en el test de abajo, y este encabezado es donde se declara la próxima.
 
   // ── 🔴 SIN CONFIRMACIÓN: un click y el dato se va ──────────────────────────
   "components/features/capacitaciones/AsignacionesTab.tsx":

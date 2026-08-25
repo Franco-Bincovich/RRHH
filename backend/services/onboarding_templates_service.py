@@ -22,12 +22,18 @@ from services._onboarding_templates_tareas import delete_tarea as _delete_tarea
 from services._onboarding_templates_tareas import update_tarea as _update_tarea
 from services._template_scope import ensure_autor, ensure_template_accesible, template_or_404
 from services.export import Descarga, build_export
+from services._audit_payloads_onboarding_templates import (
+    payload_alta_template, payload_baja_template, payload_update_template,
+)
+from services.audit_service import AuditService
 from utils.logger import logger
 
 
 class OnboardingTemplatesService:
-    def __init__(self, repo: Optional[OnboardingTemplatesRepo] = None) -> None:
+    def __init__(self, repo: Optional[OnboardingTemplatesRepo] = None,
+                 audit: Optional[AuditService] = None) -> None:
         self._repo = repo or OnboardingTemplatesRepo()
+        self._audit = audit or AuditService()
 
     def get_templates(self, empresa_id: Optional[UUID] = None, user_id: Optional[str] = None,
                       rol: Optional[str] = None) -> list[TemplateResponse]:
@@ -77,6 +83,7 @@ class OnboardingTemplatesService:
             TemplateResponse del template recién creado.
         """
         tmpl = self._repo.create_template(data.nombre, data.descripcion, data.empresa_id, created_by)
+        self._audit.registrar(**payload_alta_template(tmpl, created_by))
         logger.info("Template creado", extra={"template_id": str(tmpl.id), "empresa_id": str(data.empresa_id), "created_by": created_by})
         return tmpl
 
@@ -101,7 +108,9 @@ class OnboardingTemplatesService:
             return self.get_template(template_id, empresa_id, user_id, rol)
         # La relectura posterior va con el MISMO user_id: si la plantilla se acaba de volver
         # privada, su autor la sigue alcanzando y la respuesta no queda vacía.
-        return template_or_404(self._repo.update_template(str(template_id), payload, user_id, rol))
+        nuevo = template_or_404(self._repo.update_template(str(template_id), payload, user_id, rol))
+        self._audit.registrar(**payload_update_template(tmpl, nuevo, user_id))
+        return nuevo
 
     def delete_template(self, template_id: UUID, empresa_id: Optional[UUID] = None,
                         user_id: Optional[str] = None, rol: Optional[str] = None) -> bool:
@@ -111,9 +120,13 @@ class OnboardingTemplatesService:
         Raises:
             AppError: TEMPLATE_NOT_FOUND (404) si no lo alcanza por empresa o por visibilidad.
         """
-        ensure_template_accesible(self._repo, template_id, empresa_id, user_id, rol)  # gate antes del borrado
-        self._repo.delete_template(str(template_id))
-        logger.info("Template eliminado", extra={"template_id": str(template_id)})
+        prior = ensure_template_accesible(self._repo, template_id, empresa_id, user_id, rol)
+        # 🔴 El `prior` trae las TAREAS, y son lo que hay que fotografiar: la plantilla ES su
+        # lista de tareas, y `onboarding_tareas` no tiene versionado. El modo lo dice el repo,
+        # que es el único que sabe si borró o desactivó. Ver el payload.
+        modo = self._repo.delete_template(str(template_id))
+        self._audit.registrar(**payload_baja_template(prior, modo == "fisica", user_id))
+        logger.info("Template eliminado", extra={"template_id": str(template_id), "modo": modo})
         return True
 
     # Las tres operaciones sobre TAREAS viven en services/_onboarding_templates_tareas.py
@@ -122,15 +135,15 @@ class OnboardingTemplatesService:
     def add_tarea(self, template_id: UUID, data: TareaCreate, empresa_id: Optional[UUID] = None,
                   user_id: Optional[str] = None, rol: Optional[str] = None) -> TareaResponse:
         """Agrega una tarea a un template. Ver _onboarding_templates_tareas.add_tarea."""
-        return _add_tarea(self._repo, template_id, data, empresa_id, user_id, rol)
+        return _add_tarea(self._repo, self._audit, template_id, data, empresa_id, user_id, rol)
 
     def update_tarea(self, template_id: UUID, tarea_id: UUID, data: TareaUpdate,
                      empresa_id: Optional[UUID] = None, user_id: Optional[str] = None,
                      rol: Optional[str] = None) -> TareaResponse:
         """Actualiza una tarea del template. Ver _onboarding_templates_tareas.update_tarea."""
-        return _update_tarea(self._repo, template_id, tarea_id, data, empresa_id, user_id, rol)
+        return _update_tarea(self._repo, self._audit, template_id, tarea_id, data, empresa_id, user_id, rol)
 
     def delete_tarea(self, template_id: UUID, tarea_id: UUID, empresa_id: Optional[UUID] = None,
                      user_id: Optional[str] = None, rol: Optional[str] = None) -> bool:
         """Elimina una tarea del template. Ver _onboarding_templates_tareas.delete_tarea."""
-        return _delete_tarea(self._repo, template_id, tarea_id, empresa_id, user_id, rol)
+        return _delete_tarea(self._repo, self._audit, template_id, tarea_id, empresa_id, user_id, rol)

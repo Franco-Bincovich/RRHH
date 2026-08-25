@@ -46,7 +46,8 @@ const TRAMOS = [
  * aserciones negativas de abajo pasarían por estar mirando un panel cerrado, no por el gate.
  * Los casos `editable` afirman en positivo justamente para dejar probado que el panel abrió.
  */
-function render(editable: boolean, params: Parametros | null = PARAMS): string {
+function render(editable: boolean, params: Parametros | null = PARAMS,
+                motivoBloqueo: string | null = null): string {
   return renderToStaticMarkup(
     <Accordion.Root defaultValue={["vacaciones"]} multiple>
       <VacacionesReglas
@@ -57,6 +58,7 @@ function render(editable: boolean, params: Parametros | null = PARAMS): string {
         onTramos={vi.fn()}
         escalaPropia
         editable={editable}
+        motivoBloqueo={motivoBloqueo}
         guardandoParams={false}
         guardandoEscala={false}
         onGuardarParams={vi.fn()}

@@ -13,6 +13,14 @@
  * dashboard, y sin la siembra el link aterrizaría en el listado completo — que es justo lo que
  * la alerta viene a evitar. `useSearchParams` obliga a una barrera de Suspense arriba; el
  * porqué está en la página (sin ella `next build` falla, y en dev no se nota).
+ *
+ * 🚩 SIEMBRA ≠ ESTADO EN LA URL, Y POR ESO EL ATRÁS DEL NAVEGADOR NO FUNCIONA. Esto lee la
+ * querystring UNA vez (el inicializador de `useState`) y nunca la escribe. Está bien elegido
+ * para un link de ENTRADA —si el valor se releyera, cambiar el filtro a mano quedaría peleando
+ * contra la URL— pero no puede sostener el botón Atrás: para eso el valor tiene que DERIVARSE de
+ * la URL en cada render. Se analizó el 25/8/2026 al pedido de poner la paginación en la URL y se
+ * decidió NO hacerlo todavía. **El análisis completo está en `docs/DEUDA-TECNICA.md` §0.nueva**,
+ * incluida la advertencia de por qué la media —sólo la página a la URL— es la opción MALA.
  */
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"

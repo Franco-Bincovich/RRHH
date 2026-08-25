@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ApiError } from "@/services/api"
 import { publicarLinkedin } from "@/services/vacantes"
+import { avisarHecho } from "@/components/features/shared/avisoGuardado"
 
 /**
  * Publicar la vacante en LinkedIn vía Zernio, pidiendo el email de contacto del aviso.
@@ -49,6 +50,7 @@ export function LinkedinModal({ open, vacanteId, defaultEmail, onClose, onSucces
     setError(null)
     try {
       await publicarLinkedin(vacanteId, { email_contacto: email.trim() })
+      avisarHecho("Búsqueda publicada en LinkedIn")
       onSuccess()
       onClose()
     } catch (err) {

@@ -1,6 +1,11 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { confirmarEliminarAdjunto } from "@/components/features/shared/confirmaciones"
+import { useConfirmacion } from "@/components/features/shared/useConfirmacion"
+import { avisarHecho } from "@/components/features/shared/avisoGuardado"
+import { ApiError } from "@/services/api"
 import { toast } from "sonner"
 import { Download, Trash2 } from "lucide-react"
 
@@ -32,6 +37,8 @@ interface Props {
  */
 export function AdjuntosSection({ entidad, entidadId, titulo = "Documentos" }: Props) {
   const [adjuntos, setAdjuntos] = useState<Adjunto[]>([])
+  const aEliminar = useConfirmacion<Adjunto>()
+  const [borrandoId, setBorrandoId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const canWrite = useCanWrite()
@@ -69,13 +76,15 @@ export function AdjuntosSection({ entidad, entidadId, titulo = "Documentos" }: P
   }
 
   async function handleEliminar(a: Adjunto) {
-    if (!confirm(`¿Eliminar "${a.nombre_archivo}"? Esta acción no se puede deshacer.`)) return
+    setBorrandoId(a.id)
     try {
       await eliminarAdjunto(a.id)
-      toast.success("Documento eliminado")
+      avisarHecho("Documento eliminado")
       await recargar()
-    } catch {
-      toast.error("No se pudo eliminar el documento")
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "No se pudo eliminar el documento.")
+    } finally {
+      setBorrandoId(null)
     }
   }
 
@@ -112,7 +121,7 @@ export function AdjuntosSection({ entidad, entidadId, titulo = "Documentos" }: P
                     <Button
                       variant="ghost"
                       className="min-h-11 gap-1.5 text-destructive hover:text-destructive"
-                      onClick={() => handleEliminar(a)}
+                      onClick={() => aEliminar.pedir(a)}
                       aria-label={`Eliminar ${a.nombre_archivo}`}
                     >
                       <Trash2 className="size-4" /> Eliminar
@@ -124,6 +133,18 @@ export function AdjuntosSection({ entidad, entidadId, titulo = "Documentos" }: P
           </ul>
         )}
       </div>
+
+      <ConfirmDialog
+        open={aEliminar.abierto}
+        onClose={aEliminar.cerrar}
+        onConfirm={() => {
+          const x = aEliminar.pendiente
+          aEliminar.cerrar()
+          if (x) void handleEliminar(x)
+        }}
+        loading={borrandoId !== null}
+        {...confirmarEliminarAdjunto(aEliminar.pendiente ?? {})}
+      />
     </Section>
   )
 }

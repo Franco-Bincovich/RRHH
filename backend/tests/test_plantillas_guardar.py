@@ -85,15 +85,28 @@ class _Repo:
         self.filas[id_] = nueva
         return nueva
 
-    def borrar(self, id_, empresa_id=None) -> bool:
+    def borrar(self, id_, empresa_id=None):
+        """Devuelve LA FILA BORRADA, como el repo real (PostgREST retorna lo borrado en `.data`).
+
+        🔴 No devuelve `True`: el service audita la baja con esta fila, y un fake que devolviera
+        un booleano dejaría el evento —que es el ÚNICO respaldo del cuerpo que RRHH escribió,
+        porque la tabla no tiene versionado— sin nada que fotografiar. Un fake que no modela la
+        forma real del retorno no puede desmentir que el payload esté vacío.
+        """
         fila = self.filas.get(str(id_))
         # Igual que el repo real: con `empresa_id` provisto, el WHERE lleva las DOS condiciones,
         # así que una global (empresa NULL) nunca cae.
         if not fila or (empresa_id and fila.get("empresa_id") != str(empresa_id)):
-            return False
+            return None
         del self.filas[str(id_)]
         self.borrados.append(str(id_))
-        return True
+        return fila
+
+    def find_by_id(self, id_):
+        """El prior del diff de auditoría. Por ID, no por clave: la global comparte `bienvenida`
+        con la propia, así que resolver por clave devolvería la fila equivocada — que es
+        justamente lo que este fake, con sus tres filas, puede desmentir."""
+        return self.filas.get(str(id_))
 
     def listar(self, empresa_id=None):
         return list(self.filas.values())

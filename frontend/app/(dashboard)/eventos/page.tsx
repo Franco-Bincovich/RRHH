@@ -1,19 +1,18 @@
 "use client"
 
 import { useState } from "react"
-import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { FiltersBar } from "@/components/ui/FiltersBar"
 import { chipsDeCampos } from "@/components/ui/filtrosChips"
 import { Pagination } from "@/components/ui/Pagination"
-import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { AltaRecordatorioBoton } from "@/components/features/eventos/AltaRecordatorioBoton"
 import { EventoModal } from "@/components/features/eventos/EventoModal"
 import { EventosTabla } from "@/components/features/eventos/EventosTabla"
 import { construirCampos } from "@/components/features/eventos/_camposEventos"
-import { PAGE_SIZE, useEventos } from "@/components/features/eventos/useEventos"
+import { useEventos } from "@/components/features/eventos/useEventos"
 import { deleteEvento } from "@/services/eventos"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Evento } from "@/types/evento"
@@ -88,12 +87,7 @@ export default function EventosPage() {
             : `${agenda.total} recordatorio${agenda.total !== 1 ? "s" : ""} · cada uno avisa en el dashboard los días previos que le pongas`
         }
         action={
-          canWrite ? (
-            <Button className="min-h-11" onClick={abrirAlta}>
-              <Plus />
-              Nuevo recordatorio
-            </Button>
-          ) : undefined
+          canWrite ? <AltaRecordatorioBoton onClick={abrirAlta} /> : undefined
         }
       />
 
@@ -112,9 +106,9 @@ export default function EventosPage() {
         onResuelta={agenda.cambiarResuelta}
         chips={chips}
         onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
-        accionVacio={canWrite ? (
-          <Button className="min-h-11" onClick={abrirAlta}>Crear el primero</Button>
-        ) : undefined}
+        accionVacio={canWrite
+          ? <AltaRecordatorioBoton onClick={abrirAlta} conIcono={false}>Crear el primero</AltaRecordatorioBoton>
+          : undefined}
       />
 
       {/*
@@ -125,8 +119,8 @@ export default function EventosPage() {
        * pedido ANTERIOR sobre el esqueleto. El total es el del backend, no `eventos.length`.
        */}
       {!agenda.loading && !agenda.error && agenda.eventos.length > 0 && (
-        <Pagination page={agenda.page} total={agenda.total} pageSize={PAGE_SIZE}
-                    onPageChange={agenda.setPage} />
+        <Pagination page={agenda.page} total={agenda.total} pageSize={agenda.pageSize}
+                    onPageSizeChange={agenda.setPageSize} onPageChange={agenda.setPage} />
       )}
 
       <EventoModal

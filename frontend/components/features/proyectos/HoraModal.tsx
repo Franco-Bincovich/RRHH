@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select } from "@/components/ui/select"
 import type { Asignacion, HoraCreate } from "@/types/proyecto"
+import { avisarHecho } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   open: boolean
@@ -44,6 +45,7 @@ export function HoraModal({ open, asignaciones, onClose, onSave }: Props) {
         horas: parseFloat(horas),
         descripcion: descripcion || undefined,
       })
+      avisarHecho("Horas registradas")
     } catch {
       toast.error("No se pudo registrar la hora. Intentá de nuevo.")
     } finally { setSaving(false) }

@@ -83,11 +83,11 @@ const PENDIENTE_NO_INTENCIONAL: Record<string, string> = {
     "o se conecta contra la empresa activa del selector, o se borra. No se toca en esta tanda " +
     "porque decidirlo es producto, no limpieza.",
 
-  "@/services/empresaStore::subscribeEmpresaActiva":
-    "🔴 PENDIENTE, NO INTENCIONAL. Es la mitad suscriptora del store de empresa activa: nadie " +
-    "se suscribe, así que un cambio de empresa no notifica a nadie por esta vía (las " +
-    "pantallas releen por otro camino). Borrarla deja el store a medias; conectarla cambia " +
-    "cómo se propaga la vista. Las dos son decisión, no limpieza.",
+  // 🟢 `subscribeEmpresaActiva` YA NO ESTÁ ACÁ. Estuvo declarada como "PENDIENTE, NO
+  // INTENCIONAL — nadie se suscribe, así que un cambio de empresa no notifica a nadie por esta
+  // vía", y la decisión que faltaba se tomó el 25/8/2026: la conectó `hooks/useEmpresaConcreta`,
+  // que la necesita porque de ella depende si un BOTÓN se puede apretar (las pantallas que solo
+  // deciden si muestran la columna "Empresa" siguen leyendo el store una vez y les alcanza).
 }
 
 // Wrappers `GET /{id}` que nadie usa porque la pantalla ya tiene el objeto del listado.

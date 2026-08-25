@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { AccionFila, claseAccionFila } from "@/components/ui/AccionFila"
 import { ChevronRight, Pencil, Power, PowerOff } from "lucide-react"
 import type { ReactNode } from "react"
 
@@ -30,9 +31,6 @@ interface EmpresasTableProps {
 function Vacio() {
   return <span className="italic text-muted-foreground/60">—</span>
 }
-
-const ACCION_CLASS =
-  "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
 
 /**
  * Tabla de empresas con edición y toggle de activa por fila (solo canWrite).
@@ -97,25 +95,22 @@ export function EmpresasTable({
                 <div className="flex justify-end gap-1">
                   {canWrite && (
                     <>
-                      <button type="button" aria-label={`Editar ${empresa.nombre}`} onClick={() => onEdit(empresa)}
-                        className={`${ACCION_CLASS} group-hover:text-primary`}>
+                      <AccionFila aria-label={`Editar ${empresa.nombre}`} onClick={() => onEdit(empresa)}>
                         <Pencil className="size-4" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
+                      </AccionFila>
+                      <AccionFila
                         aria-label={empresa.activa ? `Desactivar ${empresa.nombre}` : `Activar ${empresa.nombre}`}
                         onClick={() => onToggle(empresa)}
                         disabled={togglingId === empresa.id}
-                        className={`${ACCION_CLASS} group-hover:text-primary`}
                       >
                         {empresa.activa ? <PowerOff className="size-4" aria-hidden="true" /> : <Power className="size-4" aria-hidden="true" />}
-                      </button>
+                      </AccionFila>
                     </>
                   )}
                   <Link
                     href={`/empresas/${empresa.id}`}
                     aria-label={`Ver la ficha de ${empresa.nombre}`}
-                    className={`${ACCION_CLASS} group-hover:text-primary`}
+                    className={claseAccionFila}
                   >
                     <ChevronRight className="size-4" aria-hidden="true" />
                   </Link>

@@ -371,7 +371,7 @@ Las **46** rutas de `app/`. ⚠️ **La columna GET dice qué endpoints ALCANZA 
 | `/sucesion` | sucesion | admin rrhh, gerencia lectura | 6 | 0 | 4 | sí | — | flag del front (la página redirige a /dashboard) | no |
 | `/usuarios` | usuarios | admin rrhh, gerencia lectura | 2 | 1 | 2 | — | — | — | sí |
 | `/vacaciones` | vacaciones | todos | 11 | 2 | 7 | sí | sí | — | sí |
-| `/vacantes/{}` | vacantes | admin rrhh, gerencia lectura | 6 | 0 | 10 | — | — | — | sí |
+| `/vacantes/{}` | vacantes | admin rrhh, gerencia lectura | 7 | 0 | 11 | — | — | — | sí |
 | `/vacantes` | vacantes | admin rrhh, gerencia lectura | 4 | 1 | 3 | sí | sí | — | sí |
 | `/cambiar-password` | — | todos | 0 | 0 | 1 | — | — | — | sí |
 | `/evaluacion/{}` | — | todos | 1 | 0 | 1 | — | — | flag del backend (el router no se monta) | no |
@@ -408,7 +408,7 @@ Las **46** rutas de `app/`. ⚠️ **La columna GET dice qué endpoints ALCANZA 
 | /ausencias | `components/features/ausencias/useTiposAusencia.ts` | `createTipoAusencia` | `POST /api/ausencias/tipos` | admin rrhh, mandos medios | reversible | sí |  |
 | /cambiar-password, /configuracion | `components/features/usuarios/CambiarPasswordForm.tsx` | `cambiarPassword` | `POST /api/usuarios/cambiar-password` | todos | reversible | sí |  |
 | /candidatos | `components/features/candidatos/AsignarVacanteCandidato.tsx` | `asignarVacanteACandidato` | `PUT /api/candidatos/{}/vacante` | admin rrhh | reversible | sí |  |
-| /candidatos | `components/features/candidatos/ContratarCandidatoButton.tsx` | `contratarCandidato` | `POST /api/candidatos/{}/contratar` | admin rrhh | 🔴 crea el legajo del candidato; no hay des-contratar | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
+| /candidatos, /vacantes/{} | `components/features/candidatos/ContratarCandidatoButton.tsx` | `contratarCandidato` | `POST /api/candidatos/{}/contratar` | admin rrhh | 🔴 crea el legajo del candidato; no hay des-contratar | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
 | /candidatos | `components/features/candidatos/EliminarCandidatoButton.tsx` | `deleteCandidato` | `DELETE /api/candidatos/{}` | admin rrhh | 🔴 borra la fila | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
 | /candidatos, /vacantes/{} | `components/features/screening/CorregirClasificacion.tsx` | `corregirClasificacion` | `PUT /api/screening/candidatos/{}/clasificacion` | admin rrhh | reversible | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
 | /capacitaciones | `components/features/capacitaciones/AsignacionModal.tsx` | `createAsignacion` | `POST /api/capacitaciones/asignaciones` | admin rrhh | reversible | sí |  |

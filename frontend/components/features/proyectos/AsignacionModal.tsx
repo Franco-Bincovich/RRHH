@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import type { Asignacion, AsignacionUpdate } from "@/types/proyecto"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 interface Props {
   open: boolean
@@ -42,6 +43,7 @@ export function AsignacionModal({ open, asignacion, onClose, onSave }: Props) {
         fecha_desde: fechaDesde || undefined,
         fecha_hasta: fechaHasta || undefined,
       })
+      avisarGuardado("Asignación", "f", Boolean(asignacion))
     } catch {
       toast.error("No se pudo guardar la asignación. Intentá de nuevo.")
     } finally { setSaving(false) }

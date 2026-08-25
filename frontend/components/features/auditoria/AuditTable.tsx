@@ -1,6 +1,7 @@
 import { ScrollText } from "lucide-react"
 
 import { EmptyState } from "@/components/ui/EmptyState"
+import { AccionFilaTexto } from "@/components/ui/AccionFila"
 import { ErrorState } from "@/components/ui/ErrorState"
 import { TablaVacia } from "@/components/ui/TablaVacia"
 import { Badge } from "@/components/ui/badge"
@@ -117,13 +118,9 @@ export function AuditTable({
                   {/* 🔴 SIEMPRE VISIBLE, sólo cambia de color al apuntar (§3). Revelarlo en hover
                       obliga a barrer la tabla con el mouse para descubrir que el detalle existe —
                       y en un log de auditoría el detalle ES la pantalla. */}
-                  <button
-                    type="button"
-                    onClick={() => onVerDetalle(log)}
-                    className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors group-hover:text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                  >
+                  <AccionFilaTexto onClick={() => onVerDetalle(log)}>
                     Ver detalle
-                  </button>
+                  </AccionFilaTexto>
                 </div>
               </TableCell>
             </TableRow>

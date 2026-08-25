@@ -6,7 +6,7 @@ import { fetchAreasPagina } from "@/services/areas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Area } from "@/types/area"
 
-export const PAGE_SIZE = 20
+export const PAGE_SIZE_INICIAL = 20
 
 /**
  * La LISTA de la pantalla de áreas: su página, su total y la búsqueda. El ABM (modal, edición,
@@ -31,6 +31,7 @@ export function useAreas() {
   const [areas, setAreas] = useState<Area[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [search, setSearchRaw] = useState("")
@@ -52,7 +53,7 @@ export function useAreas() {
     setError(false)
     try {
       const data = await fetchAreasPagina(
-        getEmpresaActivaId() ?? undefined, buscado || undefined, page, PAGE_SIZE,
+        getEmpresaActivaId() ?? undefined, buscado || undefined, page, pageSize,
       )
       setAreas(data.items)
       setTotal(data.total)
@@ -61,9 +62,9 @@ export function useAreas() {
     } finally {
       setLoading(false)
     }
-  }, [buscado, page])
+  }, [buscado, page, pageSize])
 
   useEffect(() => { void load() }, [load])
 
-  return { areas, total, page, setPage, loading, error, search, setSearch, buscado, load }
+  return { areas, total, page, pageSize, setPageSize, setPage, loading, error, search, setSearch, buscado, load }
 }

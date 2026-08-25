@@ -5,6 +5,7 @@ import type { Empleado } from "@/types/empleado"
 import { EMPTY, type AutocompleteKey, type FormData, type FormErrors, type TextKey } from "./_constants"
 import { guardarEmpleado } from "./_guardar"
 import { estadoSegunFecha, toFormData, validate } from "./form-utils"
+import { avisarGuardado } from "@/components/features/shared/avisoGuardado"
 
 /**
  * El ESTADO del formulario de empleado: valores, errores, envío y los handlers por campo.
@@ -56,6 +57,7 @@ export function useEmpleadoForm(open: boolean, empleado: Empleado | undefined, o
     setSubmitting(true); setServerError("")
     try {
       await guardarEmpleado(form, empleado)
+      avisarGuardado("Colaborador", "m", isEdit)
       onSuccess()
     } catch {
       setServerError("No se pudo guardar. Probá de nuevo; si vuelve a pasar, avisale a sistemas.")

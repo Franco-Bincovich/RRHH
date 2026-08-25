@@ -18,13 +18,19 @@ from services.export import Descarga, build_export
 from schemas.capacitacion import (
     CapacitacionCreate, CapacitacionListResponse, CapacitacionResponse, CapacitacionUpdate,
 )
+from services._audit_payloads_capacitaciones import (
+    payload_alta_capacitacion, payload_baja_capacitacion, payload_update_capacitacion,
+)
+from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
 
 
 class CapacitacionService:
-    def __init__(self, repo: Optional[CapacitacionRepo] = None) -> None:
+    def __init__(self, repo: Optional[CapacitacionRepo] = None,
+                 audit: Optional[AuditService] = None) -> None:
         self._repo = repo or CapacitacionRepo()
+        self._audit = audit or AuditService()
 
     def get_all(self, empresa_id: Optional[UUID] = None, solo_activos: bool = True) -> CapacitacionListResponse:
         """Retorna el catálogo filtrado por empresa (None=todas). Por defecto solo activos."""
@@ -62,37 +68,47 @@ class CapacitacionService:
         if not data.nombre.strip():
             raise AppError("El nombre es requerido", "NOMBRE_REQUERIDO", 422)
         row = self._repo.save(data)
+        self._audit.registrar(**payload_alta_capacitacion(row, created_by))
         logger.info("Capacitación creada", extra={"capacitacion_id": row.id, "created_by": created_by})
         return row
 
-    def update(self, id: UUID, data: CapacitacionUpdate, empresa_id: Optional[UUID] = None) -> CapacitacionResponse:
+    def update(self, id: UUID, data: CapacitacionUpdate, empresa_id: Optional[UUID] = None,
+               usuario_id: Optional[str] = None) -> CapacitacionResponse:
         """
         Actualiza parcialmente una capacitación.
 
         Raises:
             AppError: CAPACITACION_NOT_FOUND (404), NOMBRE_REQUERIDO (422).
         """
-        if not self._repo.find_by_id(str(id), empresa_id):
+        prior = self._repo.find_by_id(str(id), empresa_id)   # el "antes" del diff
+        if not prior:
             raise AppError("Formación no encontrada", "CAPACITACION_NOT_FOUND", 404)
         payload = data.model_dump(exclude_none=True)
         if "nombre" in payload and not payload["nombre"].strip():
             raise AppError("El nombre es requerido", "NOMBRE_REQUERIDO", 422)
         updated = self._repo.update(str(id), empresa_id, payload)
+        self._audit.registrar(**payload_update_capacitacion(prior, updated, usuario_id))
         logger.info("Capacitación actualizada", extra={"capacitacion_id": str(id)})
         return updated  # type: ignore[return-value]
 
-    def delete(self, id: UUID, empresa_id: Optional[UUID] = None) -> None:
+    def delete(self, id: UUID, empresa_id: Optional[UUID] = None,
+               usuario_id: Optional[str] = None) -> None:
         """
         Soft-delete si tiene asignaciones; hard-delete si no.
 
         Raises:
             AppError: CAPACITACION_NOT_FOUND (404) si no existe.
         """
-        if not self._repo.find_by_id(str(id), empresa_id):
+        prior = self._repo.find_by_id(str(id), empresa_id)   # la foto, con la fila viva
+        if not prior:
             raise AppError("Formación no encontrada", "CAPACITACION_NOT_FOUND", 404)
-        if self._repo.has_asignaciones(str(id)):
-            self._repo.set_activo(str(id), empresa_id, False)
-            logger.info("Capacitación desactivada (tiene asignaciones)", extra={"capacitacion_id": str(id)})
-        else:
+        fisico = not self._repo.has_asignaciones(str(id))
+        if fisico:
             self._repo.delete(str(id), empresa_id)
             logger.info("Capacitación eliminada", extra={"capacitacion_id": str(id)})
+        else:
+            self._repo.set_activo(str(id), empresa_id, False)
+            logger.info("Capacitación desactivada (tiene asignaciones)", extra={"capacitacion_id": str(id)})
+        # 🔴 `fisico` VA AL EVENTO: es la diferencia entre "la fila sigue ahí, desactivada" y "la
+        # fila ya no existe y esta foto es todo lo que queda". Ver el payload.
+        self._audit.registrar(**payload_baja_capacitacion(prior, fisico, usuario_id))

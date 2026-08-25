@@ -18,9 +18,10 @@ interface UsuariosTableProps {
   loading: boolean
   error: boolean
   onRetry: () => void
-  onDelete: (usuario: UsuarioOption) => void
+  /** `undefined` si el rol no puede escribir: entonces la fila no ofrece la baja. */
+  onDelete?: (usuario: UsuarioOption) => void
   deletingId: string | null
-  /** Qué ofrecer cuando no hay datos: el alta. Acá siempre hay: la pantalla es admin-only. */
+  /** Qué ofrecer cuando no hay datos: el alta. `undefined` sin permiso de escritura. */
   accionVacio?: ReactNode
 }
 
@@ -29,7 +30,12 @@ function rolLabel(rol: string): string {
 }
 
 /**
- * Tabla de usuarios del sistema con acción de eliminar por fila (la pantalla entera es admin_rrhh).
+ * Tabla de usuarios del sistema, con la baja por fila para quien puede escribir.
+ *
+ * 🔴 LA PANTALLA YA NO ES ADMIN-ONLY (25/8/2026). Tenía un guard propio que rebotaba a
+ * `gerencia_lectura`, en contra del modelo de permisos que le da lectura sobre todo y del
+ * backend, que ya le servía el listado. Ahora entra a MIRAR, y por eso `onDelete` es opcional:
+ * sin permiso de escritura la columna de acciones queda vacía en vez de ofrecer un 403.
  *
  * 🔴 AHORA ES DUEÑA DE SUS TRES ESTADOS (carga, error, vacío) y antes no lo era: los tenía la
  * página. El patrón del bloque B los necesita acá: el vacío es una fila con `colSpan`, y para eso
@@ -37,8 +43,8 @@ function rolLabel(rol: string): string {
  *
  * ⚠️ `TablaVacia` SE USA CON `chips=[]` Y UN `onLimpiarTodo` QUE NO HACE NADA, y es correcto:
  * `GET /api/usuarios` no acepta ningún Query, así que el vacío sólo puede caer en la rama
- * "todavía no hay nada" — la que no usa ninguno de los dos. Y esa frase SÍ es verdad para quien
- * mira: a esta pantalla sólo llega `admin_rrhh`, que es exactamente quien puede crear el primero.
+ * "todavía no hay nada" — la que no usa ninguno de los dos. La ACCIÓN del vacío sí es condicional
+ * (`accionVacio` llega `undefined` sin permiso): a quien sólo puede leer no se le ofrece crear.
  *
  * ⚠️ El rol va con `variant="secondary"` y NO con el default: un `<Badge>` sin variante es
  * `bg-primary`, el relleno que el patrón reserva al chip de filtro (§3). Acá ya estaba bien.
@@ -75,15 +81,17 @@ export function UsuariosTable({
                 {/* 🔴 SIEMPRE VISIBLE, sólo cambia de color al apuntar (§3). El rojo aparece
                     recién con el mouse en la fila: una columna de tachos rojos en reposo se lee
                     como una lista de errores, y acá cada fila es una persona con acceso vigente. */}
-                <button
-                  type="button"
-                  aria-label={`Eliminar ${u.nombre} ${u.apellido}`}
-                  onClick={() => onDelete(u)}
-                  disabled={deletingId === u.id}
-                  className="ml-auto flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors group-hover:text-destructive hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
-                >
-                  <Trash2 className="size-4" aria-hidden="true" />
-                </button>
+                {onDelete && (
+                  <button
+                    type="button"
+                    aria-label={`Eliminar ${u.nombre} ${u.apellido}`}
+                    onClick={() => onDelete(u)}
+                    disabled={deletingId === u.id}
+                    className="ml-auto flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors group-hover:text-destructive hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </button>
+                )}
               </TableCell>
             </TableRow>
           ))}

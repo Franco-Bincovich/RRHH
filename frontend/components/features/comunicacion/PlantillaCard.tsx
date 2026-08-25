@@ -1,41 +1,25 @@
 "use client"
 
 import { Pencil, Send } from "lucide-react"
+import { AccionFila } from "@/components/ui/AccionFila"
 
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import type { Plantilla } from "@/types/plantillas"
 
-/**
- * Una plantilla de mail, como TARJETA.
- *
- * 🔴 ES UNA TARJETA Y NO UNA FILA, y eso es lo que dice el sistema de diseño: §5 nombra a
- * comunicación junto a perfiles de puesto y reportes — "cada plantilla de mail guardada, una
- * tarjeta". El criterio de §5 es el que decide, no el tipo de dato: una tarjeta es para algo que
- * **se elige**, una fila para un registro que **se compara con el de al lado**. Nadie compara dos
- * plantillas entre sí: se busca la que hay que mandar o corregir, y para eso el asunto —el texto
- * que la persona va a ver en su bandeja— tiene que poder leerse entero, no truncado en una celda.
- *
- * ⚠️ Hasta el 21/8/2026 esto era una lista de filas dentro de un acordeón, y el propio archivo ya
- * anotaba que el acordeón sobraba ("un acordeón de un solo ítem adentro de una pestaña es
- * redundante, quedó pendiente a propósito"). Al pasar a tarjetas el acordeón se fue con él.
- *
- * ⚠️ SIN `interactive` NI HOVER (§2): la tarjeta no se abre, se leen sus dos líneas y se aprieta
- * una de las dos acciones. Editar y Enviar son destinos distintos, así que no hay "el" click de
- * la tarjeta que la elevación podría prometer.
- *
- * 🔴 LAS DOS ACCIONES ESTÁN SIEMPRE VISIBLES y sólo cambian de color al apuntar (§3). En una
- * grilla, revelarlas en hover obliga a barrer la pantalla con el mouse para saber qué se puede
- * hacer con cada tarjeta. Van juntas detrás de `editable` —no de dos gates distintos— porque el
- * backend gatea `PUT /api/plantillas` y `POST /api/plantillas/enviar` con el MISMO permiso: un
- * botón de enviar visible para `gerencia_lectura` daría 403 al apretarlo.
- */
-const ACCION_CLASS =
-  "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-
-export function PlantillaCard({ plantilla, editable, onEditar, onEnviar }: {
+export function PlantillaCard({ plantilla, editable, bloqueo, onEditar, onEnviar }: {
   plantilla: Plantilla
   editable: boolean
+  /**
+   * Por qué HOY las dos acciones no pueden funcionar (vista consolidada), o `null`.
+   *
+   * 🔑 UNA SOLA PROP PARA LAS DOS porque las dos terminan en un endpoint que exige empresa
+   * concreta: enviar (`POST /enviar`) y editar (el `PUT` que hace el modal al guardar). El
+   * MOTIVO no se repite por tarjeta —serían N copias del mismo cartel en una grilla— sino que
+   * lo muestra una vez `PlantillasSection`, arriba, junto al botón de alta. Acá va como `title`
+   * sobre el wrapper, porque un `<AccionFila disabled>` no dispara eventos de mouse.
+   */
+  bloqueo: string | null
   onEditar: (p: Plantilla) => void
   onEnviar: (p: Plantilla) => void
 }) {
@@ -53,15 +37,15 @@ export function PlantillaCard({ plantilla, editable, onEditar, onEnviar }: {
       <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{plantilla.asunto}</p>
 
       {editable && (
-        <div className="mt-auto flex justify-end gap-1 pt-1">
-          <button type="button" aria-label={`Enviar ${plantilla.clave}`} onClick={() => onEnviar(plantilla)}
-            className={`${ACCION_CLASS} group-hover:text-primary`}>
+        <div className="mt-auto flex justify-end gap-1 pt-1" title={bloqueo ?? undefined}>
+          <AccionFila aria-label={`Enviar ${plantilla.clave}`} disabled={Boolean(bloqueo)}
+            onClick={() => onEnviar(plantilla)}>
             <Send className="size-4" aria-hidden="true" />
-          </button>
-          <button type="button" aria-label={`Editar ${plantilla.clave}`} onClick={() => onEditar(plantilla)}
-            className={`${ACCION_CLASS} group-hover:text-primary`}>
+          </AccionFila>
+          <AccionFila aria-label={`Editar ${plantilla.clave}`} disabled={Boolean(bloqueo)}
+            onClick={() => onEditar(plantilla)}>
             <Pencil className="size-4" aria-hidden="true" />
-          </button>
+          </AccionFila>
         </div>
       )}
     </Card>

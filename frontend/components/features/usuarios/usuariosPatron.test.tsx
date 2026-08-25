@@ -58,16 +58,31 @@ describe("(c) el encabezado sigue puesto en los tres estados", () => {
     expect(html).not.toContain("Limpiar todo")
   })
 
-  it("🔴 el vacío genérico del patrón ES verdad acá, y por eso no lleva copy propio", () => {
+  it("🔴 el vacío genérico del patrón ES verdad para quien puede cargar el primero", () => {
     /*
      * La regla del bloque dice que "Cuando se cargue el primero va a aparecer acá" sólo vale si
-     * el usuario de esa pantalla PUEDE cargarlo. Acá puede: a /usuarios sólo llega `admin_rrhh`
-     * —la propia página redirige a cualquier otro rol antes de renderizar— y es exactamente quien
-     * crea usuarios. Por eso se delega en `TablaVacia` en vez de escribir el texto a mano.
+     * el usuario de esa pantalla PUEDE cargarlo.
+     *
+     * 🔴 ESTE TEST CAMBIÓ EL 25/8/2026 Y HAY QUE LEER POR QUÉ. Afirmaba que la página tenía el
+     * literal `puede(r, "usuarios", "write")`, o sea que **exigía por escrito el guard admin-only
+     * que resultó ser el bug**: rebotaba a `gerencia_lectura` en contra del modelo de permisos y
+     * del backend, que ya le sirve el listado a ese rol. Un test que fija una divergencia la
+     * vuelve intocable — es el mismo caso que `dialog.test.tsx`, que protegía la regresión de los
+     * 20 modales con `max-h-[90vh]` hasta que se dio vuelta.
+     *
+     * Lo que se afirma ahora es la CONDICIÓN real: el texto genérico se muestra cuando hay una
+     * acción de alta, y la acción sólo llega con permiso de ESCRITURA (`esAdmin`). A quien sólo
+     * lee, la página le pasa `accionVacio={undefined}`.
      */
-    expect(tabla()).toContain("Cuando se cargue el primero va a aparecer acá")
+    expect(tabla({ accionVacio: <button>Crear usuario</button> }))
+      .toContain("Cuando se cargue el primero va a aparecer acá")
     const pagina = readFileSync(PAGINA, "utf8")
-    expect(pagina).toContain('puede(r, "usuarios", "write")')
+    expect(pagina).toContain('const esAdmin = rol !== null && puede(rol, "usuarios", "write")')
+    expect(pagina).toContain("const crearBtn = esAdmin ?")
+    // Y el rebote NO vuelve: quién entra lo decide el AuthGuard, como en todas las demás.
+    // Se busca la LLAMADA (`router.replace(`) y no el nombre: el docstring de la página menciona
+    // `router.replace` en prosa para explicar qué se sacó, y esa explicación tiene que sobrevivir.
+    expect(pagina).not.toContain("router.replace(")
   })
 
   it("cargando: el esqueleto tiene la MISMA cantidad de columnas que la tabla", () => {

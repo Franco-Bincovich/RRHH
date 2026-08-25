@@ -62,3 +62,22 @@ export function validar(form: FormContratar, hoy: string): ErroresContratar {
 }
 
 export const sinErrores = (e: ErroresContratar): boolean => Object.keys(e).length === 0
+
+
+/**
+ * 🔑 EL MÍNIMO QUE ESTE BOTÓN NECESITA, y no `CandidatoConGrupo`. Se afloja el 25/8/2026 para
+ * que el tablero de la vacante —que maneja `types/vacantes.Candidato`, un tipo distinto y más
+ * chico— pueda montar el MISMO botón sin convertir nada. Es el mínimo real: el archivo entero
+ * usa `id`, `nombre`, `apellido` y `email`; el resto del legajo lo deriva el backend del
+ * candidato y de su vacante.
+ *
+ * ⚠️ LAS DOS CONDICIONES PARA OFRECERLO (etapa `oferta` + estado `activo`) NO SE MUEVEN ACÁ:
+ * las aplica quien decide mostrarlo —`CandidatoAcciones` en /candidatos y `PipelineSeleccion` en
+ * la ficha de la vacante—, y el backend las revalida igual.
+ */
+export interface CandidatoContratable {
+  id: string
+  nombre: string
+  apellido: string
+  email: string
+}

@@ -15,13 +15,14 @@ import { EvaluadosResultadosTable } from "./EvaluadosResultadosTable"
 import { FichaEvaluadoModal } from "./FichaEvaluadoModal"
 import { useFiltrosEvaluadosResultados } from "./useFiltrosEvaluadosResultados"
 
-const PAGE_SIZE = 20
+const PAGE_SIZE_INICIAL = 20
 
 export function EvaluadosResultadosPanel({ loteId }: { loteId: string }) {
   const [items, setItems] = useState<EvaluadoListadoItem[]>([])
   const [total, setTotal] = useState(0)
   const [sectores, setSectores] = useState<string[]>([])
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_INICIAL)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState(false)
   const [nonce, setNonce] = useState(0)
@@ -32,7 +33,7 @@ export function EvaluadosResultadosPanel({ loteId }: { loteId: string }) {
   useEffect(() => {
     setCargando(true)
     setError(false)
-    fetchEvaluadosResultados(loteId, filtros, page, PAGE_SIZE)
+    fetchEvaluadosResultados(loteId, filtros, page, pageSize)
       .then((r) => {
         setItems(r.items)
         setTotal(r.total)
@@ -45,7 +46,7 @@ export function EvaluadosResultadosPanel({ loteId }: { loteId: string }) {
       .finally(() => setCargando(false))
     // Los CUATRO filtros son server-side: cualquiera obliga a re-traer. Hasta el 15/8/2026 sólo
     // `proyecto_id` estaba acá y los otros tres se aplicaban sobre el array; ver el hook.
-  }, [loteId, nonce, page, filtros.sector, filtros.perfil, filtros.con_nota, filtros.proyecto_id])
+  }, [loteId, nonce, page, pageSize, filtros.sector, filtros.perfil, filtros.con_nota, filtros.proyecto_id])
 
   async function exportar() {
     try {
@@ -75,11 +76,11 @@ export function EvaluadosResultadosPanel({ loteId }: { loteId: string }) {
         chips={chips} onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
       />
 
-      {/* 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS (era `total > PAGE_SIZE`) y sólo después de cargar:
+      {/* 🔴 EL PIE VA SIEMPRE QUE HAYA FILAS (era `total > pageSize`) y sólo después de cargar:
           sin la guarda, al cambiar de filtro la barra queda mostrando el total del pedido
           ANTERIOR sobre el esqueleto. El total es el del backend, no `items.length`. */}
       {!cargando && items.length > 0 && (
-        <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
+        <Pagination page={page} total={total} pageSize={pageSize} onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
       {fichaId && <FichaEvaluadoModal loteId={loteId} evaluadoId={fichaId} onClose={() => setFichaId(null)} />}
     </div>

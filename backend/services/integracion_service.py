@@ -11,18 +11,24 @@ from uuid import UUID
 from repositories.integracion_remitente_repo import IntegracionRemitenteRepo
 from repositories.integracion_repo import IntegracionRepo
 from schemas.integracion import IntegracionResponse
+from services._audit_payloads_integraciones import (
+    payload_baja_integracion, payload_conexion_integracion, payload_remitente_sistema,
+)
 from services._google_oauth import construir_url_autorizacion, procesar_callback
 from services._google_scopes import puede_enviar
 from services._integracion_response import armar_response
+from services.audit_service import AuditService
 from utils.errors import AppError
 from utils.logger import logger
 
 
 class IntegracionService:
     def __init__(self, repo: Optional[IntegracionRepo] = None,
-                 remitente_repo: Optional[IntegracionRemitenteRepo] = None) -> None:
+                 remitente_repo: Optional[IntegracionRemitenteRepo] = None,
+                 audit: Optional[AuditService] = None) -> None:
         self._repo = repo or IntegracionRepo()
         self._remitente_repo = remitente_repo or IntegracionRemitenteRepo()
+        self._audit = audit or AuditService()
 
     def get_integraciones(self, user_id: str) -> list[IntegracionResponse]:
         """
@@ -70,6 +76,8 @@ class IntegracionService:
                 "SCOPE_ENVIO_FALTANTE", 409)
         # El repo declara UUID y el router entrega str: el casteo va acá, no en el repo.
         self._remitente_repo.set_remitente(UUID(user_id))
+        self._audit.registrar(**payload_remitente_sistema(
+            {**row, "es_remitente_sistema": True}, user_id))
         logger.info("Casilla del sistema designada", extra={"user_id": user_id})
         return armar_response("google", {**row, "es_remitente_sistema": True})
 
@@ -86,14 +94,15 @@ class IntegracionService:
         """
         Guarda o actualiza la API key de Anthropic del usuario.
 
-        Args:
-            user_id: UUID del usuario.
-            api_key: API key de Anthropic a almacenar.
+        Args: user_id (UUID del usuario) · api_key (a almacenar; NO viaja al evento).
 
         Returns:
             IntegracionResponse confirmando que la key fue guardada.
         """
         self._repo.save_api_key(user_id, "anthropic", api_key)
+        # 🔴 La KEY NO viaja al evento — ver el encabezado de _audit_payloads_integraciones.
+        self._audit.registrar(**payload_conexion_integracion(
+            {"tipo": "anthropic", "activo": True}, user_id))
         logger.info("API key Anthropic guardada", extra={"user_id": user_id})
         return IntegracionResponse(tipo="anthropic", email_cuenta=None, activo=True, connected=True)
 
@@ -109,6 +118,8 @@ class IntegracionService:
             IntegracionResponse confirmando que la key fue guardada.
         """
         self._repo.save_api_key(user_id, "zernio", api_key)
+        self._audit.registrar(**payload_conexion_integracion(
+            {"tipo": "zernio", "activo": True}, user_id))
         logger.info("API key Zernio guardada", extra={"user_id": user_id})
         return IntegracionResponse(tipo="zernio", email_cuenta=None, activo=True, connected=True)
 
@@ -123,11 +134,16 @@ class IntegracionService:
         Returns:
             True si la integración fue eliminada.
 
+        🔴 EL PRIOR SE LEE ANTES DEL DELETE (la fila se va entera, con el `email_cuenta` y el
+        flag de casilla del sistema) y el evento se emite DESPUÉS (uno previo afirmaría una baja
+        que todavía puede fallar). Este evento es lo único que va a quedar.
+
         Raises:
             AppError: INTEGRACION_NOT_FOUND (404) si el usuario no tenía esa integración.
         """
-        deleted = self._repo.delete(user_id, tipo)
-        if not deleted:
+        prior = self._repo.get_by_user_and_tipo(user_id, tipo)
+        if not self._repo.delete(user_id, tipo):
             raise AppError("Integración no encontrada", "INTEGRACION_NOT_FOUND", 404)
+        self._audit.registrar(**payload_baja_integracion(prior, tipo, user_id))
         logger.info("Integración desconectada", extra={"user_id": user_id, "tipo": tipo})
         return True

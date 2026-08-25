@@ -20,8 +20,14 @@ from typing import Optional
 from services.audit_service import _jsonable
 
 _ENTIDAD = "hora"
+# 🔴 LOS TRES DEL CAMINO POR PROYECTO ENTRAN, Y NO SON DECORATIVOS. `valor_hora_snapshot` es el
+# precio CONGELADO al insertar: con `horas` es lo único que permite reconstruir el costo de la
+# fila borrada, y ese número no se puede volver a derivar —la asignación pudo cambiar de valor, o
+# no existir ya—. `proyecto_id` y `asignacion_id` dicen a qué se imputaba. Las cargas del link
+# público los traen en NULL y ahí el evento los muestra vacíos, que es la verdad.
 _CAMPOS = ("empleado_id", "cliente_id", "fecha", "horas", "modalidad",
-           "proyecto_texto", "tarea_texto", "descripcion")
+           "proyecto_texto", "tarea_texto", "descripcion",
+           "proyecto_id", "asignacion_id", "valor_hora_snapshot")
 
 
 def _subset(obj: object, campos: tuple) -> dict:

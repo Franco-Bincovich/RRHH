@@ -1,6 +1,7 @@
 "use client"
 
 import { Pencil, Trash2 } from "lucide-react"
+import { AccionFila } from "@/components/ui/AccionFila"
 import type { ReactNode } from "react"
 
 import { ErrorState } from "@/components/ui/ErrorState"
@@ -27,9 +28,6 @@ interface Props {
   /** Qué ofrecer cuando NO hay filtros y tampoco datos: el alta. `undefined` si no puede escribir. */
   accionVacio?: ReactNode
 }
-
-const ACCION_CLASS =
-  "flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
 
 /**
  * Tabla del catálogo de clientes. PRESENTACIONAL: sin fetch ni lógica de negocio.
@@ -88,15 +86,13 @@ export function ClientesTabla({
                       borrado aparece recién al apuntar la fila: en reposo, una columna de íconos
                       rojos se lee como una lista de errores. */}
                   <div className="flex justify-end gap-1">
-                    <button type="button" aria-label={`Editar ${c.nombre}`} onClick={() => onEdit(c)}
-                      className={`${ACCION_CLASS} group-hover:text-primary`}>
+                    <AccionFila aria-label={`Editar ${c.nombre}`} onClick={() => onEdit(c)}>
                       <Pencil className="size-4" aria-hidden="true" />
-                    </button>
+                    </AccionFila>
                     {c.activo && (
-                      <button type="button" aria-label={`Dar de baja ${c.nombre}`} onClick={() => onDelete(c)}
-                        className={`${ACCION_CLASS} group-hover:text-destructive`}>
+                      <AccionFila tono="destructivo" aria-label={`Dar de baja ${c.nombre}`} onClick={() => onDelete(c)}>
                         <Trash2 className="size-4" aria-hidden="true" />
-                      </button>
+                      </AccionFila>
                     )}
                   </div>
                 </TableCell>
