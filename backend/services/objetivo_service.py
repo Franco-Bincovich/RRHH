@@ -20,6 +20,17 @@ rechaza igual venga como dueño o como acompañante.
 VALIDACIONES: los campos en _objetivos_validaciones.py y la jerarquía en _objetivos_jerarquia.py,
 los dos salidos de acá por límite de líneas. Este archivo se queda con la ORQUESTACIÓN —qué se
 valida y en qué ORDEN—, que es load-bearing: el gate del responsable va ANTES del insert.
+
+🔴 LAS CUATRO ESCRITURAS AUDITAN, Y ES TODO O NADA (24/8/2026). Hasta esa fecha este módulo era
+el ÚNICO del sistema con borrado desde la UI y CERO eventos de auditoría, y no fue gratis: un
+objetivo real de Karstec desapareció entre el 17/8 y el 24/8 sin dejar rastro de quién ni cuándo.
+`tests/test_auditoria_coherente.py` no podía cazarlo —su alcance son los módulos que YA emiten
+algún evento, así que uno que no emite ninguno queda afuera POR CONSTRUCCIÓN— y por eso la misma
+tanda suma el barrido que sí lo caza (`tests/test_auditoria_destructivas.py`). Los
+payloads, con el porqué de cada campo excluido, en `services/_audit_payloads_objetivos.py`.
+
+⚠️ EL EXPORT NO ESTÁ ACÁ: vive en `services/_objetivos_export.py`, junto a las filas que arma.
+Se mudó en esta misma tanda para hacerle lugar a la auditoría — el porqué del corte está allá.
 """
 from typing import Optional
 from uuid import UUID
@@ -30,22 +41,24 @@ from schemas.objetivo import (
     ObjetivoResponse, ObjetivoUpdate,
 )
 from schemas.objetivo_filtros import SIN_FILTROS, ObjetivosFiltros
-from repositories._objetivos_arbol import contar_con_hijos
-from services._limite_export import verificar_limite_export
+from services._audit_payloads_objetivos import payload_alta_objetivo, payload_update_objetivo
 from services._paginacion import sin_paginar
 from services._objetivos_duplicado import duplicado_a_409
-from services._objetivos_export import construir_filas_export
+from services._objetivos_export import exportar as _exportar
 from services._objetivos_jerarquia import ensure_no_tiene_hijos, ensure_padre_valido
-from services._objetivos_validaciones import ensure_prioridad_valida, ensure_responsable_valido
+from services._objetivos_validaciones import ensure_prioridad_valida, ensure_responsable_valido, ensure_responsables_validos
 from services._objetivos_write import cambiar_estado, eliminar
-from services.export import Descarga, build_export
+from services.audit_service import AuditService
+from services.export import Descarga
 from utils.errors import AppError
 from utils.logger import logger
 
 
 class ObjetivoService:
-    def __init__(self, repo: Optional[ObjetivoRepo] = None) -> None:
+    def __init__(self, repo: Optional[ObjetivoRepo] = None,
+                 audit: Optional[AuditService] = None) -> None:
         self._repo = repo or ObjetivoRepo()
+        self._audit = audit or AuditService()
 
     def get_all(self, empresa_id: Optional[UUID] = None,
                 filtros: ObjetivosFiltros = SIN_FILTROS) -> ObjetivoListResponse:
@@ -60,22 +73,8 @@ class ObjetivoService:
 
     def exportar(self, empresa_id: Optional[UUID] = None, formato: str = "excel",
                  filtros: ObjetivosFiltros = SIN_FILTROS) -> Descarga:
-        """Exporta los objetivos (columnas legibles, sin UUIDs) respetando los MISMOS filtros que
-        el listado. None = consolidado. El motor genérico no se toca.
-
-        🔑 Que el listado y el export reciban el MISMO objeto `ObjetivosFiltros` es lo que hace
-        estructuralmente imposible que un filtro quede en uno solo de los dos — la invariante que
-        `tests/test_paridad_list_export.py` verifica del lado del router.
-
-        🔴 EL ARCHIVO TRAE PADRES E HIJOS, así que el tope de filas se cuenta sobre el árbol
-        APLANADO y no sobre las raíces: `find_all` devuelve raíces con hijos anidados, y
-        `len(items)` diría bastante menos de lo que se va a escribir. Con el conteo equivocado,
-        un export de 15.000 raíces con 15.000 hijos pasaría el tope de 20.000 y produciría 30.000
-        filas — que es justo el archivo demasiado grande que el tope existe para evitar."""
-        items = self._repo.find_all(empresa_id, filtros)
-        verificar_limite_export(contar_con_hijos(items))
-        datos = {"Objetivos": construir_filas_export(items)}
-        return build_export(nombre="Objetivos", datos=datos, filename_base="objetivos", formato=formato)
+        """Exporta los objetivos con los MISMOS filtros que el listado. Ver `_objetivos_export`."""
+        return _exportar(self._repo, empresa_id, formato, filtros)
 
     def get_by_id(self, id: UUID, empresa_id: Optional[UUID] = None) -> ObjetivoResponse:
         """Raises OBJETIVO_NOT_FOUND (404)."""
@@ -100,26 +99,32 @@ class ObjetivoService:
             raise AppError("El título es requerido", "TITULO_REQUERIDO", 422)
         ensure_prioridad_valida(data.prioridad)
         ensure_responsable_valido(str(data.responsable_id))
-        for extra in (data.responsables or []):
-            ensure_responsable_valido(str(extra))
+        ensure_responsables_validos(data.responsables)
         ensure_padre_valido(self._repo, data.parent_id, data.empresa_id)
         with duplicado_a_409():
             row = self._repo.save(data)
+        # La empresa del evento sale del OBJETIVO (`data.empresa_id`, explícito en el body) y no
+        # del header: auditar es una ACCIÓN y la empresa la decide el form, no el sidebar.
+        self._audit.registrar(**payload_alta_objetivo(row, created_by))
         logger.info("Objetivo creado", extra={"objetivo_id": row.id, "created_by": created_by})
         return row
 
-    def update(self, id: UUID, data: ObjetivoUpdate, empresa_id: Optional[UUID] = None) -> ObjetivoResponse:
+    def update(self, id: UUID, data: ObjetivoUpdate, empresa_id: Optional[UUID] = None,
+               usuario_id: Optional[str] = None) -> ObjetivoResponse:
         """Actualización parcial. Revalida responsable si cambia.
 
         🔴 La edición TAMBIÉN puede chocar el índice único —cambiar título, periodicidad o TIPO
         puede dejar el objetivo idéntico a otro— y por eso lleva el mismo `duplicado_a_409` que
-        el alta. Ver ese módulo."""
-        if not self._repo.find_by_id(str(id), empresa_id):
+        el alta. Ver ese módulo.
+
+        🔑 EL `prior` SE GUARDA: el `find_by_id` que verifica existencia ES el "antes" del diff.
+        Sin él habría que releer, y releer DESPUÉS del update daría un diff vacío."""
+        prior = self._repo.find_by_id(str(id), empresa_id)
+        if not prior:
             raise AppError("Objetivo no encontrado", "OBJETIVO_NOT_FOUND", 404)
         if data.responsable_id:
             ensure_responsable_valido(str(data.responsable_id))
-        for extra in (data.responsables or []):
-            ensure_responsable_valido(str(extra))
+        ensure_responsables_validos(data.responsables)
         if data.parent_id:
             # Las DOS puntas de la profundidad 2: que el padre elegido no sea ya un hijo, y que
             # el objetivo que se cuelga no tenga hijos propios (se volverían nietos).
@@ -128,15 +133,18 @@ class ObjetivoService:
         ensure_prioridad_valida(data.prioridad, opcional=True)
         with duplicado_a_409():
             updated = self._repo.update(str(id), data, empresa_id)
+        self._audit.registrar(**payload_update_objetivo(prior, updated, usuario_id))
         logger.info("Objetivo actualizado", extra={"objetivo_id": str(id)})
         return updated  # type: ignore[return-value]
 
     # Las dos de abajo delegan en `_objetivos_write`: no orquestan validaciones, sólo verifican
     # existencia y escriben. El porqué del corte está en el encabezado de ese módulo.
-    def cambiar_estado(self, id: UUID, data: CambiarEstadoRequest, empresa_id: Optional[UUID] = None) -> ObjetivoResponse:
+    def cambiar_estado(self, id: UUID, data: CambiarEstadoRequest, empresa_id: Optional[UUID] = None,
+                       usuario_id: Optional[str] = None) -> ObjetivoResponse:
         """Mueve el objetivo a otro estado del kanban. Ver `_objetivos_write.cambiar_estado`."""
-        return cambiar_estado(self._repo, id, data, empresa_id)
+        return cambiar_estado(self._repo, self._audit, id, data, empresa_id, usuario_id)
 
-    def delete(self, id: UUID, empresa_id: Optional[UUID] = None) -> None:
+    def delete(self, id: UUID, empresa_id: Optional[UUID] = None,
+               usuario_id: Optional[str] = None) -> None:
         """Elimina el objetivo y sus subobjetivos. Ver `_objetivos_write.eliminar`."""
-        eliminar(self._repo, id, empresa_id)
+        eliminar(self._repo, self._audit, id, empresa_id, usuario_id)

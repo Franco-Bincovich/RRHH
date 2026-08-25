@@ -18,6 +18,20 @@ interface RolesInputProps {
  * Input multi-valor de roles: texto libre con chips + autocompletado.
  * Enter o coma agrega el rol tipeado; la X lo quita. Las sugerencias salen del
  * pool compartido (todas las empresas) y se filtran por lo que se escribe.
+ *
+ * 🔴 EL BORRADOR SE CONFIRMA AL SALIR DEL CAMPO (`onBlur`), Y NO ES UN DETALLE DE COMODIDAD.
+ * Hasta el 24/8/2026 el texto tipeado y no confirmado con Enter **se descartaba en silencio**:
+ * el campo se veía lleno, el usuario apretaba Guardar, y el rol no llegaba. Es un control que
+ * PARECE cerrado —tiene chips y un desplegable de sugerencias— y se comporta como texto libre
+ * con un paso extra invisible. Pasó de verdad en el formulario de contratación: el legajo se
+ * creó con `roles` vacío.
+ *
+ * Apretar el botón de guardar BLUREA el input primero, así que confirmar en `onBlur` es lo que
+ * hace que "lo que veo" y "lo que se manda" sean lo mismo.
+ *
+ * ⚠️ Elegir una sugerencia NO dispara esto dos veces: las opciones usan `onMouseDown` con
+ * `preventDefault()`, que impide el blur. Sin ese detalle, hacer click en una sugerencia
+ * agregaría el borrador Y la sugerencia.
  */
 export function RolesInput({ value, onChange, suggestions, label, required, id = "roles" }: RolesInputProps) {
   const [text, setText] = useState("")
@@ -75,7 +89,7 @@ export function RolesInput({ value, onChange, suggestions, label, required, id =
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
             onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
+            onBlur={() => { setFocused(false); add(text) }}
             placeholder={value.length === 0 ? "Escribí un rol y presioná Enter" : ""}
             className="min-h-9 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground"
             aria-required={required}

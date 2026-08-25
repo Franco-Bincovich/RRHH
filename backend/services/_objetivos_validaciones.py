@@ -64,6 +64,24 @@ def ensure_responsable_valido(responsable_id: str) -> None:
         raise AppError("El responsable no está activo", "RESPONSABLE_NO_ACTIVO", 422)
 
 
+def ensure_responsables_validos(extras) -> None:
+    """Valida la lista de responsables ADICIONALES con la MISMA función que el dueño.
+
+    Existe porque `create` y `update` tenían este bucle escrito verbatim cada uno. No es
+    deduplicación cosmética: la regla que sostiene —"un responsable inactivo se rechaza igual
+    venga como dueño o como acompañante"— está declarada en el encabezado de `objetivo_service`,
+    y dos copias del bucle son dos lugares donde esa regla puede dejar de cumplirse por separado.
+
+    Args:
+        extras: lista de user ids (UUID o str), o None. `None` y `[]` son ambos "nada que validar".
+
+    Raises:
+        AppError: RESPONSABLE_NO_VALIDO / RESPONSABLE_NO_ACTIVO (422), por cada id que falle.
+    """
+    for extra in (extras or []):
+        ensure_responsable_valido(str(extra))
+
+
 def ensure_prioridad_valida(prioridad: Optional[str], *, opcional: bool = False) -> None:
     """Verifica que la prioridad esté en el vocabulario cerrado `PRIORIDADES`.
 

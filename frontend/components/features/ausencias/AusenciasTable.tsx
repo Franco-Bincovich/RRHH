@@ -28,7 +28,7 @@ interface AusenciasTableProps {
   deletingId: string | null
   onRetry: () => void
   onEdit: (a: Ausencia) => void
-  onDelete: (id: string) => void
+  onDelete: (ausencia: Ausencia) => void
   onDocs: (a: Ausencia) => void
   /** Los filtros activos, para explicar el vacío con sus valores reales y ofrecer quitarlos. */
   chips: ChipFiltro[]
@@ -118,7 +118,7 @@ export function AusenciasTable({
                       <button type="button" onClick={() => onEdit(a)} aria-label={`Editar la ausencia de ${a.empleado_nombre ?? "el colaborador"}`} className={`${ACCION_CLASS} group-hover:text-primary`}>
                         <Pencil className="size-4" aria-hidden="true" />
                       </button>
-                      <button type="button" onClick={() => onDelete(a.id)} disabled={deletingId === a.id} aria-label={`Eliminar la ausencia de ${a.empleado_nombre ?? "el colaborador"}`} className={`${ACCION_CLASS} group-hover:text-destructive`}>
+                      <button type="button" onClick={() => onDelete(a)} disabled={deletingId === a.id} aria-label={`Eliminar la ausencia de ${a.empleado_nombre ?? "el colaborador"}`} className={`${ACCION_CLASS} group-hover:text-destructive`}>
                         <Trash2 className="size-4" aria-hidden="true" />
                       </button>
                     </>

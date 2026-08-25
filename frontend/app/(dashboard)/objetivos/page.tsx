@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { toast } from "sonner"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { ObjetivoModal } from "@/components/features/objetivos/ObjetivoModal"
 import { FiltersBar } from "@/components/ui/FiltersBar"
@@ -12,9 +11,12 @@ import { TipoObjetivoTabs } from "@/components/features/objetivos/TipoObjetivoTa
 import { useFiltrosObjetivos } from "@/components/features/objetivos/useFiltrosObjetivos"
 import { NuevoObjetivoBoton, ObjetivosAcciones } from "@/components/features/objetivos/ObjetivosAcciones"
 import { ImportarObjetivosModal } from "@/components/features/objetivos/ImportarObjetivosModal"
-import { cambiarEstadoObjetivo, deleteObjetivo, fetchObjetivos } from "@/services/objetivos"
+import { fetchObjetivos } from "@/services/objetivos"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { confirmarEliminarObjetivo } from "@/components/features/shared/confirmaciones"
+import { useAccionesObjetivos } from "@/components/features/objetivos/useAccionesObjetivos"
 import { useCanWrite } from "@/hooks/useCanWrite"
-import type { EstadoObjetivo, Objetivo } from "@/types/objetivo"
+import type { Objetivo } from "@/types/objetivo"
 
 /**
  * Orquestador de /objetivos: abre y cierra diálogos y tiene los datos. El estado de FILTROS —los
@@ -50,8 +52,9 @@ export default function ObjetivosPage() {
   const [modalOpen, setModalOpen]   = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing]       = useState<Objetivo | null>(null)
-  const [moviendo, setMoviendo]     = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  /* Mover y borrar viven en `useAccionesObjetivos`: son lo que MODIFICA el tablero, y esta
+     página se quedó con lo que MUESTRA. El borrado pide confirmación y mover no — el criterio
+     (reversibilidad, no importancia) está escrito en el hook. */
 
   // El objeto de filtros viaja ENTERO: cambiar la vista dispara el mismo camino que cambiar el
   // estado o la prioridad, y por eso no hay ninguna rama especial para el filtro nuevo.
@@ -68,17 +71,7 @@ export default function ObjetivosPage() {
 
   useEffect(() => { load() }, [load])
 
-  async function handleMover(id: string, estado: EstadoObjetivo) {
-    setMoviendo(id)
-    try { await cambiarEstadoObjetivo(id, { estado }); await load() }
-    catch { toast.error("No se pudo mover el objetivo. Intentá de nuevo.") } finally { setMoviendo(null) }
-  }
-
-  async function handleDelete(id: string) {
-    setDeletingId(id)
-    try { await deleteObjetivo(id); await load() }
-    catch { toast.error("No se pudo eliminar el objetivo. Intentá de nuevo.") } finally { setDeletingId(null) }
-  }
+  const acciones = useAccionesObjetivos(load)
 
   const chips = chipsDeCampos(f.campos)
   const nuevoBtn = <NuevoObjetivoBoton onClick={() => { setEditing(null); setModalOpen(true) }} />
@@ -122,8 +115,9 @@ export default function ObjetivosPage() {
       <ObjetivosVistas
         vista={vista} onVista={setVista} loading={loading} error={error} onReintentar={load}
         objetivos={objetivos} total={total} mostrarEmpresa={f.mostrarEmpresa} canWrite={canWrite}
-        onMover={handleMover} moviendo={moviendo} deletingId={deletingId}
-        onEdit={(o) => { setEditing(o); setModalOpen(true) }} onDelete={handleDelete}
+        onMover={acciones.mover} moviendo={acciones.moviendo}
+        deletingId={acciones.confirmacion.pendiente?.id ?? null}
+        onEdit={(o) => { setEditing(o); setModalOpen(true) }} onDelete={acciones.confirmacion.pedir}
         chips={chips}
         onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
         accionVacio={canWrite ? nuevoBtn : undefined}
@@ -137,6 +131,14 @@ export default function ObjetivosPage() {
 
       <ObjetivoModal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }}
         onSuccess={() => { setModalOpen(false); setEditing(null); load() }} editing={editing} />
+
+      <ConfirmDialog
+        open={acciones.confirmacion.abierto}
+        onClose={acciones.confirmacion.cerrar}
+        onConfirm={acciones.confirmarBorrado}
+        loading={acciones.borrando}
+        {...confirmarEliminarObjetivo(acciones.confirmacion.pendiente ?? {})}
+      />
     </div>
   )
 }

@@ -74,7 +74,7 @@ interface Props {
   onMover: (id: string, estado: EstadoObjetivo) => Promise<void>
   moviendo: string | null
   onEdit: (obj: Objetivo) => void
-  onDelete: (id: string) => void
+  onDelete: (objetivo: Objetivo) => void
   deletingId: string | null
   /** Los filtros activos, para explicar el vacío con sus valores reales y ofrecer quitarlos. */
   chips: ChipFiltro[]

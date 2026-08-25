@@ -26,7 +26,7 @@ interface Props {
   objetivo: Objetivo
   canWrite: boolean
   onEdit: (obj: Objetivo) => void
-  onDelete: (id: string) => void
+  onDelete: (objetivo: Objetivo) => void
   deletingId: string | null
 }
 
@@ -44,7 +44,7 @@ export function ObjetivoCard({ objetivo: obj, canWrite, onEdit, onDelete, deleti
             </Button>
             <Button
               variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-              disabled={deletingId === obj.id} onClick={() => onDelete(obj.id)} aria-label="Eliminar"
+              disabled={deletingId === obj.id} onClick={() => onDelete(obj)} aria-label="Eliminar"
             >
               <Trash2 className="size-3" />
             </Button>

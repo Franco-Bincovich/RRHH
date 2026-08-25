@@ -289,7 +289,7 @@ backend/
 │                          router NUEVO exige dividirlo primero (ver "Líneas" más abajo).
 ├── config/settings.py   ← única fuente de config y env (Settings() se instancia en import)
 ├── routers/             ← 81 archivos (límite 80 líneas cada uno)
-├── services/            ← 241 archivos de lógica de negocio (269 con submódulos: export/ 10,
+├── services/            ← 243 archivos de lógica de negocio (271 con submódulos: export/ 10,
 │                          mailer/ 6, reportes/ 12) (límite 150)
 │   ├── _empleado_scope.py     ← barrera de empresa/ownership sobre el empleado target (Fase 2)
 │   ├── _adjunto_padres.py     ← resolver de la entidad padre de un adjunto (Fase 2)
@@ -350,7 +350,7 @@ backend/
 │                          viven en migracionAWS/). 🔴 121 es el NÚMERO de la última, no la cantidad.
 ├── ruff.toml            ← config de ruff (reemplazó pyproject.toml, por Vercel)
 ├── pytest.ini           ← config de pytest (asyncio_mode=auto, testpaths=tests)
-└── tests/               ← 230 archivos .py: 210 `test_*.py` + 20 helpers `_*.py` (exentos del
+└── tests/               ← 235 archivos .py: 213 `test_*.py` + 22 helpers `_*.py` (exentos del
                             límite de 200 los primeros, NO los segundos — ver "Líneas")
 ```
 
@@ -941,7 +941,7 @@ compilación real de Tailwind/Turbopack** — directivas mal ubicadas, imports d
 cliente, CSS que no resuelve.
 
 `next dev` con Turbopack transpila sin type-check → un error de tipo pasa desapercibido en
-desarrollo pero **`next build` falla**. `vitest` cubre 1560 tests en 135 archivos, pero **la mayor
+desarrollo pero **`next build` falla**. `vitest` cubre 1593 tests en 139 archivos, pero **la mayor
 parte del front sigue sin test**: `tsc` sigue siendo la red principal. **Si aparece un error en
 cualquiera de los tres, es tuyo.**
 
@@ -1085,11 +1085,18 @@ Hay **tres módulos apagados a propósito**. En los tres el código está **ente
 **Frontend — 12 archivos > 150** (sin contar `.test.*`; **11 propios**, el otro es un primitivo de
 shadcn), y **CERO hooks > 80**. 🔴 **REMEDIDO EL 21/8/2026 sobre los 650 archivos del front, al
 cerrar el bloque B.** Venía de 28 el 12/8; los 16 que salieron los cortaron las tandas del bloque
-B, una pantalla por vez. Los 11 que quedan, de mayor a menor:
+B, una pantalla por vez. Los 11 que quedan, de mayor a menor (**remedidos el 25/8/2026**, con
+`.Count` y `-LiteralPath`):
 `ImportarNominaCSVModal.tsx` **377** · `NominaModal.tsx` 284 · `AIPanel.tsx` 249 ·
-`EmpresaAreasTab.tsx` 206 · `CapacitacionModal.tsx` 189 · `OnboardingChecklist.tsx` 186 ·
-`AsignacionModal.tsx` 185 · `CandidatoModal.tsx` 181 · `ArbolProyecto.tsx` 170 ·
-`ItemModal.tsx` 160 · `MapaVacaciones.tsx` 152.
+`EmpresaAreasTab.tsx` 206 · `CapacitacionModal.tsx` 190 · `OnboardingChecklist.tsx` 186 ·
+`AsignacionModal.tsx` 186 · `CandidatoModal.tsx` 183 · `ArbolProyecto.tsx` 171 ·
+`ItemModal.tsx` 161 · `MapaVacaciones.tsx` 152.
+> ⚠️ **`CandidatoModal.tsx` creció DOS líneas el 24/8/2026** (181 → 183) al migrar su regex de
+> email al validador compartido. Es el único de los once que esta tanda tocó, y se lo tocó
+> estando ya sobre el límite: era una de las TRES copias del mismo regex con tres mensajes
+> distintos, y dejar la copia divergida adentro para no sumar dos líneas habría conservado el
+> bug que la tanda vino a cerrar. **Queda anotado, no justificado como precedente**: el corte de
+> este archivo sigue pendiente y es el molde `AreaModal`/`ClienteModal` de abajo.
 - 🔑 **Los dos objetivos grandes ya no son páginas: son MODALES.** `costos/page.tsx` (624) y
   `vacantes/[id]/page.tsx` (452) se cortaron; lo que queda arriba de 180 son cuatro modales de
   formulario (`ImportarNominaCSVModal`, `NominaModal`, `CapacitacionModal`, `AsignacionModal`) y
@@ -1153,12 +1160,13 @@ contra el catálogo el 12/8/2026).
 - **"Compatibilidad con una posición"** (sucesión): feature nunca construida, no deuda técnica. El ranking es por assessment genérico. Cuando RRHH la reclame, definir qué significa compatibilidad antes de improvisar.
 
 ### Tests
-- **Backend: 4248 passed** en **210 archivos `test_*.py`** (+ **20 helpers** `tests/_*.py`, que no son tests — 230 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 23/8/2026, arreglando lo que encontró el smoke de lectura. Los TRES archivos nuevos son uno por unidad: la barrera de empresa de `completar_tarea`, el barrido de routers de escritura sin `Request`, y el agrupamiento del reporte de distribución — un archivo de test cubre UN módulo. 🟢 Desde esta sesión estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
-  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → 4115 (el cliente real bloqueado bajo tests) → 4120 (`motivo_baja` sale por la API, el hermano de `fecha_egreso`) → 4155 (los KPIs de §6 + la masa salarial deduplicada) → 4198 (el cierre del deslogueo en /vacantes: el barrido de codes 401, la clasificación del fallo de renovación de Google y los tests del interceptor, que no tenía ninguno) → 4200 (el barrido de `maybe_single()`, que nació del 500 permanente de `POST /api/offboarding`) → 4205 (la guarda del egreso en recategorizaciones) → 4218 (el barrido que sostiene `docs/INVENTARIO-SMOKE.md`: 13 tests en un archivo, seis de ellos comparando el documento contra el código en las dos direcciones) → 4244 (el smoke de lectura: la barrera de empresa que faltaba en `PUT /api/onboarding/{id}/tareas/{id}/completar` con su barrido de routers sin `Request`, y el agrupamiento insensible a la caja del reporte de distribución) → **4248** (los arreglos del smoke de ESCRITURA: la guarda del reingreso, la del proyecto con asignaciones, el `tipo` del hito y la completitud de `BAJA_LOGICA`). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
-- **Front: `npm test` (= `vitest run`) — 1560 tests en 135 archivos, verdes.** *(Windows, 23/8/2026, arreglando lo que encontró el smoke de lectura. Los CUATRO archivos nuevos son uno por unidad: `hooks/hidratacionPermisos.test.tsx` (el render de servidor de los primitivos de permiso es fail-closed aunque haya sesión), `components/ui/dropdownMenuLabel.test.tsx` (el label del dropdown vive dentro de un group — sin eso el menú no abre), `components/ui/ErrorState.test.tsx` (el 404 no es "algo salió mal") y `components/ui/fieldError.test.tsx` (el mensaje por campo mide 11px y lo decide un solo primitivo). La tanda anterior dejó 1528 en 130, al cablear los KPIs del dashboard a su pantalla, sumar el selector de vista de objetivos y cerrar todos los desplegables. Los CUATRO archivos nuevos son uno por unidad: `components/features/dashboard/_destinosKpi.test.ts` (a dónde lleva cada KPI y quién puede llegar), `components/ui/barridoAcordeones.test.ts` (ningún desplegable nace desplegado, con sus dos excepciones declaradas), y los dos del selector de vista de objetivos (`TipoObjetivoTabs.test.tsx` y `_filtrosObjetivos.test.ts`, que existen separados porque uno cubre el control y el otro el cable que lleva lo elegido a la query — el segundo nació de una mutación que sobrevivió). La tanda anterior dejó 1477 en 126, al sumar el hover de tarjeta de §2 y el barrido que lo hubiera cazado. El archivo nuevo es uno solo, `components/ui/decisionesVisuales.test.ts`, y no cubre una pantalla sino una CLASE de decisión: lo que §2 y §3 deciden sobre superficie, densidad y movimiento, contra los primitivos donde eso vive. La tanda anterior dejó 1451 en 123, al cerrar el bloque B con las CUATRO pantallas de afuera de `(dashboard)` —/login, /horas, /evaluacion/[token] y /cambiar-password—. El archivo nuevo es uno solo, `app/pantallasPublicas.test.tsx`, y cubre a las cuatro juntas: son la unidad de esa tanda y comparten los mismos cuatro ejes (estados compartidos, mensajes por campo, touch targets de 44px y el bug de huso). La tanda anterior dejó 1425 en 122, al cerrar el patrón de ficha en las CINCO pantallas que faltaban —/vacantes/[id], /proyectos/[id], /empresas/[id], /assessment/[id] y /onboarding/templates/[id]— más el barrido de paginación. Los seis archivos nuevos son uno por ficha (`barra<Entidad>.test.tsx`, junto a la barra que prueban) y `components/ui/barridoPaginacion.test.ts`. La tanda anterior dejó 1360 en 116, al propagar los patrones del bloque B3 a las NUEVE pantallas que quedaban: /objetivos, /onboarding, /onboarding/templates, /offboarding, /horas-por-cliente, /procesos, /organigrama, /sucesion y /assessment. Con esta tanda el bloque B3 cubre el front entero. Los nueve archivos nuevos son uno por pantalla, que es el criterio del repo: un archivo de test cubre UNA pantalla — por eso /onboarding y /onboarding/templates tienen uno cada una aunque compartan carpeta. Las tandas anteriores dejaron 1271 en 107 (/auditoria, /eventos, /costos, /inventario, /capacitaciones, /evaluaciones, /comunicacion), 1187 en 100 (/areas, /clientes, /empresas, /usuarios, /periodos, /proyectos) y 1128 en 94 (/ausencias, /vacaciones, /candidatos, /vacantes, /equipo); antes de eso, 1071 en 89 al cerrar el dashboard de §6. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
+- **Backend: 4278 passed** en **213 archivos `test_*.py`** (+ **22 helpers** `tests/_*.py`, que no son tests — 235 archivos `.py` en total dentro de `tests/`). `pytest -q` desde `backend/` con `venv`. *(Remedido el 25/8/2026, en la tanda de "los arreglos que hacen daño". Los TRES archivos nuevos son uno por unidad: `test_objetivos_auditoria.py` (los cuatro eventos del CRUD de objetivos), `test_auditoria_destructivas.py` (barrido nº 42) y `test_semilla_alcanza_lo_que_se_escribe.py` (barrido nº 43) — un archivo de test cubre UN módulo. Los DOS helpers nuevos son sus motores: `_barrido_destructivas.py` y `_barrido_tablas.py`. 🟢 Estos números los vigila `tests/test_claude_md_no_miente.py`: ya no se corrigen a mano.)*
+  > ⚠️ **`test_identificacion_publica.py::TestElPisoDeTiempo::test_el_exito_espera_el_piso` es FLAKY en Windows y no es del código.** Mide `perf_counter() - t0 >= 0.12` contra el piso de tiempo del rechazo único; con la suite entera corriendo dio **0.11951** (falla por medio milisegundo) y **sola pasa**. La granularidad del timer de Windows es ~15.6 ms, así que un `asyncio.sleep(0.12)` puede devolver apenas por debajo. Si aparece en rojo, correr ese archivo solo antes de diagnosticar nada. 🚩 Salida cuando moleste: comparar contra el piso menos una tolerancia, no contra el piso exacto.
+  > 📌 **La secuencia, para que un número no parezca una caída inexplicada:** 3280 (11/8) → 3229 (J5a) → 3228 (J5b) → 3234 (fix ASCII) → 3915 (A4.2) → 3934 (A5.1) → 3980 (A5.2/A6) → 4004 (A3.3) → 4052 (B4) → 4092 (fecha_egreso + orden del listado) → 4105 (motivo de la baja + el PUT sin `baja`) → 4115 (el cliente real bloqueado bajo tests) → 4120 (`motivo_baja` sale por la API, el hermano de `fecha_egreso`) → 4155 (los KPIs de §6 + la masa salarial deduplicada) → 4198 (el cierre del deslogueo en /vacantes: el barrido de codes 401, la clasificación del fallo de renovación de Google y los tests del interceptor, que no tenía ninguno) → 4200 (el barrido de `maybe_single()`, que nació del 500 permanente de `POST /api/offboarding`) → 4205 (la guarda del egreso en recategorizaciones) → 4218 (el barrido que sostiene `docs/INVENTARIO-SMOKE.md`: 13 tests en un archivo, seis de ellos comparando el documento contra el código en las dos direcciones) → 4244 (el smoke de lectura: la barrera de empresa que faltaba en `PUT /api/onboarding/{id}/tareas/{id}/completar` con su barrido de routers sin `Request`, y el agrupamiento insensible a la caja del reporte de distribución) → 4248 (los arreglos del smoke de ESCRITURA: la guarda del reingreso, la del proyecto con asignaciones, el `tipo` del hito y la completitud de `BAJA_LOGICA`) → **4278** (los arreglos que hacen daño: la auditoría del CRUD de objetivos —el módulo que borraba desde la UI sin dejar rastro— más los dos barridos que nacen de ahí, el de borrados físicos sin evento y el de `ORDEN` contra lo que el código escribe). Sube porque se agrega código con tests, no al revés — si algún día baja, es porque se borró código, como el único caso de arriba.
+- **Front: `npm test` (= `vitest run`) — 1593 tests en 139 archivos, verdes.** *(Windows, 25/8/2026, la tanda de "los arreglos que hacen daño". Los CUATRO archivos nuevos son uno por unidad: `components/ui/barridoConfirmacion.test.ts` (nº 44 — toda acción que borra pasa por ConfirmDialog), `components/ui/limpiarTodoRestituye.test.ts` (nº 45 — un filtro con valor siempre tiene chip), `components/features/shared/confirmaciones.test.ts` (el TEXTO de cada confirmación, que es lo único de un diálogo que esta suite puede ver sin jsdom) y `components/features/candidatos/estadoCandidato.test.tsx` (la tarjeta dice cómo TERMINÓ el candidato, no sólo dónde llegó). La tanda anterior dejó 1560 en 135, arreglando lo que encontró el smoke de lectura. Los CUATRO archivos nuevos son uno por unidad: `hooks/hidratacionPermisos.test.tsx` (el render de servidor de los primitivos de permiso es fail-closed aunque haya sesión), `components/ui/dropdownMenuLabel.test.tsx` (el label del dropdown vive dentro de un group — sin eso el menú no abre), `components/ui/ErrorState.test.tsx` (el 404 no es "algo salió mal") y `components/ui/fieldError.test.tsx` (el mensaje por campo mide 11px y lo decide un solo primitivo). La tanda anterior dejó 1528 en 130, al cablear los KPIs del dashboard a su pantalla, sumar el selector de vista de objetivos y cerrar todos los desplegables. Los CUATRO archivos nuevos son uno por unidad: `components/features/dashboard/_destinosKpi.test.ts` (a dónde lleva cada KPI y quién puede llegar), `components/ui/barridoAcordeones.test.ts` (ningún desplegable nace desplegado, con sus dos excepciones declaradas), y los dos del selector de vista de objetivos (`TipoObjetivoTabs.test.tsx` y `_filtrosObjetivos.test.ts`, que existen separados porque uno cubre el control y el otro el cable que lleva lo elegido a la query — el segundo nació de una mutación que sobrevivió). La tanda anterior dejó 1477 en 126, al sumar el hover de tarjeta de §2 y el barrido que lo hubiera cazado. El archivo nuevo es uno solo, `components/ui/decisionesVisuales.test.ts`, y no cubre una pantalla sino una CLASE de decisión: lo que §2 y §3 deciden sobre superficie, densidad y movimiento, contra los primitivos donde eso vive. La tanda anterior dejó 1451 en 123, al cerrar el bloque B con las CUATRO pantallas de afuera de `(dashboard)` —/login, /horas, /evaluacion/[token] y /cambiar-password—. El archivo nuevo es uno solo, `app/pantallasPublicas.test.tsx`, y cubre a las cuatro juntas: son la unidad de esa tanda y comparten los mismos cuatro ejes (estados compartidos, mensajes por campo, touch targets de 44px y el bug de huso). La tanda anterior dejó 1425 en 122, al cerrar el patrón de ficha en las CINCO pantallas que faltaban —/vacantes/[id], /proyectos/[id], /empresas/[id], /assessment/[id] y /onboarding/templates/[id]— más el barrido de paginación. Los seis archivos nuevos son uno por ficha (`barra<Entidad>.test.tsx`, junto a la barra que prueban) y `components/ui/barridoPaginacion.test.ts`. La tanda anterior dejó 1360 en 116, al propagar los patrones del bloque B3 a las NUEVE pantallas que quedaban: /objetivos, /onboarding, /onboarding/templates, /offboarding, /horas-por-cliente, /procesos, /organigrama, /sucesion y /assessment. Con esta tanda el bloque B3 cubre el front entero. Los nueve archivos nuevos son uno por pantalla, que es el criterio del repo: un archivo de test cubre UNA pantalla — por eso /onboarding y /onboarding/templates tienen uno cada una aunque compartan carpeta. Las tandas anteriores dejaron 1271 en 107 (/auditoria, /eventos, /costos, /inventario, /capacitaciones, /evaluaciones, /comunicacion), 1187 en 100 (/areas, /clientes, /empresas, /usuarios, /periodos, /proyectos) y 1128 en 94 (/ausencias, /vacaciones, /candidatos, /vacantes, /equipo); antes de eso, 1071 en 89 al cerrar el dashboard de §6. 🟢 Lo vigila `frontend/claudeMdNoMiente.test.ts`, que lo mide corriendo `vitest list` — no hay forma de contarlo leyendo el código: `it.each` sobre 30 elementos son 30 tests, no uno.)* **La cobertura sigue siendo parcial** — `tsc` sigue haciendo falta. No listar los archivos acá: se desactualiza en una sesión. `npm test` los enumera.
   > ✅ **Los 3 rojos que daba en Windows están arreglados (12/8).** `barridoFront.test.ts` armaba los paths con `path.join` (separador `\`) y filtraba con un `/` literal, así que descubría **0 exports** y las guardas de mínimo lo cazaban. **Verde en la Mac, rojo en la Lenovo, sin que cambiara el código auditado.** Ahora los paths se normalizan en `archivosDe`, el único lugar donde nacen. 🔑 **La regla que deja: un barrido que recorre el árbol filtra por `e.name` o normaliza el separador — nunca compara un tramo de path con `/` literal.** Los barridos del backend ya lo hacen bien (`Path.parts` / `.stem` / `.as_posix()`), y los otros tres del front filtran por nombre de archivo.
   > 🔴 **Y APARECIÓ UN CUARTO ROJO DE WINDOWS, DE LA MISMA FAMILIA, arreglado el 20/8/2026.** `claudeMdNoMiente.test.ts` lanzaba el hijo con `execFileSync("node_modules/.bin/vitest")`, que **en Windows es un script de shell SIN extensión**: `ENOENT`. O sea que el barrido que existe para que estos números no mientan estaba **rojo en la Lenovo y verde en la Mac**, y por eso el front venía declarando 896/75 con 941/79 medidos. Ahora se lanza con `process.execPath` + `node_modules/vitest/vitest.mjs`. 🔑 **La regla que deja: un test que lanza un proceso usa el ejecutable de node que ya está corriendo, nunca un lanzador de `.bin/`.**
-- **Son 41 barridos estructurales conocidos** (24 backend + 17 front), renumerados el 19/8/2026 —
+- **Son 45 barridos estructurales conocidos** (26 backend + 19 front), renumerados el 19/8/2026 —
   la lista anterior tenía dos numeraciones distintas conviviendo (1–11 y 12–15 fuera de orden) y
   le faltaban 3 barridos que ya existían. **Cada uno cubre automáticamente lo que se agregue
   después, y todos llevan guarda de mínimo** (`assert len(...) >= N`), sin la cual una
@@ -1362,6 +1370,68 @@ contra el catálogo el 12/8/2026).
       que `barridoSelect`) y verifica que ninguna excepción apunte a una tarjeta borrada.
       Guardas de mínimo ≥10 tarjetas y ≥200 archivos. Verificado por mutación: sacarle
       `interactive` a `ProcesoCard` lo rojea nombrándolo.
+  42. 🔴 **`tests/test_auditoria_destructivas.py`** (24/8/2026) — **toda escritura que BORRA
+      FÍSICAMENTE emite un evento de auditoría**, o está declarada con su razón. 🔑 Es el barrido
+      que le faltaba al repo el día que un objetivo real de Karstec desapareció sin rastro, y su
+      eje está elegido para cubrir lo que el nº 8 **no puede ver por construcción**: aquél toma
+      como alcance los módulos que YA emiten algún evento, así que un módulo que no emite
+      NINGUNO —que era exactamente el caso de `/objetivos`— queda afuera y en verde. Éste
+      pregunta por el ACTO, no por el módulo: si del otro lado hay una fila que deja de existir,
+      tiene que quedar registro. Las excepciones se declaran en DOS grupos que no se mezclan —
+      higiene técnica (filas que el sistema borra solo) y deuda real (acciones que alguien
+      aprieta y no dejan rastro)—, porque una lista que dice "no sé" es la que nadie limpia.
+      Descubrimiento por AST sobre `repositories/` + el grafo de llamadas de `_barrido_auditoria`.
+      Verificado por mutación: sacándole el `audit.registrar` a `_objetivos_write.eliminar`,
+      rojea nombrándolo.
+  43. 🔴 **`tests/test_semilla_alcanza_lo_que_se_escribe.py`** (24/8/2026) — **toda tabla en la
+      que el código puede CREAR filas la conoce `ORDEN`, la lista de borrado de
+      `scripts/_semilla_plan_borrado.py`, o está declarada con su razón. Y lo mismo con los
+      buckets de Storage.** 🔑 Lo que lo motivó: el smoke con navegador escribe en PRODUCCIÓN, y
+      una tabla que toca y que el limpiador no conoce deja filas para siempre **sin que nadie se
+      entere** — el limpiador termina en verde contando lo que sí borró. Pasó dos veces en la
+      corrida del 23-24/8: **`reportes_generados`** (86 filas, ninguna capa del limpiador la ve)
+      y **dos archivos huérfanos en Storage**, que aparecieron mirando `storage.objects` a mano
+      porque el limpiador **no sabe que Storage existe**. Las excepciones van en TRES clases y la
+      diferencia es si hay algo que hacer: fuera de alcance · CASCADE · 🔴 HUECO. Deja escrito
+      además el hallazgo de producto que sale de ahí: **`DELETE /api/adjuntos/{id}` borra la fila
+      y deja el objeto en el bucket**, mientras `_adjuntos_masivo.eliminar_todos` sí lo borra —
+      el camino de todos los días es el que acumula huérfanos, y **eso se porta tal cual a S3**.
+      Resuelve el nombre de la tabla en tres pasos (literal, constante de módulo, constante
+      importada): sin el tercero quedaban 123 call sites sin resolver y el barrido habría
+      reportado de MENOS en silencio, que en cobertura es el peor resultado. Verificado en las
+      DOS direcciones: se le sacó `objetivos` a `ORDEN` y rojeó nombrándola; se declaró una tabla
+      inexistente y rojeó también. Guardas de mínimo ≥35 tablas que crean filas, ≥20 en `ORDEN`,
+      ≥3 buckets.
+  44. 🔴 **`frontend/components/ui/barridoConfirmacion.test.ts`** (24/8/2026) — **toda acción que
+      BORRA pasa por `<ConfirmDialog>`.** Nació con las CINCO pantallas donde un click destruía
+      un dato sin ningún paso intermedio (/ausencias, /vacaciones, /periodos, /inventario,
+      /objetivos), teniendo el patrón canónico ya construido y usado por 8 componentes: no era
+      una decisión, era que nadie lo había cableado. 🔑 **El eje es una función de `services/`
+      que hace `method: "DELETE"`**, no "un botón que dice Eliminar" ni "un handler llamado
+      handleDelete": esos son texto y convención, y renombrar los esquiva sin querer. El verbo
+      HTTP es el hecho. 🔴 **Y la unidad es el archivo MÁS SUS IMPORTADORES DIRECTOS, UN SALTO,
+      medido:** hace falta uno porque quien llama a `deleteObjetivo` es un hook que no renderiza
+      nada, y **no más de uno** porque con el cierre transitivo —lo que hace el nº 30, y ahí es
+      correcto porque su pregunta es de PANTALLA— daba falsos VERDES: `AdjuntosSection` borra con
+      el `confirm()` del navegador y pasaba porque tres saltos arriba había un ConfirmDialog
+      **de otra acción**. Acá la pregunta es de ACCIÓN. Enmascara los comentarios (varios
+      archivos explican en prosa por qué su acción no es un borrado). Verificado por mutación en
+      las dos direcciones. Guardas de mínimo ≥16 destructivas, ≥300 archivos, ≥15 llamadores,
+      ≥10 con diálogo.
+  45. 🔴 **`frontend/components/ui/limpiarTodoRestituye.test.ts`** (24/8/2026) — **"Limpiar todo"
+      restituye: un filtro con valor SIEMPRE tiene su chip, aunque su catálogo esté vacío.** 🔑 Lo
+      que lo motivó: /empleados mostraba **20 filas al entrar y 16 después de limpiar los
+      filtros**, en desktop y en mobile, diciendo "0 filtros activos" sobre un listado recortado
+      — o sea sin nada que mirar para entender por qué faltan filas. La causa es la composición
+      de dos cosas correctas por separado: "Limpiar todo" es **cada chip quitándose a sí mismo**
+      (a propósito: así hereda el reseteo a página 1 y los efectos propios de cada filtro), y los
+      campos cuyo catálogo llega por fetch se renderizaban **sólo si el catálogo tenía opciones**.
+      Si el fetch falla o la empresa no tiene áreas, el campo desaparece, no hay chip que quitar,
+      y el valor sigue vivo en el `useState` **y sigue viajando al backend**. Medido: **31 campos
+      en 11 módulos** estaban así. El primer bloque ejercita `construirCampos` REAL con el
+      catálogo VACÍO y el filtro puesto —con el catálogo lleno, que es como se testearía
+      "naturalmente", el bug no existe y el test pasaría con el código roto—; el segundo barre el
+      árbol, así que el campo condicionado número 32 entra solo.
 
   > ⚠️ **Esta lista es una FOTO, compilada por grep del marcador "BARRIDO ESTRUCTURAL" + memoria
   > de sesión, no una re-auditoría exhaustiva de cada archivo.** Puede faltar alguno con un

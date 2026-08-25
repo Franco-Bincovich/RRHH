@@ -31,7 +31,7 @@ interface Props {
   showEmpresa: boolean
   canWrite: boolean
   onEdit: (obj: Objetivo) => void
-  onDelete: (id: string) => void
+  onDelete: (objetivo: Objetivo) => void
   deletingId: string | null
   /** Los filtros activos, para explicar el vacío con sus valores reales y ofrecer quitarlos. */
   chips: ChipFiltro[]
@@ -117,7 +117,7 @@ export function ListView({
                           className={`${ACCION_CLASS} group-hover:text-primary`}>
                           <Pencil className="size-4" aria-hidden="true" />
                         </button>
-                        <button type="button" onClick={() => onDelete(obj.id)} disabled={deletingId === obj.id}
+                        <button type="button" onClick={() => onDelete(obj)} disabled={deletingId === obj.id}
                           aria-label={`Eliminar ${obj.titulo}`} className={`${ACCION_CLASS} group-hover:text-destructive`}>
                           <Trash2 className="size-4" aria-hidden="true" />
                         </button>

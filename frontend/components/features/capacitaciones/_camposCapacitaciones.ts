@@ -52,7 +52,7 @@ export interface ArgsCamposCatalogo {
 
 export function construirCamposCatalogo(a: ArgsCamposCatalogo): FiltroCampo[] {
   return [
-    ...(!a.empresaActivaId && a.empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
+    ...((!a.empresaActivaId && a.empresas.length > 0) || a.empresaFiltro ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
       onChange: (v: string) => { a.setEmpresaFiltro(v); a.onFiltroChange() },
       opciones: a.empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
     { tipo: "select" as const, label: "Estado", value: a.activosFiltro, opcionTodos: "Sólo activos",
@@ -82,18 +82,18 @@ export interface ArgsCamposAsignacionesCap {
 
 export function construirCamposAsignacionesCap(a: ArgsCamposAsignacionesCap): FiltroCampo[] {
   return [
-    ...(!a.empresaActivaId && a.empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
+    ...((!a.empresaActivaId && a.empresas.length > 0) || a.empresaFiltro ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
       onChange: (v: string) => { a.cambiarEmpresa(v); a.onFiltroChange() },
       opciones: a.empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
-    ...(a.areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas",
+    ...((a.areas.length > 0) || a.areaFiltro ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas",
       onChange: (v: string) => { a.setAreaFiltro(v); a.onFiltroChange() },
       opciones: a.areas.map((ar) => ({ value: ar.id, label: ar.nombre })) }] : []),
     { tipo: "select" as const, label: "Estado", value: a.estadoFiltro, opcionTodos: "Todos los estados",
       onChange: (v: string) => { a.setEstadoFiltro(v); a.onFiltroChange() }, opciones: ESTADO_ASIGNACION_OPCIONES },
-    ...(a.empleados.length > 0 ? [{ tipo: "select" as const, label: "Colaborador", value: a.empleadoFiltro, opcionTodos: "Todos los colaboradores", avanzado: true,
+    ...((a.empleados.length > 0) || a.empleadoFiltro ? [{ tipo: "select" as const, label: "Colaborador", value: a.empleadoFiltro, opcionTodos: "Todos los colaboradores", avanzado: true,
       onChange: (v: string) => { a.setEmpleadoFiltro(v); a.onFiltroChange() },
       opciones: a.empleados.map((e) => ({ value: e.id, label: `${e.apellido}, ${e.nombre}` })) }] : []),
-    ...(a.capacitaciones.length > 0 ? [{ tipo: "select" as const, label: "Formación", value: a.capacitacionFiltro, opcionTodos: "Todas las formaciones", avanzado: true,
+    ...((a.capacitaciones.length > 0) || a.capacitacionFiltro ? [{ tipo: "select" as const, label: "Formación", value: a.capacitacionFiltro, opcionTodos: "Todas las formaciones", avanzado: true,
       onChange: (v: string) => { a.setCapacitacionFiltro(v); a.onFiltroChange() },
       opciones: a.capacitaciones.map((c) => ({ value: c.id, label: c.nombre })) }] : []),
   ]

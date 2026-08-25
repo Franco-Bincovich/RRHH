@@ -15,31 +15,18 @@ import { FormErrores } from "@/components/ui/FormErrores"
 import { AVISO_PASSWORD_UNICA } from "@/components/features/usuarios/_avisos"
 import { EmpleadoLiderSelect } from "@/components/features/usuarios/EmpleadoLiderSelect"
 import { SelectField, TextField } from "@/components/features/usuarios/_fields"
+// La forma del formulario y su validación viven afuera, en un módulo puro. El porqué del corte
+// está en el encabezado de ese archivo.
+import {
+  EMPTY, ROL_OPTIONS, validate, type FormData, type FormErrors,
+} from "@/components/features/usuarios/_crearUsuarioForm"
 import { useEmpleadosPorRol } from "@/hooks/useEmpleadosPorRol"
 import { crearUsuario, type CrearUsuarioPayload, type CrearUsuarioResult } from "@/services/usuarios"
-import { ROL_LABEL, type UserRol } from "@/types/auth"
 
 interface CrearUsuarioModalProps {
   open: boolean
   onClose: () => void
   onCreated: (result: CrearUsuarioResult) => void
-}
-
-type FormData = { nombre: string; apellido: string; email: string; username: string; rol: string; empleadoId: string }
-type FormErrors = Partial<Record<Exclude<keyof FormData, "empleadoId" | "rol">, string>>
-
-const EMPTY: FormData = { nombre: "", apellido: "", email: "", username: "", rol: "mandos_medios", empleadoId: "" }
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const ROL_OPTIONS = (Object.keys(ROL_LABEL) as UserRol[]).map((r) => ({ value: r, label: ROL_LABEL[r] }))
-
-function validate(f: FormData): FormErrors {
-  const e: FormErrors = {}
-  if (!f.nombre.trim()) e.nombre = "El nombre es requerido"
-  if (!f.apellido.trim()) e.apellido = "El apellido es requerido"
-  if (!f.email.trim()) e.email = "El email es requerido"
-  else if (!EMAIL_RE.test(f.email.trim())) e.email = "Formato de email inválido"
-  if (f.username.trim().length < 3) e.username = "Mínimo 3 caracteres"
-  return e
 }
 
 export function CrearUsuarioModal({ open, onClose, onCreated }: CrearUsuarioModalProps) {

@@ -39,12 +39,12 @@ export function construirCamposPadron(a: ArgsCamposPadron): FiltroCampo[] {
     { tipo: "search" as const, label: "Buscar", value: a.search, placeholder: a.placeholderBusqueda, onChange: a.setSearch },
     // El select de Empresa solo existe en modo consolidado: con una empresa elegida en el
     // sidebar sería un segundo control diciendo lo mismo, y los dos podrían discrepar.
-    ...(!a.empresaActivaId && a.empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
+    ...((!a.empresaActivaId && a.empresas.length > 0) || a.empresaFiltro ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
       // Cambiar de empresa LIMPIA el área: un área de otra empresa deja el listado en cero sin
       // ninguna explicación a la vista. Mismo handler que /empleados.
       onChange: (v: string) => { a.setEmpresaFiltro(v); a.setAreaFiltro(""); a.onFiltroChange() },
       opciones: a.empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
-    ...(a.areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas",
+    ...((a.areas.length > 0) || a.areaFiltro ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas",
       onChange: (v: string) => { a.setAreaFiltro(v); a.onFiltroChange() },
       opciones: a.areas.map((ar) => ({ value: ar.id, label: etiquetaArea(ar, a.empresas, Boolean(a.empresaActivaId || a.empresaFiltro)) })) }] : []),
   ]

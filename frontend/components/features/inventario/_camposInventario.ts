@@ -50,12 +50,12 @@ export interface ArgsCamposItems {
 export function construirCamposItems(a: ArgsCamposItems): FiltroCampo[] {
   const empresaId = a.empresaActivaId || a.empresaFiltro
   return [
-    ...(!a.empresaActivaId && a.empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
+    ...((!a.empresaActivaId && a.empresas.length > 0) || a.empresaFiltro ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
       onChange: (v: string) => { a.cambiarEmpresa(v); a.onFiltroChange() },
       opciones: a.empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
     { tipo: "select" as const, label: "Estado", value: a.estadoFiltro, opcionTodos: "Todos los estados",
       onChange: (v: string) => { a.setEstadoFiltro(v); a.onFiltroChange() }, opciones: ESTADO_ITEM_OPCIONES },
-    ...(a.areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas", avanzado: true,
+    ...((a.areas.length > 0) || a.areaFiltro ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas", avanzado: true,
       onChange: (v: string) => { a.setAreaFiltro(v); a.onFiltroChange() },
       opciones: a.areas.map((ar) => ({ value: ar.id, label: etiquetaArea(ar, a.empresas, Boolean(empresaId)) })) }] : []),
   ]
@@ -78,13 +78,13 @@ export interface ArgsCamposAsignaciones {
 export function construirCamposAsignaciones(a: ArgsCamposAsignaciones): FiltroCampo[] {
   const empresaId = a.empresaActivaId || a.empresaFiltro
   return [
-    ...(!a.empresaActivaId && a.empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
+    ...((!a.empresaActivaId && a.empresas.length > 0) || a.empresaFiltro ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
       onChange: (v: string) => { a.cambiarEmpresa(v); a.onFiltroChange() },
       opciones: a.empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
-    ...(a.areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas",
+    ...((a.areas.length > 0) || a.areaFiltro ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas",
       onChange: (v: string) => { a.setAreaFiltro(v); a.onFiltroChange() },
       opciones: a.areas.map((ar) => ({ value: ar.id, label: etiquetaArea(ar, a.empresas, Boolean(empresaId)) })) }] : []),
-    ...(a.empleados.length > 0 ? [{ tipo: "select" as const, label: "Colaborador", value: a.empleadoFiltro, opcionTodos: "Todos los colaboradores", avanzado: true,
+    ...((a.empleados.length > 0) || a.empleadoFiltro ? [{ tipo: "select" as const, label: "Colaborador", value: a.empleadoFiltro, opcionTodos: "Todos los colaboradores", avanzado: true,
       onChange: (v: string) => { a.setEmpleadoFiltro(v); a.onFiltroChange() },
       opciones: a.empleados.map((e) => ({ value: e.id, label: `${e.apellido}, ${e.nombre}` })) }] : []),
   ]

@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { EstadoCandidatoBadge } from "@/components/features/candidatos/EstadoCandidatoBadge"
 import { Button } from "@/components/ui/button"
 import { CandidatoClasificacion } from "@/components/features/candidatos/CandidatoClasificacion"
 import { CandidatoCv } from "@/components/features/candidatos/CandidatoCv"
@@ -96,8 +97,17 @@ export function CandidatoDetailPanel({
             </div>
           </Section>
 
-          <Section title="Etapa">
-            <Badge variant="secondary">{ETAPA_LABELS[c.etapa_pipeline] ?? c.etapa_pipeline}</Badge>
+          {/* 🔴 LOS DOS EJES, NO UNO. El panel mostraba sólo la etapa, así que después de
+              contratar seguía diciendo "Oferta" — el mismo bug que la tarjeta del listado. La
+              etapa dice DÓNDE llegó (y contratar no la toca, a propósito: es el embudo) y el
+              estado dice CÓMO terminó. Ver `EstadoCandidatoBadge`. */}
+          <Section title={c.estado === "activo" ? "Etapa" : "Etapa y desenlace"}>
+            <span className="flex flex-wrap items-center gap-2">
+              <Badge variant={c.estado === "activo" ? "secondary" : "outline"}>
+                {ETAPA_LABELS[c.etapa_pipeline] ?? c.etapa_pipeline}
+              </Badge>
+              <EstadoCandidatoBadge estado={c.estado} />
+            </span>
           </Section>
 
           <Section title="Preselección">

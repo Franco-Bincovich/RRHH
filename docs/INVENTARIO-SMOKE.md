@@ -3,7 +3,7 @@
 > **GENERADO DESDE EL CÓDIGO. No editar a mano.**
 > Se regenera con `backend\venv\Scripts\python.exe scripts/inventario_smoke.py`,
 > y `backend/tests/test_inventario_smoke.py` da ROJO si el archivo quedó atrás.
-> Última generación: **2026-08-23**.
+> Última generación: **2026-08-25**.
 
 ## Por qué existe
 
@@ -474,12 +474,12 @@ Las **46** rutas de `app/`. ⚠️ **La columna GET dice qué endpoints ALCANZA 
 | /inventario | `components/features/inventario/ItemModal.tsx` | `updateItem` | `PUT /api/inventario/items/{}` | admin rrhh | reversible | sí |  |
 | /inventario | `components/features/inventario/ItemsTab.tsx` | `deleteItem` | `DELETE /api/inventario/items/{}` | admin rrhh | 🔴 borra la fila | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
 | /login | `components/features/auth/LoginForm.tsx` | `login` | `POST /api/auth/login` | todos | reversible | sí |  |
-| /objetivos | `app/(dashboard)/objetivos/page.tsx` | `cambiarEstadoObjetivo` | `PUT /api/objetivos/{}/estado` | admin rrhh | reversible | sí |  |
-| /objetivos | `app/(dashboard)/objetivos/page.tsx` | `deleteObjetivo` | `DELETE /api/objetivos/{}` | admin rrhh | 🔴 borra la fila | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
 | /objetivos | `components/features/objetivos/ImportarObjetivosModal.tsx` | `confirmarImportObjetivos` | `POST /api/importacion/objetivos/confirmar` | admin rrhh | 🔴 persiste el lote entero del import; en evaluaciones BORRA el período anterior por CASCADE antes de escribir el nuevo | no | necesita el archivo real de RRHH: el parser depende de los nombres de columna, el encoding y el separador de SU planilla |
 | /objetivos | `components/features/objetivos/ImportarObjetivosModal.tsx` | `previewImportObjetivos` | `POST /api/importacion/objetivos/preview` | admin rrhh | reversible | no | necesita el archivo real de RRHH: el parser depende de los nombres de columna, el encoding y el separador de SU planilla |
 | /objetivos | `components/features/objetivos/ObjetivoModal.tsx` | `createObjetivo` | `POST /api/objetivos` | admin rrhh | reversible | sí |  |
 | /objetivos | `components/features/objetivos/ObjetivoModal.tsx` | `updateObjetivo` | `PUT /api/objetivos/{}` | admin rrhh | reversible | sí |  |
+| /objetivos | `components/features/objetivos/useAccionesObjetivos.ts` | `cambiarEstadoObjetivo` | `PUT /api/objetivos/{}/estado` | admin rrhh | reversible | sí |  |
+| /objetivos | `components/features/objetivos/useAccionesObjetivos.ts` | `deleteObjetivo` | `DELETE /api/objetivos/{}` | admin rrhh | 🔴 borra la fila | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
 | /offboarding | `components/features/offboarding/EfectivizarBajaButton.tsx` | `efectivizarBaja` | `POST /api/offboarding/{}/efectivizar` | admin rrhh | 🔴 escribe estado='baja' y fecha_egreso en el legajo | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
 | /offboarding | `components/features/offboarding/EntrevistaSalida.tsx` | `registrarEntrevista` | `PUT /api/offboarding/{}/entrevista` | admin rrhh | reversible | sí |  |
 | /offboarding | `components/features/offboarding/useOffboardings.ts` | `marcarActivoDevuelto` | `PUT /api/offboarding/{}/activos/{}` | admin rrhh | reversible | sí |  |

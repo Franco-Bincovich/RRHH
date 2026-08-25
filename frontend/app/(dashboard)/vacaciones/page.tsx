@@ -17,6 +17,9 @@ import { AdjuntosDialog } from "@/components/features/adjuntos/AdjuntosDialog"
 import { PendientesSection } from "@/components/features/vacaciones/PendientesSection"
 import { exportarVacaciones } from "@/services/vacaciones"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { useConfirmacion } from "@/components/features/shared/useConfirmacion"
+import { confirmarCancelarVacaciones } from "@/components/features/shared/confirmaciones"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { SolicitudVacaciones } from "@/types/vacaciones"
 
@@ -36,6 +39,12 @@ export default function VacacionesPage() {
     useVacacionesLista(filtros, page)
 
   const chips = chipsDeCampos(campos)
+
+  /* 🔴 PIDE CONFIRMACIÓN, PERO NO ES UN BORRADO — y el texto lo dice. `cancel` setea
+     `cancelada=true`: la fila sigue en el listado y los días vuelven al saldo (el cálculo filtra
+     por `cancelada=false`). Escribirle el copy de un borrado frenaría al usuario de hacer algo
+     reversible, y de paso devaluaría el diálogo de los que sí destruyen. Ver `confirmaciones.ts`. */
+  const aCancelar = useConfirmacion<SolicitudVacaciones>()
 
   return (
     <div>
@@ -78,7 +87,7 @@ export default function VacacionesPage() {
           showEmpresa={!empresaActivaId}
           cancelingId={cancelingId}
           onRetry={load}
-          onCancel={handleCancel}
+          onCancel={aCancelar.pedir}
           onDocs={setDocsFor}
           chips={chips}
           onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
@@ -111,6 +120,18 @@ export default function VacacionesPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onSuccess={() => { setModalOpen(false); load(); setPendientesKey((k) => k + 1) }}
+      />
+
+      <ConfirmDialog
+        open={aCancelar.abierto}
+        onClose={aCancelar.cerrar}
+        onConfirm={() => {
+          const s = aCancelar.pendiente
+          aCancelar.cerrar()
+          if (s) handleCancel(s.id)
+        }}
+        loading={cancelingId !== null}
+        {...confirmarCancelarVacaciones(aCancelar.pendiente ?? {})}
       />
 
       <AdjuntosDialog

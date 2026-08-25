@@ -56,7 +56,7 @@ interface Props {
   moviendo:   string | null
   canWrite:   boolean
   onEdit:     (obj: Objetivo) => void
-  onDelete:   (id: string) => void
+  onDelete:   (objetivo: Objetivo) => void
   deletingId: string | null
 }
 

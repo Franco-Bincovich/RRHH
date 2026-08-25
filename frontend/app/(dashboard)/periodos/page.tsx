@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/layout/PageHeader"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { useConfirmacion } from "@/components/features/shared/useConfirmacion"
+import { fechaLegible } from "@/components/features/shared/confirmaciones"
 import { PeriodoForm } from "@/components/features/periodos/PeriodoForm"
 import { PeriodoList } from "@/components/features/periodos/PeriodoList"
 import { useCanWrite } from "@/hooks/useCanWrite"
@@ -39,8 +42,19 @@ export default function PeriodosPage() {
     return (id && usuarios[id]) || "—"
   }
 
-  async function handleReabrir(p: Periodo) {
-    if (!confirm(`¿Reabrir el período de ${p.desde} a ${p.hasta}? Se podrán volver a cargar y editar registros en ese rango.`)) return
+  /* 🔴 SALIÓ DEL `confirm()` NATIVO DEL NAVEGADOR (24/8/2026), y no es cosmético. Ese diálogo
+     no se puede estilar, no respeta el tema, en mobile aparece pegado a la barra del navegador
+     con la URL del sitio arriba, y —lo que decide— era el ÚNICO de todo el producto: la misma
+     pantalla que pedía confirmación con la caja gris del sistema para reabrir, cerraba un
+     período sin pedir nada. Dos gestos opuestos para dos acciones del mismo par.
+     ⚠️ Reabrir NO destruye —saca un candado— así que va con `destructive={false}` y su texto no
+     habla de borrar; ver la regla 2 de `confirmaciones.ts`. */
+  const aReabrir = useConfirmacion<Periodo>()
+
+  async function handleReabrir() {
+    const p = aReabrir.pendiente
+    if (!p) return
+    aReabrir.cerrar()
     try {
       await reabrirPeriodo(p.id)
       toast.success("Período reabierto")
@@ -75,9 +89,21 @@ export default function PeriodosPage() {
           nombreUsuario={nombreUsuario}
           canWrite={canWrite}
           onRetry={load}
-          onReabrir={handleReabrir}
+          onReabrir={aReabrir.pedir}
         />
       </div>
+
+      <ConfirmDialog
+        open={aReabrir.abierto}
+        onClose={aReabrir.cerrar}
+        onConfirm={handleReabrir}
+        destructive={false}
+        title="Reabrir el período"
+        description={`¿Reabrir el período del ${fechaLegible(aReabrir.pendiente?.desde)} al `
+          + `${fechaLegible(aReabrir.pendiente?.hasta)}? Se van a poder volver a cargar, editar `
+          + "y borrar registros con fecha dentro de ese rango."}
+        confirmLabel="Reabrir el período"
+      />
     </div>
   )
 }

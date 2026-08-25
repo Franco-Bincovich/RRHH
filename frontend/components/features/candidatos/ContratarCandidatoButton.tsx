@@ -8,8 +8,10 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { RolesInput } from "@/components/ui/RolesInput"
+import { ContratarFormFields } from "@/components/features/candidatos/ContratarFormFields"
+import {
+  validar, sinErrores, type ErroresContratar, type FormContratar,
+} from "@/components/features/candidatos/_contratarForm"
 import { ApiError } from "@/services/api"
 import { contratarCandidato } from "@/services/candidatos"
 import { fetchRolesConocidos } from "@/services/empleados"
@@ -28,7 +30,15 @@ import type { CandidatoConGrupo } from "@/types/candidato"
  * queda el acto. El backend revalida las dos igual (`_candidato_contratar_guardas.py:49-72`):
  * esto es UI, no la barrera.
  *
- * 🔴 LOS SEIS ERRORES SE MUESTRAN CON SU MENSAJE. Los cuatro de estado y el de fecha vienen
+ * 🔴 VALIDA POR CAMPO, Y NO SIEMPRE LO HIZO. Hasta el 24/8/2026 la única guarda era un
+ * `disabled` con condiciones de PRESENCIA (`!email.trim() || roles.length === 0`), heredado del
+ * molde que copió —`EliminarCandidatoButton`, que es un botón de CONFIRMACIÓN y no un
+ * formulario—. Con eso, un email `"a"` habilitaba el botón y creaba el legajo. La validación
+ * vive ahora en `_contratarForm.ts`, con la misma forma que el resto de los formularios del
+ * repo, y el email usa el validador COMPARTIDO (había tres copias del regex con tres mensajes
+ * distintos). Ver el encabezado de `shared/validacionEmail.ts`.
+ *
+ * 🔴 LOS SEIS ERRORES DEL BACKEND SE MUESTRAN CON SU MENSAJE. Los cuatro de estado y el de fecha vienen
  * redactados con la salida adentro ("Solo se puede contratar a un candidato en etapa 'oferta', y
  * este está en 'entrevista_tecnica'"), y el sexto —el 409 de `email_corporativo` ya usado, que
  * sube desde el alta de empleado— es el único que se puede corregir sin salir del modal. Un
@@ -39,12 +49,15 @@ export function ContratarCandidatoButton(
 ) {
   const hoy = new Date().toISOString().slice(0, 10)
   const [open, setOpen] = useState(false)
-  const [email, setEmail] = useState("")
-  const [roles, setRoles] = useState<string[]>([])
-  const [fecha, setFecha] = useState(hoy)
+  // Un objeto y no tres `useState` sueltos: es la misma forma que `validar` y `ContratarFormFields`
+  // reciben, así que agregar un campo cuarto se toca en un lugar y no en cinco.
+  const [form, setForm] = useState<FormContratar>({ email: "", roles: [], fecha: hoy })
   const [sugerencias, setSugerencias] = useState<string[]>([])
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState("")
+  // Los errores por campo aparecen recién al intentar guardar: mostrarlos mientras se tipea
+  // pinta de rojo un email que todavía se está escribiendo. Mismo criterio que /empleados.
+  const [errores, setErrores] = useState<ErroresContratar>({})
 
   // El pool de roles ya cargados es el MISMO que usa el alta de empleado, y sale de todas las
   // empresas: el legajo que este puente crea es un empleado más, así que sugerirle un
@@ -56,15 +69,18 @@ export function ContratarCandidatoButton(
   }, [open, sugerencias.length])
 
   function cerrar() {
-    setOpen(false); setError(""); setGuardando(false)
-    setEmail(""); setRoles([]); setFecha(hoy)
+    setOpen(false); setError(""); setGuardando(false); setErrores({})
+    setForm({ email: "", roles: [], fecha: hoy })
   }
 
   async function confirmar() {
+    const encontrados = validar(form, hoy)
+    setErrores(encontrados)
+    if (!sinErrores(encontrados)) return
     setGuardando(true); setError("")
     try {
       await contratarCandidato(candidato.id, {
-        email_corporativo: email.trim(), roles, fecha_ingreso: fecha,
+        email_corporativo: form.email.trim(), roles: form.roles, fecha_ingreso: form.fecha,
       })
       toast.success(`${candidato.nombre} ${candidato.apellido} ya tiene legajo, en preingreso`)
       cerrar()
@@ -95,31 +111,11 @@ export function ContratarCandidatoButton(
               desde su ficha. El resto de los datos salen del candidato y de la búsqueda.
             </p>
 
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-foreground">Email corporativo</span>
-              <Input
-                type="email" value={email} placeholder="nombre@empresa.com"
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              {/* Se aclara porque el error natural es pegar el mail con el que se postuló: la
-                  columna es única en TODO el sistema y ese valor queda quemado para siempre. */}
-              <span className="text-xs text-muted-foreground">
-                No es el personal ({candidato.email}), que queda igual en la ficha.
-              </span>
-            </label>
-
-            <RolesInput
-              value={roles} onChange={setRoles} suggestions={sugerencias}
-              label="Rol en el legajo" required
+            <ContratarFormFields
+              form={form} errores={errores} sugerencias={sugerencias} hoy={hoy}
+              emailPersonal={candidato.email}
+              onCampo={(campo, valor) => setForm((f) => ({ ...f, [campo]: valor }))}
             />
-
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-foreground">Fecha de ingreso acordada</span>
-              {/* `min` = hoy: el backend exige una fecha hacia adelante y rechaza el pasado con
-                  FECHA_INGRESO_PASADA. Es la UI evitando el viaje, no la validación. */}
-              <Input type="date" value={fecha} min={hoy}
-                onChange={(e) => setFecha(e.target.value)} />
-            </label>
 
             {error && (
               <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
@@ -135,7 +131,12 @@ export function ContratarCandidatoButton(
             <Button
               className="min-h-11"
               onClick={confirmar}
-              disabled={guardando || !email.trim() || roles.length === 0 || !fecha}
+              /* 🔴 SÓLO se deshabilita mientras GUARDA. Antes también con los campos vacíos, y
+                 eso es lo que convertía la validación en un botón muerto: el usuario ve un botón
+                 gris y no sabe cuál de los tres campos falta. Ahora el botón se puede apretar
+                 siempre y la respuesta es un mensaje POR CAMPO que dice qué corregir — que es lo
+                 que pide §3 del sistema de diseño y lo que ya hacía /empleados. */
+              disabled={guardando}
             >
               {guardando ? "Creando legajo..." : "Contratar"}
             </Button>

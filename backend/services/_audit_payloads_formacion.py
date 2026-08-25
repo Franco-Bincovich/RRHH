@@ -1,7 +1,7 @@
 """
 Payload de auditoría del import de Formación. UN evento por lote, nunca fila por fila.
 
-Molde: `_audit_payloads_objetivos.py` — archivo por dominio, misma forma.
+Molde: `_audit_payloads_objetivos_import.py` — archivo por dominio, misma forma.
 
 🔴 ESTE ES EL PRIMER EVENTO DE AUDITORÍA DEL MÓDULO DE CAPACITACIONES/FORMACIÓN. Hasta hoy el
 módulo no auditaba nada (ni el catálogo ni las asignaciones emiten eventos; solo logs). Igual

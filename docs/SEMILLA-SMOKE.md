@@ -112,6 +112,41 @@ primera. **Cambiar un nombre después de sembrar deja esa fila huérfana del lim
   tabla de montos no admite marca de agua: nada distingue una fila sembrada de una que cargue
   RRHH en el mismo período, salvo su id. **Sin manifiesto, el limpiador no las toca.**
 
+### 🔴 REGLA — TODO LO QUE EL SMOKE **TIPEA** LLEVA LA MARCA
+
+Lo de arriba es lo que el SCRIPT siembra, y ahí la marca la pone el código. Esto es lo otro: el
+smoke con navegador **también escribe en producción**, y ahí quien pone la marca es la persona
+que está tipeando. Es una regla, no una costumbre:
+
+> **Todo nombre que el smoke escriba en un formulario arranca con `SMK`, y todo mail que escriba
+> termina en `@semilla.hrkarstec.site`. Los dos, siempre, aunque el campo sea opcional y aunque
+> la fila se vaya a borrar en cinco minutos.**
+
+Concretamente, campo por campo: nombre y apellido de una persona → `SMK Apellido` · legajo →
+`SMK-NN` · email corporativo y personal → `algo@semilla.hrkarstec.site` · título de un objetivo,
+nombre de una vacante, de un cliente, de un proyecto, de un ítem de inventario, de una
+capacitación, de un evento de agenda → **prefijo `SMK ` y después lo que quieras**.
+
+**LA EVIDENCIA DE QUE ALCANZA, Y ES MEDIDA.** En la corrida del 23-24/8/2026 el smoke creó **6
+colaboradores por pantalla**, ninguno anotado en el manifiesto (el manifiesto sólo registra lo
+que se siembra por la API). La limpieza los tuvo que encontrar de otra forma, y la clave natural
+—el dominio del mail— **cazó 5 de los 6 sola**. El que se escapó es *Sebastián Videla*, con el
+email corporativo `"a"`: **el único que se salió de la convención es el único que hubo que
+buscar a mano**. No hacía falta un mecanismo nuevo; hacía falta usar el que ya existe.
+
+**POR QUÉ NO HAY UN BARRIDO QUE LO IMPONGA, y no es un pendiente.** Los 45 barridos estructurales
+del repo funcionan porque miran CÓDIGO: `test_semilla_alcanza_lo_que_se_escribe.py` puede exigir que
+toda tabla en la que el código crea filas esté en `ORDEN` porque las dos cosas están escritas en
+archivos. Lo que una persona tipea en un navegador contra producción no está en ningún archivo
+—no hay AST de un formulario que alguien llenó— así que ningún test puede verlo. **Esta regla se
+sostiene escribiéndola acá y leyéndola antes de correr el smoke**, que es exactamente por lo que
+tiene que estar escrita como regla y no quedar como costumbre de quien lo corrió la última vez.
+
+⚠️ **Y si se rompe igual:** lo que quedó sin marca no lo va a encontrar el limpiador. La salida
+es la del 24/8 —ir a `storage.objects` y a las tablas a mano, con `created_at` del día del
+smoke— y es cara. Anotarlo en el momento en `docs/SMOKE-TEST-RESULTADOS.md` es más barato que
+reconstruirlo después.
+
 ### La red de seguridad
 
 De las cuatro fases que tocan personas, **dos modifican el legajo** al que apuntan: recategorizar

@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label"
 import { CvField } from "@/components/features/vacantes/CvField"
 import { createCandidato } from "@/services/vacantes"
 import type { CandidatoCreate } from "@/types/vacantes"
+import { validarEmail } from "@/components/features/shared/validacionEmail"
 
 interface CandidatoModalProps {
   open: boolean
@@ -46,11 +47,11 @@ function validate(form: FormData): FormErrors {
   const errors: FormErrors = {}
   if (!form.nombre.trim()) errors.nombre = "El nombre es requerido"
   if (!form.apellido.trim()) errors.apellido = "El apellido es requerido"
-  if (!form.email.trim()) {
-    errors.email = "El email es requerido"
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-    errors.email = "El email no es válido"
-  }
+  // El vacío lleva mensaje PROPIO: acá el email es el PERSONAL del candidato (por donde se
+  // postuló), no el corporativo. El default del validador habla de la casilla de la empresa y
+  // acá diría algo falso.
+  const errorEmail = validarEmail(form.email, { vacio: "Escribí el email del candidato: es por donde se le responde" })
+  if (errorEmail) errors.email = errorEmail
   return errors
 }
 

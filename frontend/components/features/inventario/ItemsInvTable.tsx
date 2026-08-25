@@ -36,7 +36,7 @@ interface ItemsInvTableProps {
   onReload: () => void
   onHistorial: (item: InventarioItem) => void
   onEditar: (item: InventarioItem) => void
-  onEliminar: (id: string) => void
+  onEliminar: (item: InventarioItem) => void
   /** Los filtros activos, para explicar el vacío con sus valores reales y ofrecer quitarlos. */
   chips: ChipFiltro[]
   onLimpiarTodo: () => void
@@ -103,7 +103,7 @@ export function ItemsInvTable({
                         className={`${ACCION_CLASS} group-hover:text-primary`}>
                         <Pencil className="size-4" aria-hidden="true" />
                       </button>
-                      <button type="button" onClick={() => onEliminar(item.id)} disabled={deletingId === item.id}
+                      <button type="button" onClick={() => onEliminar(item)} disabled={deletingId === item.id}
                         aria-label={`Eliminar ${item.nombre}`}
                         className={`${ACCION_CLASS} group-hover:text-destructive`}>
                         <Trash2 className="size-4" aria-hidden="true" />

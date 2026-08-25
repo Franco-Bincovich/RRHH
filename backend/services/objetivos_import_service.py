@@ -17,7 +17,7 @@ en vez de un renglón en el reporte.
 un archivo con columna de padre se RECHAZA ENTERO en vez de ignorarla. El porqué de las dos
 cosas está en `_objetivos_import_transforms`.
 
-AUDITORÍA: UN evento por lote, en el confirmar. Ver `_audit_payloads_objetivos`.
+AUDITORÍA: UN evento por lote, en el confirmar. Ver `_audit_payloads_objetivos_import`.
 """
 from typing import List, Optional
 from uuid import UUID
@@ -27,7 +27,7 @@ from schemas.importacion_objetivos import (
     ImportacionObjetivosConfirmarResponse, ImportacionObjetivosPreviewResponse,
 )
 from schemas.objetivo import ObjetivoCreate
-from services._audit_payloads_objetivos import payload_importacion_objetivos
+from services._audit_payloads_objetivos_import import payload_importacion_objetivos
 from services.audit_service import AuditService
 from services.objetivos_import_preview import preview as _preview
 from services.objetivo_service import ObjetivoService

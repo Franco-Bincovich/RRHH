@@ -14,6 +14,9 @@ import { HistorialModal } from "@/components/features/inventario/HistorialModal"
 import { useFiltrosItemsInv } from "@/components/features/inventario/useFiltrosItemsInv"
 import { useListadoItemsInv } from "@/components/features/inventario/useListadoItemsInv"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { useConfirmacion } from "@/components/features/shared/useConfirmacion"
+import { confirmarEliminarItem } from "@/components/features/shared/confirmaciones"
 import { deleteItem, exportarInventarioItems } from "@/services/inventario"
 import type { InventarioItem } from "@/types/inventario"
 
@@ -35,6 +38,8 @@ export function ItemsTab({ canWrite }: { canWrite: boolean }) {
   const [editing, setEditing] = useState<InventarioItem | null>(null)
   const [historialItem, setHistorialItem] = useState<InventarioItem | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  /* 🔴 Borrado FÍSICO: se va el ítem y su historial de asignaciones. Pide confirmación. */
+  const aBorrar = useConfirmacion<InventarioItem>()
 
   async function handleDelete(id: string) {
     setDeletingId(id)
@@ -65,7 +70,7 @@ export function ItemsTab({ canWrite }: { canWrite: boolean }) {
         mostrarEmpresa={mostrarEmpresa} deletingId={deletingId} onReload={load}
         onHistorial={setHistorialItem}
         onEditar={(item) => { setEditing(item); setModalOpen(true) }}
-        onEliminar={handleDelete}
+        onEliminar={aBorrar.pedir}
         chips={chips}
         onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
         accionVacio={canWrite ? nuevoBtn : undefined}
@@ -77,6 +82,18 @@ export function ItemsTab({ canWrite }: { canWrite: boolean }) {
       {!loading && !error && items.length > 0 && (
         <Pagination page={page} total={total} pageSize={PAGE_SIZE} onPageChange={setPage} />
       )}
+
+      <ConfirmDialog
+        open={aBorrar.abierto}
+        onClose={aBorrar.cerrar}
+        onConfirm={() => {
+          const i = aBorrar.pendiente
+          aBorrar.cerrar()
+          if (i) handleDelete(i.id)
+        }}
+        loading={deletingId !== null}
+        {...confirmarEliminarItem(aBorrar.pendiente ?? {})}
+      />
 
       <ItemModal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null) }} onSuccess={() => { setModalOpen(false); setEditing(null); load() }} editing={editing} />
       {historialItem && <HistorialModal item={historialItem} onClose={() => setHistorialItem(null)} />}

@@ -9,12 +9,25 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { confirmarCerrarPeriodo } from "@/components/features/shared/confirmaciones"
 import { cerrarPeriodo, MODULO_LABEL } from "@/services/periodos"
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
 import type { Empresa } from "@/types/empresa"
 
-/** Formulario para cerrar un período nuevo. Al confirmar refresca la lista (onCreated). */
+/**
+ * Formulario para cerrar un período nuevo. Al confirmar refresca la lista (onCreated).
+ *
+ * 🔴 EL SUBMIT NO CIERRA EL PERÍODO: ABRE LA CONFIRMACIÓN. Cerrar un período le pone un candado
+ * a un rango de fechas para TODA la empresa —nadie puede cargar, editar ni borrar ahí adentro— y
+ * hasta el 24/8/2026 eso ocurría con un solo click sobre un botón de formulario, que es el gesto
+ * más automático que hay en la pantalla.
+ *
+ * ⚠️ Y EL TEXTO NO DICE "ELIMINAR", porque esto no borra nada Y ES REVERSIBLE: la lista de abajo
+ * tiene "Reabrir". El copy dice qué deja de poder hacerse y que se puede volver atrás — ver la
+ * regla 2 de `components/features/shared/confirmaciones.ts`.
+ */
 export function PeriodoForm({ onCreated }: { onCreated: () => void }) {
   const activa = getEmpresaActivaId()
   const [empresas, setEmpresas] = useState<Empresa[]>([])
@@ -24,6 +37,8 @@ export function PeriodoForm({ onCreated }: { onCreated: () => void }) {
   const [hasta, setHasta] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  // El submit valida y prende esto; la escritura la dispara el diálogo.
+  const [confirmando, setConfirmando] = useState(false)
 
   useEffect(() => {
     fetchEmpresas()
@@ -31,11 +46,17 @@ export function PeriodoForm({ onCreated }: { onCreated: () => void }) {
       .catch(() => setEmpresas([]))
   }, [])
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!empresaId) return setError("Elegí una empresa")
     if (!desde || !hasta) return setError("Completá las fechas de inicio y fin")
     if (hasta < desde) return setError("La fecha de fin debe ser igual o posterior al inicio")
+    setError("")
+    setConfirmando(true)
+  }
+
+  async function confirmar() {
+    setConfirmando(false)
     setSaving(true)
     setError("")
     try {
@@ -87,6 +108,18 @@ export function PeriodoForm({ onCreated }: { onCreated: () => void }) {
         <Lock className="size-4" />
         {saving ? "Cerrando..." : "Cerrar período"}
       </Button>
+
+      <ConfirmDialog
+        open={confirmando}
+        onClose={() => setConfirmando(false)}
+        onConfirm={confirmar}
+        loading={saving}
+        destructive={false}
+        {...confirmarCerrarPeriodo({
+          empresa_nombre: empresas.find((e) => e.id === empresaId)?.nombre,
+          desde, hasta, modulo_label: modulo ? MODULO_LABEL[modulo] : null,
+        })}
+      />
     </Card>
   )
 }

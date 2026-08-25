@@ -1,4 +1,5 @@
 import { isoLocal } from "@/components/features/shared/fechas"
+import { validarEmail } from "@/components/features/shared/validacionEmail"
 import type { Empleado, EmpleadoCreate, EstadoAlta } from "@/types/empleado"
 import type { FormData, FormErrors } from "./_constants"
 
@@ -67,12 +68,12 @@ export function validate(form: FormData, isEdit: boolean): FormErrors {
   if (!isEdit && !form.empresa_id) errors.empresa_id = "Elegí de qué empresa va a depender el legajo"
   if (!form.nombre.trim()) errors.nombre = "Escribí el nombre tal como figura en el documento"
   if (!form.apellido.trim()) errors.apellido = "Escribí el apellido tal como figura en el documento"
-  if (!form.email_corporativo.trim()) {
-    // Dice PARA QUÉ se usa: es lo que evita que carguen el personal en vez del corporativo.
-    errors.email_corporativo = "Escribí el email de la empresa: es la casilla a la que el sistema le manda los avisos"
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email_corporativo)) {
-    errors.email_corporativo = "Falta el arroba o el dominio — tiene que ser algo como nombre@empresa.com"
-  }
+  // 🔑 LOS DOS MENSAJES SON LOS MISMOS DE ANTES: se movieron a `shared/validacionEmail.ts` tal
+  // cual, porque esta pantalla es la que los tenía bien y es el molde. Lo que cambió es que ahora
+  // los comparte con los otros cuatro formularios que piden un email — había TRES copias del
+  // regex con TRES mensajes distintos, y dos formularios que no validaban nada.
+  const errorEmail = validarEmail(form.email_corporativo)
+  if (errorEmail) errors.email_corporativo = errorEmail
   if (!form.area_id) errors.area_id = "Elegí el área en la que va a trabajar. Si no está en la lista, creala primero en Áreas"
   if (form.roles.length === 0) errors.roles = "Agregá al menos un rol"
   if (!form.fecha_ingreso) errors.fecha_ingreso = "Elegí el día en que la persona empieza a trabajar"

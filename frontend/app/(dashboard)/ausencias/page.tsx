@@ -15,6 +15,9 @@ import { useListadoAusencias } from "@/components/features/ausencias/useListadoA
 import { AdjuntosDialog } from "@/components/features/adjuntos/AdjuntosDialog"
 import { ExportMenu } from "@/components/features/export/ExportMenu"
 import { exportarAusencias } from "@/services/ausencias"
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog"
+import { useConfirmacion } from "@/components/features/shared/useConfirmacion"
+import { confirmarEliminarAusencia } from "@/components/features/shared/confirmaciones"
 import { useCanWrite } from "@/hooks/useCanWrite"
 import type { Ausencia } from "@/types/ausencias"
 
@@ -34,6 +37,11 @@ export default function AusenciasPage() {
   const { empresaActivaId, filtros, campos } = useFiltrosAusencias(() => setPage(1))
   const { items, loading, error, total, deletingId, load, handleDelete } =
     useListadoAusencias(filtros, page, pageSize)
+
+  /* 🔴 EL BORRADO PIDE CONFIRMACIÓN. `solicitudes_ausencia` no tiene baja lógica: el DELETE es
+     físico, la fila desaparece y con ella los días que computaban al ausentismo del período.
+     Un solo click no puede ser el único paso entre ver la tabla y perder ese dato. */
+  const aBorrar = useConfirmacion<Ausencia>()
 
   const chips = chipsDeCampos(campos)
 
@@ -89,7 +97,7 @@ export default function AusenciasPage() {
         deletingId={deletingId}
         onRetry={load}
         onEdit={handleEdit}
-        onDelete={handleDelete}
+        onDelete={aBorrar.pedir}
         onDocs={setDocsFor}
         chips={chips}
         onLimpiarTodo={() => chips.forEach((c) => c.quitar())}
@@ -116,6 +124,18 @@ export default function AusenciasPage() {
         onClose={handleModalClose}
         onSuccess={() => { handleModalClose(); load() }}
         editing={editingAusencia}
+      />
+
+      <ConfirmDialog
+        open={aBorrar.abierto}
+        onClose={aBorrar.cerrar}
+        onConfirm={() => {
+          const a = aBorrar.pendiente
+          aBorrar.cerrar()
+          if (a) handleDelete(a.id)
+        }}
+        loading={deletingId !== null}
+        {...confirmarEliminarAusencia(aBorrar.pendiente ?? {})}
       />
 
       <AdjuntosDialog

@@ -52,7 +52,7 @@ export function construirCamposEvaluados(a: ArgsCamposEvaluados): FiltroCampo[] 
       opcionTodos: "Los dos perfiles", opciones: PERFIL_OPCIONES },
     { tipo: "select" as const, label: "Nota final", value: a.conNota, onChange: cambiar(a.setConNota),
       opcionTodos: "Con y sin nota", opciones: NOTA_OPCIONES },
-    ...(a.proyectos.length > 0 ? [{ tipo: "select" as const, label: "Proyecto", value: a.proyecto,
+    ...((a.proyectos.length > 0) || a.proyecto ? [{ tipo: "select" as const, label: "Proyecto", value: a.proyecto,
       onChange: cambiar(a.setProyecto), opcionTodos: "Todos los proyectos", avanzado: true,
       opciones: a.proyectos.map((p) => ({ value: p.id, label: p.nombre })) }] : []),
   ]

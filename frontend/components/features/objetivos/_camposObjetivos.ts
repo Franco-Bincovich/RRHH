@@ -57,14 +57,14 @@ export interface ArgsCamposObjetivos {
 
 export function construirCampos(a: ArgsCamposObjetivos): FiltroCampo[] {
   return [
-    ...(a.mostrarEmpresa && a.empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
+    ...((a.mostrarEmpresa && a.empresas.length > 0) || a.empresaFiltro ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
       onChange: (v: string) => { a.setEmpresaFiltro(v); a.onFiltroChange() },
       opciones: a.empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
     { tipo: "select" as const, label: "Estado", value: a.estadoFiltro, opcionTodos: "Todos los estados",
       onChange: (v: string) => { a.setEstadoFiltro(v); a.onFiltroChange() }, opciones: ESTADO_OPCIONES },
     { tipo: "select" as const, label: "Prioridad", value: a.prioridadFiltro, opcionTodos: "Todas las prioridades",
       onChange: (v: string) => { a.setPrioridadFiltro(v); a.onFiltroChange() }, opciones: PRIORIDAD_OPCIONES },
-    ...(a.usuarios.length > 0 ? [{ tipo: "select" as const, label: "Responsable", value: a.responsableFiltro, opcionTodos: "Todos los responsables", avanzado: true,
+    ...((a.usuarios.length > 0) || a.responsableFiltro ? [{ tipo: "select" as const, label: "Responsable", value: a.responsableFiltro, opcionTodos: "Todos los responsables", avanzado: true,
       onChange: (v: string) => { a.setResponsableFiltro(v); a.onFiltroChange() },
       opciones: a.usuarios.map((u) => ({ value: u.id, label: `${u.nombre} ${u.apellido}` })) }] : []),
   ]

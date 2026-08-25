@@ -53,20 +53,20 @@ export interface ArgsCamposVacaciones {
 
 export function construirCampos(a: ArgsCamposVacaciones): FiltroCampo[] {
   return [
-    ...(!a.empresaActivaId && a.empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
+    ...((!a.empresaActivaId && a.empresas.length > 0) || a.empresaFiltro ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
       onChange: (v: string) => { a.setEmpresaFiltro(v); a.setAreaFiltro(""); a.setEmpleadoFiltro(""); a.onFiltroChange() },
       opciones: a.empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
-    ...(a.areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas",
+    ...((a.areas.length > 0) || a.areaFiltro ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas",
       onChange: (v: string) => { a.setAreaFiltro(v); a.onFiltroChange() },
       opciones: a.areas.map((ar) => ({ value: ar.id, label: etiquetaArea(ar, a.empresas, Boolean(a.empresaActivaId || a.empresaFiltro)) })) }] : []),
     { tipo: "select" as const, label: "Estado", value: a.estadoFiltro, opcionTodos: "Todos los estados",
       onChange: (v: string) => { a.setEstadoFiltro(v); a.onFiltroChange() }, opciones: ESTADO_OPCIONES },
     { tipo: "daterange" as const, label: "Período", value: a.rango,
       onChange: (v: RangoFechas) => { a.setRango(v); a.onFiltroChange() } },
-    ...(a.empleadosSel.length > 0 ? [{ tipo: "select" as const, label: "Colaborador", value: a.empleadoFiltro, opcionTodos: "Todos los colaboradores", avanzado: true,
+    ...((a.empleadosSel.length > 0) || a.empleadoFiltro ? [{ tipo: "select" as const, label: "Colaborador", value: a.empleadoFiltro, opcionTodos: "Todos los colaboradores", avanzado: true,
       onChange: (v: string) => { a.setEmpleadoFiltro(v); a.onFiltroChange() },
       opciones: a.empleadosSel.map((e) => ({ value: e.id, label: `${e.apellido}, ${e.nombre}` })) }] : []),
-    ...(a.proyectos.length > 0 ? [{ tipo: "select" as const, label: "Proyecto", value: a.proyectoFiltro, opcionTodos: "Todos los proyectos", avanzado: true,
+    ...((a.proyectos.length > 0) || a.proyectoFiltro ? [{ tipo: "select" as const, label: "Proyecto", value: a.proyectoFiltro, opcionTodos: "Todos los proyectos", avanzado: true,
       onChange: (v: string) => { a.setProyectoFiltro(v); a.onFiltroChange() },
       opciones: a.proyectos.map((p) => ({ value: p.id, label: p.nombre })) }] : []),
   ]

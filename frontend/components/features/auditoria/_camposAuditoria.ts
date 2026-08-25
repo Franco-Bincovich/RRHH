@@ -58,7 +58,7 @@ export function construirCampos(a: ArgsCamposAuditoria): FiltroCampo[] {
       onChange: (v: string) => { a.setEvento(v); a.onFiltroChange() }, opciones: EVENTO_OPCIONES },
     { tipo: "daterange" as const, label: "Período", value: a.rango,
       onChange: (v: RangoFechas) => { a.setRango(v); a.onFiltroChange() } },
-    ...(a.usuarios.length > 0 ? [{ tipo: "select" as const, label: "Usuario", value: a.usuarioId, opcionTodos: "Todos los usuarios", avanzado: true,
+    ...((a.usuarios.length > 0) || a.usuarioId ? [{ tipo: "select" as const, label: "Usuario", value: a.usuarioId, opcionTodos: "Todos los usuarios", avanzado: true,
       onChange: (v: string) => { a.setUsuarioId(v); a.onFiltroChange() },
       opciones: a.usuarios.map((u) => ({ value: u.id, label: `${u.nombre} ${u.apellido}` })) }] : []),
   ]

@@ -93,6 +93,14 @@ class TestMensaje:
 
 # (módulo, clase, método). El barrido es explícito y no por introspección de disco porque
 # cada export tiene su propia firma; lo que se verifica es que NINGUNO quede sin chequeo.
+#
+# 🔴 LA CLASE PUEDE SER `None`: EL EXPORT NO SIEMPRE ES UN MÉTODO. El 24/8/2026
+# `ObjetivoService.exportar` se mudó a `services/_objetivos_export.py` como FUNCIÓN LIBRE —el
+# service estaba en 142/150 y había que hacerle lugar a la auditoría del módulo— y este barrido
+# lo cazó en el acto, que es exactamente para lo que está. La salida NO era sacar objetivos de la
+# lista: era enseñarle al barrido la forma que el repo ya usa en los write paths extraídos por
+# límite de líneas (`_vacaciones_write`, `_costos_write`, `_objetivos_write`), donde la lógica
+# vive en funciones que reciben el repo. Con `None`, la entrada apunta al módulo y a la función.
 EXPORTS = [
     ("services.empleado_service", "EmpleadoService", "exportar"),
     ("services.vacaciones_service", "VacacionesService", "exportar"),
@@ -100,7 +108,8 @@ EXPORTS = [
     ("services.asignacion_service", "AsignacionService", "exportar"),
     ("services.inventario_items_service", "InventarioItemsService", "exportar"),
     ("services.inventario_asignaciones_service", "InventarioAsignacionesService", "exportar"),
-    ("services.objetivo_service", "ObjetivoService", "exportar"),
+    # Función libre: el export de objetivos vive en el satélite, no en el service. Ver arriba.
+    ("services._objetivos_export", None, "exportar"),
     ("services.evaluacion_reportes_service", "EvaluacionReportesService", "exportar"),
     ("services.costo_service", "CostoService", "exportar"),
     ("services.audit_service", "AuditService", "exportar"),
@@ -137,7 +146,7 @@ class TestTodosLosExportsChequean:
         sin haber mirado nada."""
         assert len(EXPORTS) >= 20
 
-    @pytest.mark.parametrize("modulo,clase,metodo", EXPORTS, ids=lambda v: v.split(".")[-1])
+    @pytest.mark.parametrize("modulo,clase,metodo", EXPORTS, ids=lambda v: (v or "<módulo>").split(".")[-1])
     def test_importa_el_chequeo(self, modulo: str, clase: str, metodo: str) -> None:
         mod = importlib.import_module(modulo)
         assert hasattr(mod, "verificar_limite_export"), (
@@ -145,14 +154,15 @@ class TestTodosLosExportsChequean:
             "_SIN_CHEQUEO CON su razón — no lo saques del barrido."
         )
 
-    @pytest.mark.parametrize("modulo,clase,metodo", EXPORTS, ids=lambda v: v.split(".")[-1])
+    @pytest.mark.parametrize("modulo,clase,metodo", EXPORTS, ids=lambda v: (v or "<módulo>").split(".")[-1])
     def test_lo_invoca_en_el_export(self, modulo: str, clase: str, metodo: str) -> None:
         """Importarlo no alcanza: tiene que estar en el cuerpo de `exportar`."""
         import inspect
         mod = importlib.import_module(modulo)
-        fuente = inspect.getsource(getattr(getattr(mod, clase), metodo))
+        destino = getattr(mod, clase) if clase else mod
+        fuente = inspect.getsource(getattr(destino, metodo))
         assert "verificar_limite_export(" in fuente, (
-            f"{modulo}.{clase}.{metodo} importa el chequeo pero no lo llama."
+            f"{modulo}.{clase or '<módulo>'}.{metodo} importa el chequeo pero no lo llama."
         )
 
     def test_las_excepciones_declaradas_siguen_existiendo(self) -> None:

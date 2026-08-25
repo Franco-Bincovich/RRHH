@@ -1,9 +1,18 @@
 """
-Proyección de columnas legibles para el export de objetivos.
+EL EXPORT DE OBJETIVOS, entero: el acto (`exportar`) y la proyección de columnas legibles.
 
 Extraído del service para no volcar model_dump() crudo (que incluía UUIDs). Los
 headers del Excel son las keys de cada dict (el motor genérico las capitaliza).
 No toca el motor de export.
+
+🔴 `exportar` SE MUDÓ ACÁ EL 24/8/2026, al cablearle auditoría al módulo (bloque 1). El service
+estaba en 142/150 y los cuatro eventos no entraban; la regla del repo es que un archivo que se
+pasa **se divide, no se comprime**. De todo lo que había para sacar, el export es lo que menos
+información pierde al moverse: el tope de filas —que se cuenta sobre el árbol APLANADO y no
+sobre las raíces— queda ahora pegado a `_aplanar`, que es la función que produce esas filas. En
+el service ese `contar_con_hijos` estaba a sesenta líneas de lo único que lo explica.
+Lo que NO se movió es `create`/`update`: el docstring del service declara que ese archivo se
+queda con la ORQUESTACIÓN —qué se valida y en qué ORDEN— y ahí el orden es load-bearing.
 
 🔴 LA JERARQUÍA SE APLANA CON UNA COLUMNA "Objetivo padre", NO CON INDENTACIÓN. `find_all`
 devuelve raíces con sus hijos anidados; acá se recorre ese árbol y sale UNA FILA POR OBJETIVO,
@@ -23,9 +32,14 @@ que el archivo recién bajado se lea como la pantalla; después de que el usuari
 columna "Objetivo padre" es lo único que sostiene la relación — que es exactamente para lo que
 está.
 """
-from typing import List
+from typing import List, Optional
+from uuid import UUID
 
+from repositories._objetivos_arbol import contar_con_hijos
 from schemas.objetivo import ObjetivoResponse
+from schemas.objetivo_filtros import SIN_FILTROS, ObjetivosFiltros
+from services._limite_export import verificar_limite_export
+from services.export import Descarga, build_export
 
 
 def _fecha(v) -> str:
@@ -95,3 +109,36 @@ def construir_filas_export(items: List[ObjetivoResponse]) -> List[dict]:
         }
         for o in _aplanar(items)
     ]
+
+
+def exportar(repo, empresa_id: Optional[UUID] = None, formato: str = "excel",
+             filtros: ObjetivosFiltros = SIN_FILTROS) -> Descarga:
+    """Exporta los objetivos (columnas legibles, sin UUIDs) respetando los MISMOS filtros que el
+    listado. `empresa_id=None` = consolidado. El motor genérico no se toca.
+
+    🔑 Que el listado y el export reciban el MISMO objeto `ObjetivosFiltros` es lo que hace
+    estructuralmente imposible que un filtro quede en uno solo de los dos — la invariante que
+    `tests/test_paridad_list_export.py` verifica del lado del router.
+
+    🔴 EL ARCHIVO TRAE PADRES E HIJOS, así que el tope de filas se cuenta sobre el árbol APLANADO
+    y no sobre las raíces: `find_all` devuelve raíces con hijos anidados, y `len(items)` diría
+    bastante menos de lo que se va a escribir. Con el conteo equivocado, un export de 15.000
+    raíces con 15.000 hijos pasaría el tope de 20.000 y produciría 30.000 filas — que es justo el
+    archivo demasiado grande que el tope existe para evitar.
+
+    Args:
+        repo: ObjetivoRepo (o doble).
+        empresa_id: Empresa del request. None = consolidado.
+        formato: pdf | excel | csv | word.
+        filtros: los MISMOS seis que acepta el listado.
+
+    Returns:
+        La descarga lista para que el router la devuelva.
+
+    Raises:
+        AppError: EXPORT_DEMASIADAS_FILAS (422) si el árbol aplanado supera el tope.
+    """
+    items = repo.find_all(empresa_id, filtros)
+    verificar_limite_export(contar_con_hijos(items))
+    return build_export(nombre="Objetivos", datos={"Objetivos": construir_filas_export(items)},
+                        filename_base="objetivos", formato=formato)

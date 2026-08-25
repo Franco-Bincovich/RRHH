@@ -40,7 +40,7 @@ interface VacacionesTableProps {
   showEmpresa: boolean
   cancelingId: string | null
   onRetry: () => void
-  onCancel: (id: string) => void
+  onCancel: (solicitud: SolicitudVacaciones) => void
   onDocs: (s: SolicitudVacaciones) => void
   /** Los filtros activos, para explicar el vacío con sus valores reales y ofrecer quitarlos. */
   chips: ChipFiltro[]
@@ -107,7 +107,7 @@ export function VacacionesTable({
                       size="sm"
                       className="text-muted-foreground transition-colors group-hover:text-destructive"
                       disabled={cancelingId === s.id}
-                      onClick={() => onCancel(s.id)}
+                      onClick={() => onCancel(s)}
                     >
                       {cancelingId === s.id ? "Cancelando..." : "Cancelar"}
                     </Button>

@@ -72,10 +72,10 @@ export interface ArgsCampos {
 export function construirCampos(a: ArgsCampos): FiltroCampo[] {
   return [
     { tipo: "search" as const, label: "Buscar", value: a.search, placeholder: "Buscar por nombre...", onChange: a.setSearch },
-    ...(!a.empresaActivaId && a.empresas.length > 0 ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
+    ...((!a.empresaActivaId && a.empresas.length > 0) || a.empresaFiltro ? [{ tipo: "select" as const, label: "Empresa", value: a.empresaFiltro, opcionTodos: "Todas las empresas",
       onChange: (v: string) => { a.setEmpresaFiltro(v); a.setAreaFiltro(""); a.onFiltroChange() },
       opciones: a.empresas.map((e) => ({ value: e.id, label: e.nombre })) }] : []),
-    ...(a.areas.length > 0 ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas",
+    ...((a.areas.length > 0) || a.areaFiltro ? [{ tipo: "select" as const, label: "Área", value: a.areaFiltro, opcionTodos: "Todas las áreas",
       onChange: (v: string) => { a.setAreaFiltro(v); a.onFiltroChange() },
       opciones: a.areas.map((ar) => ({ value: ar.id, label: etiquetaArea(ar, a.empresas, Boolean(a.empresaActivaId || a.empresaFiltro)) })) }] : []),
     { tipo: "select" as const, label: "Estado", value: a.estadoFiltro, opcionTodos: "Todos los estados",
@@ -84,7 +84,7 @@ export function construirCampos(a: ArgsCampos): FiltroCampo[] {
       onChange: (v: string) => { a.setLiderFiltro(v); a.onFiltroChange() }, opciones: LIDER_OPCIONES },
     { tipo: "select" as const, label: "Superior", value: a.sinManagerFiltro, opcionTodos: "Todos", avanzado: true,
       onChange: (v: string) => { a.setSinManagerFiltro(v); a.onFiltroChange() }, opciones: SUPERIOR_OPCIONES },
-    ...(a.proyectos.length > 0 ? [{ tipo: "select" as const, label: "Proyecto", value: a.proyectoFiltro, opcionTodos: "Todos los proyectos", avanzado: true,
+    ...((a.proyectos.length > 0) || a.proyectoFiltro ? [{ tipo: "select" as const, label: "Proyecto", value: a.proyectoFiltro, opcionTodos: "Todos los proyectos", avanzado: true,
       onChange: (v: string) => { a.setProyectoFiltro(v); a.onFiltroChange() },
       opciones: a.proyectos.map((p) => ({ value: p.id, label: p.nombre })) }] : []),
   ]

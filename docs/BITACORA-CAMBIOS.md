@@ -41,6 +41,197 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-25 · Los arreglos que hacen daño · commits por bloque
+
+**Qué cambió:** siete bloques, todos sobre cosas que ya se cobraron un dato o lo pueden hacer.
+Los cuatro comandos en verde: `pytest -q` **4278 passed** · `tsc` 0 errores · `npm test`
+**1593/1593 en 139 archivos** · `npm run build` compiled successfully.
+
+**🔴 (1) `/objetivos` ya audita las cuatro escrituras, y era el único módulo del sistema con
+borrado desde la UI y CERO eventos.** Un objetivo real de Karstec desapareció entre el 17/8 y el
+24/8 y no hay forma de saber quién ni cuándo: `auditoria` no tenía una sola fila de esa entidad.
+Ahora el alta, la edición, el cambio de estado del kanban y la baja emiten evento
+(`services/_audit_payloads_objetivos.py` + `services/_audit_objetivo_forma.py`). **El evento de
+baja lleva `arrastro_subobjetivos_por_cascade`**: la FK `parent_id` es ON DELETE CASCADE
+(migración 095) y de los hijos que se lleva la base **no queda ningún evento** —los triggers de
+auditoría se dropearon en la 058—, así que sin ese dato el log diría que se borró UNO cuando
+desaparecieron cuatro. El cambio de estado va como evento PROPIO
+(`cambio_estado_objetivo`) y no mezclado con `update_objetivo`, porque mover una tarjeta es el
+acto más frecuente del tablero y ése es justo el corte que RRHH va a querer hacer en `/auditoria`.
+
+**🔴 Y el barrido que existía NO podía cazarlo, por construcción.**
+`tests/test_auditoria_coherente.py` toma como alcance los módulos que YA emiten algún evento, o
+sea que uno que no emite ninguno queda afuera y en verde. El barrido nuevo
+—`tests/test_auditoria_destructivas.py`, nº 42— pregunta por el ACTO y no por el módulo: **toda
+escritura que borra físicamente emite evento, o se declara con su razón**. Al encenderlo quedaron
+declarados en dos grupos que no se mezclan —higiene técnica y deuda real— **once borrados físicos
+que hoy no dejan rastro** (áreas, capacitaciones, proyectos, inventario, asignaciones, plantillas
+de onboarding, plantillas de mail, horas). Ninguno es de esta tanda; lo nuevo es que ahora están
+escritos y el próximo no puede nacer mudo.
+
+**🔴 (2) Cinco pantallas borraban con un click y ahora pasan por `ConfirmDialog`:** /ausencias,
+/vacaciones, /periodos, /inventario y /objetivos. El patrón canónico ya existía y lo usaban 8
+componentes: no era una decisión, era que nadie lo había cableado. El texto dice **qué va a pasar
+con los valores reales**, y las dos acciones que NO destruyen no dicen "eliminar" — cancelar unas
+vacaciones es un `cancelada=true` que devuelve los días al saldo, y cerrar un período es un
+candado reversible. Cuando todo dice "no se puede deshacer", "no se puede deshacer" no significa
+nada. Lo sostiene el barrido nº 44, cuyo eje es **una función de `services/` que hace
+`method: "DELETE"`** y no el texto de un botón.
+
+**🔴 (3) El formulario de contratación creó un legajo con el email corporativo `"a"` y el campo
+roles vacío.** No fue un olvido puntual: `ContratarCandidatoButton` copió el molde de
+`EliminarCandidatoButton`, que es un BOTÓN DE CONFIRMACIÓN y no un formulario, así que heredó un
+`disabled` con condiciones de PRESENCIA en vez de una capa de validación. Se unificaron las **tres
+copias del regex de email** (con tres mensajes distintos, uno de ellos el ejemplo textual que el
+sistema de diseño usa para explicar un mensaje que no ayuda) en
+`components/features/shared/validacionEmail.ts`. 🚩 **El backend sigue sin validar el formato en
+ninguno de los dos caminos de alta**: un POST directo con `email_corporativo: "a"` entra igual.
+Cerrarlo es una tanda de backend; hasta entonces esto es una barrera de UI, no una garantía.
+
+**🔴 (4) "Limpiar todo" no restituía: 20 filas al entrar y 16 después de limpiar.** Los campos
+cuyo catálogo llega por fetch se renderizaban sólo si el catálogo tenía opciones, así que con el
+fetch caído o una empresa sin áreas el campo desaparecía, no había chip que quitar, y el valor
+seguía vivo en el `useState` **y seguía viajando al backend** — con la pantalla diciendo "0
+filtros activos". **31 campos en 11 módulos** estaban así. Barrido nº 45.
+
+**(5) `/candidatos` seguía diciendo "Oferta" después de contratar.** No era falta de refresco: la
+tarjeta pintaba UN SOLO EJE de los dos, y justo el que contratar no cambia. `estado` viajaba por
+HTTP y estaba tipado, y **su único uso en todo el front era un booleano**: no se renderizaba en
+ningún lado.
+
+**🔴 (6) Barrido nº 43 — `ORDEN` contra lo que el código escribe, buckets incluidos.** Es lo
+comprometido el 24/8: **toda tabla en la que el código puede crear filas la conoce el limpiador
+de la semilla, o está declarada con su razón**. Habría marcado `reportes_generados` ANTES de que
+el smoke corriera. **Incluye Storage**, que era la mitad que el limpiador no ve, y deja escrito
+el hallazgo de fondo: **`DELETE /api/adjuntos/{id}` borra la fila y DEJA el objeto en el bucket**,
+mientras `_adjuntos_masivo.eliminar_todos` sí lo borra — el camino que el usuario usa todos los
+días es el que acumula huérfanos, y nada los purga.
+
+**(7) La convención de nombres del smoke quedó escrita como REGLA** en `docs/SEMILLA-SMOKE.md`
+§5: todo nombre que el smoke tipee arranca con `SMK`, todo mail termina en
+`@semilla.hrkarstec.site`. La evidencia de que alcanza está medida: de los 6 colaboradores que el
+smoke creó por pantalla, la clave natural cazó **5 sola por el dominio del mail**, y el único que
+hubo que buscar a mano es el único que se salió de la convención. Queda dicho ahí también **por
+qué no hay barrido que lo imponga**: lo que una persona tipea en un navegador no está en ningún
+archivo, y ningún AST puede verlo.
+
+**Impacto en infraestructura:** Ninguno en deploy. Sin migraciones, sin variables de entorno, sin
+dependencias nuevas, sin endpoints nuevos, sin cambios de schema, sin buckets nuevos ni cambio de
+uso de los existentes. **Dos cosas que sí conviene saber:**
+- **`auditoria` empieza a recibir cuatro `evento` nuevos** — `alta_objetivo`, `update_objetivo`,
+  `cambio_estado_objetivo`, `baja_objetivo`, con `entidad = "objetivo"`. La columna es texto y no
+  hay CHECK, así que no requiere migración; lo declaro porque cualquier consumidor que enumere
+  valores de `evento` (el filtro de `/auditoria`, un reporte, un dashboard futuro) va a ver
+  cuatro más a partir del deploy. **El volumen no es despreciable**: el kanban emite uno por cada
+  tarjeta que alguien mueve.
+- **El huérfano de Storage del borrado de adjuntos sigue abierto y se porta tal cual a S3.** Acá
+  el archivo simplemente queda; en S3 queda **y se factura por mes**. Está anotado como 🔴 HUECO
+  dentro del barrido nº 43, con su disparador de salida escrito.
+
+## 2026-08-24 · Limpieza de lo que el smoke de recorridos dejó en PRODUCCIÓN · sin commit (datos, no código)
+
+**Qué cambió:** nada de código. Se borraron de producción las filas que el smoke con navegador
+creó **por la UI** y que `limpiar_semilla.py` no podía ver, porque su plan de borrado se arma con
+el manifiesto `.semilla-smoke.json` (ids anotados al sembrar por la API) más la clave natural de
+la semilla, y lo creado a mano por pantalla no está en ninguno de los dos. Por base: 4
+`solicitudes_vacaciones`, 2 `recategorizaciones`, 1 `offboarding_instancias` (arrastró 4
+`offboarding_activos` por CASCADE), 6 `empleados` y **86 `reportes_generados`**. Por la API, que es donde el DELETE deja
+su evento en `auditoria`: 1 `proyectos` y 2 `solicitudes_ausencia`.
+
+**🔴 Los 2 `candidatos` NO se pudieron borrar por la API y terminaron yendo por base.**
+`DELETE /api/candidatos/{id}` sólo acepta HUÉRFANOS (`services/_candidato_acciones.borrar`: si
+`vacante_id is not None` → 400 `CANDIDATO_ACTIVO`, "los de búsqueda viva se gestionan desde la
+vacante"), y los dos colgaban de vacantes SEMBRADAS. Y no hay forma de desvincularlos: el único
+endpoint que toca ese campo es `PUT /{id}/vacante`, cuyo `AsignarVacanteRequest.vacante_id` es
+`UUID` **no opcional** — asigna, no desasigna. La única vía por API habría sido borrar la vacante
+sembrada, que es justo lo que esta limpieza no puede tocar. Antes de ir por base se verificó que
+los dos tuvieran `cv_storage_path` NULL: el borrado por API además saca el CV del bucket `cvs`, y
+saltearlo habría dejado exactamente el huérfano de Storage que esta misma entrada denuncia. No
+había CV en ninguno de los dos. Se revirtieron además las dos bajas que el smoke efectivizó sobre
+colaboradores SEMBRADOS (SMK-09 Otamendi y SMK-04 Bevilacqua) para que la rotación de agosto no
+quedara inflada por un número inventado: los dos vuelven a `activo` con `fecha_egreso` y
+`motivo_baja` en NULL, y la instancia de SMK-09 vuelve a `iniciado` — el estado exacto en que la
+semilla la dejó, idéntico al de SMK-08. La instancia de SMK-04 se borró entera: la semilla nunca
+le creó una. **La `auditoria` NO se tocó** (inmutable por diseño): sus 365 eventos del 23-24/8
+son el registro de este smoke y valen más que la prolijidad. Balance final: **las 55 tablas con residuo CERO.**
+
+**🔴 Dos archivos quedaron huérfanos en Storage y el limpiador nunca los iba a ver.** `DELETE
+/api/adjuntos/{id}` borra la fila y **deja el objeto en el bucket**: los dos adjuntos que el
+smoke subió y borró (`documentos/adjuntos/vacante/…` y `documentos/adjuntos/ausencia/…`, del 24/8
+00:26 y 00:40) siguieron ahí con sus entidades padre ya inexistentes. Se borraron por
+`integrations/storage.borrar`. **Aparecieron mirando `storage.objects`, no el limpiador**: ni el
+manifiesto anota archivos ni `ORDEN` son buckets, así que Storage está fuera de las dos capas.
+
+**🔴 `/objetivos` no emite un solo evento de auditoría — cero filas con `objetivo` en `evento`, en
+toda la tabla, desde siempre.** Salió a la luz porque el objetivo REAL de Karstec (el único que
+`CLAUDE.md` declaraba al 12/8) ya no está, y no hay forma de decir quién lo borró ni cuándo. Es
+el único módulo del sistema con borrado en la UI y sin rastro: un dato de Karstec puede
+desaparecer ahí sin que nadie pueda reconstruir qué pasó. **Va en la próxima sesión de arreglos**
+(decisión de Franco, 24/8), no en una tanda propia. El objetivo se recreó por `POST /api/objetivos`
+(id `1c85757d`).
+
+**🔑 De los campos del objetivo recreado, CUATRO no se inventaron: estaban medidos contra
+producción en los bloques de verificación de las migraciones.** Las 111 (dedup), 114 (post-deploy)
+y 119 (tipo + areas array) documentan cada una la ÚNICA fila que la tabla tenía, y la 119 la midió
+el **2026-08-17**: *"búsqueda líder de equipo · tipo 'anual' · periodicidad '' · areas_involucradas
+{} · parent_id NULL"*. Eso fija `titulo`, `tipo`, `periodicidad`, `areas_involucradas` y
+`parent_id` con evidencia, y de paso **acota la ventana del borrado: el objetivo existía el 17/8 y
+ya no está**.
+
+**🔴 Y ahí había una trampa que el default se comía en silencio.** `objetivos.tipo` tiene DEFAULT
+`'anual'` en la BASE (mig 119, elegido para que el backfill de esa única fila saliera gratis), pero
+`ObjetivoCreate.tipo` tiene `TIPO_POR_DEFECTO = "operativo"` — son dos preguntas distintas y las
+dos están bien contestadas, está explicado en `schemas/objetivo.py`. Consecuencia: un `POST` sin
+`tipo` habría recreado el objetivo como **operativo**, o sea en la vista equivocada y sin que nada
+fallara. Se mandó `tipo: "anual"` explícito.
+
+**Lo que SÍ es reconstruido y no verificable, anotado acá para que nadie lo lea como original:**
+`empresa_id` (SERVICIOS Y CONSULTORIA), `responsable_id` (Alejandra), `prioridad` (media) y
+`fecha_entrega` (2026-08-15) salen de **una captura del tablero que tenía Franco**, no de la base.
+`estado` quedó `por_hacer`, que es el default del alta y coincide con la captura — `ObjetivoCreate`
+ni siquiera acepta `estado`, se cambia después por `PUT /{id}/estado`.
+
+⚠️ **Y las dos inferencias con las que se llegó a la empresa NO se sostienen en el modelo, aunque
+la conclusión pueda ser correcta.** (1) *"la empresa es la del responsable"*: `users` **no tiene
+`empresa_id`** —verificado contra el catálogo— y es decisión de producto que todo usuario alcance
+todas las empresas; el dominio del mail es una señal humana, no un dato del sistema. (2) *"los 4
+sembrados están en IT NET, así que el que faltaba no era de ahí"*: la semilla planta sus objetivos
+en UNA empresa que elige el script (`sembrar_objetivos(cli, empresa, ...)`), así que no dice nada
+sobre dónde vivía el real. **El backend no puede verificar la empresa de ese objetivo por ninguna
+vía** — se buscó en migraciones, docs y catálogo. La captura es mejor evidencia que cualquiera de
+las dos inferencias; lo que no hay es forma de confirmarla desde acá.
+
+**Lo que se verificó en positivo antes de borrar** — un cero puede significar "no hay" o "no ve",
+así que se contaron las filas reales y se las nombró: 31 colaboradores de Karstec, **0 con
+`fecha_egreso`** y 0 con `estado ≠ activo` · 12 áreas · 10 cesiones · la vacante `Analista
+contable` · 3 candidatos reales · 4 clientes · 1 `horas_proyecto` real · el lote de evaluaciones
+(1/10/307) intacto · y las **156 filas de `auditoria` previas al 23/8, que coinciden exactas con
+lo que `CLAUDE.md` declara al 12/8**. Los 6 empleados borrados no tenían **ni una fila hija** en
+16 tablas, y nadie los referenciaba como `manager_id` ni como `responsable_id` de un área. Los 3
+clientes reales figuran con `updated_at` del 24/8 porque el smoke los abrió y guardó: el diff de
+auditoría muestra **sólo `updated_at`**, ningún campo de contenido — no había nada que revertir.
+
+**Impacto en infraestructura:** Ninguno. Sin migraciones, sin variables de entorno, sin
+dependencias, sin endpoints nuevos, sin cambios de schema. El bucket `documentos` perdió 2
+objetos huérfanos; no cambia su uso. Lo único que le toca al dev de infra es indirecto y es la
+nota de arriba: **el borrado de un adjunto no borra el archivo**, así que el bucket acumula
+huérfanos con el tiempo, y eso se porta tal cual a S3 si no se arregla antes.
+
+**Queda comprometido para la próxima sesión** (decidido con Franco el 24/8, sobre tres propuestas
+de las que se descartó la tercera):
+- **(a) Un barrido estructural que compare `ORDEN` de `_semilla_plan_borrado.py` contra las
+  tablas que las 139 acciones de escritura de `docs/INVENTARIO-SMOKE.md` tocan**, buckets de
+  Storage incluidos. Es lo que habría marcado `reportes_generados` ANTES de que el smoke corriera
+  —la tabla no está en ninguna capa del limpiador— y es la forma que ya sostiene los otros 41
+  barridos: falla solo, no depende de que nadie se acuerde.
+- **(b) La convención de nombres del smoke escrita como regla y no como costumbre**: todo nombre
+  que el smoke tipee arranca con `SMK`, todo mail termina en `@semilla.hrkarstec.site`. El dato
+  que lo justifica: de los 6 empleados que el smoke creó, **5 los cazó sola la clave natural** por
+  el dominio del mail; el único que se escapó (`Sebastián Videla`, mail `"a"`) es el que se salió
+  de la convención. No hace falta mecanismo nuevo, hace falta usar el que ya existe.
+- **Descartado: un modo `--patron` que liste y no borre.** Una lista que alguien tiene que mirar
+  es la disciplina que este repo ya documenta fallando siete sesiones seguidas.
+
 ## 2026-08-23 · Arreglos del smoke de ESCRITURA + los tres que vio Franco · commits por bloque
 
 **Qué cambió:** nueve bloques de arreglo sobre lo que encontró el smoke de escritura y sobre lo
