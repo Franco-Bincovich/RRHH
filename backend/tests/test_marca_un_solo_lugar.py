@@ -31,7 +31,18 @@ RAIZ = Path(__file__).resolve().parents[2]
 BACKEND = RAIZ / "backend"
 FRONT = RAIZ / "frontend"
 
-LITERAL = "HR Karstec"
+# 🔴 EL LITERAL ES EL NOMBRE DE HOY, Y CAMBIA CON ÉL. El 27/8/2026 pasó de «HR Karstec» a
+# «Core RH» (definido por Capital Humano). Este renglón es el TERCERO y último que hay que tocar
+# para renombrar la plataforma —los otros dos son los defaults de `DUENOS`—, y es la prueba de
+# que la centralización del bloque N9 funcionó: el renombre fueron tres líneas, no un
+# buscar-y-reemplazar sobre las decenas de comentarios que nombran la marca.
+#
+# ⚠️ NO se guarda además el nombre VIEJO, y no es un olvido. El barrido pregunta "¿alguien
+# escribe el nombre de la plataforma literal en vez de usar la constante?", y esa pregunta es
+# sobre el nombre VIGENTE: un literal «HR Karstec» que hubiera quedado en pantalla habría rojeado
+# ANTES de este cambio, con el barrido en verde como estaba. Guardar los dos nombres para siempre
+# convertiría esta constante en una lista histórica que nadie poda.
+LITERAL = "Core RH"
 
 # Los DOS lugares donde el literal vive a propósito: el default de cada lado.
 DUENOS = {

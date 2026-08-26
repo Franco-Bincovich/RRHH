@@ -10,23 +10,39 @@ class Settings(BaseSettings):
     app_env: str = "development"
 
     # 🔴 EL NOMBRE DE LA PLATAFORMA, EN UN SOLO LUGAR (bloque N9, 25/8/2026).
-    # El nombre va a cambiar y todavía no está confirmado. Estaba escrito literal en el título de
-    # la API (`main.py`) y en el metadato `author` de todo PDF exportado; del lado del front,
-    # en seis archivos (ver `frontend/lib/marca.ts`, que es su espejo con el MISMO default).
-    # NO se cambió nada: el default es exactamente el nombre de hoy. Cambiarlo es setear `MARCA`.
+    # Estaba escrito literal en el título de la API (`main.py`) y en el metadato `author` de todo
+    # PDF exportado; del lado del front, en seis archivos (ver `frontend/lib/marca.ts`, que es su
+    # espejo con el MISMO default).
+    #
+    # ✅ EL NOMBRE YA ESTÁ CONFIRMADO: **Core RH**, definido por Capital Humano el 27/8/2026.
+    # Ésta es la primera vez que el default cambia, y la centralización se pagó sola: el renombre
+    # fue este renglón, su espejo del front y el literal del barrido nº 52 — no un
+    # buscar-y-reemplazar sobre un repo que menciona el nombre viejo en decenas de comentarios.
+    #
+    # ⚠️ «Core RH» dice **RH**, y el vocabulario de §4 prohíbe «RRHH» y «Recursos Humanos».
+    # NO hay conflicto y no hace falta ninguna excepción: los dos barridos de vocabulario buscan
+    # `\bRRHH\b` (cuatro letras) y `\bRecursos Humanos\b`, y ninguno matchea «RH». Además el
+    # nombre lo eligió Capital Humano — es un nombre propio, no un texto de pantalla que estemos
+    # redactando nosotros, así que §4 no le aplica aunque el patrón lo rozara.
     #
     # ⚠️ QUÉ **NO** GOBIERNA ESTA VARIABLE, para no prometer de más:
     #   · El DOMINIO `hrkarstec.site`. Es una compra y una config de DNS, no un string: cambiarlo
     #     es comprar otro, apuntarlo, sumarlo a `ALLOWED_ORIGINS` y reemitir el certificado.
     #   · El nombre del LOGGER (`utils/logger.py` usa `"hrkarstec"`). Es un identificador de
     #     jerarquía de logging, no texto de pantalla: renombrarlo rompe cualquier filtro o alerta
-    #     que ya apunte a él, y no lo ve ningún usuario.
+    #     que ya apunte a él, y no lo ve ningún usuario. 🔴 SE DEJA ASÍ A PROPÓSITO el 27/8/2026,
+    #     con el nombre ya cambiado a «Core RH»: es DECISIÓN DEL DEV DE INFRA, porque el costo lo
+    #     paga él y no avisa — una alerta que filtre por `hrkarstec` queda MUDA, no rota, así que
+    #     el síntoma es que nunca más suena. Ver `docs/handoff-aws/HANDOFF.md`.
     #   · Los DATOS que ya están en la base: nombres de empresa, las plantillas de mail que
     #     escribe Capital Humano (son contenido editable, no código) y el template de onboarding
     #     que sembró la migración 027.
     #   · Las MIGRACIONES ya corridas. Son historia; no se reescriben.
     #   · La casilla REMITENTE de los mails, que sale de `integraciones` en la base.
-    marca: str = "HR Karstec"
+    #   · Las RAZONES SOCIALES de las dos empresas ni los mails `@karstec.com.ar`: son datos del
+    #     cliente, no de la plataforma. La plataforma se llama Core RH; el cliente sigue siendo
+    #     Karstec.
+    marca: str = "Core RH"
 
     # Módulos desactivables
     # Assessment está APAGADO por decisión de producto. Apagarlo saca del app el módulo

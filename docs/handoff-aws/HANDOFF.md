@@ -392,7 +392,7 @@ antes de que lo descubra un usuario.
 
 ## 5 · Lo que queda abierto — decisiones de Karstec, no técnicas
 
-> 🔴 **Ninguna de estas cinco se resuelve programando.** Están acá para que sepas que existen y
+> 🔴 **Ninguna de estas seis se resuelve programando.** Están acá para que sepas que existen y
 > para que no las decidas vos de rebote al portear.
 
 ### 5.1 · La casilla del sistema está en un Gmail personal
@@ -500,6 +500,35 @@ duplicada pasó meses sin que nadie lo notara.
 > **sí se ve en cuanto la tabla tiene filas**, y va a volver a verse el día que RRHH cargue el
 > primer offboarding real — con la diferencia de que esa vez los datos van a ser reales y nadie
 > va a poder atribuirle el desvío a la semilla.
+
+
+### 5.6 · 🔴 El nombre del logger sigue diciendo `hrkarstec`, y la decisión es TUYA
+
+**La plataforma se llama «Core RH» desde el 27/8/2026** (lo definió Capital Humano). El renombre
+ya está hecho en el código y fue de tres líneas, porque el nombre estaba centralizado: el default
+de `settings.marca`, su espejo `frontend/lib/marca.ts` y el literal del barrido nº 52.
+
+**Lo que NO se tocó, a propósito, es `utils/logger.py`, que sigue nombrando al logger
+`"hrkarstec"`.** No es un olvido ni un pendiente nuestro: es una decisión que te corresponde a
+vos, porque **el costo lo pagás vos y no avisa**.
+
+**El costo, escrito:** el nombre del logger no es texto de pantalla — es el identificador de la
+jerarquía de logging, o sea la clave por la que se FILTRA. Si tenés una alerta, un filtro de
+CloudWatch, una métrica de log o un dashboard que referencie `hrkarstec`, renombrarlo **no la
+rompe: la deja MUDA**. No hay error, no hay excepción, no hay deploy fallido. El único síntoma es
+que esa alerta no vuelve a sonar nunca — y una alerta que no suena se lee igual que "no pasó
+nada". Es la peor forma de falla posible para una pieza de observabilidad: silenciosa y con
+apariencia de éxito.
+
+**Qué hacer, si decidís cambiarlo:** primero inventariá qué referencia el string `hrkarstec` del
+lado de infra (filtros de métrica, subscription filters, alarmas, queries guardadas), después
+renombrá el logger, y recién ahí actualizá esas referencias. En ese orden. Si el inventario da
+cero, el cambio es gratis y conviene hacerlo para que el identificador acompañe al nombre nuevo.
+
+**Qué NO cambia con el renombre de la plataforma, para que no lo hagas de rebote:** el dominio
+`hrkarstec.site`, el nombre del repo, el del proyecto de Vercel y el de Supabase, las razones
+sociales de las dos empresas y los mails `@karstec.com.ar`. Los últimos dos son **datos del
+cliente**: la plataforma se llama Core RH, el cliente sigue siendo Karstec.
 
 ---
 

@@ -41,6 +41,56 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-27 · La plataforma pasa a llamarse «Core RH» · commit por bloque
+
+**Qué cambió:** Capital Humano definió el nombre de la plataforma: **Core RH**, en reemplazo de
+«HR Karstec». El renombre fueron **tres líneas de código**, porque el nombre ya estaba
+centralizado desde el bloque N9 (25/8): el default de `settings.marca`, su espejo
+`frontend/lib/marca.ts`, y el literal `LITERAL` del barrido nº 52, que es el que impide que
+alguien vuelva a escribirlo a mano. **Ningún archivo de pantalla se tocó** — los seis lugares del
+front y los dos del backend que muestran el nombre ya leían la constante. Se actualizaron además
+los dos valores de `.env.example`.
+
+**Impacto en infraestructura:**
+
+🟠 **(1) LAS DOS VARIABLES DE MARCA CAMBIAN DE VALOR EN PRODUCCIÓN.** No son nuevas —existen desde
+el 25/8— pero hoy su valor deja de coincidir con el default:
+
+| Variable | Proyecto de Vercel | Valor nuevo | Cuándo aplica |
+|---|---|---|---|
+| `MARCA` | `sofia-backend` | `Core RH` | **RUNTIME** — con el próximo deploy alcanza |
+| `NEXT_PUBLIC_MARCA` | `sofia-front` | `Core RH` | 🔴 **BUILD-TIME** — exige **redeploy del front** |
+
+🔴 **Si las dos están HOY sin setear en Vercel, no hace falta tocar nada**: el default del código
+ya dice «Core RH» y sale bien con el próximo deploy de cada proyecto. **Si alguna está seteada con
+el valor viejo, pisa al default y la pantalla va a seguir diciendo «HR Karstec»** — ése es el
+único modo de falla de este cambio, y no da error: sale el nombre viejo, en verde.
+
+⚠️ **`NEXT_PUBLIC_MARCA` es BUILD-TIME**: Next la inlinea al compilar. Cambiar el valor en el
+dashboard **no cambia nada hasta que el front se vuelva a buildear**. Es la misma mecánica que
+`NEXT_PUBLIC_API_URL`.
+
+🟢 **(2) EL NOMBRE DEL LOGGER NO SE TOCÓ, Y ES DECISIÓN DEL DEV DE INFRA.** `utils/logger.py`
+sigue nombrando al logger `"hrkarstec"`. **El costo de cambiarlo lo paga infraestructura y no
+avisa:** el nombre del logger es la clave por la que se FILTRA, así que una alerta o un filtro de
+métrica que lo referencie **queda MUDA, no rota** — sin error, sin deploy fallido, y con el único
+síntoma de que no vuelve a sonar. Está escrito con el procedimiento en
+**`docs/handoff-aws/HANDOFF.md` §5.6** (sección nueva) y anotado en `settings.py`.
+
+🟢 **(3) NO CAMBIA NADA MÁS.** En particular **no cambian**: el dominio `hrkarstec.site`, el
+nombre del repo, el del proyecto de Vercel, el del proyecto de Supabase, las razones sociales de
+las dos empresas ni los mails `@karstec.com.ar`. Los dos últimos son **datos del cliente**: la
+plataforma se llama Core RH, el cliente sigue siendo Karstec. Tampoco se tocaron las migraciones
+ya corridas (son historia) ni las plantillas de mail (son contenido editable por Capital Humano).
+
+⚠️ **(4) EL VOCABULARIO DE §4 NO ENTRA EN CONFLICTO, y se verificó ejecutando.** El sistema de
+diseño prohíbe «RRHH» y «Recursos Humanos», y «Core RH» dice **RH**. Los dos barridos de
+vocabulario (`tests/test_vocabulario.py` y `frontend/vocabulario.test.ts`) buscan `RRHH`
+—cuatro letras— y `Recursos Humanos`: ninguno matchea «RH». **No hizo falta declarar
+ninguna excepción ni relajar ningún barrido.** Los dos corren en verde con el nombre nuevo.
+
+---
+
 ## 2026-08-26 · Los números de producción pasan de PROYECTADOS a MEDIDOS · commit por bloque
 
 **Qué cambió:** ningún código. La limpieza de la semilla (entrada de abajo) se ejecutó y se

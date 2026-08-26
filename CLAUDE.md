@@ -1,4 +1,4 @@
-# CLAUDE.md — RRHH (HR Karstec)
+# CLAUDE.md — RRHH (Core RH)
 
 > **Ubicación:** raíz del repo RRHH (`RRHH/`), desde donde se ejecuta `claude`. `backend/`, `frontend/`, `docs/` y `migracionAWS/` cuelgan directo de la raíz — **`RRHH/` es el único repo git (no hay repos anidados), y todas las operaciones git corren desde ahí**.
 
@@ -50,7 +50,8 @@ nada de RLS en tablas nuevas).
 ---
 
 ## Qué es este proyecto
-RRHH es el repositorio interno de **HR Karstec**: plataforma de gestión del ciclo de vida del empleado, **multiempresa** (2–5 empresas simultáneas), operada por un equipo de RRHH de 3 personas. Reporting con IA vía Claude Sonnet. **Live en https://www.hrkarstec.site**.
+RRHH es el repositorio interno de **Core RH**: plataforma de gestión del ciclo de vida del empleado, **multiempresa** (2–5 empresas simultáneas), operada por un equipo de RRHH de 3 personas. Reporting con IA vía Claude Sonnet. **Live en https://www.hrkarstec.site**.
+> 🔴 **La plataforma se llama «Core RH» desde el 27/8/2026** (lo definió Capital Humano; antes «HR Karstec»). El nombre vive en `settings.marca` y `frontend/lib/marca.ts` — no se escribe literal en ningún otro lado, y el barrido nº 52 lo sostiene. **NO cambiaron, y no hay que cambiarlos**: el dominio `hrkarstec.site`, el nombre del repo, el del proyecto de Vercel, el del proyecto de Supabase (`"HR Karstec"`, ver arriba), las razones sociales de las dos empresas ni los mails `@karstec.com.ar` — esos dos últimos son **datos del cliente**: la plataforma se llama Core RH, el cliente sigue siendo Karstec. El **nombre del logger** (`"hrkarstec"`) tampoco: es decisión del dev de infra, con su costo escrito en `docs/handoff-aws/HANDOFF.md` §5.6.
 
 ## Stack
 - **Backend**: Python 3.11 + FastAPI. Arquitectura por capas **router → service → repository** (NO hay controllers).
@@ -1581,10 +1582,13 @@ contra el catálogo el 12/8/2026).
       gerencia, sector, perfil): las COLUMNAS siguen en la tabla, así que nada impedía volver a
       pintarlas "porque el dato está". Guardas de mínimo ≥25 campos de ficha y ≥30 de export.
   52. 🔴 **`tests/test_marca_un_solo_lugar.py`** (25/8/2026) — **el nombre de la plataforma se
-      escribe en UN solo lugar por lado.** El nombre va a cambiar y todavía no está confirmado;
-      estaba literal en OCHO archivos —seis del front (título del navegador, sidebar, login, pie
-      de la evaluación pública y tres textos del panel de IA) y dos del backend (el título de la
-      API y el `author` de todo PDF exportado)—. Centralizarlo en `settings.marca` y
+      escribe en UN solo lugar por lado.** Estaba literal en OCHO archivos —seis del front
+      (título del navegador, sidebar, login, pie de la evaluación pública y tres textos del panel
+      de IA) y dos del backend (el título de la API y el `author` de todo PDF exportado)—.
+      🟢 **Se cobró el 27/8/2026**: el nombre pasó a «Core RH» y el renombre fueron TRES líneas
+      —los dos defaults y el `LITERAL` de este barrido—, sin tocar un solo archivo de pantalla.
+      El `LITERAL` es siempre el nombre VIGENTE, no una lista histórica de nombres.
+      Centralizarlo en `settings.marca` y
       `frontend/lib/marca.ts` no alcanza sin barrido: el próximo texto que nombre la plataforma
       vuelve a escribirlo literal en el próximo PR. 🔑 **Barre las DOS puntas desde un solo test**
       porque la regla es una sola; partirlo daría dos listas de excepciones que se separan (molde
