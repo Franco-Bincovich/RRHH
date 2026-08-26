@@ -10,8 +10,9 @@ from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import field_validator
 
+from schemas._legajo_normalizado import LegajoNormalizado
 from schemas._provincias import Provincia
 # El vocabulario de estados (tipos y constantes) vive en un solo módulo, para que el espejo del
 # CHECK exista una vez. Molde: `schemas/usuario.py`, que importa ROLES_VALIDOS de utils.permisos.
@@ -52,7 +53,7 @@ def _normalizar_roles(v: object) -> object:
     return limpio
 
 
-class EmpleadoBase(BaseModel):
+class EmpleadoBase(LegajoNormalizado):
     nombre: str
     apellido: str
     email_corporativo: str
@@ -113,7 +114,7 @@ class EmpleadoCreate(EmpleadoBase):
     estado: EstadoAlta = "activo"
 
 
-class EmpleadoUpdate(BaseModel):
+class EmpleadoUpdate(LegajoNormalizado):
     nombre: Optional[str] = None
     apellido: Optional[str] = None
     email_corporativo: Optional[str] = None

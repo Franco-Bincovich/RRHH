@@ -3,6 +3,7 @@ import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/layout/ThemeProvider"
 import { Toaster } from "@/components/ui/sonner"
 import "./globals.css"
+import { MARCA } from "@/lib/marca"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -10,7 +11,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "HR Karstec",
+  title: MARCA,
   description: "Plataforma de gestión del ciclo de vida del colaborador",
 }
 

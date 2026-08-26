@@ -9,6 +9,7 @@ es donde estaba el bug de las columnas encimadas y tiene su propia explicación.
 import io
 from typing import Any, Dict
 
+from config.settings import settings
 from services.export._formato import celda, etiqueta, titulo_seccion
 from services.export._pdf_tabla import necesita_apaisado, tabla_de
 
@@ -29,7 +30,7 @@ def build_pdf(nombre: str, datos: Dict[str, Any]) -> bytes:
     margen = 1.5 * cm
     doc = SimpleDocTemplate(buf, pagesize=hoja, leftMargin=margen, rightMargin=margen,
                             topMargin=margen, bottomMargin=margen,
-                            title=nombre, author="HR Karstec")
+                            title=nombre, author=settings.marca)
     util = hoja[0] - 2 * margen
     styles = getSampleStyleSheet()
 

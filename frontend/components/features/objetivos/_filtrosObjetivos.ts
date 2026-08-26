@@ -9,6 +9,8 @@ export interface ValoresFiltroObjetivos {
   prioridadFiltro: string
   responsableFiltro: string
   tipoFiltro: TipoObjetivo | ""
+  areaFiltro: string
+  periodicidadFiltro: string
 }
 
 /**
@@ -37,5 +39,9 @@ export function armarFiltros(v: ValoresFiltroObjetivos): ObjetivosFiltros {
     responsableId: v.responsableFiltro || undefined,
     prioridad: v.prioridadFiltro || undefined,
     tipo: v.tipoFiltro || undefined,
+    area: v.areaFiltro || undefined,
+    // `.trim()` porque es texto tipeado: " mensual" no matchea nada y el usuario
+    // ve un listado vacío sin ninguna pista de por qué.
+    periodicidad: v.periodicidadFiltro.trim() || undefined,
   }
 }

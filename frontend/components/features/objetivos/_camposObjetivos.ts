@@ -20,9 +20,21 @@ import type { UserItem } from "@/types/objetivo"
  * 🔴 EL ESTADO SON TRES VALORES, NO UN PORCENTAJE (§7): por hacer · haciendo · terminado. Ninguna
  * opción de este select puede insinuar una fracción de avance, porque ese dato no existe.
  *
- * ⚠️ NO HAY FILTRO POR ÁREA, y no es un olvido: `objetivos.responsable_id` es FK a `users`, no a
- * `empleados`, y los operadores de Capital Humano no tienen área. Está declarado como decisión de
- * producto en CLAUDE.md, no como deuda.
+ * 🔴 SÍ HAY FILTRO POR ÁREA DESDE EL 25/8/2026, Y NO CONTRADICE LA DECISIÓN DE PRODUCTO — son dos
+ * "área" distintas y el comentario anterior las mezclaba. Lo que está descartado es cortar por el
+ * área del RESPONSABLE: `objetivos.responsable_id` es FK a `users`, y los operadores de Capital
+ * Humano no tienen área. Este filtro es sobre `areas_involucradas`, un array de texto del OBJETIVO
+ * (migración 119) que responde otra pregunta: "¿qué objetivos tocan a Sistemas?". El backend ya lo
+ * aceptaba, con endpoint de catálogo propio y cero llamadores.
+ *
+ * 🔴 LOS DOS NUEVOS VAN AVANZADOS. Area y Periodicidad son recortes de segunda vuelta —la pregunta
+ * diaria sigue siendo qué hay que hacer y con qué urgencia—, y subirlos a la barra visible
+ * empujaría a Prioridad fuera del primer vistazo. Mismo criterio que Responsable.
+ *
+ * ⚠️ Los dos se DIBUJAN SÓLO SI HAY ALGO QUE ELEGIR (o si ya hay un valor puesto). El "o" no es
+ * decorativo: es la regla del barrido nº45 —un filtro con valor SIEMPRE tiene su chip—, porque si
+ * el catálogo llega vacío y el campo desaparece, el valor sigue vivo en el `useState`, sigue
+ * viajando al backend, y "Limpiar todo" no tiene chip que quitar.
  *
  * Sin estado ni efectos: recibe valores y setters. El reset de página lo dispararía
  * `onFiltroChange`, que acá no hace falta porque **este listado no pagina** (el backend devuelve
@@ -52,6 +64,11 @@ export interface ArgsCamposObjetivos {
   usuarios: UserItem[]
   responsableFiltro: string
   setResponsableFiltro: (v: string) => void
+  areas: string[]
+  areaFiltro: string
+  setAreaFiltro: (v: string) => void
+  periodicidadFiltro: string
+  setPeriodicidadFiltro: (v: string) => void
   onFiltroChange: () => void
 }
 
@@ -67,5 +84,13 @@ export function construirCampos(a: ArgsCamposObjetivos): FiltroCampo[] {
     ...((a.usuarios.length > 0) || a.responsableFiltro ? [{ tipo: "select" as const, label: "Responsable", value: a.responsableFiltro, opcionTodos: "Todos los responsables", avanzado: true,
       onChange: (v: string) => { a.setResponsableFiltro(v); a.onFiltroChange() },
       opciones: a.usuarios.map((u) => ({ value: u.id, label: `${u.nombre} ${u.apellido}` })) }] : []),
+    ...(a.areas.length > 0 || a.areaFiltro ? [{ tipo: "select" as const, label: "Área involucrada", value: a.areaFiltro, opcionTodos: "Todas las áreas", avanzado: true,
+      onChange: (v: string) => { a.setAreaFiltro(v); a.onFiltroChange() },
+      opciones: a.areas.map((x) => ({ value: x, label: x })) }] : []),
+    // `search` y no `select`: la periodicidad es texto libre que escribe Capital Humano
+    // ("mensual", "por sprint"), no un vocabulario cerrado. Un desplegable prometería una lista
+    // que no existe.
+    { tipo: "search" as const, label: "Periodicidad", value: a.periodicidadFiltro, avanzado: true,
+      placeholder: "Ej: mensual", onChange: (v: string) => { a.setPeriodicidadFiltro(v); a.onFiltroChange() } },
   ]
 }

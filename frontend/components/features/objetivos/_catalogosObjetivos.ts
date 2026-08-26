@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 
 import { fetchEmpresas } from "@/services/empresas"
 import { getEmpresaActivaId } from "@/services/empresaStore"
-import { fetchCamposObjetivo, fetchUsuariosActivos } from "@/services/objetivos"
+import { fetchAreasConocidas, fetchCamposObjetivo, fetchUsuariosActivos } from "@/services/objetivos"
 import type { Empresa } from "@/types/empresa"
 import type { TipoObjetivo, UserItem } from "@/types/objetivo"
 
@@ -22,7 +22,7 @@ export type OpcionVista = { value: TipoObjetivo; label: string }
  * estado que un test podría ver es el de carga — o sea que las dos solapas que importan no las
  * miraría nadie. Es el caso #4 de "un test solo prueba lo que el fake puede desmentir".
  *
- * ⚠️ Los tres `.catch(() => {})` son deliberados y NO tapan un error del listado: son catálogos
+ * ⚠️ Los cuatro `.catch(() => {})` son deliberados y NO tapan un error del listado: son catálogos
  * de SELECTORES. Si uno no llega, su control no se dibuja (`construirCampos` y el selector de
  * vista omiten los que vienen vacíos) y la pantalla sigue mostrando los objetivos. El error del
  * listado sí se muestra, y lo maneja la página.
@@ -32,12 +32,15 @@ export function useCatalogosObjetivos() {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [usuarios, setUsuarios] = useState<UserItem[]>([])
   const [vistas, setVistas] = useState<OpcionVista[]>([])
+  /** Texto libre: el vocabulario son los datos, así que sale de la base (bloque N8). */
+  const [areas, setAreas] = useState<string[]>([])
 
   useEffect(() => {
     if (!empresaActivaId) fetchEmpresas().then((r) => setEmpresas(r.items.filter((e) => e.activa))).catch(() => {})
     fetchUsuariosActivos().then((r) => setUsuarios(r.items)).catch(() => {})
     fetchCamposObjetivo().then((r) => setVistas(r.tipos)).catch(() => {})
+    fetchAreasConocidas().then(setAreas).catch(() => {})
   }, [empresaActivaId])
 
-  return { empresaActivaId, empresas, usuarios, vistas }
+  return { empresaActivaId, empresas, usuarios, vistas, areas }
 }

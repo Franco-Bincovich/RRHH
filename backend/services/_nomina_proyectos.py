@@ -8,6 +8,32 @@ al empleado. Reusa ProyectosService y AsignacionesService (nada de inserts direc
   ASIGNACION_DUPLICADA y acá se traga (idempotente). Empleado en baja: no se asigna.
 - Best-effort: un fallo de proyecto/asignación NO rompe la carga del empleado (ya creado);
   se loguea y sigue. Gerencia vacía/"NO APLICA" llega como None (limpiada en el parser) → no hace nada.
+
+🔴 ESTE ARCHIVO ES LA AGRUPACIÓN DEL ORGANIGRAMA, Y `empleados.gerencia` DEJÓ DE SER UN CAMPO DEL
+LEGAJO (25/8/2026, bloque N2). Desde esa fecha la gerencia **no se muestra en la ficha, no se pide
+en el formulario y no sale en el export**: su único origen es el archivo de nómina, y por lo tanto
+este módulo. Capital Humano lo pidió así —que no se cargue ni se edite a mano— y hay una razón
+técnica que lo respalda, escrita acá porque es donde se ve:
+
+  **La asignación al proyecto es una FOTO del momento del import.** El valor del CSV se escribe en
+  DOS lados en la misma pasada: la columna `empleados.gerencia` (la TRAZA de qué declaró el
+  archivo) y el par `proyectos` + `proyecto_asignaciones` (la MATERIALIZACIÓN, que es lo que
+  `organigrama_proyectos_service` renderiza). El organigrama **no lee la columna**. O sea que
+  editarla a mano no reasignaba a nadie: era un campo que parecía editable y cuya edición no hacía
+  nada — que es peor que no tenerlo. Como los dos los escribe este import, no pueden divergir.
+
+  Verificado contra producción el 25/8/2026: las 7 gerencias distintas tienen su proyecto homónimo
+  con las asignaciones exactas (13/13 "RECUPERO DEL GASTO HOSPITALARIO", 11/11 "CALIDAD DE DATOS",
+  3/3 "BERAZATEGUI" y 1/1 en las otras cuatro).
+
+⚠️ NO CONFUNDIR con `organismo`/`sector`/`perfil`, que salieron del legajo en la misma tanda por lo
+CONTRARIO: están en 0 filas de 41 y nadie las escribe nunca. `gerencia` tiene 31 de 41 y salió
+justamente porque el dato importa demasiado como para dejar que dos orígenes lo escriban.
+
+📌 DEUDA ABIERTA, del lado de Karstec: si algún día se unifican las 14 áreas de producción en un
+conjunto más chico, el organigrama puede migrar a **área** y esta columna se retira del todo. Hoy
+no se puede: nadie definió el mapeo de gerencia → área, y con 7 gerencias contra 14 áreas la
+agrupación por gerencia es la que se lee. Ver `docs/DEUDA-TECNICA.md`.
 """
 from typing import Optional
 from uuid import UUID

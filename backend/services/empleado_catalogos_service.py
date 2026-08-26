@@ -12,9 +12,19 @@ from utils.errors import AppError
 
 # Única fuente de verdad de qué columnas del legajo se pueden autocompletar (A1.2).
 # Restringe el endpoint /valores-conocidos: evita exponer columnas arbitrarias de empleados.
+# 🔴 SALIERON CUATRO EL 25/8/2026 (bloque N2), Y NO POR EL MISMO MOTIVO — leerlas como "las cuatro
+# estaban vacías" es el error que hay que evitar:
+#   · `organismo`, `sector` y `perfil` están en CERO filas de producción (41 legajos). El import
+#     lee "Organismo" y "Sector" del CSV y los desvía a resolver empresa y área, sin escribir
+#     nunca las columnas del mismo nombre. Salieron porque no hay nada que mostrar.
+#   · `gerencia` tiene 31 de 41 y salió por lo contrario: **dejó de ser un campo del legajo para
+#     ser la agrupación del organigrama**, y su único origen legítimo es el archivo de nómina.
+#     Ofrecerla acá invitaba a cargarla a mano, que es justamente lo que Capital Humano pidió que
+#     no pase. El porqué completo está en `db/schema.sql` (sobre la columna) y en el docstring de
+#     `services/_nomina_proyectos.py`.
+# Las COLUMNAS no se tocaron en ninguno de los dos casos: eso es DDL y va en su propia tanda.
 CAMPOS_AUTOCOMPLETABLES = frozenset({
-    "gerencia", "sector", "seniority", "tipo_contrato",
-    "perfil", "categoria", "ubicacion", "organismo", "tipo_documento",
+    "seniority", "categoria", "ubicacion", "tipo_contrato", "tipo_documento",
 })
 
 

@@ -24,11 +24,13 @@ import type { TipoObjetivo } from "@/types/objetivo"
  */
 
 export function useFiltrosObjetivos() {
-  const { empresaActivaId, empresas, usuarios, vistas } = useCatalogosObjetivos()
+  const { empresaActivaId, empresas, usuarios, vistas, areas } = useCatalogosObjetivos()
   const [empresaFiltro, setEmpresaFiltro] = useState("")
   const [estadoFiltro, setEstadoFiltro] = useState("")
   const [prioridadFiltro, setPrioridadFiltro] = useState("")
   const [responsableFiltro, setResponsableFiltro] = useState("")
+  const [areaFiltro, setAreaFiltro] = useState("")
+  const [periodicidadFiltro, setPeriodicidadFiltro] = useState("")
   /** "" = las dos vistas. No es un valor del vocabulario: es la AUSENCIA del filtro. */
   const [tipoFiltro, setTipoFiltro] = useState<TipoObjetivo | "">("")
 
@@ -38,6 +40,7 @@ export function useFiltrosObjetivos() {
     mostrarEmpresa, empresas, empresaFiltro, setEmpresaFiltro,
     estadoFiltro, setEstadoFiltro, prioridadFiltro, setPrioridadFiltro,
     usuarios, responsableFiltro, setResponsableFiltro,
+    areas, areaFiltro, setAreaFiltro, periodicidadFiltro, setPeriodicidadFiltro,
     // Vacío a propósito: este listado no pagina, así que no hay página que resetear. Se pasa
     // igual para no divergir del molde y para el día que pagine.
     onFiltroChange: () => {},
@@ -46,6 +49,7 @@ export function useFiltrosObjetivos() {
   // UN solo objeto: lo consumen el listado y el export, así que no pueden divergir.
   const filtros = armarFiltros({
     mostrarEmpresa, empresaFiltro, estadoFiltro, prioridadFiltro, responsableFiltro, tipoFiltro,
+    areaFiltro, periodicidadFiltro,
   })
 
   return {

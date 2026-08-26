@@ -446,7 +446,36 @@ CREATE TABLE public.empleados (
     ubicacion text,
     turno text,
     horas_contrato integer,
+    -- 🔴 LAS CUATRO SALIERON DEL LEGAJO EL 25/8/2026 (bloque N2) — no se muestran en la ficha,
+    -- no se piden en el formulario y no salen en el export. Las columnas se conservan, y el
+    -- motivo NO es el mismo para las cuatro. Leerlas como un grupo es el error a evitar:
+    --
+    --   · `organismo`, `sector`, `perfil` → **0 filas cargadas de 41** (medido contra el catálogo
+    --     vivo el 25/8/2026). El import de nómina lee las columnas "Organismo" y "Sector" del CSV
+    --     y las DESVÍA a resolver `empresa_id` y `area_id`; nunca escribe estas tres. La ficha
+    --     mostraba un guion en campos que el archivo sí traía, resueltos en otro lado y con otro
+    --     nombre. Llenarlas habría creado una copia en texto plano y sin FK de lo que ya vive en
+    --     `empresas.nombre` y `areas.nombre`: al primer renombre desde /areas, la copia miente y
+    --     no hay forma de saber cuál manda. Son candidatas a DROP; nadie las lee.
+    --
+    --   · `gerencia` → **31 filas de 41, y NO es candidata a DROP**. Dejó de ser un campo del
+    --     legajo para ser **la agrupación del organigrama**, y su ÚNICO origen es el archivo de
+    --     nómina. Salió del formulario porque Capital Humano pidió que no se cargue ni se edite
+    --     a mano, y hay una razón técnica que lo respalda: editar esta columna **no mueve a nadie
+    --     en el organigrama**. Ver el párrafo de abajo.
     organismo text,
+    -- 🔴 CÓMO FUNCIONA REALMENTE LA AGRUPACIÓN POR GERENCIA, porque la frase corta se malentiende:
+    -- **el organigrama NO lee esta columna.** El import (`services/_nomina_proyectos.py`) hace DOS
+    -- cosas en la misma pasada con el valor del CSV: escribe acá, y crea/reusa un `proyecto` con
+    -- ese nombre y asigna a la persona. El organigrama que se ve es
+    -- `organigrama_proyectos_service`, que renderiza `proyectos` + `proyecto_asignaciones`.
+    -- Verificado contra producción el 25/8/2026: las 7 gerencias distintas tienen su proyecto
+    -- homónimo, con las asignaciones exactas (13/13, 11/11, 3/3 y 1/1 ×4).
+    -- ⚠️ CONSECUENCIA, y es el argumento más fuerte para haberla sacado del formulario: la
+    -- asignación al proyecto es una FOTO del momento del import. Cambiar esta columna a mano no
+    -- reasigna a nadie — era un campo que parecía editable y cuya edición no hacía nada.
+    -- 📌 Esta columna es la TRAZA de qué gerencia declaró el archivo; el proyecto es la
+    -- materialización. Las dos las escribe el mismo import, así que no pueden divergir.
     gerencia text,
     sector text,
     seniority text,

@@ -38,11 +38,7 @@ export type FormData = {
   ubicacion: string
   turno: string
   horas_contrato: string
-  organismo: string
-  gerencia: string
-  sector: string
   seniority: string
-  perfil: string
   categoria: string
   referido: string
   es_lider: boolean
@@ -53,10 +49,19 @@ export type FormErrors = Partial<Record<keyof FormData, string>>
 /** Claves de campos de texto (string). Excluye roles (lista), es_lider (booleano) y estado
  *  (unión cerrada: su control es un select propio, no un input de texto). */
 export type TextKey = Exclude<keyof FormData, "roles" | "es_lider" | "estado">
-/** Claves con autocompletado de texto libre + sugerencias (single-value). */
+/**
+ * Claves con autocompletado de texto libre + sugerencias (single-value).
+ *
+ * 🔴 ERAN OCHO HASTA EL 25/8/2026: salieron las CUATRO del bloque N2. `organismo`, `sector` y
+ * `perfil` porque están en CERO filas; `gerencia` por otra razón, y por eso NO se puede leer como
+ * "las cuatro estaban vacías": tiene 31 de 41 y **dejó de ser un campo del legajo para ser la
+ * agrupación del organigrama por proyecto**, alimentada sólo por el archivo de nómina. Editarla a
+ * mano no movía a nadie en el organigrama (ver `db/schema.sql` y `_nomina_proyectos.py`), o sea
+ * que era un campo que parecía editable y cuya edición no hacía nada. Las COLUMNAS no se tocaron:
+ * es DDL. El backend recortó `CAMPOS_AUTOCOMPLETABLES` en paralelo, así que pedirlas da 400.
+ */
 export type AutocompleteKey =
-  | "tipo_documento" | "ubicacion" | "organismo" | "gerencia" | "sector"
-  | "seniority" | "perfil" | "categoria"
+  | "tipo_documento" | "ubicacion" | "seniority" | "categoria"
 
 /** Handler de cambio de un input/select controlado del form. */
 export type FieldChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void
@@ -104,11 +109,7 @@ export const EMPTY: FormData = {
   ubicacion: "",
   turno: "",
   horas_contrato: "",
-  organismo: "",
-  gerencia: "",
-  sector: "",
   seniority: "",
-  perfil: "",
   categoria: "",
   referido: "",
   es_lider: false,
@@ -137,13 +138,13 @@ export const PERSONAL_CONTACT_FIELDS: TextField[] = [
 ]
 
 /**
- * Domicilio desglosado (C4). Va en su propio bloque y NO junto al resto de los datos de
- * contacto: son seis campos que se completan de una sola vez, y mezclarlos con teléfono y
- * email hace que el formulario se lea como una lista sin fin.
+ * Domicilio desglosado (C4). Va en su propio bloque y NO junto al resto de los datos de contacto:
+ * son seis campos que se completan de una vez, y mezclarlos con teléfono y email hace que el
+ * formulario se lea como una lista sin fin.
  *
  * `domicilio_provincia` NO está acá: es un select cerrado y lo renderiza DomicilioFields.
- * `domicilio` (el texto libre viejo) tampoco: dejó de editarse, se muestra como referencia en
- * la ficha mientras estos estén vacíos.
+ * `domicilio` (el texto libre viejo) tampoco: dejó de editarse, se muestra en la ficha como
+ * referencia mientras estos estén vacíos.
  */
 export const DOMICILIO_FIELDS: TextField[] = [
   { field: "domicilio_calle", label: "Calle" },
@@ -155,7 +156,9 @@ export const DOMICILIO_FIELDS: TextField[] = [
 
 export const LABORAL_TEXT_FIELDS: TextField[] = [
   { field: "turno", label: "Turno", placeholder: "Ej: 8 a 17 hs" },
-  { field: "horas_contrato", label: "Horas por día", type: "number" },
+  // Vacío = lo calcula el backend del turno, y el placeholder lo dice: un campo que se completa
+  // solo DESPUÉS de guardar se lee como un campo que no se guardó.
+  { field: "horas_contrato", label: "Horas por día", type: "number", placeholder: "Se calcula del turno" },
   { field: "fecha_ingreso", label: "Fecha de ingreso", required: true, type: "date" },
   { field: "referido", label: "Referido" },
   { field: "dias_vacaciones_asignados", label: "Días de vacaciones asignados", type: "number" },
@@ -165,13 +168,18 @@ export const PERSONAL_AUTOCOMPLETE: ReadonlyArray<{ field: AutocompleteKey; labe
   { field: "tipo_documento", label: "Tipo de documento" },
 ]
 
+/**
+ * Los tres campos del legajo que se completan escribiendo, con sugerencias de lo ya cargado.
+ * 🔴 `seniority` MOTIVÓ EL BLOQUE N3. La columna tiene TRES escritores —este formulario, el import
+ * de nómina y la recategorización— y cada uno escribía su grafía: producción tenía `senior` (5) y
+ * `SENIOR` (1) como dos valores, y "Distribución de plantilla" partía en dos a los 6 seniors. El
+ * combobox ya sugería lo existente; faltaba **normalizar al guardar**, y eso se cerró en el
+ * backend (`schemas/_legajo_normalizado`), el único punto por el que pasan los tres. `categoria`
+ * es el nivel dentro del seniority y **acepta números pelados** ("3" es real): texto libre.
+ */
 export const LABORAL_AUTOCOMPLETE: ReadonlyArray<{ field: AutocompleteKey; label: string }> = [
   { field: "ubicacion", label: "Ubicación" },
-  { field: "organismo", label: "Organismo" },
-  { field: "gerencia", label: "Gerencia" },
-  { field: "sector", label: "Sector" },
   { field: "seniority", label: "Seniority" },
-  { field: "perfil", label: "Perfil" },
   { field: "categoria", label: "Categoría" },
 ]
 

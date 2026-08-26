@@ -41,6 +41,148 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-25 · Normalización del legajo cargado + tres secciones fuera del menú · commit por bloque
+
+**Qué cambió:** dos cosas independientes.
+
+**(1) Se corrió la normalización de `seniority`/`categoria` sobre los datos YA cargados**
+(`scripts/normalizar_legajo.py`, la contracara de la regla que el bloque N cableó al escribir).
+**13 de 41 empleados cambiaron, las 13 sólo en `seniority`**: `senior`/`SENIOR` → `Senior`,
+`junior` → `Junior`, `lider` → `Lider`, `EXPERT` → `Expert`, `TRAINEE` → `Trainee`,
+`semi_senior` → `Semi Senior`. Ninguna fila de `categoria` cambió (los `C1`…`C7` y el `3` ya
+estaban en su forma canónica) y **ningún valor pasó a NULL**. Con esto "Distribución de
+plantilla" deja de contar `senior` y `SENIOR` como dos grupos: hoy dice **Senior 6, Junior 2,
+Lider 2, Expert 1, Semi Senior 1, Trainee 1 y 28 sin especificar**.
+⚠️ **Se aplicó por SQL directo contra el catálogo, no corriendo el script**, porque la Mac no
+tiene el `.env` del backend (gitignoreado, no viajó). La REGLA es la misma: el cálculo de las 13
+filas se hizo importando `utils.legajo_reglas`, que es lo que el script importa; lo único
+distinto fue el transporte. El script sigue siendo el camino oficial y es idempotente —
+volver a correrlo ahora no toca ninguna fila.
+
+**(2) Costos, Períodos y Horas por cliente salieron del menú** (decisión de Franco). **No se
+borró código, ni rutas, ni endpoints, ni entradas de `permisos.ts`**: las tres pantallas siguen
+vivas y alcanzables tipeando la URL, con su gate del AuthGuard intacto. El mecanismo es la lista
+`RUTAS_OCULTAS` de `components/layout/nav-config.ts`, que aplica `nav-visibilidad.itemVisible`
+(el único punto por el que ya pasaba "¿este ítem se ve?") **y también `_destinosKpi.destino()`**,
+para que la card "Masa salarial del mes" del dashboard no siga siendo una entrada a /costos más
+grande que el propio menú. **Reponer una sección es borrar su línea de esa lista** — vuelven el
+ítem y el link juntos.
+
+**Impacto en infraestructura:** **Ninguno.** Sin migraciones, sin variables de entorno, sin
+dependencias, sin buckets, sin endpoints nuevos ni borrados, sin cambios de auth ni de CORS. El
+punto (1) es un UPDATE de datos ya aplicado en producción (13 filas de `empleados.seniority`);
+el punto (2) es front puro y no cambia una sola ruta servida.
+
+**Dos hallazgos de producción que valen para quien lea esto** (medidos contra el catálogo vivo
+el 25/8/2026, no reverificados desde el 12/8):
+- **`periodos_cerrados` tiene 2 filas, no 0** como declara CLAUDE.md. Son las DOS empresas con
+  `2019-01-01 → 2019-01-31` y `modulo NULL`, creadas el 23/8/2026 por la corrida del smoke.
+  No bloquean nada real —la regla sólo aplica a `mandos_medios` y ningún registro se solapa con
+  enero de 2019— pero son residuo del smoke que el limpiador no borró, que es exactamente la
+  clase de fuga que el barrido nº 43 vino a vigilar.
+- **`costos_nomina` tiene 62 filas, no 0.** O sea que el KPI de masa salarial y el historial
+  salarial de la ficha YA muestran datos reales — y la pantalla que los lista es justamente una
+  de las tres que salieron del menú. `horas_proyecto` tiene 2 filas.
+
+## 2026-08-25 · Bloque N: el legajo según la nómina real, el cruce de filtros y el nombre de la plataforma · commits por bloque
+
+**Qué cambió:** los nueve bloques del bloque N. Los cuatro comandos en verde: `pytest -q`
+**4425 passed** (era 4279) · `tsc` 0 errores · `npm test` **1649/1649 en 149 archivos** ·
+`npm run build` compiled successfully.
+
+**Impacto en infraestructura — HAY DOS COSAS, y las dos son nuevas:**
+
+🟢 **(1) MIGRACIONES: NINGUNA. La última pendiente sigue siendo la 121.**
+La corrección de los `seniority`/`categoria` ya cargados **NO va como migración**: es
+`scripts/normalizar_legajo.py`, y el corte es deliberado. Una migración declara la FORMA de la
+base; esto corrige VALORES — mezclarlos hace que un replay sobre una base nueva ejecute un UPDATE
+que no tiene nada que corregir, y que el historial de migraciones deje de leerse como la historia
+del modelo. Además, **un UPDATE sobre datos reales se mira antes de correrse**: el script no
+escribe nada por default, imprime fila por fila el valor viejo y el nuevo, y escribir exige
+`--aplicar`. Es idempotente (compara contra la forma canónica y sólo toca lo que difiere, así que
+tampoco dispara `updated_at` de más).
+⚠️ **Para infraestructura no hay nada que hacer**: no toca schema, no necesita ventana y no tiene
+orden respecto de ninguna migración. Lo corre quien administre los datos, cuando quiera.
+
+🟠 **(2) VARIABLES DE ENTORNO NUEVAS: `MARCA` (backend) y `NEXT_PUBLIC_MARCA` (front).**
+Las dos tienen default y el default es **exactamente el nombre de hoy** (`HR Karstec`), así que
+**no hay que hacer nada para que todo siga igual**. Existen porque el nombre de la plataforma va a
+cambiar y todavía no está confirmado: el día que se defina, se setean las dos y no se toca código.
+⚠️ **`NEXT_PUBLIC_MARCA` es BUILD-TIME**: Next la inlinea al compilar, así que cambiarla en Vercel
+**exige un redeploy de `sofia-front`** — igual que `NEXT_PUBLIC_API_URL`. Y las dos tienen que
+decir lo MISMO: hay un test que lo verifica, porque si divergen la pantalla y el PDF que esa
+pantalla descarga dirían nombres distintos.
+🔴 **Lo que estas variables NO gobiernan, para que nadie lo prometa:** el dominio `hrkarstec.site`
+(es una compra + DNS + `ALLOWED_ORIGINS` + certificado, no un string), el nombre del logger
+(`"hrkarstec"` en `utils/logger.py` — es un identificador de jerarquía de logging, renombrarlo
+rompe filtros y alertas y no lo ve ningún usuario), los datos que ya están en la base (nombres de
+empresa, plantillas de mail que escribe Capital Humano, el template de onboarding de la migración
+027) y las migraciones ya corridas, que son historia.
+
+**Endpoints nuevos: ninguno.** Dependencias: ninguna. Buckets: ninguno. Procesos de fondo:
+ninguno. Autenticación: sin cambios.
+
+**Lo demás, en una línea cada uno (sin impacto de infra):**
+- **N1/N2 — las CUATRO salen del legajo, por DOS motivos distintos.** `organismo`, `sector` y
+  `perfil` porque están en **0 de 41** filas: el import desvía "Organismo" y "Sector" a resolver
+  empresa y área y nunca escribe las columnas del mismo nombre. Llenarlas duplicaría en texto
+  plano lo que ya vive en `empresas.nombre` y `areas.nombre`, así que se sacaron de la ficha, del
+  formulario y del export. **`gerencia` salió por lo contrario**: tiene 31 de 41 y dejó de ser un
+  campo del legajo para ser **la agrupación del organigrama**, con el archivo de nómina como único
+  origen — Capital Humano pidió que no se cargue ni se edite a mano.
+  🔴 **Las columnas NO se dropearon** (es DDL), y `gerencia` **no es candidata a DROP**: la
+  necesita el organigrama. 🔴 **La precisión que hay que conservar, escrita en `db/schema.sql` y en
+  `services/_nomina_proyectos.py`: el organigrama NO lee la columna.** El import escribe en dos
+  lados con el valor del CSV — la columna (la traza) y `proyectos` + `proyecto_asignaciones` (la
+  materialización, que es lo que se renderiza). La asignación es una FOTO del import: editar la
+  columna a mano no reasignaba a nadie. Verificado contra producción: las 7 gerencias distintas
+  tienen su proyecto homónimo con las asignaciones exactas (13/13, 11/11, 3/3, 1/1 ×4).
+  📌 **Deuda abierta anotada en `docs/DEUDA-TECNICA.md` §0.gerencia:** si algún día se unifican las
+  14 áreas, el organigrama puede migrar a área y `gerencia` se retira del todo. Hoy no: nadie
+  definió el mapeo gerencia → área, y el bloqueo no es técnico.
+- **N3/N4 — normalización de `seniority` y `categoria` al escribir**, en el schema y no en un
+  service, así alcanza a los TRES escritores (formulario, import de nómina, recategorización).
+  🔴 **El valor guardado ES la etiqueta que se muestra** (`Senior`, `Semi Senior`, `C6`): se
+  descartó guardar en minúscula y derivar una etiqueta al pintar, porque esa derivación tendría
+  que existir en el front Y en el backend — dos implementaciones de la misma regla sobre la misma
+  columna, que es la divergencia pantalla-vs-archivo que N7 acaba de cerrar. Un valor nuevo se ve
+  bien sin que nadie lo agregue a ningún catálogo.
+  🔴 **Y la normalización destapó un bug propio, ya arreglado:** la recategorización escribe en
+  DOS lados —la fila del historial y el legajo— y sólo el segundo pasaba por el normalizador, así
+  que tipear "SENIOR" dejaba la fila diciendo **`Senior → SENIOR`**, un cambio que no ocurrió, en
+  la pantalla cuyo único trabajo es contar qué cambió. Cerrado con un segundo mixin
+  (`RecategorizacionNormalizada`) que llama a las MISMAS funciones: lo que se mapea son los
+  nombres de campo (`seniority_nueva`), no la regla.
+  📌 **Dato para Capital Humano, no un bug: 28 de 41 colaboradores (68%) NO tienen seniority
+  cargado.** Después de normalizar, "Distribución de plantilla" va a seguir diciendo
+  "Sin especificar: 28" — y esa vez va a ser verdad. Conviene avisarlo antes del recorrido.
+- **N5 — `horas_contrato` se deriva del turno** (ventana menos una hora de almuerzo) cuando el
+  payload no la trae. El import de nómina la escribía en **0 de 31** filas y de esa columna
+  depende el cálculo de licencias del link público de horas.
+- **N6 — siete columnas que la API no devolvía** pasaron a `EmpleadoResponse` y a la ficha, entre
+  ellas `fecha_ingreso_reconocida`, **que decide el cupo de vacaciones** y no se mostraba en
+  ninguna pantalla.
+- **N7 — el export de empleados pasó de 26 a 42 columnas** y quedó emparejado con la ficha, con un
+  barrido que lo sostiene (nº 51).
+- 🔴 **Fuera del pedido pero de la misma familia: el barrido de columnas ahora cubre `empleados`**
+  (nº 53). Cubría `candidatos`, `capacitaciones` y `empleado_capacitacion`, y **no la tabla
+  central**: por eso las doce columnas de N6 pudieron existir descartadas en silencio. Era la
+  sexta aparición del mismo bug.
+- 🔴 **N8 (2) — el barrido que impide el sexto (nº 54).** Los tres filtros huérfanos de agosto se
+  encontraron A MANO, en tres tandas distintas, y los dos guardias que el repo ya tenía no podían
+  verlos: los dos comparan LISTADO contra EXPORT, y un filtro que ninguna punta manda hace que el
+  par coincida perfecto en cero. `tests/test_filtros_publicados_sin_ui.py` compara backend contra
+  front. Verificado por mutación contra los cinco casos reales.
+- **N8 (1) — cinco filtros publicados sin UI, cableados:** `area` y `periodicidad` en objetivos (con su
+  endpoint de catálogo `/api/objetivos/areas-conocidas`, que llevaba meses sin un solo llamador) y
+  `area_id`/`empleado_id`/`proyecto_id` en vacaciones pendientes, que ignoraba la barra de filtros
+  de su propia pantalla.
+- 🟠 **Fuera de alcance, encontrado de paso: `frontend/app/api/ai/route.ts` pedía
+  `claude-sonnet-4-20250514`**, un string con fecha **retirado el 15/6/2026** (→ 404). Corregido a
+  `claude-sonnet-4-6`. No se notaba porque esa ruta está doblemente apagada (el panel de IA está
+  oculto y `ANTHROPIC_API_KEY` no está cargada en `sofia-front`), pero el día que se encienda el
+  chat habría fallado al primer mensaje.
+
 ## 2026-08-25 · Cierre de los arreglos del smoke (once bloques) · commits por bloque
 
 **Qué cambió:** once de los doce bloques que dejó el smoke. Los cuatro comandos en verde:

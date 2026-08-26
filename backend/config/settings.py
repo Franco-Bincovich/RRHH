@@ -9,6 +9,25 @@ class Settings(BaseSettings):
     # App
     app_env: str = "development"
 
+    # 🔴 EL NOMBRE DE LA PLATAFORMA, EN UN SOLO LUGAR (bloque N9, 25/8/2026).
+    # El nombre va a cambiar y todavía no está confirmado. Estaba escrito literal en el título de
+    # la API (`main.py`) y en el metadato `author` de todo PDF exportado; del lado del front,
+    # en seis archivos (ver `frontend/lib/marca.ts`, que es su espejo con el MISMO default).
+    # NO se cambió nada: el default es exactamente el nombre de hoy. Cambiarlo es setear `MARCA`.
+    #
+    # ⚠️ QUÉ **NO** GOBIERNA ESTA VARIABLE, para no prometer de más:
+    #   · El DOMINIO `hrkarstec.site`. Es una compra y una config de DNS, no un string: cambiarlo
+    #     es comprar otro, apuntarlo, sumarlo a `ALLOWED_ORIGINS` y reemitir el certificado.
+    #   · El nombre del LOGGER (`utils/logger.py` usa `"hrkarstec"`). Es un identificador de
+    #     jerarquía de logging, no texto de pantalla: renombrarlo rompe cualquier filtro o alerta
+    #     que ya apunte a él, y no lo ve ningún usuario.
+    #   · Los DATOS que ya están en la base: nombres de empresa, las plantillas de mail que
+    #     escribe Capital Humano (son contenido editable, no código) y el template de onboarding
+    #     que sembró la migración 027.
+    #   · Las MIGRACIONES ya corridas. Son historia; no se reescriben.
+    #   · La casilla REMITENTE de los mails, que sale de `integraciones` en la base.
+    marca: str = "HR Karstec"
+
     # Módulos desactivables
     # Assessment está APAGADO por decisión de producto. Apagarlo saca del app el módulo
     # ENTERO, incluidas sus 2 rutas públicas sin auth (/api/assessment/evaluacion/{token}

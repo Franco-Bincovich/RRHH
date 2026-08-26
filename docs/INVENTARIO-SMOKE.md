@@ -209,7 +209,7 @@ La columna **Caller** cruza contra los literales de path del front. `—declarad
 | 149 | GET | `/api/mails` | configuracion · read | 👁️ | sí | sí |  |
 | 150 | GET | `/api/objetivos` | objetivos · read | 👁️ | sí | sí |  |
 | 151 | POST | `/api/objetivos` | objetivos · write | ✍️ | sí | sí |  |
-| 152 | GET | `/api/objetivos/areas-conocidas` | objetivos · read | 👁️ | **—declarado** | sí |  |
+| 152 | GET | `/api/objetivos/areas-conocidas` | objetivos · read | 👁️ | sí | sí |  |
 | 153 | GET | `/api/objetivos/campos` | objetivos · read | 👁️ | sí | sí |  |
 | 154 | GET | `/api/objetivos/exportar` | objetivos · read | 👁️ | sí | sí |  |
 | 155 | DELETE | `/api/objetivos/{id}` | objetivos · write | ✍️ | sí | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
@@ -354,7 +354,7 @@ Las **46** rutas de `app/`. ⚠️ **La columna GET dice qué endpoints ALCANZA 
 | `/eventos` | eventos | admin rrhh, gerencia lectura | 1 | 0 | 4 | sí | sí | — | sí |
 | `/horas-por-cliente` | proyectos | admin rrhh, gerencia lectura | 2 | 1 | 1 | — | — | — | sí |
 | `/inventario` | inventario | admin rrhh, gerencia lectura | 7 | 2 | 5 | sí | sí | — | sí |
-| `/objetivos` | objetivos | admin rrhh, gerencia lectura | 4 | 1 | 6 | sí | — | — | sí |
+| `/objetivos` | objetivos | admin rrhh, gerencia lectura | 5 | 1 | 6 | sí | — | — | sí |
 | `/offboarding` | offboarding | admin rrhh, gerencia lectura | 3 | 1 | 5 | — | — | — | sí |
 | `/onboarding` | onboarding | admin rrhh, gerencia lectura | 4 | 1 | 2 | — | — | — | sí |
 | `/onboarding/templates/{}` | onboarding | admin rrhh, gerencia lectura | 1 | 0 | 4 | — | — | — | sí |
@@ -637,7 +637,6 @@ Importados de `backend/tests/test_callers_huerfanos.py`, no copiados: ese barrid
 | `GET /api/clientes/{id}` | completitud REST: el modal de edición recibe el objeto entero del listado, así que pedir la fila de vuelta sería una ida a la red por lo que la pantalla ya tiene. Su wrapper `fetchCliente` se borró el 2026-08-10 tras nacer sin caller; este barrido no lo vio porque `updateCliente`/`deleteCliente` escriben el MISMO literal de path. |
 | `GET /api/eventos/{id}` | completitud REST: el modal de edición recibe el objeto entero del listado, así que pedir la fila de vuelta sería una ida a la red por lo que la pantalla ya tiene. Es el MISMO caso que /api/clientes/{id}, y por eso services/eventos.ts nace sin su `fetchEvento` en vez de con un wrapper que nadie llama. |
 | `GET /api/integraciones/google/callback` | lo invoca el REDIRECT de Google, no el front. Un wrapper en services/ sería incorrecto. |
-| `GET /api/objetivos/areas-conocidas` | el pool de áreas ya usadas, para el desplegable del filtro por área. Sigue sin caller: la tanda del selector de vista (23/8/2026) construyó el filtro por `tipo`, no el de área. SALE DE ESTA LISTA cuando `_camposObjetivos.ts` monte el select de área — hoy ese archivo declara en su encabezado por qué NO lo tiene (los objetivos son del equipo de Capital Humano, y sus operadores no tienen área), así que el disparador real es que esa decisión de producto se revierta. Si eso no pasa, lo que corresponde es BORRAR el endpoint, no dejarlo declarado para siempre. |
 | `GET /api/perfiles-puesto/{id}` | completitud REST: el LISTADO devuelve el perfil entero —los 12 campos, no una proyección—, así que el modal de edición recibe el objeto que la pantalla ya tiene y pedir la fila de vuelta sería una ida a la red por nada. Es el MISMO caso que /api/clientes/{id} y /api/eventos/{id}, y por eso services/perfilesPuesto.ts nace SIN su `fetchPerfil` en vez de con un wrapper que nadie llama. 🔴 Esta entrada es la única de las 7 del módulo que sobrevivió al cableado del front (20/8/2026). |
 | `GET /api/recategorizaciones/{id}` | completitud REST: el LISTADO devuelve la fila entera —incluidos los seis campos de la cadena de valores anteriores—, así que el modal de edición recibe el objeto que la pantalla ya tiene y pedirlo de vuelta sería una ida a la red por nada. Es el MISMO caso que /api/clientes/{id}, /api/eventos/{id} y /api/perfiles-puesto/{id}, y por eso services/recategorizaciones.ts nace SIN su fetch por id. 🔴 Es la única de las 6 del módulo que sobrevivió al cableado del front (20/8/2026). |
 | `GET /api/vacaciones-pendientes/empleado/{empleado_id}` | completitud REST: el listado ya acepta `empleado_id` como Query y es el que usa el front. |

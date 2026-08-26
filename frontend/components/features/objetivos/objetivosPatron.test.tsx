@@ -37,6 +37,8 @@ function args(over: Partial<ArgsCamposObjetivos> = {}): ArgsCamposObjetivos {
     prioridadFiltro: "", setPrioridadFiltro: vi.fn(),
     usuarios: USUARIOS as ArgsCamposObjetivos["usuarios"],
     responsableFiltro: "", setResponsableFiltro: vi.fn(),
+    areas: ["Sistemas", "Comercial"], areaFiltro: "", setAreaFiltro: vi.fn(),
+    periodicidadFiltro: "", setPeriodicidadFiltro: vi.fn(),
     onFiltroChange: vi.fn(),
     ...over,
   }
@@ -75,10 +77,23 @@ describe("(b) quitar un chip quita ESE filtro, no los otros", () => {
     }
   })
 
-  it("qué queda atrás de 'Más filtros': sólo Responsable, el recorte a UNA persona", () => {
+  it("qué queda atrás de 'Más filtros': los tres recortes de segunda vuelta", () => {
+    // La barra visible contesta la pregunta diaria —qué hay que hacer y con qué urgencia— y los
+    // recortes finos quedan atrás. Área y Periodicidad entraron el 25/8/2026 (bloque N8) y
+    // entraron AVANZADOS por eso: subirlos empujaría a Prioridad fuera del primer vistazo.
     const campos = construirCampos(args())
-    expect(campos.filter((c) => c.avanzado).map((c) => c.label)).toEqual(["Responsable"])
+    expect(campos.filter((c) => c.avanzado).map((c) => c.label))
+      .toEqual(["Responsable", "Área involucrada", "Periodicidad"])
     expect(campos.filter((c) => !c.avanzado).map((c) => c.label)).toEqual(["Empresa", "Estado", "Prioridad"])
+  })
+
+  it("el filtro de área NO se dibuja sin catálogo, salvo que ya tenga un valor puesto", () => {
+    // 🔴 La segunda mitad es la regla del barrido nº45: un filtro CON VALOR siempre tiene su
+    // chip. Si el catálogo llega vacío y el campo desaparece, el valor sigue vivo en el estado y
+    // sigue viajando al backend, y "Limpiar todo" no tiene nada que quitar.
+    expect(construirCampos(args({ areas: [] })).map((c) => c.label)).not.toContain("Área involucrada")
+    expect(construirCampos(args({ areas: [], areaFiltro: "Sistemas" })).map((c) => c.label))
+      .toContain("Área involucrada")
   })
 })
 

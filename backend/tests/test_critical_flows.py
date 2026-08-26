@@ -242,8 +242,24 @@ class _FakeRolesRepo:
 
 
 class TestValoresConocidos:
-    def test_whitelist_tiene_9_campos(self) -> None:
-        assert len(CAMPOS_AUTOCOMPLETABLES) == 9
+    def test_whitelist_tiene_5_campos(self) -> None:
+        """🔴 ERAN 9 HASTA EL 25/8/2026 (bloque N2). Salieron `organismo`, `sector`, `perfil` y
+        `gerencia`: Capital Humano las sacó del legajo, así que ya no hay ningún campo del
+        formulario que autocompletar con ellas y la whitelist dejaría abierta la lectura de
+        cuatro columnas que ninguna pantalla pide. Las COLUMNAS siguen ahí (sacarlas es DDL).
+
+        ⚠️ Las cuatro salieron por DOS motivos distintos —tres están vacías, `gerencia` pasó a ser
+        la agrupación del organigrama y sólo la escribe el import—. Ver `db/schema.sql`."""
+        assert len(CAMPOS_AUTOCOMPLETABLES) == 5
+
+    @pytest.mark.parametrize("campo", ["organismo", "sector", "perfil", "gerencia"])
+    def test_los_cuatro_campos_sacados_del_legajo_ya_no_se_autocompletan(self, campo: str) -> None:
+        """La contracara del de arriba: el 400 se comprueba campo por campo, no por el conteo.
+        Sin esto, la whitelist podría bajar sacando cualquier otro y el test seguiría en verde."""
+        svc = EmpleadoCatalogosService(roles_repo=_FakeRolesRepo())
+        with pytest.raises(AppError) as exc:
+            svc.get_valores_conocidos(campo)
+        assert exc.value.code == "CAMPO_INVALIDO"
 
     def test_campo_fuera_de_whitelist_lanza_400(self) -> None:
         svc = EmpleadoCatalogosService(roles_repo=_FakeRolesRepo())
@@ -254,7 +270,7 @@ class TestValoresConocidos:
 
     def test_campo_valido_devuelve_lista(self) -> None:
         svc = EmpleadoCatalogosService(roles_repo=_FakeRolesRepo())
-        assert svc.get_valores_conocidos("gerencia") == ["Capital Humano", "Sistemas"]
+        assert svc.get_valores_conocidos("seniority") == ["Capital Humano", "Sistemas"]
 
 
 # ─── Manager / superior inmediato (A1.6a) ───────────────────────────────────────

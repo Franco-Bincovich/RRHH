@@ -26,8 +26,10 @@ const BASE: Empleado = {
   telefono_alternativo: null, domicilio: null, domicilio_calle: null, domicilio_numero: null,
   domicilio_piso_depto: null, domicilio_localidad: null, domicilio_provincia: null,
   domicilio_cp: null, estudios: null, ubicacion: null, turno: null, horas_contrato: null,
-  organismo: null, gerencia: null, sector: null, seniority: null, perfil: null, categoria: null,
-  referido: null, es_lider: false, created_at: "2020-03-01",
+  seniority: null, categoria: null,
+  referido: null, es_lider: false, fecha_ingreso_reconocida: null, potencial: null,
+  desempeno: null, liderazgo: null, product_owner: null, co_sourcing: null, equipo: null,
+  created_at: "2020-03-01",
 }
 
 const barra = (empleado: Empleado, acciones?: React.ReactNode) =>

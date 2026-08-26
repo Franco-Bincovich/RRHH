@@ -28,6 +28,9 @@ import {
 import { exportarObjetivos, fetchObjetivos } from "@/services/objetivos"
 import { fetchProyectos } from "@/services/proyectos"
 import { exportarVacaciones, fetchVacaciones } from "@/services/vacaciones"
+import {
+  exportarVacacionesPendientes, fetchVacacionesPendientes,
+} from "@/services/vacacionesPendientes"
 
 /** Query params con los que se llamó a apiFetch (el listado). */
 function queryListado(): URLSearchParams {
@@ -379,13 +382,14 @@ describe("la empresa viaja por header, no por query", () => {
 describe("objetivos — la vista (anual / operativo) es un filtro server-side más", () => {
   const filtros = {
     empresaIdOverride: "emp-1", estado: "haciendo", responsableId: "u-9",
-    prioridad: "alta", tipo: "anual" as const,
+    prioridad: "alta", tipo: "anual" as const, area: "Sistemas", periodicidad: "mensual",
   }
 
   it("el listado manda la vista en la query", async () => {
     await fetchObjetivos(filtros)
     expect(listadoComoObjeto()).toEqual({
       estado: "haciendo", responsable_id: "u-9", prioridad: "alta", tipo: "anual",
+      area: "Sistemas", periodicidad: "mensual",
     })
   })
 
@@ -393,6 +397,7 @@ describe("objetivos — la vista (anual / operativo) es un filtro server-side m�
     await exportarObjetivos("excel", filtros)
     expect(queryExport()).toEqual({
       estado: "haciendo", responsable_id: "u-9", prioridad: "alta", tipo: "anual",
+      area: "Sistemas", periodicidad: "mensual",
     })
   })
 
@@ -417,5 +422,51 @@ describe("objetivos — la vista (anual / operativo) es un filtro server-side m�
     expect(initListado()?.headers).toEqual({ "X-Empresa-Id": "emp-1" })
     expect(headersExport()).toEqual({ "X-Empresa-Id": "emp-1" })
     expect(listadoComoObjeto()).not.toHaveProperty("empresa_id")
+  })
+})
+
+
+describe("vacaciones pendientes — la tabla de abajo obedece la barra de arriba", () => {
+  /**
+   * 🔴 LOS DOS MANDABAN CERO FILTROS HASTA EL 25/8/2026 (bloque N8), así que "el archivo coincide
+   * con la pantalla" se cumplía por casualidad: no había con qué diferir. El endpoint acepta los
+   * tres desde que existe.
+   *
+   * El bug que cierra se ve en UNA pantalla: /vacaciones filtra por área, el listado de arriba se
+   * recorta y la tabla de días pendientes de abajo queda ENTERA. Dos totales sobre la misma
+   * pantalla que no se pueden conciliar.
+   *
+   * ⚠️ El fixture trae `estado` y el rango de fechas A PROPÓSITO, aunque este endpoint no los
+   * acepte: son la mitad de `VacacionesFiltros` que `queryPendientes` tiene que DESCARTAR. Sin
+   * ellos en el fixture, borrar el filtrado dejaría el test en verde.
+   */
+  const filtros = {
+    areaId: "area-3", empleadoId: "emp-7", proyectoId: "proy-2",
+    estado: "aprobada", fechaDesde: "2026-01-01", fechaHasta: "2026-12-31",
+  }
+
+  it("el listado manda los tres que el endpoint acepta, y ninguno más", async () => {
+    await fetchVacacionesPendientes(1, 20, filtros)
+    expect(listadoComoObjeto()).toEqual({
+      area_id: "area-3", empleado_id: "emp-7", proyecto_id: "proy-2",
+    })
+  })
+
+  it("el export manda EXACTAMENTE lo mismo", async () => {
+    await exportarVacacionesPendientes("excel", filtros)
+    expect(queryExport()).toEqual({
+      area_id: "area-3", empleado_id: "emp-7", proyecto_id: "proy-2",
+    })
+  })
+
+  it("listado y export traducen el mismo objeto a los mismos params", async () => {
+    await fetchVacacionesPendientes(1, 20, filtros)
+    await exportarVacacionesPendientes("excel", filtros)
+    expect(queryExport()).toEqual(listadoComoObjeto())
+  })
+
+  it("EL CONTRASTE: sin filtros la URL queda con page/page_size y nada más", async () => {
+    await fetchVacacionesPendientes(1, 20)
+    expect(listadoComoObjeto()).toEqual({})
   })
 })

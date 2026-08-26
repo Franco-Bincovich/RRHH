@@ -12,6 +12,7 @@ import {
   deleteVacacionPendiente, exportarVacacionesPendientes, fetchVacacionesPendientes,
   updateVacacionPendiente,
 } from "@/services/vacacionesPendientes"
+import type { VacacionesFiltros } from "@/services/vacaciones"
 import type { VacacionPendiente } from "@/types/vacaciones"
 import { PendientesTable } from "./PendientesTable"
 
@@ -21,6 +22,15 @@ interface PendientesSectionProps {
   showEmpresa: boolean
   /** Cambia cuando se crea un registro desde el modal, para refrescar esta sección. */
   refreshKey: number
+  /**
+   * Los filtros de la barra de /vacaciones, que gobiernan las DOS tablas de la pantalla.
+   *
+   * 🔴 NO tiene barra propia a propósito: dos superficies de filtrado sobre el mismo módulo es
+   * peor que una, y el endpoint acepta los tres que esta pantalla ya ofrece. Antes del 25/8/2026
+   * esta sección ignoraba la barra entera, así que filtrar por área recortaba el listado de
+   * arriba y dejaba éste completo.
+   */
+  filtros: VacacionesFiltros
 }
 
 /**
@@ -31,7 +41,7 @@ interface PendientesSectionProps {
  * el resultado combinado. Con historia completa de 50-120 empleados por empresa eso es
  * exactamente el volumen que el límite de export existe para evitar.
  */
-export function PendientesSection({ showEmpresa, refreshKey }: PendientesSectionProps) {
+export function PendientesSection({ showEmpresa, refreshKey, filtros }: PendientesSectionProps) {
   const canWrite = useCanWrite()
   const [items, setItems] = useState<VacacionPendiente[]>([])
   const [total, setTotal] = useState(0)
@@ -45,7 +55,7 @@ export function PendientesSection({ showEmpresa, refreshKey }: PendientesSection
     setLoading(true)
     setError(false)
     try {
-      const data = await fetchVacacionesPendientes(page, pageSize)
+      const data = await fetchVacacionesPendientes(page, pageSize, filtros)
       setItems(data.items)
       setTotal(data.total)
     } catch {
@@ -53,7 +63,10 @@ export function PendientesSection({ showEmpresa, refreshKey }: PendientesSection
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, refreshKey])
+    // `filtros` es un objeto nuevo en cada render de la página, así que se depende de sus
+    // VALORES y no de su identidad: con el objeto en las deps, `load` cambiaría siempre y
+    // el efecto entraría en bucle.
+  }, [page, pageSize, refreshKey, filtros.areaId, filtros.empleadoId, filtros.proyectoId])
 
   useEffect(() => { load() }, [load])
 
@@ -87,7 +100,7 @@ export function PendientesSection({ showEmpresa, refreshKey }: PendientesSection
         {/* El archivo sale del MISMO listado que la tabla, con el mismo recorte por ownership
             que el backend resuelve con el token. Sin filas no se ofrece exportar. */}
         {!loading && !error && items.length > 0 && (
-          <ExportMenu onExport={exportarVacacionesPendientes} />
+          <ExportMenu onExport={(f) => exportarVacacionesPendientes(f, filtros)} />
         )}
       </div>
       <p className="mb-4 text-sm text-muted-foreground">

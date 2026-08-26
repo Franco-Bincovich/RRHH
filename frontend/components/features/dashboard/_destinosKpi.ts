@@ -1,3 +1,4 @@
+import { RUTAS_OCULTAS } from "@/components/layout/nav-config"
 import { puede, seccionDeRuta } from "@/services/permisos"
 import type { UserRol } from "@/types/auth"
 
@@ -85,7 +86,15 @@ export function destino(rol: UserRol | null, title: string): string | undefined 
   const ruta = DESTINOS[title]
   if (!ruta) return undefined
   // Ver el ⚠️ del encabezado: sin este corte, `seccionDeRuta` devuelve null y el gate no corre.
-  const seccion = seccionDeRuta(ruta.split("?")[0])
+  const camino = ruta.split("?")[0]
+  // 🔴 UNA SECCIÓN QUE NO ESTÁ EN EL MENÚ TAMPOCO SE LINKEA DESDE ACÁ, y el motivo es que el
+  // dashboard es una entrada MÁS grande que el sidebar, no una más chica: es la primera pantalla
+  // que se abre. Dejar la card linkeando a /costos con Costos fuera del menú desharía justo lo
+  // que ocultarla buscaba. La entrada NO se saca de `DESTINOS` ni se muda a `SIN_DESTINO`: se
+  // filtra acá contra `RUTAS_OCULTAS`, así reponer la sección devuelve el link solo, sin tocar
+  // este archivo — que es la mitad que un flag por archivo perdería.
+  if (RUTAS_OCULTAS.includes(camino)) return undefined
+  const seccion = seccionDeRuta(camino)
   if (seccion && !puede(rol, seccion, "read")) return undefined
   return ruta
 }

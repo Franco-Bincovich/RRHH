@@ -12,6 +12,46 @@
 
 ---
 
+## 0.gerencia 🟡 `empleados.gerencia` ESPERA EL MAPEO A ÁREA PARA PODER RETIRARSE (25/8/2026) · M
+
+**Estado: NO es un bug y NO hay nada que arreglar hoy.** Es una decisión de producto que quedó a
+medio camino a propósito, y se anota para que la próxima sesión no la resuelva sola en la
+dirección equivocada.
+
+**Qué pasó.** En el bloque N2 Capital Humano sacó del legajo `organismo`, `sector`, `perfil` y
+`gerencia`. Las tres primeras salieron porque están en **0 filas de 41**. `gerencia` salió por lo
+contrario —tiene **31 de 41**— y con una premisa que después cayó: *"las áreas pasan de 12 a 7, y
+el área reemplaza a la gerencia"*. Franco decidió dejar las áreas como están, así que el reemplazo
+no ocurre.
+
+**Dónde quedó, y es un estado coherente:**
+- **No se muestra, no se pide y no se exporta.** Deja de ser un campo del legajo. Lo vigila el
+  barrido nº 51 (`tests/test_legajo_ficha_export.py`).
+- **Sigue siendo columna viva**, alimentada SÓLO por el import de nómina, y es **la agrupación del
+  organigrama**. No se dropea.
+- 🔴 **La precisión que hay que conservar: el organigrama NO lee la columna.** El import escribe en
+  dos lados con el valor del CSV — la columna (la traza) y `proyectos` + `proyecto_asignaciones`
+  (la materialización, que es lo que `organigrama_proyectos_service` renderiza). Verificado contra
+  producción: las **7 gerencias distintas** tienen su proyecto homónimo con las asignaciones
+  exactas (13/13, 11/11, 3/3, 1/1 ×4). **La asignación es una FOTO del import**: editar la columna
+  a mano no reasignaba a nadie, y ése es el argumento más fuerte para haberla sacado del
+  formulario — un campo que parecía editable y cuya edición no hacía nada.
+
+**Lo que queda abierto, del lado de Karstec (no de desarrollo).** Si algún día se unifican las
+**14 áreas** de producción en un conjunto más chico, el organigrama puede migrar a **área** y
+`gerencia` se retira del todo: se dropea la columna y `_nomina_proyectos` deja de crear proyectos
+por gerencia. **Hoy no se puede, y el bloqueo no es técnico: nadie definió el mapeo gerencia →
+área.** Con 7 gerencias contra 14 áreas, la agrupación por gerencia es la que se lee de un vistazo.
+
+**Disparador para reabrir esto:** que Capital Humano entregue el mapeo. Sin él, cualquier
+migración inventa la correspondencia, que es exactamente lo que no se puede hacer con la
+estructura de la organización.
+
+**Dónde está escrito en el código** (para no depender de este documento): `db/schema.sql` sobre las
+cuatro columnas, y el encabezado de `services/_nomina_proyectos.py`.
+
+---
+
 ## 0.nueva 🟠 EL ATRÁS DEL NAVEGADOR NO RESPETA LA PAGINACIÓN (analizado el 25/8/2026, NO hecho)
 
 **Decisión tomada: no se hace hoy.** Se analizó en la tanda de cierre del smoke, se eligió no

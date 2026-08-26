@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { Sparkles, X, Send, ChevronDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { MARCA } from "@/lib/marca"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ export function AIPanel() {
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "No se pudo conectar con HR Karstec. Intentá de nuevo." },
+        { role: "assistant", content: `No se pudo conectar con ${MARCA}. Intentá de nuevo.` },
       ])
     } finally {
       setLoading(false)
@@ -113,7 +114,7 @@ export function AIPanel() {
           open ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none",
         )}
         style={{ maxHeight: "calc(100dvh - 120px)" }}
-        aria-label="Panel de IA HR Karstec"
+        aria-label={`Panel de IA ${MARCA}`}
         role="dialog"
         aria-modal="true"
       >
@@ -124,7 +125,7 @@ export function AIPanel() {
               <Sparkles className="size-3.5 text-primary" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground leading-none">HR Karstec</p>
+              <p className="text-sm font-semibold text-foreground leading-none">{MARCA}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">Asistente de Capital Humano</p>
             </div>
           </div>
@@ -153,7 +154,7 @@ export function AIPanel() {
           {messages.length === 0 ? (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground text-center">
-                Preguntale algo a HR Karstec sobre tus datos de Capital Humano
+                Preguntale algo a {MARCA} sobre tus datos de Capital Humano
               </p>
               <div className="grid grid-cols-1 gap-1.5">
                 {SUGGESTIONS.map((s) => (
@@ -214,7 +215,7 @@ export function AIPanel() {
               className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
               style={{ maxHeight: "120px" }}
               disabled={loading}
-              aria-label="Mensaje para HR Karstec"
+              aria-label={`Mensaje para ${MARCA}`}
             />
             <button
               onClick={() => send(input)}

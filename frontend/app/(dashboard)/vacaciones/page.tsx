@@ -116,7 +116,7 @@ export default function VacacionesPage() {
                     onPageSizeChange={setPageSize} onPageChange={setPage} />
       )}
 
-      {vista === "lista" && <PendientesSection showEmpresa={!empresaActivaId} refreshKey={pendientesKey} />}
+      {vista === "lista" && <PendientesSection showEmpresa={!empresaActivaId} refreshKey={pendientesKey} filtros={filtros} />}
 
       <VacacionesModal
         open={modalOpen}

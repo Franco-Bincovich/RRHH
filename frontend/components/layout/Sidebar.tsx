@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Menu, X, Building2 } from "lucide-react"
 
+import { MARCA } from "@/lib/marca"
 import { cn } from "@/lib/utils"
 import { CLASES_PANEL_SIDEBAR } from "@/components/layout/sidebarClases"
 import { Separator } from "@/components/ui/separator"
@@ -30,8 +31,7 @@ export function Sidebar() {
    * 🔴 EXCEPCIÓN DECLARADA a "todo desplegable nace plegado" — la razón completa está en
    * `components/ui/barridoAcordeones.test.ts`, que rojea si alguien la cambia sin sacarla de la
    * lista. En una línea: esto no es "abierto por defecto", es abierto PORQUE EL USUARIO ESTÁ
-   * ADENTRO, y plegarlo esconde la pantalla en la que está sin recuperar nada (`openGroup` es un
-   * solo valor, así que nunca hay más de un grupo desplegado).
+   * ADENTRO, y plegarlo esconde la pantalla en la que está sin recuperar nada (`openGroup` es un solo valor: nunca hay más de un grupo desplegado).
    */
   const [openGroup, setOpenGroup] = useState<string | null>(() => grupoDeRuta(pathname))
 
@@ -91,7 +91,7 @@ export function Sidebar() {
             onClick={closeMobile}
           >
             <Building2 className="size-5 text-primary" />
-            <span>HR Karstec</span>
+            <span>{MARCA}</span>
           </Link>
           <div className="flex items-center gap-1">
             <ThemeToggle />

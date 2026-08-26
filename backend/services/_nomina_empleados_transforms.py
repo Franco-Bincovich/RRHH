@@ -118,6 +118,27 @@ def parsear_fila(row: dict) -> dict:
         "product_owner": parse_bool(_get(row, "Product Owner")),
         "fecha_baja": parse_fecha(_get(row, "Fecha Baja")),
         "motivo_baja": limpiar(_get(row, "Motivo Baja")),
+        # 🔴 "Organismo" Y "Sector" SE DESVÍAN A EMPRESA Y ÁREA, Y NO ESCRIBEN LAS COLUMNAS DEL
+        # MISMO NOMBRE — es a propósito, y quedó decidido así el 25/8/2026 (bloque N1).
+        #
+        # Qué pasaba: el CSV trae "Organismo" y "Sector", el import los lee ACÁ y `validar_y_resolver`
+        # los usa para resolver/crear la `empresa` y el `area` de la fila. `empleados.organismo` y
+        # `empleados.sector` existen como columnas y **nadie las escribe nunca**: en producción están
+        # 0/41 las dos. Por eso la ficha mostraba un guion en dos campos que el archivo sí traía, y
+        # el reporte de esa "falta de carga" apuntaba a un dato que en realidad estaba —resuelto en
+        # otro lado, con otro nombre.
+        #
+        # Las dos salidas eran defendibles y se eligió **sacarlas del legajo**, no llenarlas:
+        #   · Llenarlas habría creado una SEGUNDA COPIA de un dato que ya vive en `empresas.nombre`
+        #     y `areas.nombre`, en texto plano y sin FK. El día que alguien renombra un área desde
+        #     /areas, la copia queda vieja y **no hay forma de saber cuál de las dos manda**. Es
+        #     exactamente el modo de falla que el repo ya pagó con `modalidad_contratacion`.
+        #   · Sacarlas del legajo no pierde NADA: las dos columnas están vacías, así que no hay
+        #     histórico que rescatar, y el dato sigue visible en la ficha como "Empresa" y "Área",
+        #     que es donde un humano lo busca.
+        # La ejecución de esa decisión es el bloque N2 (fuera de la ficha, del formulario y del
+        # export). Las columnas NO se dropearon: eso es DDL y va en su propia tanda.
+        #
         # No se persisten en empleados: se usan para crear empresa/área y para el reporte.
         # Trajo texto pero no se pudo mapear a Sí/No. Distinto de la celda vacía, que no es un
         # problema que reportar: nadie dijo nada, y no hay nada que corregir.

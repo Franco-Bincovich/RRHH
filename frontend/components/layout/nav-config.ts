@@ -64,6 +64,37 @@ const SUCESION_ITEM: NavLink = {
   label: "Sucesión", href: "/sucesion", icon: TrendingUp, seccion: "sucesion",
 }
 
+// 🔴 LAS RUTAS QUE NO SE MUESTRAN EN EL MENÚ, EN UNA SOLA LISTA — Y ES EL ÚNICO LUGAR.
+//
+// Costos, Períodos y Horas por cliente salen del menú por decisión de Franco (25/8/2026). Las
+// TRES están TERMINADAS: no se borró una línea de código, ni una ruta, ni un endpoint, ni su
+// entrada en `permisos.ts`. Sus `page.tsx` siguen vivas y alcanzables tipeando la URL, con su
+// gate del AuthGuard intacto — igual que /inventario, que el sistema de diseño §4 ya había
+// sacado del menú "hasta nuevo aviso".
+//
+// PARA VOLVER A MOSTRAR UNA: borrarla de esta lista. Una línea, y vuelve el ítem al sidebar Y
+// el link de la card del dashboard que apunta a ella. Vaciar la lista repone las tres.
+//
+// 🔴 POR QUÉ UNA LISTA Y NO UN BOOLEAN POR ÍTEM (que es lo que hace SUCESION_ACTIVA). Ocultar
+// una sección no es sólo sacarla del sidebar: `_destinosKpi.ts` linkea "Masa salarial del mes"
+// a /costos desde el dashboard, que es la PRIMERA pantalla que ve alguien y una entrada más
+// visible que el propio menú. Con un flag por archivo habría que acordarse de apagar las dos
+// puntas y volver a encenderlas juntas; con la lista, las dos leen de acá y no pueden divergir.
+//
+// 🔴 POR QUÉ NO SE USA `proximamente` PARA ESTO. Ese marcador significa, literalmente, "la
+// pantalla todavía no existe" (ver el comentario de `href` más arriba): usarlo para una pantalla
+// construida haría que el menú afirme algo falso, y además obliga a SACARLE el href, que es otra
+// cosa distinta de esconderla. El criterio queda escrito para la próxima: terminada y sólo no se
+// quiere mostrar → esta lista, ruta viva. Sin construir → `proximamente`, sin href.
+//
+// ⚠️ Los ítems NO se sacan de `ADMIN_GROUP`: siguen declarados ahí y el filtro lo aplica
+// `nav-visibilidad.itemVisible`, que es el único punto por el que ya pasaba "¿este ítem se ve?".
+// Dejarlos en la estructura los mantiene dentro de los barridos de nav-config.test.ts —el href
+// tiene que seguir existiendo en app/ y su sección tiene que seguir coincidiendo con el guard—,
+// que es justamente lo que /inventario perdió al salir del array por completo: hoy nada verifica
+// su espejo con permisos.ts, y el día que se lo reponga hay que revalidarlo a mano.
+export const RUTAS_OCULTAS: ReadonlyArray<string> = ["/costos", "/periodos", "/horas-por-cliente"]
+
 // INVENTARIO está FUERA DEL MENÚ por el sistema de diseño §4 ("hasta nuevo aviso").
 // NO se borró nada más: /inventario sigue siendo una ruta viva y alcanzable por URL, con su
 // `Seccion.inventario` en permisos.ts y su gate en el AuthGuard. Volver a mostrarlo es agregar

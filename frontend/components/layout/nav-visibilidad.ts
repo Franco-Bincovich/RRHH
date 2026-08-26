@@ -1,5 +1,5 @@
 import {
-  ADMIN_GROUP, ITEMS_SUPERIORES, NAV_GROUPS, TODOS_LOS_GRUPOS,
+  ADMIN_GROUP, ITEMS_SUPERIORES, NAV_GROUPS, RUTAS_OCULTAS, TODOS_LOS_GRUPOS,
   type NavGroupDef, type NavLink,
 } from "@/components/layout/nav-config"
 import { puede } from "@/services/permisos"
@@ -21,6 +21,12 @@ export function grupoDeRuta(pathname: string): string | null {
  *  Sin soloRol → solo cuenta la sección (retrocompat). rol=null (pre-mount) → un item con soloRol
  *  no se muestra (null no está en ninguna lista), evitando flash hasta conocer el rol. */
 export function itemVisible(item: NavLink, rol: UserRol | null): boolean {
+  // Las secciones ocultas se filtran ACÁ y no sacándolas de NAV_GROUPS: éste es el único punto
+  // por el que ya pasaba la pregunta, así que las tres superficies (los 6 grupos, Administración
+  // y los ítems superiores) quedan cubiertas sin repetir el filtro. El porqué de dejar el ítem
+  // declarado en la estructura está en `RUTAS_OCULTAS`. ⚠️ Va ANTES del permiso a propósito: si
+  // la sección no se muestra, el rol es una pregunta que ya no hace falta contestar.
+  if (item.href && RUTAS_OCULTAS.includes(item.href)) return false
   const seccionOk = item.seccion === null || (rol !== null && puede(rol, item.seccion, item.accion ?? "read"))
   const rolOk = !item.soloRol || (rol !== null && item.soloRol.includes(rol))
   return seccionOk && rolOk

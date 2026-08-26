@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { EsqueletoAuth, MarcaAuth, MarcoAuth } from "@/components/features/auth/MarcaAuth"
 import { LoginForm } from "@/components/features/auth/LoginForm"
 import { getSession } from "@/services/api"
+import { MARCA } from "@/lib/marca"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -33,7 +34,7 @@ export default function LoginPage() {
 
   return (
     <MarcoAuth pie="¿Problemas para ingresar? Contactá a Capital Humano.">
-      <MarcaAuth titulo="HR Karstec">Ingresá a tu cuenta</MarcaAuth>
+      <MarcaAuth titulo={MARCA}>Ingresá a tu cuenta</MarcaAuth>
       <div className="rounded-2xl border bg-card p-6 shadow-sm">
         <LoginForm />
       </div>

@@ -31,13 +31,14 @@ from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+from schemas._legajo_normalizado import RecategorizacionNormalizada
 
 # `motivo` es `text` sin límite en la base: este tope es de PRODUCTO. Es una línea de
 # explicación ("paso de categoría 3 a 4 por antigüedad"), no un campo de notas.
 MAX_MOTIVO = 500
 
 
-class RecategorizacionCreate(BaseModel):
+class RecategorizacionCreate(RecategorizacionNormalizada):
     """Alta. Lo MÍNIMO que carga Capital Humano; el resto lo completa el sistema.
 
     🔴 El CHECK `recategorizaciones_algo_cambia_check` (migración 117) exige que al menos uno de
@@ -57,7 +58,7 @@ class RecategorizacionCreate(BaseModel):
     impacto_salarial: Optional[Decimal] = None
 
 
-class RecategorizacionUpdate(BaseModel):
+class RecategorizacionUpdate(RecategorizacionNormalizada):
     """Edición. Todo opcional; `None` = "no lo toques".
 
     ⚠️ `empleado_id` NO se puede cambiar, y no es un olvido: mover una recategorización de

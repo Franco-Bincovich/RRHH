@@ -3,7 +3,9 @@ import { join, resolve } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-import { ADMIN_GROUP, ITEMS_SUPERIORES, NAV_GROUPS, TODOS_LOS_GRUPOS } from "@/components/layout/nav-config"
+import {
+  ADMIN_GROUP, ITEMS_SUPERIORES, NAV_GROUPS, RUTAS_OCULTAS, TODOS_LOS_GRUPOS,
+} from "@/components/layout/nav-config"
 import { itemVisible } from "@/components/layout/nav-visibilidad"
 import { seccionDeRuta } from "@/services/permisos"
 
@@ -99,14 +101,53 @@ describe("(b) los ítems sin pantalla no son navegables", () => {
   })
 })
 
-describe("(c) Inventario está fuera del menú pero la ruta sigue viva", () => {
-  it("no hay ítem de Inventario", () => {
-    expect(ITEMS.filter((i) => i.href === "/inventario")).toEqual([])
+describe("(c) las secciones ocultas no se muestran, pero sus rutas siguen vivas", () => {
+  /**
+   * Hay DOS mecanismos de ocultamiento conviviendo y los dos se barren acá, porque prueban cosas
+   * distintas: /inventario salió del array por completo (§4 del sistema de diseño), y las de
+   * `RUTAS_OCULTAS` siguen DECLARADAS en el menú y las filtra `itemVisible`. La diferencia se
+   * paga en cobertura y por eso conviene tenerla escrita: al salir del array, /inventario dejó
+   * de pasar por los bloques (a) y (d) —nada verifica ya que su href exista ni que su sección
+   * coincida con el guard—, mientras que las tres de `RUTAS_OCULTAS` los siguen atravesando.
+   *
+   * 🚨 ¿QUÉ TENDRÍA QUE SER DISTINTO PARA QUE ESTO PUEDA FALLAR? El rol de prueba es `admin_rrhh`
+   * y no `mandos_medios`: admin lee TODO, así que es el único rol con el que "no se ve" sólo
+   * puede deberse al ocultamiento y no a un permiso. Con un rol angosto, las tres darían
+   * invisibles igual con el filtro borrado. Y cada aserción de "no se ve" lleva su CONTRASTE de
+   * "sí se ve" con el mismo rol, sin el cual un `itemVisible` que devolviera siempre false
+   * pasaría entero.
+   */
+  it("guarda: hay rutas ocultas que barrer", () => {
+    expect(RUTAS_OCULTAS.length).toBeGreaterThanOrEqual(1)
   })
 
-  it("/inventario sigue siendo alcanzable por URL, con su gate", () => {
-    // El sistema de diseño lo saca "hasta nuevo aviso": es reversible. Borrar la ruta o la
-    // sección no lo sería, y dejaría la pantalla sin gate si alguien la repone.
+  it.each([...RUTAS_OCULTAS])("%s sigue declarada en el menú (una entrada muerta rojea)", (ruta) => {
+    // Si alguien BORRA el ítem en vez de ocultarlo, la entrada de RUTAS_OCULTAS queda apuntando
+    // a la nada y "reponerlo borrándola de la lista" dejaría de funcionar en silencio.
+    expect(ITEMS.filter((i) => i.href === ruta)).toHaveLength(1)
+  })
+
+  it.each([...RUTAS_OCULTAS])("%s no se le muestra ni a admin_rrhh, que lee todo", (ruta) => {
+    const item = ITEMS.find((i) => i.href === ruta)!
+    expect(itemVisible(item, "admin_rrhh")).toBe(false)
+  })
+
+  it("EL CONTRASTE: los ítems que NO están ocultos sí se le muestran a admin_rrhh", () => {
+    const visibles = NAVEGABLES.filter((i) => !RUTAS_OCULTAS.includes(i.href))
+      .filter((i) => itemVisible(i, "admin_rrhh"))
+    // Todos menos "Mi equipo", que es soloRol: ["mandos_medios"].
+    expect(visibles.length).toBeGreaterThanOrEqual(NAVEGABLES.length - RUTAS_OCULTAS.length - 1)
+  })
+
+  it.each([...RUTAS_OCULTAS])("%s sigue siendo alcanzable por URL, con su gate", (ruta) => {
+    // Ocultarlas es reversible; borrar la ruta o su sección no lo sería, y dejaría la pantalla
+    // sin gate el día que alguien la reponga.
+    expect(RUTAS_APP.has(ruta)).toBe(true)
+    expect(seccionDeRuta(ruta)).not.toBeNull()
+  })
+
+  it("Inventario está fuera del menú y su ruta también sigue viva", () => {
+    expect(ITEMS.filter((i) => i.href === "/inventario")).toEqual([])
     expect(RUTAS_APP.has("/inventario")).toBe(true)
     expect(seccionDeRuta("/inventario")).toBe("inventario")
   })

@@ -134,18 +134,14 @@ _ENDPOINTS_SIN_FRONT: dict[tuple[str, str], str] = {
     # disparador se cumplió al pie de la letra: el selector de vista (`TipoObjetivoTabs`) pide
     # el vocabulario en vez de escribir `anual | operativo` por su cuenta, que es exactamente
     # para lo que ese endpoint existía.
-    # 🔴 Y POR ESO EL DE ABAJO CAMBIÓ DE TEXTO: decía "SALE DE ESTA LISTA junto con /campos, con
-    # el mismo disparador", y eso ya no es cierto — /campos salió y éste sigue sin caller. Una
-    # declaración que apunta a un disparador ajeno ya cumplido es una excepción que nadie va a
-    # volver a mirar. Ahora tiene el suyo.
-    ("GET", "/api/objetivos/areas-conocidas"):
-        "el pool de áreas ya usadas, para el desplegable del filtro por área. Sigue sin caller: "
-        "la tanda del selector de vista (23/8/2026) construyó el filtro por `tipo`, no el de "
-        "área. SALE DE ESTA LISTA cuando `_camposObjetivos.ts` monte el select de área — hoy ese "
-        "archivo declara en su encabezado por qué NO lo tiene (los objetivos son del equipo de "
-        "Capital Humano, y sus operadores no tienen área), así que el disparador real es que esa "
-        "decisión de producto se revierta. Si eso no pasa, lo que corresponde es BORRAR el "
-        "endpoint, no dejarlo declarado para siempre.",
+    # ✅ `/api/objetivos/areas-conocidas` YA NO ESTÁ ACÁ (25/8/2026, bloque N8). Su disparador
+    # escrito era "sale cuando `_camposObjetivos.ts` monte el select de área", y se cumplió. Lo
+    # que destrabó la decisión fue notar que el encabezado de ese archivo mezclaba DOS "área"
+    # distintas: lo que está descartado por producto es cortar por el área del RESPONSABLE (que
+    # es un usuario de Capital Humano y no tiene área); este endpoint sirve el pool de
+    # `objetivos.areas_involucradas`, que es un campo del OBJETIVO (migración 119) y responde
+    # otra pregunta — "¿qué objetivos tocan a Sistemas?". La alternativa que la declaración
+    # dejaba abierta era borrar el endpoint; se cableó, que era lo barato.
 
     # ✅ RECATEGORIZACIONES YA NO ESTÁ ACÁ (20/8/2026). Sus 6 rutas estuvieron declaradas con
     # DISPARADOR —"salen cuando exista frontend/app/(dashboard)/recategorizaciones/ con su

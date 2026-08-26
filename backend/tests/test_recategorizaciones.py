@@ -401,7 +401,13 @@ class TestEfectoSobreElEmpleado:
         assert r.status_code == 201
         emp = _fila_empleado(almacen)
         assert emp["roles"][0] == "MANAGER"
-        assert emp["seniority"] == "SENIOR"
+        # 🔴 EL CSV DICE "SENIOR" Y LA COLUMNA GUARDA "Senior" (bloque N3, 25/8/2026). La
+        # recategorización es el TERCER escritor de `empleados.seniority` —después del formulario
+        # y del import de nómina— y pasa por `EmpleadoUpdate`, así que hereda la normalización de
+        # `schemas/_legajo_normalizado`. Que este test haya cambiado es la evidencia de que el
+        # mixin alcanza a los tres caminos y no solo a los dos que la tanda miraba: escribir la
+        # regla en el schema y no en cada service es justamente lo que compra eso.
+        assert emp["seniority"] == "Senior"
 
     async def test_fecha_ANTERIOR_se_registra_y_NO_actualiza(self, almacen, como) -> None:
         """🔴 EL TEST DE LA REGLA 2. Ya existe una del 1/9; se carga una del 1/8. El histórico

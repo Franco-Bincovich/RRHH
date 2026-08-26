@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
+import { MARCA } from "@/lib/marca"
 
-const MODEL = "claude-sonnet-4-20250514"
+// 🔴 ALIAS SIN FECHA, SIEMPRE. `claude-sonnet-4-20250514` estuvo acá hasta el 25/8/2026, y ese
+// string fue RETIRADO el 15/6/2026: la llamada devuelve 404. No se notaba porque esta ruta está
+// doblemente apagada —el panel de IA está oculto y `ANTHROPIC_API_KEY` no está cargada en
+// `sofia-front` por decisión—, así que el día que se encienda el chat fallaría al primer mensaje
+// con un error que no dice "modelo retirado". Es la mina que CLAUDE.md declara en el stack.
+const MODEL = "claude-sonnet-4-6"
 
-const SYSTEM = `Sos el asistente de IA de HR Karstec, una plataforma de gestión del ciclo de vida del empleado.
-Tu nombre es HR Karstec. Ayudás al equipo de RRHH con:
-- Consultas sobre empleados, cargos, áreas y organigrama
+const SYSTEM = `Sos el asistente de IA de ${MARCA}, una plataforma de gestión del ciclo de vida del colaborador.
+Tu nombre es ${MARCA}. Ayudás al equipo de Capital Humano con:
+- Consultas sobre colaboradores, cargos, áreas y organigrama
 - Análisis de assessments conductuales y cognitivos (modelo AREAS)
 - Planes de carrera, sucesión y mapa de talento 9-box
 - Vacantes, pipeline de selección y candidatos
 - Costos de personal y presupuesto
-- Onboarding, offboarding y procesos de RRHH
+- Onboarding, offboarding y procesos de Capital Humano
 
 Respondé siempre en español, de forma concisa y profesional. Si no tenés datos concretos, indicalo claramente.`
 

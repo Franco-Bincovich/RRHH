@@ -25,22 +25,35 @@ const TODO: ValoresFiltroObjetivos = {
   prioridadFiltro: "alta",
   responsableFiltro: "usr-3",
   tipoFiltro: "anual",
+  areaFiltro: "Sistemas",
+  // Con espacios a los costados a propósito: `armarFiltros` los trimea, y sin un valor sucio
+  // acá el `.trim()` se podría borrar sin que nada rojee.
+  periodicidadFiltro: "  mensual  ",
 }
 
 const VACIO: ValoresFiltroObjetivos = {
   mostrarEmpresa: true, empresaFiltro: "", estadoFiltro: "",
   prioridadFiltro: "", responsableFiltro: "", tipoFiltro: "",
+  areaFiltro: "", periodicidadFiltro: "   ",
 }
 
 describe("todo lo elegido llega al objeto de filtros", () => {
-  it("los cinco, cada uno en su campo", () => {
+  it("los siete, cada uno en su campo", () => {
     expect(armarFiltros(TODO)).toEqual({
       empresaIdOverride: "emp-7",
       estado: "haciendo",
       prioridad: "alta",
       responsableId: "usr-3",
       tipo: "anual",
+      area: "Sistemas",
+      periodicidad: "mensual",   // llegó con espacios: el trim es parte del contrato
     })
+  })
+
+  it("la periodicidad en blanco NO viaja como filtro puesto", () => {
+    // "   " es lo que deja un usuario que borra lo que había tecleando espacios. Sin el `.trim()`
+    // viajaría `?periodicidad=%20%20%20` y el listado saldría VACÍO sin ninguna pista.
+    expect(armarFiltros(VACIO).periodicidad).toBeUndefined()
   })
 
   it("la VISTA en particular: es el filtro que llegó último y el que no puede faltar", () => {

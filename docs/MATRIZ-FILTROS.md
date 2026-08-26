@@ -1,6 +1,6 @@
 # Matriz de filtros — inventario de la superficie de corte
 
-**Fecha del relevamiento:** 27/7/2026, con actualizaciones al cierre de cada tanda (la última, **21/8/2026**, al terminar el bloque B3) · **Método:** verificado contra el código, archivo:línea. No contra `CLAUDE.md`.
+**Fecha del relevamiento:** 27/7/2026, con actualizaciones al cierre de cada tanda (la última, **25/8/2026**, al cerrar el bloque N8 — el cruce completo de las 46 pantallas contra lo que su backend acepta) · **Método:** verificado contra el código, archivo:línea. No contra `CLAUDE.md`.
 
 **Qué es:** el inventario completo de qué filtros existen hoy en cada módulo, en cuál de las
 cuatro capas (repo → service → router → UI) vive cada uno, y si el export los acepta. Es la
@@ -58,6 +58,31 @@ concentra 13.
 † **El área no es una columna de la tabla.** Se resuelve a una lista de `empleado_id` en
 `_ownership_filter.resolver_empleado_ids` y llega al repo como un solo `.in_("empleado_id", ...)`.
 Es el mismo canal por el que entra el ownership — ver Parte 3.
+
+#### Vacaciones — días pendientes (`PendientesSection`, la tabla de abajo de la MISMA pantalla)
+
+| Filtro | Repo | Service | Router (Query) | UI | ¿Export? |
+|---|---|---|---|---|---|
+| empresa | ✅ | ✅ | header | (el selector del sidebar) | ✅ |
+| **área** | ✅ | ✅ | `vacaciones_pendientes.py` `area_id` | **la barra de /vacaciones** | ✅ |
+| **empleado** | ✅ | ✅ | `vacaciones_pendientes.py` `empleado_id` | **la barra de /vacaciones** | ✅ |
+| **proyecto** | ✅ | ✅ | `vacaciones_pendientes.py` `proyecto_id` | **la barra de /vacaciones** | ✅ |
+
+> 🟢 **LOS TRES SE CABLEARON EL 25/8/2026 (bloque N8), y el bug que cerraron se veía en UNA sola
+> pantalla.** El endpoint acepta los tres desde que existe y el front no le mandaba ninguno: filtrar
+> /vacaciones por un área recortaba el listado de arriba y dejaba **la tabla de días pendientes
+> entera**. Dos totales sobre la misma pantalla que no se pueden conciliar, y un export que bajaba
+> el padrón completo.
+>
+> 🔴 **NO tiene barra propia, y eso es a propósito** — el docstring viejo de
+> `services/vacacionesPendientes.ts` decía que no tenía filtros "para no dar dos superficies de
+> filtrado sobre el mismo módulo", y ese razonamiento se respetó: la sección **reusa la barra de
+> /vacaciones**, que ya ofrece los tres. Sigue habiendo una sola superficie; lo que cambió es que
+> ahora gobierna las dos tablas.
+>
+> ⚠️ Recibe `VacacionesFiltros` **entero** y `queryPendientes` descarta lo que este endpoint no
+> acepta (`estado` y el rango de fechas, que no aplican a un saldo). Recibir el mismo tipo que la
+> pantalla ya tiene es lo que hace imposible el corrimiento de argumentos.
 
 ### Ausencias
 
@@ -123,8 +148,8 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 | responsable | `objetivo_repo.py:49` | ✅ | `objetivos.py:31` | `_camposObjetivos.ts` (avanzado) | ✅ |
 | prioridad | `objetivo_repo.py:50` | ✅ | `objetivos.py:32` | `_camposObjetivos.ts` | ✅ |
 | **tipo (la vista)** | `_objetivo_filtros.py` | ✅ | `objetivos.py:47` | **`TipoObjetivoTabs.tsx`** | ✅ |
-| periodicidad | `_objetivo_filtros.py` | ✅ | `objetivos.py:47` | ❌ **sin UI** | ✅ (inalcanzable) |
-| area | `_objetivo_area.py` | ✅ | `objetivos.py:47` | ❌ **sin UI** | ✅ (inalcanzable) |
+| **periodicidad** | `_objetivo_filtros.py` | ✅ | `objetivos.py:47` | **`_camposObjetivos.ts` (avanzado, `search`)** | ✅ |
+| **area** | `_objetivo_area.py` | ✅ | `objetivos.py:47` | **`_camposObjetivos.ts` (avanzado, `select`)** | ✅ |
 
 > Módulo **completo y coherente en las 4 capas**. Es el mejor ejemplo del repo junto con auditoría.
 > `responsable_id` apunta a `users`, no a `empleados` (limitación de modelo ya documentada).
@@ -140,12 +165,21 @@ Es el mismo canal por el que entra el ownership — ver Parte 3.
 > EXPORT lo arma el backend, así que el Excel habría salido con las dos vistas mientras la pantalla
 > muestra una. Y este listado devuelve un ÁRBOL: recortar en el cliente deja hijos sin padre.
 >
-> ⚠️ **`periodicidad` y `area` siguen SIN UI** y por eso el export los acepta pero nadie puede
-> mandarlos: son filtros publicados e inalcanzables. `area` es una decisión de producto declarada
-> (los objetivos son del equipo de Capital Humano y sus operadores no tienen área — ver el
-> encabezado de `_camposObjetivos.ts`); `periodicidad` es texto libre y todavía no se definió cómo
-> se ofrece. Los dos están anotados en `services/objetivos.ts::ObjetivosFiltros`: agregarlos es un
-> campo en el objeto y una línea en `queryObjetivos`.
+> 🟢 **`periodicidad` Y `area` SE CABLEARON EL 25/8/2026 (bloque N8).** Eran filtros publicados e
+> inalcanzables: el backend los aceptaba de punta a punta —schema, router, `aplicar_filtros`— y
+> encima había un endpoint de catálogo hecho para el desplegable, `/api/objetivos/areas-conocidas`,
+> con **cero llamadores** (estaba declarado como tal en el barrido nº 5, con el disparador
+> "sale cuando `_camposObjetivos.ts` monte el select de área"; se cumplió y la excepción se borró).
+> 🔴 **Lo que destrabó la decisión fue notar que el encabezado viejo mezclaba DOS "área" distintas.**
+> Lo descartado por producto es cortar por el área del **RESPONSABLE** —que es un usuario de
+> Capital Humano y no tiene área—, y eso sigue en pie. Este filtro es sobre
+> `objetivos.areas_involucradas`, un array de texto **del objetivo** (migración 119), y responde
+> otra pregunta: *"¿qué objetivos tocan a Sistemas?"*. La alternativa que la declaración dejaba
+> abierta era borrar el endpoint; cablearlo era lo barato.
+> Los dos van **detrás de "Más filtros"**: la pregunta diaria del tablero sigue siendo qué hay que
+> hacer y con qué urgencia, y subirlos empujaría a Prioridad fuera del primer vistazo.
+> `periodicidad` es un `search` y no un `select` porque es texto libre que escribe Capital Humano
+> ("mensual", "por sprint"): un desplegable prometería una lista que no existe.
 >
 > 🔑 **Y el módulo dejó de tener filtros POSICIONALES**: `fetchObjetivos`/`exportarObjetivos`
 > tomaban cuatro `string | undefined` en fila cada uno, así que `tipo` habría sido el quinto — el
@@ -631,54 +665,72 @@ Lo que conviene copiar:
 
 ---
 
-## PARTE 5 — Filtros faltantes de alto valor
+## PARTE 5 — Filtros faltantes, remedidos el 25/8/2026 (bloque N8)
 
-Mi lectura, ordenada por **valor / esfuerzo**. El criterio es cuántos cortes destraba y cuántos
-"exportar todo y filtrar en Excel" elimina.
+🔴 **ESTA PARTE SE REESCRIBIÓ ENTERA.** La versión anterior era del relevamiento de julio y
+**cuatro de sus once ítems ya estaban hechos** (el rango de fechas en vacaciones y ausencias, los
+seis PARCIALES, el export de auditoría, el filtro de empresa en proyectos) y un quinto —"export en
+vacantes, candidatos, proyectos, onboarding, offboarding"— también. Una lista de pendientes que
+nombra cosas terminadas es peor que no tenerla: se lee como trabajo por hacer y esconde lo que
+falta de verdad.
 
-### Alto valor / bajo esfuerzo
+**Método, y por qué se puede confiar en la primera lista.** El inventario de lo que cada endpoint
+ACEPTA sale de introspección de `app.routes` (los `Query` de cada handler, con todos los flags
+encendidos), no de leer routers. Lo que el front MANDA sale de las funciones de `services/`. El
+cruce de los dos es mecánico. Lo que sigue en la segunda lista sí es criterio: qué filtro
+convendría que exista.
 
-1. **Rango de fechas en vacaciones y ausencias.** Es la ausencia más grave de todo el inventario:
-   los dos módulos de uso diario **no se pueden acotar por período**. Cualquier pregunta de RRHH
-   ("ausencias del último trimestre", "vacaciones tomadas en enero") obliga hoy a exportar todo.
-   El repo ya tiene el molde: `.gte`/`.lte` en `audit_repo.py:89-91`. **Habilita además el
-   cálculo de ausentismo por período arbitrario**, que hoy está clavado al mes.
-2. **Cerrar los 6 PARCIALES.** Ya están implementados en backend; solo falta el control en la UI
-   (y el wrapper de export en 2 de ellos). Costo casi nulo:
-   `es_lider` (empleados) · `solo_activos` (catálogo capacitaciones) · `empleado` y `capacitación`
-   (asignaciones capacitaciones) · `empleado` (inventario asignaciones) · `registro_id` (auditoría).
-3. **Export de auditoría.** Tiene 6 filtros y ningún export: es el módulo donde el trabajo de
-   filtrado ya está hecho y no se puede llevar el resultado. El motor `build_export` es genérico.
-4. **Filtro de empresa en proyectos.** El repo y el service ya lo aceptan
-   (`proyectos_repo.py:45`); falta el selector, que existe en casi todas las demás pantallas.
+### 5.a — Publicados en el backend y SIN UI: **cero** (eran cinco esta mañana)
 
-### Alto valor / esfuerzo medio
+Los cinco se cablearon en esta misma tanda. Se dejan escritos porque el modo de falla se repite:
 
-5. **Rango de períodos en costos.** Hoy `mes` y `anio` son **obligatorios y puntuales**
-   (`costos.py:30-31`): no se puede pedir un semestre ni un año. Es lo que bloquea el análisis de
-   evolución de masa salarial, que es de las primeras cosas que va a pedir gerencia.
-6. **Área y empleado en costos/nómina.** El listado de nómina no se puede cortar por área — el
-   corte más natural para un análisis de costos. Requiere join a `empleados` (el patrón ya
-   existe en `asignacion_repo.py:40-42`).
-7. **Filtros en horas de proyecto** (fecha trabajada, empleado, área). Cero filtros hoy. Es el
-   módulo de **costeo**: sin cortes no hay análisis posible. Menor prioridad solo porque los
-   datos todavía no se cargan.
-8. **Histórico + estado en onboarding y offboarding.** Los dos traen solo activos, así que el
-   histórico es inalcanzable desde la UI. **Offboarding alimenta el reporte de rotación**, así
-   que la falta de corte por motivo y fecha se paga dos veces.
+| Módulo | Filtro | Qué pasaba |
+|---|---|---|
+| objetivos | `area` | Aceptado de punta a punta **y con endpoint de catálogo propio sin un solo llamador** (`/api/objetivos/areas-conocidas`). |
+| objetivos | `periodicidad` | Ídem, texto libre. |
+| vacaciones pendientes | `area_id` | La tabla ignoraba la barra de filtros de su propia pantalla. |
+| vacaciones pendientes | `empleado_id` | Ídem. |
+| vacaciones pendientes | `proyecto_id` | Ídem. |
 
-### Valor medio
+> 🟢 **Y EL HUECO QUE LOS DEJÓ PASAR YA ESTÁ CERRADO.** Del lado del backend,
+> `test_paridad_list_export.py` empareja listado y export por introspección; del lado del front,
+> `services/filtros-export.test.ts` compara las dos traducciones entre sí. Lo que **ninguno de los
+> dos ve** es un filtro que el backend acepta y el front nunca manda —los dos comparan listado
+> contra export, no backend contra front—, y ése es exactamente el hueco por el que se colaron
+> estos cinco: con cero de los dos lados, el par coincide perfecto. Lo cierra el **barrido nº 54**,
+> `tests/test_filtros_publicados_sin_ui.py`, escrito en esta misma tanda y verificado por mutación
+> contra los cinco casos. El sexto va a aparecer solo, en rojo.
 
-9. **Etapa y vacante en candidatos.** El pipeline tiene etapas y no se puede filtrar por ellas.
-10. **Multi-select en área y estado**, transversal. Convierte "un corte por vez" en "el corte que
-    quieras". Depende de la Tanda 0.
-11. **Export en vacantes, candidatos, proyectos, onboarding, offboarding.**
+### 5.b — Filtros que NO existen en el backend, con lo que costaría
 
-### Lo que NO recomiendo hacer
+El costo se cuenta en las cuatro capas del patrón (repo → service → router → UI) más el wrapper
+del export. **Barato** = un predicado sobre una columna de la propia tabla. **Medio** = requiere
+join, resolución a una lista de ids, o cambiar la forma del parámetro.
 
-- **Filtros en `ev_*`** (instancias/ciclos/plantillas): backend vivo, **cero frontend**, tablas
-  vacías, borrado tras el cutover. Sería trabajo tirado.
+| # | Módulo | Filtro que falta | Costo | Por qué vale |
+|---|---|---|---|---|
+| 1 | **costos / nómina** | **rango de períodos** (hoy `anio`+`mes` son puntuales y obligatorios) | medio | Es lo que bloquea la **evolución de masa salarial**, la primera pregunta de gerencia. Hoy hay que pedir mes por mes y pegar en Excel. |
+| 2 | **costos / nómina** | **área** y **empleado** | medio (join a `empleados`, molde en `_scope_filtros`) | El corte más natural de un análisis de costos, y el único módulo grande que no lo tiene. |
+| 3 | **empleados** | **seniority**, **categoría**, **tipo de contrato**, **modalidad**, **turno**, **ubicación** | barato ×6 (`.eq()` sobre columnas propias) | Son seis columnas del legajo que ya se muestran y no se pueden cortar. **Con `seniority` y `categoria` ya normalizados (bloque N3/N4) el filtro por fin devuelve lo que promete**: antes `senior` y `SENIOR` eran dos valores distintos. |
+| 4 | **empleados** | **provincia / localidad** | barato | Las columnas existen (migración 081) y `provincia` ya es una lista cerrada servida por endpoint. **Sigue esperando que se carguen domicilios**: hoy no filtraría nada. |
+| 5 | **candidatos** | **vacante** y **etapa del pipeline** | barato | El pipeline tiene etapas y no se puede filtrar por ellas; hoy sólo hay `clasificacion` y `sin_vacante`. |
+| 6 | **vacantes** | **área** y **responsable** | barato / medio | Sólo acepta `estado`. Con varias búsquedas abiertas, "las de Sistemas" no se puede pedir. |
+| 7 | **auditoría** | **acción** (INSERT/UPDATE/DELETE) | barato | La columna existe y es el corte más obvio que falta: "qué se BORRÓ este mes". Los otros seis filtros del módulo ya están. |
+| 8 | **objetivos** | **rango de `fecha_entrega`** | barato | "Qué vence este mes" es la pregunta de un tablero, y el listado ya ordena por esa columna. |
+| 9 | **inventario · ítems** | **búsqueda por nº de serie / nombre** | barato | Con varios cientos de ítems, un listado sin buscador obliga a paginar a mano. |
+| 10 | **clientes** | **búsqueda por nombre** | barato | Sólo acepta `incluir_inactivos`. Hoy son 4 clientes; escala mal. |
+| 11 | **eventos** | **rango de fechas** y **tipo** | barato | Sólo acepta `incluir_resueltas`. Una agenda sin corte por fecha es una lista. |
+| 12 | **horas por cliente** | **cliente** y **proyecto/tarea** | barato | Hoy sólo período (obligatorio). Es el módulo de **facturación**: sin corte por cliente hay que exportar todo. |
+| 13 | **onboarding / offboarding** | **estado / histórico** y **motivo de egreso** | medio | Los dos traen solo los activos, así que **el histórico es inalcanzable desde la UI**. Offboarding alimenta el reporte de rotación, así que se paga dos veces. |
+| 14 | transversal | **multi-select en área y estado** | medio | Convierte "un corte por vez" en "el corte que quieras". `FiltersBar` ya tiene el control (`multiselect`); lo que falta es que los repos acepten listas. |
+
+### 5.c — Lo que NO recomiendo hacer
+
 - **Filtros en assessment**: módulo apagado por flag (`ASSESSMENT_ENABLED=false`).
+- **Filtros en sucesión**: apagado por dos flags del front.
+- **Un export en `/comunicacion` (historial de mails)**: es una decisión tomada, no un olvido —
+  `mail_enviado` guarda nombre, dirección y el cuerpo entero del mail. Ese Excel es justamente el
+  archivo que no se quiere que circule.
 
 ---
 

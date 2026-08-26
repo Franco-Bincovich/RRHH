@@ -17,7 +17,7 @@ from utils.errors import AppError
 from registro_routers import registrar
 from utils.rate_limit import limiter, rate_limit_handler
 app = FastAPI(
-    title="HR Karstec API",
+    title=f"{settings.marca} API",
     version="1.0.0",
     docs_url="/docs" if settings.app_env == "development" else None,
     redoc_url=None,

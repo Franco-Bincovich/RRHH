@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { RUTAS_OCULTAS } from "@/components/layout/nav-config"
 import type { DashboardData, KpisExtra } from "@/services/dashboard"
 import { DESTINOS, SIN_DESTINO } from "./_destinosKpi"
 import { bloquesKpi, formatVariacion, SIN_DATO } from "./_kpisDashboard"
@@ -284,11 +285,31 @@ describe("el fondo semántico", () => {
  * acá sería una tercera copia del mapa, que es lo que hace que las copias diverjan.
  */
 describe("cada card llega con su destino ya resuelto", () => {
-  it("las que tienen destino declarado lo traen, y son las mismas del mapa", () => {
+  /** Las cards cuyo destino cayó en `RUTAS_OCULTAS`: se DERIVA, igual que en _destinosKpi.test.ts.
+   *  Reponer una sección la saca de acá sola y su card vuelve a traer href, sin tocar este test. */
+  const OCULTAS = Object.keys(DESTINOS)
+    .filter((t) => RUTAS_OCULTAS.includes(DESTINOS[t].split("?")[0]))
+
+  it("las que tienen destino declarado y visible lo traen, y son las mismas del mapa", () => {
     const cards = bloquesKpi(datos(), ADMIN).flatMap((b) => b.kpis)
     const conHref = cards.filter((k) => k.href).map((k) => k.title).sort()
-    expect(conHref).toEqual(Object.keys(DESTINOS).sort())
-    cards.forEach((k) => expect(k.href).toBe(DESTINOS[k.title]))
+    expect(conHref).toEqual(Object.keys(DESTINOS).filter((t) => !OCULTAS.includes(t)).sort())
+    cards.forEach((k) => {
+      expect(k.href).toBe(OCULTAS.includes(k.title) ? undefined : DESTINOS[k.title])
+    })
+  })
+
+  it("una card cuya sección salió del menú llega SIN href, ni siquiera para admin", () => {
+    // La otra punta del ocultamiento, afirmada donde está el cable: `_destinosKpi.test.ts` prueba
+    // que `destino()` devuelva undefined, y esto que la card efectivamente llegue sin link. Sin
+    // esta aserción, un `href` cableado por otro camino dejaría el dashboard linkeando igual.
+    expect(OCULTAS.length).toBeGreaterThanOrEqual(1) // guarda: si no hay ninguna, no mira nada
+    const cards = bloquesKpi(datos(), ADMIN).flatMap((b) => b.kpis)
+    OCULTAS.forEach((t) => {
+      const c = cards.find((k) => k.title === t)
+      expect(c, `la card ${t} dejó de existir`).toBeTruthy()
+      expect(c!.href, t).toBeUndefined()
+    })
   })
 
   it("EL CONTRASTE: con un rol que no puede leer casi nada, casi ninguna trae href", () => {

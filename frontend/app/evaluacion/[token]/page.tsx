@@ -16,6 +16,7 @@ import {
 } from "@/components/features/evaluacionPublica/_preguntas"
 import { fetchEvaluacion, submitEvaluacion } from "@/services/assessment"
 import type { LinkInfo, RespuestaItem } from "@/types/assessment"
+import { MARCA } from "@/lib/marca"
 
 type Estado = "cargando" | "link_invalido" | "activa" | "enviando" | "listo"
 
@@ -80,7 +81,7 @@ export default function AssessmentPublicPage() {
       <header className="border-b bg-card">
         <div className="mx-auto flex h-14 max-w-2xl items-center gap-2.5 px-4">
           <Building2 className="size-5 text-primary" aria-hidden="true" />
-          <span className="font-semibold text-foreground">HR Karstec</span>
+          <span className="font-semibold text-foreground">{MARCA}</span>
           <span className="text-muted-foreground">·</span>
           <span className="text-sm text-muted-foreground">Assessment</span>
           {link && (

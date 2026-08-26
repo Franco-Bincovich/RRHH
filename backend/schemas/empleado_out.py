@@ -89,6 +89,33 @@ class EmpleadoResponse(BaseModel):
     categoria: Optional[str] = None
     referido: Optional[str] = None
     es_lider: bool = False
+    # 🔴 LAS SIETE COLUMNAS QUE LA TABLA TENÍA Y LA API NO DEVOLVÍA (bloque N6, 25/8/2026).
+    # Las escriben el import de nómina (las cinco de abajo) o la DB por default (las dos de
+    # arriba), y NINGÚN consumidor de EmpleadoResponse podía verlas: ni la ficha, ni el listado,
+    # ni el export. Medido contra el catálogo vivo ese día, sobre 41 legajos: `potencial` 41/41,
+    # `desempeno` 41/41, `product_owner` 31/41, `liderazgo` 31/41, `fecha_ingreso_reconocida`
+    # 10/41. O sea que NO son columnas vacías esperando su turno: son datos cargados y ciegos.
+    #
+    # 🔴 `fecha_ingreso_reconocida` ES LA MÁS CARA DE LAS SIETE y por eso encabeza la lista:
+    # es la fecha con la que se reconoce la antigüedad (una cesión, un pase entre sociedades del
+    # grupo) y **de ella depende el cupo de vacaciones**, que sale de la regla por antigüedad de
+    # `config/reglas_vacaciones.py`. Sin exponerla, alguien con un cupo distinto al que su
+    # `fecha_ingreso` sugiere no tenía NINGUNA forma de saber por qué: el dato existía, decidía,
+    # y no se mostraba en ninguna pantalla.
+    #
+    # Todas Optional aunque `potencial`/`desempeno` sean NOT NULL en la tabla: este schema lo
+    # construyen también los dobles de test, y volverlos obligatorios convertiría un campo nuevo
+    # en un ValidationError en cientos de tests que no tienen nada que ver con esto.
+    fecha_ingreso_reconocida: Optional[date] = None
+    potencial: Optional[str] = None
+    desempeno: Optional[str] = None
+    # `liderazgo` es el TEXTO CRUDO del CSV ("SI"/"NO"/"GERENTE DE ÁREA") y `es_lider` el booleano
+    # derivado. Salen los dos: cuando el texto no se pudo mapear a Sí/No, `es_lider` queda sin
+    # escribir y el crudo es lo ÚNICO que dice qué declaró la nómina.
+    liderazgo: Optional[str] = None
+    product_owner: Optional[bool] = None
+    co_sourcing: Optional[bool] = None
+    equipo: Optional[str] = None
     # Domicilio desglosado (C4, migración 081). `domicilio` de arriba se conserva como texto
     # libre: es el destino de lo que no encaje acá y la referencia para completar estos.
     domicilio_calle: Optional[str] = None

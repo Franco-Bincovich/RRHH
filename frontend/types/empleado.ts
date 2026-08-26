@@ -53,15 +53,32 @@ export interface Empleado {
   estudios: string | null
   ubicacion: string | null
   turno: string | null
+  /** Sale del `turno` si nadie la carga a mano (ventana menos una hora de almuerzo). La cuenta
+   *  vive SOLO en el backend (`utils/legajo_reglas`): un espejo acá sería una segunda
+   *  implementación que diverge sin avisar. Lo cargado a mano gana siempre. */
   horas_contrato: number | null
-  organismo: string | null
-  gerencia: string | null
-  sector: string | null
   seniority: string | null
-  perfil: string | null
   categoria: string | null
   referido: string | null
   es_lider: boolean
+  /**
+   * 🔴 LAS SIETE QUE LA API NO DEVOLVÍA HASTA EL 25/8/2026 (bloque N6). No son campos nuevos: son
+   * columnas que el import de nómina venía escribiendo y que ninguna pantalla podía leer.
+   * `fecha_ingreso_reconocida` es la que más importa — **decide el cupo de vacaciones** (la regla
+   * por antigüedad la usa en lugar de `fecha_ingreso` cuando está cargada), así que sin mostrarla
+   * nadie podía explicar un cupo que no coincide con la fecha de ingreso de al lado.
+   * ⚠️ `potencial` y `desempeno` son los ejes del 9-box y hoy valen `"medio"` para TODA la
+   * plantilla: es el DEFAULT de la columna y su único escritor (el assessment) está apagado. Es
+   * el valor real del registro, no una calificación que alguien haya puesto.
+   */
+  fecha_ingreso_reconocida: string | null
+  potencial: string | null
+  desempeno: string | null
+  /** Texto crudo del CSV ("SI"/"NO"/"GERENTE DE ÁREA"); `es_lider` es el booleano derivado. */
+  liderazgo: string | null
+  product_owner: boolean | null
+  co_sourcing: boolean | null
+  equipo: string | null
   created_at: string
 }
 
@@ -133,12 +150,9 @@ export interface EmpleadoCreate {
   estudios?: string
   ubicacion?: string
   turno?: string
+  /** Ausente = la deriva el backend del `turno`. Presente = manda lo que se cargó a mano. */
   horas_contrato?: number
-  organismo?: string
-  gerencia?: string
-  sector?: string
   seniority?: string
-  perfil?: string
   categoria?: string
   referido?: string
   es_lider?: boolean
