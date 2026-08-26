@@ -29,7 +29,8 @@ export type ModalidadVacante = "presencial" | "remoto" | "hibrido"
 
 export interface Vacante {
   id: string
-  /** `VAC-0001`. Lo genera la base (mig 097); RRHH no lo elige ni lo edita. NO es opcional. */
+  /** `ECO-2026`. 🔴 LO ESCRIBE CAPITAL HUMANO (mig 122) y es editable; hasta el 26/8/2026 lo
+   *  generaba la base y acá decía que no se elegía. Es único en TODO el sistema. NO es opcional. */
   codigo: string
   empresa_id: string | null
   empresa_nombre: string | null
@@ -78,12 +79,17 @@ export interface AsignacionResultado {
 
 export interface VacanteCreate {
   empresa_id: string
+  /** Obligatorio: una búsqueda sin código no puede recibir CVs por la casilla. */
+  codigo: string
   titulo: string
   area_id: string
   tipo_contrato: string
 }
 
 export interface VacanteUpdate {
+  /** Corregible. Cambiarlo no mueve ningún candidato, pero deja sin matchear los mails que
+   *  lleguen con el código viejo — la pantalla lo avisa antes de guardar. */
+  codigo?: string
   titulo?: string
   area_id?: string
   descripcion?: string

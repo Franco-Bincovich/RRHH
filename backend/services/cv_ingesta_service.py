@@ -72,15 +72,20 @@ class CvIngestaService:
         reloj = Presupuesto(PRESUPUESTO_SEGUNDOS if presupuesto is None else presupuesto)
         with cliente_o(cliente) as cli:
             ids = self._gmail.ids_con_adjunto(cli, token)
-            items = [self._uno(cli, token, mid) for mid in reloj.con_margen(ids)]
+            # 🔴 UNA sola lectura de los códigos para toda la corrida. Desde la mig 122 el código
+            # lo escribe Capital Humano, así que el matcher necesita saber cuáles existen; pedirlo
+            # por mail sumaría una query a cada vuelta de un loop que ya hace 2+ llamadas a Gmail.
+            codigos = self._vacantes.codigos()
+            items = [self._uno(cli, token, mid, codigos) for mid in reloj.con_margen(ids)]
         return self._resumen(items, reloj, len(ids), usuario_id)
 
-    def _uno(self, cliente, token: str, message_id: str) -> IngestaMailItem:
+    def _uno(self, cliente, token: str, message_id: str, codigos) -> IngestaMailItem:
         """Un mail. Cualquier fallo suyo queda contenido acá: el lote sigue."""
         try:
             mensaje = self._gmail.mensaje_completo(cliente, token, message_id)
             r = procesar_mail(cliente, token, mensaje, vacante_repo=self._vacantes,
-                              candidato_repo=self._candidatos, cv_service=self._cv)
+                              candidato_repo=self._candidatos, cv_service=self._cv,
+                              codigos_conocidos=codigos)
         except Exception as exc:  # noqa: BLE001 — ver el docstring
             logger.error("Fallo al procesar un mail de la casilla",
                          extra={"message_id": message_id, "error": str(exc)})

@@ -29,7 +29,7 @@ declara: `filename`, `mimeType` y `body.size`, que es exactamente lo que `cv_ser
 mira. Los bytes recién se piden al ASIGNAR, o sea sobre el mail que RRHH eligió.
 """
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 from services._cv_alta import crear_de_un_cv
 from services._gmail_adjuntos import descargar_cvs
@@ -79,13 +79,16 @@ def pendiente_de(mensaje: dict, motivo: str) -> MailPendiente:
         adjuntos_validos=validos, nombres_adjuntos=nombres, motivo=motivo)
 
 
-def motivo_de(mensaje: dict, vacante_repo) -> Optional[str]:
+def motivo_de(mensaje: dict, vacante_repo, codigos_conocidos: Iterable[str]) -> Optional[str]:
     """Por qué este mail no se resolvió solo, o None si sí matchea una vacante.
 
     Repite el matcheo de `procesar_mail` sin crear nada: la pantalla tiene que mostrar el mismo
-    veredicto que la ingesta, y calcularlo con otro criterio los haría divergir.
+    veredicto que la ingesta, y calcularlo con otro criterio los haría divergir. Por eso
+    `codigos_conocidos` también es obligatorio acá: si esta pantalla mirara otro conjunto de
+    códigos que la corrida, un mail podría figurar como pendiente y resolverse solo al apretar
+    "Revisar casilla" (o al revés), sin que nada falle.
     """
-    encontrados = codigos_en(_headers(mensaje).get("Subject", ""))
+    encontrados = codigos_en(_headers(mensaje).get("Subject", ""), codigos_conocidos)
     if not encontrados:
         return "sin_codigo"
     if len(encontrados) > 1:

@@ -21,6 +21,7 @@ from typing import Optional
 from uuid import UUID
 
 from schemas.vacante import VacanteCreate, VacanteResponse, VacanteUpdate
+from services._vacante_codigo import asegurar_unico, choque_de_codigo, normalizar
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -34,21 +35,52 @@ def _or_404(vacante: Optional[VacanteResponse]) -> VacanteResponse:
     return vacante
 
 
+def _guardar_con_codigo(codigo: str, repo, escribir):
+    """Ejecuta la escritura traduciendo el choque del índice único a un mensaje que se entiende.
+
+    🔴 EL `try` NO ES REDUNDANTE CON `asegurar_unico`. Aquél consulta antes y sirve para NOMBRAR
+    la búsqueda dueña; entre esa consulta y este INSERT/UPDATE otra sesión puede escribir el
+    mismo código. La garantía la da el índice `vacantes_codigo_uq`, y sin esta traducción el
+    usuario vería un 500 de PostgREST sobre lo que en realidad es un código repetido.
+
+    ⚠️ Relanza el error ORIGINAL si no es el índice: tragarse cualquier fallo de base detrás de
+    "código duplicado" mandaría a Capital Humano a cambiar un código que estaba perfecto.
+    """
+    try:
+        return escribir()
+    except AppError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — se inspecciona y se relanza si no es lo nuestro
+        choque = choque_de_codigo(exc, repo, codigo)
+        if choque:
+            raise choque from exc
+        raise
+
+
 def crear(repo, audit, data: VacanteCreate, created_by: str) -> VacanteResponse:
     """
     Crea una nueva vacante en estado 'nueva'. empresa_id viene en el body.
 
+    El código lo escribe Capital Humano (mig 122): se normaliza a su forma canónica y se verifica
+    que no lo tenga otra búsqueda ANTES de escribir, para poder decir cuál lo tiene.
+
     Args:
         repo: VacanteRepo (o doble de test).
         audit: AuditService (o doble de test).
-        data: Datos de la vacante validados por Pydantic (incluye empresa_id).
+        data: Datos de la vacante validados por Pydantic (incluye empresa_id y codigo).
         created_by: ID del usuario que realiza la operación (trazabilidad).
+
+    Raises:
+        AppError: CODIGO_VACANTE_INVALIDO (422) · CODIGO_VACANTE_DUPLICADO (409).
     """
-    vacante = repo.save(data)
+    data.codigo = normalizar(data.codigo)
+    asegurar_unico(repo, data.codigo)
+    vacante = _guardar_con_codigo(data.codigo, repo, lambda: repo.save(data))
     audit.registrar(
         usuario_id=created_by, entidad="vacante", registro_id=vacante.id, accion="INSERT",
         evento="alta_vacante", empresa_id=vacante.empresa_id, datos_anteriores=None,
-        datos_nuevos={"titulo": vacante.titulo, "area_id": vacante.area_id, "estado": vacante.estado},
+        datos_nuevos={"codigo": vacante.codigo, "titulo": vacante.titulo,
+                      "area_id": vacante.area_id, "estado": vacante.estado},
     )
     logger.info("Vacante creada", extra={"vacante_id": vacante.id, "created_by": created_by})
     return vacante
@@ -59,9 +91,19 @@ def actualizar(repo, audit, id: UUID, data: VacanteUpdate, empresa_id: Optional[
     """
     Actualiza los campos de una vacante existente (actualización parcial).
 
+    El código se puede corregir, con la MISMA validación que el alta: se normaliza y se verifica
+    que no lo tenga otra búsqueda. `excepto_id` es esta misma vacante — sin él, guardarla sin
+    tocarle el código chocaría contra sí misma.
+
+    ⚠️ Cambiar el código NO toca a los candidatos que ya entraron: cuelgan de `vacante_id`. Lo
+    que queda desalineado es el AVISO ya publicado — un mail que llegue con el código viejo cae
+    en "pendientes" con `vacante_desconocida` y se asigna a mano. La pantalla lo avisa antes de
+    guardar cuando la búsqueda ya tiene candidatos.
+
     Raises:
         AppError: ESTADO_INVALIDO (400) si el estado no está en el enum.
         AppError: VACANTE_NOT_FOUND (404) si el ID no existe o no pertenece a la empresa.
+        AppError: CODIGO_VACANTE_INVALIDO (422) · CODIGO_VACANTE_DUPLICADO (409).
     """
     if data.estado and data.estado not in _ESTADOS:
         raise AppError(
@@ -70,7 +112,11 @@ def actualizar(repo, audit, id: UUID, data: VacanteUpdate, empresa_id: Optional[
     # Lectura previa para el diff: `update` devuelve la fila YA actualizada, así que sin esto
     # el evento no podría decir de qué valor se venía. El 404 es el mismo de abajo.
     previa = _or_404(repo.find_by_id(str(id), empresa_id))
-    vacante = _or_404(repo.update(str(id), data, empresa_id))
+    if data.codigo is not None:
+        data.codigo = normalizar(data.codigo)
+        asegurar_unico(repo, data.codigo, excepto_id=previa.id)
+    vacante = _or_404(_guardar_con_codigo(
+        data.codigo or previa.codigo, repo, lambda: repo.update(str(id), data, empresa_id)))
     tocados = data.model_dump(exclude_none=True)
     audit.registrar(
         usuario_id=usuario_id, entidad="vacante", registro_id=str(id), accion="UPDATE",

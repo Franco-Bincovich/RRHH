@@ -86,7 +86,7 @@ export default function VacanteDetailPage() {
       />
 
       {/* Va ARRIBA de la publicación: es lo que hay que copiar ANTES de escribir el aviso. */}
-      <CodigoPostulacion vacanteId={id} />
+      <CodigoPostulacion vacanteId={id} candidatos={candidatos.length} canWrite={canWrite} />
 
       <InformacionPuestoSection vacante={vacante} canWrite={canWrite} onSaved={setVacante} />
 

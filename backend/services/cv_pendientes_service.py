@@ -39,9 +39,11 @@ class CvPendientesService:
         with cliente_o(cliente) as cli:
             ids = self._gmail.ids_con_adjunto(cli, token)
             ya = self._candidatos.message_ids_procesados(ids)
+            # Una sola lectura de códigos para toda la pantalla, igual que en la ingesta.
+            codigos = self._vacantes.codigos()
             for mid in [i for i in ids if i not in ya]:
                 mensaje = self._gmail.mensaje_completo(cli, token, mid)
-                motivo = _pend.motivo_de(mensaje, self._vacantes)
+                motivo = _pend.motivo_de(mensaje, self._vacantes, codigos)
                 if motivo:
                     salida.append(MailPendienteItem(**vars(_pend.pendiente_de(mensaje, motivo))))
         return salida

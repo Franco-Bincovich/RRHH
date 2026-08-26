@@ -76,8 +76,13 @@ export function VacanteModal({ open, onClose, onSuccess }: VacanteModalProps) {
       await createVacante(payloadVacante(form))
       avisarGuardado("Búsqueda", "f", false)
       onSuccess()
-    } catch {
-      setServerError("Ocurrió un error al guardar. Intentá de nuevo.")
+    } catch (e) {
+      // 🔴 SE MUESTRA EL MENSAJE DEL BACKEND, no un genérico. Acá decía siempre "Ocurrió un
+      // error al guardar", y con el código escrito a mano eso se volvió inaceptable: el rechazo
+      // más probable es "ese código ya lo usa la búsqueda X", que es justamente la única
+      // información con la que se puede resolver. Un genérico deja a Capital Humano probando
+      // códigos al azar.
+      setServerError(e instanceof Error ? e.message : "Ocurrió un error al guardar. Intentá de nuevo.")
     } finally {
       setSubmitting(false)
     }
@@ -94,8 +99,8 @@ export function VacanteModal({ open, onClose, onSuccess }: VacanteModalProps) {
               usuario no puede saber mirando los campos es que la vacante nace con un código de
               postulación propio, que es lo que después empareja los mails de la casilla. */}
           <DialogDescription>
-            Se abre la búsqueda con su código de postulación, y desde ahí ya puede recibir
-            candidatos por la casilla o por el formulario público.
+            El código que elijas es lo que los candidatos escriben en el asunto del mail: con eso
+            sus CVs entran solos a esta búsqueda.
           </DialogDescription>
         </DialogHeader>
 

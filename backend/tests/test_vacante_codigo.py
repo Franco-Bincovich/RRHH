@@ -1,13 +1,24 @@
 """
-El código de la vacante (`VAC-0001`, migración 097): generación sin colisión, lookup del matcher,
-y que el valor llegue de verdad hasta el schema.
+El código de la vacante EN LA BASE: que viaje en el INSERT, que el índice único lo defienda, que
+el lookup del matcher lo encuentre, y que llegue hasta el schema.
+
+## 🔴 CAMBIÓ LA PREMISA EL 26/8/2026 — LO ESCRIBE CAPITAL HUMANO, YA NO LA SECUENCIA
+
+Hasta la migración 122 el código lo ponía el DEFAULT de la base y este archivo probaba, entre
+otras cosas, que la aplicación NO lo mandara. Ahora es un campo del formulario y esas dos
+aserciones están DADAS VUELTA, no borradas: `test_el_alta_manda_el_codigo_que_eligio_la_persona`
+y `test_se_puede_elegir_y_corregir_desde_afuera` ocupan el lugar de las que decían lo contrario.
+Borrarlas habría dejado sin vigilancia justo el punto donde ahora entra el valor.
+
+El DEFAULT y la secuencia SIGUEN EXISTIENDO como red (una fila que entre por afuera de la app
+nace con código igual), y el fake los conserva: por eso el insert sin `codigo` todavía emite uno.
 
 ## 🔴 POR QUÉ EL FAKE DE SUPABASE MODELA LA SECUENCIA **Y** EL ÍNDICE ÚNICO
 
-El código NO lo calcula Python: lo pone el DEFAULT de la base (`nextval`). Un fake que devolviera
-siempre un código libre haría **imposible desmentir la guarda de unicidad** — el test pasaría con
-cualquier implementación, incluida la que este diseño existe para evitar ("leer el máximo y sumar
-uno", que colisiona con dos altas simultáneas).
+El índice es ahora LA garantía: con el código escrito a mano, dos altas simultáneas con el mismo
+valor son una carrera real. Un fake que aceptara cualquier código haría **imposible desmentir la
+guarda de unicidad** — el test pasaría con cualquier implementación, incluida una que confiara
+sólo en el `SELECT` previo.
 
 Por eso `_FakeSupabase` implementa las dos mitades de la base real:
 
@@ -22,12 +33,13 @@ permisivo se vería idéntico a uno estricto.
 
 ## Lo que estos tests NO cubren, para no venderlos de más
 
-No corren SQL: la migración 097 no se ejecuta acá. Que `nextval` sea atómico es una propiedad de
-Postgres, no algo que un test de Python pueda verificar. Lo que sí se verifica es lo único que
-depende de nosotros: **que la aplicación no le dispute el código a la base** —no lo manda en el
-INSERT y no lo calcula leyendo un máximo—, que es exactamente donde se metería la carrera.
-`TestLaMigracionNoTieneCarrera` mira el SQL como texto, que es todo lo que se puede mirar sin
-una base.
+No corren SQL: ni la 097 ni la 122 se ejecutan acá, así que el CHECK de formato de la base no se
+prueba en este archivo (la forma la valida `services/_vacante_codigo.py`, y eso vive en
+`test_vacante_codigo_unico.py`). Que el índice único sea atómico es una propiedad de Postgres, no
+algo que un test de Python pueda verificar. Lo que sí se verifica es lo que depende de nosotros:
+que el valor viaje, que nadie lo calcule leyendo un máximo, y que la migración declare el índice
+GLOBAL y case-insensitive. Las dos clases `TestLaMigracion*` miran el SQL como texto, que es todo
+lo que se puede mirar sin una base.
 """
 import os
 
@@ -55,7 +67,9 @@ import repositories.vacante_repo as repo_mod  # noqa: E402
 from repositories._vacante_row import _vrow  # noqa: E402
 from schemas.vacante import VacanteCreate, VacanteResponse  # noqa: E402
 
-_MIGRACION = Path(__file__).resolve().parent.parent / "migrations" / "097_vacantes_codigo.sql"
+_MIGRACIONES = Path(__file__).resolve().parent.parent / "migrations"
+_MIGRACION = _MIGRACIONES / "097_vacantes_codigo.sql"
+_MIGRACION_122 = _MIGRACIONES / "122_vacantes_codigo_manual.sql"
 EMPRESA, AREA = uuid4(), uuid4()
 
 
@@ -132,45 +146,57 @@ def base(monkeypatch) -> _FakeSupabase:
     return fake
 
 
-def _crear(repo) -> VacanteResponse:
-    return repo.save(VacanteCreate(empresa_id=EMPRESA, titulo="Analista", area_id=AREA,
-                                   tipo_contrato="efectivo"))
+def _crear(repo, codigo: str = "ECO-2026") -> VacanteResponse:
+    return repo.save(VacanteCreate(empresa_id=EMPRESA, codigo=codigo, titulo="Analista",
+                                   area_id=AREA, tipo_contrato="efectivo"))
 
 
 # ── 1. La generación ──────────────────────────────────────────────────────────
 
 class TestGeneracion:
 
-    def test_dos_altas_seguidas_no_comparten_codigo(self, base) -> None:
-        """El caso del enunciado. Con la secuencia, dos altas consecutivas no pueden coincidir.
+    def test_el_alta_manda_el_codigo_que_eligio_la_persona(self, base) -> None:
+        """🔴 DADO VUELTA EL 26/8/2026. Acá vivía `test_el_alta_no_manda_el_codigo_lo_pone_la_base`,
+        que exigía lo contrario: que `codigo` NO estuviera en el payload, para que se aplicara el
+        DEFAULT. Con la mig 122 el código lo escribe Capital Humano y tiene que viajar; el test
+        se invierte en vez de borrarse, porque el punto que vigila es el mismo —de dónde sale el
+        valor— y sin él nadie notaría que el campo dejó de llegar al INSERT.
+        """
+        vac = _crear(repo_mod.VacanteRepo(), "ECO-2026")
+        assert base.insertados[0].get("codigo") == "ECO-2026", (
+            "el INSERT no manda el código elegido: se aplicaría el DEFAULT y la búsqueda nacería "
+            "con un VAC-000N que nadie pidió")
+        assert vac.codigo == "ECO-2026"
 
-        ¿Qué tendría que ser distinto en el fake para que falle? Que el contador no avanzara —o
-        que la aplicación mandara el código en el payload—: ahí las dos altas traerían el mismo
-        valor y, además, la segunda chocaría con el índice único del propio fake.
+    def test_el_DEFAULT_sigue_siendo_la_red_si_no_llega_ninguno(self, base) -> None:
+        """La secuencia no se sacó (ver el encabezado de la 122): una fila que entre por afuera de
+        la aplicación —un INSERT a mano, un import futuro— sigue naciendo con código en vez de
+        fallar contra el NOT NULL. Es la mitad que el test invertido de arriba dejaría sin mirar.
+        """
+        base.table("vacantes").insert({"titulo": "X"}).execute()
+        assert base.filas[-1]["codigo"] == "VAC-0001"
+
+    def test_dos_altas_con_el_mismo_codigo_no_pueden_convivir(self, base) -> None:
+        """El caso del enunciado, ahora que el valor lo elige una persona: la SEGUNDA no entra.
+
+        ¿Qué tendría que ser distinto en el fake para que falle? Que no modelara el índice único
+        sobre `upper(codigo)`: ahí las dos filas quedarían con el mismo código y el matcher se
+        rompería para siempre — el único bug de este módulo que no se puede reparar después,
+        porque el aviso ya salió publicado.
         """
         repo = repo_mod.VacanteRepo()
-        a, b = _crear(repo), _crear(repo)
-        assert a.codigo != b.codigo
-        assert (a.codigo, b.codigo) == ("VAC-0001", "VAC-0002")
-
-    def test_el_alta_no_manda_el_codigo_lo_pone_la_base(self, base) -> None:
-        """🔴 La invariante que evita la carrera: la app NO le disputa el código a la base.
-
-        Si el payload trajera `codigo`, el DEFAULT no se aplicaría y el valor saldría de donde
-        sea que la app lo calculó — que es exactamente donde dos altas simultáneas colisionan.
-        """
-        _crear(repo_mod.VacanteRepo())
-        assert "codigo" not in base.insertados[0], (
-            f"el INSERT manda el código: {base.insertados[0].get('codigo')!r}. Lo pone el DEFAULT")
+        _crear(repo, "ECO-2026")
+        with pytest.raises(_CodigoDuplicado):
+            _crear(repo, "eco-2026")     # distinta caja, el MISMO código
 
     def test_un_codigo_repetido_lo_rechaza_la_base(self, base) -> None:
         """🔴 EL TEST QUE LE DA DIENTES AL FAKE. Fuerza la colisión que los otros dan por
         imposible: si el doble no modelara el índice único, esto pasaría en silencio y todo el
         archivo estaría afirmando sobre un fake que no puede desmentir nada."""
-        base.filas.append({"id": str(uuid4()), "codigo": "VAC-0001", "area_id": str(AREA)})
-        base.usados.add("VAC-0001")
+        base.filas.append({"id": str(uuid4()), "codigo": "ECO-2026", "area_id": str(AREA)})
+        base.usados.add("ECO-2026")
         with pytest.raises(_CodigoDuplicado):
-            base.table("vacantes").insert({"codigo": "vac-0001", "titulo": "X"}).execute()
+            base.table("vacantes").insert({"codigo": "eco-2026", "titulo": "X"}).execute()
 
     def test_ningun_codigo_se_calcula_leyendo_el_maximo(self) -> None:
         """La carrera descartada, buscada en el código: nadie ordena por `codigo` para sumar uno.
@@ -212,9 +238,50 @@ class TestLaMigracionNoTieneCarrera:
 
     def test_el_formato_admite_mas_de_cuatro_digitos(self) -> None:
         """`lpad` no trunca: la vacante 10.000 emite VAC-10000. Con `{4}` exacto el CHECK la
-        rechazaría y el alta fallaría sin que nadie entienda por qué."""
+        rechazaría y el alta fallaría sin que nadie entienda por qué. ⚠️ Este CHECK ya no rige:
+        lo reemplaza el de la 122. Se conserva porque la 097 sigue siendo la migración que hay que
+        correr primero en un rebuild, y su texto tiene que seguir siendo coherente consigo mismo."""
         sql = _MIGRACION.read_text(encoding="utf-8")
         assert "[0-9]{4,}" in sql and "[0-9]{4}$" not in sql
+
+
+class TestLaMigracion122:
+    """La 122 como texto: qué ensancha y, sobre todo, qué NO toca."""
+
+    def test_reemplaza_el_check_viejo_en_vez_de_agregarle_otro(self) -> None:
+        """Dos CHECKs sobre la misma columna se cumplen por AND: dejar el de la 097 haría que
+        `ECO-2026` siguiera siendo rechazado y la feature no funcionara, sin ningún error que
+        apunte a la migración."""
+        sql = _MIGRACION_122.read_text(encoding="utf-8")
+        assert "DROP CONSTRAINT IF EXISTS vacantes_codigo_formato" in sql
+        assert "ADD CONSTRAINT vacantes_codigo_formato" in sql
+
+    def test_NO_toca_el_indice_unico(self) -> None:
+        """🔴 La unicidad global es lo único que impide que dos búsquedas compartan código, y con
+        el valor escrito a mano pasó a ser LA garantía. Un `DROP INDEX` acá sería el bug más caro
+        del módulo."""
+        sql = _MIGRACION_122.read_text(encoding="utf-8")
+        assert "DROP INDEX" not in sql.upper()
+        assert "vacantes_codigo_uq" in sql, "la migración ni siquiera menciona el índice que cuida"
+
+    def test_NO_dropea_la_secuencia_ni_el_default(self) -> None:
+        """Se conservan como red. Ver `test_el_DEFAULT_sigue_siendo_la_red_si_no_llega_ninguno`."""
+        sql = _MIGRACION_122.read_text(encoding="utf-8").upper()
+        assert "DROP SEQUENCE" not in sql and "DROP DEFAULT" not in sql
+
+    def test_el_check_nuevo_exige_al_menos_una_letra(self) -> None:
+        """Un código puramente numérico (`2026`) matchearía cualquier "2026" suelto en un asunto
+        y mandaría el CV a esa búsqueda sin que nada falle. Es la misma clase de decisión que el
+        mínimo de 4 dígitos que tenía la 097."""
+        sql = _MIGRACION_122.read_text(encoding="utf-8")
+        assert "codigo ~ '[A-Z]'" in sql
+
+    def test_los_codigos_viejos_siguen_siendo_validos(self) -> None:
+        """Las 5 vacantes de producción tienen `VAC-000N` y NO se renombran: el aviso ya está
+        publicado con ese código. La migración no puede invalidarlas."""
+        import re as _re
+        assert _re.match(r"^[A-Z0-9]+(-[A-Z0-9]+)*$", "VAC-0001")
+        assert 3 <= len("VAC-0001") <= 30 and _re.search(r"[A-Z]", "VAC-0001")
 
 
 # ── 2. El lookup del matcher ──────────────────────────────────────────────────
@@ -224,7 +291,7 @@ class TestLookupPorCodigo:
     @pytest.fixture
     def repo(self, base):
         r = repo_mod.VacanteRepo()
-        _crear(r)                                          # queda como VAC-0001
+        _crear(r, "VAC-0001")
         return r
 
     @pytest.mark.parametrize("escrito", ["VAC-0001", "vac-0001", "Vac-0001", "vAc-0001"])
@@ -304,9 +371,14 @@ class TestElCodigoLlegaAlSchema:
         with pytest.raises(Exception):
             _vrow(fila)
 
-    def test_no_se_puede_elegir_el_codigo_desde_afuera(self) -> None:
-        """Ni al crear ni al editar: lo pone la base. Si `VacanteCreate` lo aceptara, viajaría en
-        el payload del insert y le ganaría al DEFAULT."""
+    def test_se_puede_elegir_y_corregir_desde_afuera(self) -> None:
+        """🔴 DADO VUELTA EL 26/8/2026. Acá vivía `test_no_se_puede_elegir_el_codigo_desde_afuera`,
+        que exigía que ninguno de los dos schemas declarara `codigo`. Con la mig 122 lo escribe
+        Capital Humano: es OBLIGATORIO al crear (una búsqueda sin código no puede recibir CVs) y
+        OPCIONAL al editar (el caso típico es corregir un typo que ya se pegó en el aviso).
+        """
         from schemas.vacante import VacanteUpdate
-        assert "codigo" not in VacanteCreate.model_fields
-        assert "codigo" not in VacanteUpdate.model_fields
+        assert VacanteCreate.model_fields["codigo"].is_required(), (
+            "opcional al crear = una búsqueda puede nacer sin código y quedar muda")
+        assert not VacanteUpdate.model_fields["codigo"].is_required(), (
+            "obligatorio al editar = no se puede cambiar el título sin re-mandar el código")

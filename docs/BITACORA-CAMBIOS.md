@@ -41,6 +41,58 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-26 · Costos fuera del dashboard + el código de vacante lo escribe Capital Humano · commit por bloque
+
+**Qué cambió:** dos bloques independientes.
+
+**(1) La masa salarial y las alertas de costos salen de la vista del dashboard.** La card "Masa
+salarial del mes" y las DOS alertas que empujan a /costos (`sin_costos_nomina` y
+`sin_presupuesto`) dejan de pintarse. Es OCULTAMIENTO, no borrado: el backend sigue calculando la
+masa salarial y sigue emitiendo las dos alertas, así que el contrato de `/api/dashboard` no
+cambió ni una clave. El filtro vive en un módulo nuevo del front
+(`components/features/dashboard/_ocultoEnDashboard.ts`) y **DERIVA de `RUTAS_OCULTAS`**, la misma
+lista con la que el 25/8 se sacaron Costos, Períodos y Horas por cliente del menú: sacar
+`"/costos"` de esa constante repone el ítem del sidebar, el link de la card, la card y las dos
+alertas de una sola vez. El segundo bloque de KPIs pasó de 4 cards a 3.
+
+**(2) `vacantes.codigo` deja de generarlo la base y pasa a ser un campo obligatorio del
+formulario.** Es único en TODO el sistema (no por empresa) y el rechazo por duplicado **nombra la
+búsqueda que ya lo tiene**. El matcher de CVs se reescribió en consecuencia: ya no reconoce una
+FORMA (`VAC` + 4 dígitos) sino los códigos que EXISTEN, que se leen UNA vez por corrida de
+ingesta. Se puede corregir el código de una búsqueda existente desde su ficha; si ya tiene
+candidatos, la pantalla avisa que los mails con el código viejo van a caer en "Mails pendientes".
+
+**Impacto en infraestructura:**
+
+- 🔴 **Migración nueva: `122_vacantes_codigo_manual.sql`. ESCRITA, NO CORRIDA** — la corre Franco.
+  **No es destructiva:** dropea el CHECK `vacantes_codigo_formato` (que sólo admitía
+  `^VAC-[0-9]{4,}$`) y lo reemplaza por uno más ancho (`^[A-Z0-9]+(-[A-Z0-9]+)*$`, con al menos
+  una letra, 3-30 caracteres). No toca filas: las 5 vacantes de producción tienen `VAC-000N` y
+  son válidas bajo la forma nueva. **Orden: después de la 121.**
+  - 🔴 **NO toca el índice `vacantes_codigo_uq ON vacantes (upper(codigo))` (mig 097), y ése pasó
+    a ser LA garantía del módulo**: con el código escrito a mano, dos altas simultáneas con el
+    mismo valor son una carrera real. Si en el rebuild de AWS ese índice no se recrea, el matcher
+    de CVs se puede romper de forma irreparable (el aviso ya salió publicado con el código).
+  - **NO dropea la secuencia `vacantes_codigo_seq` ni el DEFAULT**: se conservan como red para
+    filas que entren por afuera de la aplicación.
+- **Variables de entorno:** ninguna nueva.
+- **Dependencias:** ninguna nueva.
+- **Buckets de Storage:** sin cambios.
+- **Endpoints:** ninguno nuevo. `POST /api/vacantes` ahora **exige `codigo` en el body** (un POST
+  sin él responde 422 de Pydantic) y `PUT /api/vacantes/{id}` lo acepta. Dos códigos de error
+  nuevos en el contrato: `CODIGO_VACANTE_INVALIDO` (422) y `CODIGO_VACANTE_DUPLICADO` (409).
+- **Procesos que no corren en serverless:** sin cambios. La corrida de ingesta suma **una query**
+  (`SELECT codigo FROM vacantes`) por corrida, no por mail — no mueve el presupuesto de 240 s.
+- **Autenticación:** sin cambios.
+- **URLs/dominios:** sin cambios.
+
+**Para el equipo de Capital Humano, al entregar:** los códigos existentes (`VAC-0001` a
+`VAC-0005`) **se conservan tal cual** porque ya están publicados en sus avisos y las cinco tienen
+candidatos cargados. Si quieren renombrarlos, se hace de a uno desde la ficha. ⚠️ **No conviene
+usar un código que sea el prefijo de otro que también se publica** (`ECO` y `ECO-2026` conviven
+sin romperse, pero `ECO` + un `ECO-2027` inexistente resolvería a `ECO`); está declarado en el
+encabezado de `services/_gmail_matcher.py`.
+
 ## 2026-08-25 · El handoff: .env.example, DEPLOY desde cero, los 4 greps y el documento de infra · commit por bloque
 
 **Qué cambió:** documentación de entrega, más un borrado de datos. Cinco bloques.

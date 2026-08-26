@@ -69,7 +69,16 @@ def _mensaje(mid, asunto, remitente="Ana Pérez <ana@x.com>", partes=None, fecha
 
 
 class _VacanteRepo:
-    """DOS vacantes, códigos distintos, EMPRESAS distintas."""
+    """DOS vacantes, códigos distintos, EMPRESAS distintas.
+
+    🔴 `codigos()` devuelve un TERCERO que `find_by_codigo` no resuelve — la misma asimetría que
+    el doble de `test_cv_ingesta`, y por el mismo motivo: desde la mig 122 `vacante_desconocida`
+    solo ocurre si la vacante desaparece entre la lectura de códigos y el lookup. Sin modelarla,
+    ese caso sería inalcanzable y este archivo lo probaría en el vacío.
+    """
+
+    def codigos(self):
+        return ["VAC-0001", "VAC-0002", "VAC-0003"]
 
     def find_by_codigo(self, codigo):
         m = {"VAC-0001": (V1, E1), "VAC-0002": (V2, E2)}
@@ -214,7 +223,7 @@ class TestFilaDelPendiente:
     @pytest.mark.parametrize("asunto,motivo", [
         ("mando mi cv", "sin_codigo"),
         ("[VAC-0001] y [VAC-0002]", "codigo_ambiguo"),
-        ("[VAC-9999]", "vacante_desconocida"),
+        ("[VAC-0003]", "vacante_desconocida"),
     ], ids=["sin_codigo", "ambiguo", "desconocida"])
     def test_el_motivo_es_el_mismo_que_calcula_la_ingesta(self, asunto, motivo) -> None:
         """Calcularlo con otro criterio haría que la pantalla y la corrida automática dijeran

@@ -5,11 +5,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import type { VacanteFormData, VacanteFormErrors } from "@/components/features/vacantes/vacanteForm"
+import { VacanteCampoCodigo } from "@/components/features/vacantes/VacanteCampoCodigo"
 import type { Area } from "@/types/area"
 import type { Empresa } from "@/types/empresa"
 
 /**
- * Los cuatro campos del alta de vacante. Presentacional: sin estado, sin fetch, sin submit —
+ * Los cinco campos del alta de vacante (el código vive en su propio componente: lo comparte con
+ * la corrección desde la ficha). Presentacional: sin estado, sin fetch, sin submit —
  * todo eso se queda en VacanteModal.tsx, su único consumidor. Extraído porque el modal estaba en
  * 251/150. El movimiento fue PURO: JSX, clases, ids, `aria-*` y el ORDEN son idénticos.
  *
@@ -70,6 +72,10 @@ export function VacanteCamposBase({
           <FieldError>{errors.empresa_id}</FieldError>
         )}
       </div>
+
+      {/* Código — va segundo, pegado a la empresa: es la identidad de la búsqueda para el
+          mundo de afuera, y el campo que después no se puede cambiar sin consecuencias. */}
+      <VacanteCampoCodigo value={form.codigo} error={errors.codigo} onChange={field("codigo")} />
 
       {/* Título */}
       <div className="flex flex-col gap-1.5">

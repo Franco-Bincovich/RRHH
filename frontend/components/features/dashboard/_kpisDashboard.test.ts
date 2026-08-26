@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { RUTAS_OCULTAS } from "@/components/layout/nav-config"
 import type { DashboardData, KpisExtra } from "@/services/dashboard"
 import { DESTINOS, SIN_DESTINO } from "./_destinosKpi"
-import { bloquesKpi, formatVariacion, SIN_DATO } from "./_kpisDashboard"
+import { bloquesKpi, formatVariacion, masaSalarial, SIN_DATO } from "./_kpisDashboard"
 import type { DatosAdmin } from "./dashboardAdminData"
 
 /**
@@ -92,6 +92,19 @@ const ADMIN = "admin_rrhh" as const
 const titulos = (d: DatosAdmin) => bloquesKpi(d, ADMIN).map((b) => b.kpis.map((k) => k.title))
 const card = (d: DatosAdmin, title: string) =>
   bloquesKpi(d, ADMIN).flatMap((b) => b.kpis).find((k) => k.title === title)!
+/**
+ * 🔴 LA CARD DE LA MASA SALARIAL SE ARMA DIRECTO, NO SE BUSCA EN LA PANTALLA, porque hoy NO se
+ * pinta: se fue de la vista con Costos (`_ocultoEnDashboard`). Sus reglas —"$0" vs "sin cargar",
+ * la variación sin base— se siguen probando enteras, y por eso siguen abajo: son lo que tiene
+ * que seguir sabiendo el día que Costos vuelva al menú. Buscarla con `card()` habría dejado
+ * cinco tests reventando en `undefined`, y borrarlos habría tirado las reglas con la card.
+ */
+const cardMasa = (d: DatosAdmin) => masaSalarial(d.dashboard.kpis_extra)
+
+/** Las cards cuyo destino cayó en `RUTAS_OCULTAS`: se DERIVA, igual que en `_destinosKpi.test.ts`
+ *  y en `_ocultoEnDashboard.test.ts`. Reponer una sección la saca de acá sola. */
+const OCULTAS = Object.keys(DESTINOS)
+  .filter((t) => RUTAS_OCULTAS.includes(DESTINOS[t].split("?")[0]))
 
 // ── (a) los diez, en los dos bloques, en el orden de §6 ───────────────────────────
 
@@ -100,22 +113,23 @@ describe("los diez KPIs de §6", () => {
     expect(bloquesKpi(datos(), ADMIN).map((b) => b.titulo)).toEqual(["Operación", "Indicadores del período"])
   })
 
-  it("son exactamente diez y en el orden del documento", () => {
+  it("salen los que no están ocultos, en el orden del documento", () => {
     // La lista está escrita a mano CONTRA §6 (no derivada del código): es lo que hace que
     // agregar, sacar o mover una card rompa el test en vez de pasar sola.
+    // 🔴 "Masa salarial del mes" NO está: se fue de la vista con Costos. Que falte JUSTO ella se
+    // afirma abajo contra `RUTAS_OCULTAS`, no acá — acá lo que se fija es el orden del resto.
     expect(titulos(datos())).toEqual([
       ["Colaboradores activos", "Búsquedas abiertas", "Ingresos próximos 30 días",
        "Ausencias en curso", "Recategorizaciones del mes", "Rotación 12 meses"],
-      ["Masa salarial del mes", "Ausentismo del mes", "Antigüedad promedio",
-       "Headcount por empresa"],
+      ["Ausentismo del mes", "Antigüedad promedio", "Headcount por empresa"],
     ])
   })
 
   it("y NO hay una card de bajas del mes ni de onboardings activos", () => {
     // Los dos campos siguen llegando y se usan —`bajas_mes` como contraste de la rotación—, pero
-    // como card serían la once y la doce. §6 pide diez.
+    // como card serían la once y la doce. §6 pide diez, de los que hoy se pintan nueve.
     const todas = titulos(datos()).flat()
-    expect(todas).toHaveLength(10)
+    expect(todas).toHaveLength(10 - OCULTAS.length)
     expect(todas.some((t) => t.includes("Bajas"))).toBe(false)
     expect(todas.some((t) => t.includes("Onboarding"))).toBe(false)
   })
@@ -139,8 +153,8 @@ describe("variación sin base de comparación", () => {
   })
 
   it("la card lo dice cuando hay mes actual pero no anterior", () => {
-    const c = card(datos({ masa_salarial_actual: 900, masa_salarial_anterior: 0,
-                           masa_salarial_variacion_pct: null }), "Masa salarial del mes")
+    const c = cardMasa(datos({ masa_salarial_actual: 900, masa_salarial_anterior: 0,
+                               masa_salarial_variacion_pct: null }))
     expect(c.description).not.toMatch(/%/)
     expect(c.description).toBe("Sin mes anterior para comparar")
   })
@@ -148,21 +162,21 @@ describe("variación sin base de comparación", () => {
   it("EL CONTRASTE: un 0 legítimo sí dice 0 %", () => {
     // Sin esto, devolver siempre "sin comparación" pasaría los dos tests de arriba. Con base y
     // sin movimiento, "0,0% vs mes anterior" es verdad y tiene que salir.
-    const c = card(datos({ masa_salarial_variacion_pct: 0 }), "Masa salarial del mes")
+    const c = cardMasa(datos({ masa_salarial_variacion_pct: 0 }))
     expect(c.description).toBe("0,0% vs mes anterior")
   })
 
   it("con costos_nomina VACÍA la card no dice $0: dice que no hay nada cargado", () => {
     // Es el estado de producción hoy. "$0" afirmaría que 31 personas activas cuestan cero.
-    const c = card(datos({ masa_salarial_actual: 0, masa_salarial_anterior: 0,
-                           masa_salarial_variacion_pct: null }), "Masa salarial del mes")
+    const c = cardMasa(datos({ masa_salarial_actual: 0, masa_salarial_anterior: 0,
+                               masa_salarial_variacion_pct: null }))
     expect(c.value).toBe(SIN_DATO)
     expect(c.description).toBe("Sin costos cargados")
   })
 
   it("pero un mes que CAE a cero teniendo base sí muestra $0", () => {
-    const c = card(datos({ masa_salarial_actual: 0, masa_salarial_anterior: 1000,
-                           masa_salarial_variacion_pct: -100 }), "Masa salarial del mes")
+    const c = cardMasa(datos({ masa_salarial_actual: 0, masa_salarial_anterior: 1000,
+                               masa_salarial_variacion_pct: -100 }))
     expect(c.value).toContain("0")
     expect(c.value).not.toBe(SIN_DATO)
   })
@@ -196,7 +210,7 @@ describe("el payload es el del backend y nada más", () => {
     // La contracara: el proxy caza el ACCESO, esto caza el RESULTADO — un campo opcional que
     // llegue vacío y termine formateado como "$NaN" no rompe ninguna lectura.
     const cards = bloquesKpi(datos(), ADMIN).flatMap((b) => b.kpis)
-    expect(cards).toHaveLength(10)   // guarda: sin cards, el forEach no compara nada
+    expect(cards).toHaveLength(10 - OCULTAS.length)   // guarda: sin cards, el forEach no compara nada
     cards.forEach((c) => {
       expect(`${c.title} ${c.value} ${c.description}`).not.toMatch(/undefined|NaN/)
     })
@@ -285,11 +299,6 @@ describe("el fondo semántico", () => {
  * acá sería una tercera copia del mapa, que es lo que hace que las copias diverjan.
  */
 describe("cada card llega con su destino ya resuelto", () => {
-  /** Las cards cuyo destino cayó en `RUTAS_OCULTAS`: se DERIVA, igual que en _destinosKpi.test.ts.
-   *  Reponer una sección la saca de acá sola y su card vuelve a traer href, sin tocar este test. */
-  const OCULTAS = Object.keys(DESTINOS)
-    .filter((t) => RUTAS_OCULTAS.includes(DESTINOS[t].split("?")[0]))
-
   it("las que tienen destino declarado y visible lo traen, y son las mismas del mapa", () => {
     const cards = bloquesKpi(datos(), ADMIN).flatMap((b) => b.kpis)
     const conHref = cards.filter((k) => k.href).map((k) => k.title).sort()
@@ -299,17 +308,16 @@ describe("cada card llega con su destino ya resuelto", () => {
     })
   })
 
-  it("una card cuya sección salió del menú llega SIN href, ni siquiera para admin", () => {
-    // La otra punta del ocultamiento, afirmada donde está el cable: `_destinosKpi.test.ts` prueba
-    // que `destino()` devuelva undefined, y esto que la card efectivamente llegue sin link. Sin
-    // esta aserción, un `href` cableado por otro camino dejaría el dashboard linkeando igual.
+  it("una card cuya sección salió del menú NO LLEGA, ni siquiera para admin", () => {
+    // 🔴 CAMBIÓ EL 26/8/2026 y antes decía lo contrario: "llega SIN href". Esa era la primera
+    // mitad del ocultamiento —el link— y la decisión de Franco fue la segunda: la card entera
+    // sale de la vista. Un número de una sección que el menú esconde no es "informativo": es un
+    // número del que no se puede hacer nada, ocupando una de las tres columnas de la fila.
+    // La card SIGUE DECLARADA en `_kpisDashboard` (por eso `DESTINOS` la conserva y por eso
+    // `masaSalarial` se sigue probando abajo): lo que se fue es su lugar en la grilla.
     expect(OCULTAS.length).toBeGreaterThanOrEqual(1) // guarda: si no hay ninguna, no mira nada
     const cards = bloquesKpi(datos(), ADMIN).flatMap((b) => b.kpis)
-    OCULTAS.forEach((t) => {
-      const c = cards.find((k) => k.title === t)
-      expect(c, `la card ${t} dejó de existir`).toBeTruthy()
-      expect(c!.href, t).toBeUndefined()
-    })
+    OCULTAS.forEach((t) => expect(cards.find((k) => k.title === t), t).toBeUndefined())
   })
 
   it("EL CONTRASTE: con un rol que no puede leer casi nada, casi ninguna trae href", () => {

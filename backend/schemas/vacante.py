@@ -12,6 +12,11 @@ from pydantic import BaseModel
 
 class VacanteCreate(BaseModel):
     empresa_id: UUID  # empresa de la vacante — viaja en el body, no en el header
+    # 🔴 OBLIGATORIO desde el 26/8/2026: lo escribe Capital Humano, ya no lo emite la secuencia
+    # de la base. Sin default a propósito — una vacante sin código no puede recibir CVs, y un
+    # `""` por defecto la crearía muda. La forma y la unicidad las valida
+    # `services/_vacante_codigo.py` (y el CHECK + índice único de la mig 122 detrás).
+    codigo: str
     titulo: str
     area_id: UUID
     descripcion: Optional[str] = None
@@ -33,6 +38,10 @@ class VacanteCreate(BaseModel):
 
 
 class VacanteUpdate(BaseModel):
+    # Se puede corregir: el caso típico es un typo en el código que ya se pegó en el aviso.
+    # ⚠️ Cambiarlo NO mueve ningún candidato —cuelgan de `vacante_id`, no del código— pero deja
+    # sin matchear los mails que lleguen con el código viejo. La pantalla lo avisa antes.
+    codigo: Optional[str] = None
     titulo: Optional[str] = None
     area_id: Optional[UUID] = None
     descripcion: Optional[str] = None
@@ -53,10 +62,12 @@ class VacanteUpdate(BaseModel):
 
 class VacanteResponse(BaseModel):
     id: str
-    # 🔴 NO ESTÁ EN VacanteCreate NI EN VacanteUpdate, Y ES A PROPÓSITO: lo genera el DEFAULT de
-    # la base (secuencia `vacantes_codigo_seq`, migración 097). RRHH no lo elige ni lo edita, y
-    # el backend tampoco lo calcula — si lo hiciera, dos altas simultáneas podrían emitir el
-    # mismo, que es el único modo de falla que rompe el matcher de CVs para siempre.
+    # 🔴 LO ESCRIBE CAPITAL HUMANO (mig 122). Hasta el 26/8/2026 lo generaba el DEFAULT de la base
+    # (`vacantes_codigo_seq`, mig 097) y este comentario decía que no se elegía ni se editaba.
+    # El DEFAULT sigue puesto como RED —una fila que entre por afuera de la app nace con código
+    # igual— pero el camino normal es el formulario. Lo que NO cambió es el modo de falla que
+    # importa: dos vacantes con el mismo código rompen el matcher de CVs para siempre, y por eso
+    # la unicidad la sostiene el índice único de la base, no un chequeo de la aplicación.
     # Es NOT NULL en la base, así que acá va sin default: una vacante sin código sería una que
     # no puede recibir postulaciones, y prefiero que eso explote al mapear y no en silencio.
     codigo: str

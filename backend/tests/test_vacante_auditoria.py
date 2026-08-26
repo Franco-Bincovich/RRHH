@@ -90,9 +90,15 @@ class _FakeVacanteRepo:
     def find_by_id(self, id, empresa_id=None):
         return _vacante(titulo="Analista", estado="nueva")
 
+    def find_by_codigo(self, codigo):
+        # Ningún código está tomado: este archivo mira la AUDITORÍA, no la unicidad (eso vive en
+        # test_vacante_codigo_unico.py, con un doble que sí tiene uno usado). Declarado a
+        # propósito, como pide la regla de los fakes permisivos.
+        return None
+
     def save(self, data):
         # Ver la EXCEPCIÓN DECLARADA del encabezado: empresa_id NO sale del body a propósito.
-        return _vacante(titulo=data.titulo, area_id=str(data.area_id))
+        return _vacante(titulo=data.titulo, area_id=str(data.area_id), codigo=data.codigo)
 
     def update(self, id, data, empresa_id=None):
         patch = data.model_dump(exclude_none=True)
@@ -137,7 +143,7 @@ def test_alta_de_vacante_emite_un_evento_con_la_empresa_de_la_fila():
     """La empresa sale de la fila PERSISTIDA, no del body del request."""
     audit = _FakeAudit()
     _svc(audit).create_vacante(
-        VacanteCreate(empresa_id=UUID(EMPRESA_DEL_BODY), titulo="Analista",
+        VacanteCreate(empresa_id=UUID(EMPRESA_DEL_BODY), codigo="VAC-0001", titulo="Analista",
                       area_id=UUID(AREA_ID), tipo_contrato="efectivo"), "user-1")
     assert len(audit.eventos) == 1
     ev = audit.eventos[0]

@@ -3,7 +3,7 @@
 > **GENERADO DESDE EL CÓDIGO. No editar a mano.**
 > Se regenera con `backend\venv\Scripts\python.exe scripts/inventario_smoke.py`,
 > y `backend/tests/test_inventario_smoke.py` da ROJO si el archivo quedó atrás.
-> Última generación: **2026-08-25**.
+> Última generación: **2026-08-26**.
 
 ## Por qué existe
 
@@ -32,7 +32,7 @@ un resultado; una fila que falta es el modo de falla que este repo ya pagó cinc
 |---|---:|---:|---:|---:|
 | Endpoints | 265 | 208 | 24 | 33 |
 | Pantallas | 46 | 41 | 0 | 5 |
-| Acciones de escritura | 139 | 91 | 23 | 25 |
+| Acciones de escritura | 140 | 92 | 23 | 25 |
 
 ### Los endpoints que no salen automatizables a secas
 
@@ -381,7 +381,7 @@ Las **46** rutas de `app/`. ⚠️ **La columna GET dice qué endpoints ALCANZA 
 
 ## 3 — Acciones de escritura
 
-**139** filas. 🔴 **La unidad es «el componente que importa una función de escritura y la invoca», no «el botón»**, y la diferencia importa al leer la lista:
+**140** filas. 🔴 **La unidad es «el componente que importa una función de escritura y la invoca», no «el botón»**, y la diferencia importa al leer la lista:
 
 | Se cuenta | Qué pasa |
 |---|---|
@@ -526,6 +526,7 @@ Las **46** rutas de `app/`. ⚠️ **La columna GET dice qué endpoints ALCANZA 
 | /vacantes | `components/features/vacantes/VacanteModal.tsx` | `createVacante` | `POST /api/vacantes` | admin rrhh | reversible | sí |  |
 | /vacantes/{} | `components/features/screening/ClasificarCvsButton.tsx` | `clasificarPendientes` | `POST /api/screening/vacantes/{}` | admin rrhh | reversible | no | llama a Claude: cuesta plata por request y la respuesta no es determinista, así que la aserción no puede ser sobre el contenido |
 | /vacantes/{} | `components/features/vacantes/CandidatoModal.tsx` | `createCandidato` | `POST /api/vacantes/{}/candidatos` | admin rrhh | reversible | sí |  |
+| /vacantes/{} | `components/features/vacantes/EditarCodigoModal.tsx` | `updateVacante` | `PUT /api/vacantes/{}` | admin rrhh | reversible | sí |  |
 | /vacantes/{} | `components/features/vacantes/EliminarVacanteButton.tsx` | `deleteVacante` | `DELETE /api/vacantes/{}` | admin rrhh | 🔴 borra la fila | sí, sólo sobre datos sembrados | sólo sobre las filas sembradas por docs/SEMILLA-SMOKE.md, nunca sobre datos de RRHH |
 | /vacantes/{} | `components/features/vacantes/InformacionPuestoSection.tsx` | `updateVacante` | `PUT /api/vacantes/{}` | admin rrhh | reversible | sí |  |
 | /vacantes/{} | `components/features/vacantes/LinkedinModal.tsx` | `publicarLinkedin` | `POST /api/vacantes/{}/publicar-linkedin` | admin rrhh | 🔴 publica afuera del sistema | no | depende de un servicio externo (LinkedIn / Zernio) |

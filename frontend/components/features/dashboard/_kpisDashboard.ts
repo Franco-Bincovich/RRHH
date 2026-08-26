@@ -7,10 +7,12 @@ import type { LucideIcon } from "lucide-react"
 import type { KpisExtra } from "@/services/dashboard"
 import type { UserRol } from "@/types/auth"
 import { destino } from "./_destinosKpi"
+import { kpiOculto } from "./_ocultoEnDashboard"
 import type { DatosAdmin } from "./dashboardAdminData"
 
 /**
- * LOS DIEZ KPIs de `docs/SISTEMA-DE-DISENO.md` §6, en sus dos bloques y en su orden.
+ * LOS DIEZ KPIs de §6, en sus dos bloques y en su orden. Se DECLARAN los diez y se pintan los que
+ * `_ocultoEnDashboard` no esconde — hoy NUEVE: la masa salarial se fue de la vista con Costos.
  *
  * El orden NO es libre: es el del documento, y `dashboardBloques.test.tsx` lo fija contra una
  * lista escrita a mano. Un KPI que se agregue por gusto rompe ese test, que es el punto.
@@ -130,10 +132,9 @@ function bloqueOperacion(datos: DatosAdmin): KpiCardData[] {
  * y las tres condiciones juntas solo pueden significar que no hay nada cargado: una nómina real
  * de 31 personas no suma cero. Un mes que CAE a cero teniendo mes anterior no cae acá — ahí la
  * variación es -100 % y el `$0` es verdad.
- * ⚠️ No se repite el aviso de bloqueo: "no hay costos de nómina cargados" ya lo dice
- * `AlertasPanel` (viene de `_dashboard_alertas_catalogo`). Acá solo se evita afirmar un cero.
- */
-function masaSalarial(x: KpisExtra): KpiCardData {
+ * ⚠️ HOY NO SE PINTA (`_ocultoEnDashboard`): sus reglas se conservan enteras y testeadas, así
+ * que el día que Costos vuelva al menú la card vuelve sabiendo no afirmar un cero. */
+export function masaSalarial(x: KpisExtra): KpiCardData {
   const sinCargar = x.masa_salarial_actual === 0 && x.masa_salarial_anterior === 0
     && x.masa_salarial_variacion_pct === null
   return conFallo(x, "masa_salarial", {
@@ -185,13 +186,14 @@ function bloquePeriodo(datos: DatosAdmin): KpiCardData[] {
  * (`useRol` en `app/(dashboard)/dashboard/page.tsx`), así que nunca es `null` acá.
  *
  * El destino se cuelga al FINAL y en un solo lugar, no dentro de cada literal de card: las diez
- * cards siguen diciendo solo qué muestran, y a dónde llevan lo decide `_destinosKpi`.
+ * cards siguen diciendo solo qué muestran, a dónde llevan lo decide `_destinosKpi` y si se
+ * pintan, `_ocultoEnDashboard` — que deriva las dos cosas de `RUTAS_OCULTAS`.
  */
 export function bloquesKpi(datos: DatosAdmin, rol: UserRol | null): BloqueKpi[] {
-  const conDestino = (kpis: KpiCardData[]) =>
-    kpis.map((k) => ({ ...k, href: destino(rol, k.title) }))
+  const visibles = (kpis: KpiCardData[]) =>
+    kpis.filter((k) => !kpiOculto(k.title)).map((k) => ({ ...k, href: destino(rol, k.title) }))
   return [
-    { titulo: "Operación", kpis: conDestino(bloqueOperacion(datos)) },
-    { titulo: "Indicadores del período", kpis: conDestino(bloquePeriodo(datos)) },
+    { titulo: "Operación", kpis: visibles(bloqueOperacion(datos)) },
+    { titulo: "Indicadores del período", kpis: visibles(bloquePeriodo(datos)) },
   ]
 }

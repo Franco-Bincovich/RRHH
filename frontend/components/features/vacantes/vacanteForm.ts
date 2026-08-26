@@ -1,5 +1,7 @@
 import type { VacanteCreate } from "@/types/vacantes"
 
+import { normalizarCodigo, validarCodigo } from "./codigoVacante"
+
 /**
  * Shape del form de alta de vacante + constantes, validación y payload. Puro: sin JSX, sin
  * React, sin red.
@@ -20,6 +22,10 @@ import type { VacanteCreate } from "@/types/vacantes"
  */
 export type VacanteFormData = {
   empresa_id: string
+  /** 🔴 Lo escribe Capital Humano (mig 122). Es lo que el candidato pone en el asunto del mail,
+   *  así que es lo único del alta que después no se puede "arreglar sin consecuencias": el
+   *  código ya salió publicado. La forma la valida `codigoVacante.ts`; la unicidad, el backend. */
+  codigo: string
   titulo: string
   area_id: string
   tipo_contrato: string
@@ -29,6 +35,7 @@ export type VacanteFormErrors = Partial<Record<keyof VacanteFormData, string>>
 
 export const EMPTY_VACANTE: VacanteFormData = {
   empresa_id: "",
+  codigo: "",
   titulo: "",
   area_id: "",
   tipo_contrato: "efectivo",
@@ -42,16 +49,23 @@ export const EMPTY_VACANTE: VacanteFormData = {
 export function validateVacante(form: VacanteFormData): VacanteFormErrors {
   const errors: VacanteFormErrors = {}
   if (!form.empresa_id) errors.empresa_id = "La empresa es requerida"
+  // El mensaje lo arma `validarCodigo`, compartido con la edición del código en la ficha: dos
+  // pantallas que validan lo mismo con dos textos distintos enseñan dos reglas distintas.
+  const codigo = validarCodigo(form.codigo)
+  if (codigo) errors.codigo = codigo
   if (!form.titulo.trim()) errors.titulo = "El título es requerido"
   if (!form.area_id) errors.area_id = "El área es requerida"
   if (!form.tipo_contrato) errors.tipo_contrato = "El tipo de contrato es requerido"
   return errors
 }
 
-/** Payload del alta. Los cuatro campos que hoy acepta el POST, ni uno más. */
+/** Payload del alta. Los cinco campos que hoy acepta el POST, ni uno más.
+ *  El código va NORMALIZADO: el backend lo normaliza igual, pero mandarlo crudo haría que el
+ *  mensaje de "ya lo usa X" hablara de un código escrito distinto del que el usuario ve. */
 export function payloadVacante(form: VacanteFormData): VacanteCreate {
   return {
     empresa_id: form.empresa_id,
+    codigo: normalizarCodigo(form.codigo),
     titulo: form.titulo.trim(),
     area_id: form.area_id,
     tipo_contrato: form.tipo_contrato,

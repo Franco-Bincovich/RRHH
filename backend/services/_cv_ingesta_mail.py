@@ -23,7 +23,7 @@ asigna a mano; recién ahí se crea el candidato, con la empresa de la vacante e
 una empresa acá sería adivinar a qué sociedad pertenece una postulación.
 """
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 from services._cv_alta import crear_de_un_cv
 from services._gmail_adjuntos import descargar_cvs
@@ -55,7 +55,8 @@ def _headers(mensaje: dict) -> dict:
 
 
 def procesar_mail(client, access_token: str, mensaje: dict, *, vacante_repo, candidato_repo,
-                  cv_service, empresa_id_por_defecto=None) -> ResultadoMail:
+                  cv_service, codigos_conocidos: Iterable[str],
+                  empresa_id_por_defecto=None) -> ResultadoMail:
     """Matchea, baja y crea. NUNCA levanta por un mail: lo que falla vuelve en `motivo`.
 
     Args:
@@ -63,6 +64,10 @@ def procesar_mail(client, access_token: str, mensaje: dict, *, vacante_repo, can
         access_token: token de la casilla del SISTEMA.
         mensaje: dict de `messages.get?format=full`.
         vacante_repo: con `find_by_codigo` (case-insensitive, sin filtro de empresa).
+        codigos_conocidos: los códigos de las vacantes que existen. 🔴 ES OBLIGATORIO Y VIENE DE
+            AFUERA: desde la migración 122 el código lo escribe Capital Humano y no tiene forma
+            que adivinar, así que el matcher busca los que EXISTEN. Se resuelve UNA vez por
+            corrida (`CvIngestaService.revisar_casilla`); pedirlo acá sería una query por mail.
         candidato_repo: con `existe_cv_de_gmail`, `save_candidato` y `set_cv`.
         cv_service: con `validar` y `subir`.
         empresa_id_por_defecto: NO se usa para crear; se acepta para no romper la firma si algún
@@ -72,7 +77,7 @@ def procesar_mail(client, access_token: str, mensaje: dict, *, vacante_repo, can
     res = ResultadoMail(message_id=str(mensaje.get("id") or ""),
                         asunto=hmap.get("Subject", ""), remitente=hmap.get("From", ""))
 
-    encontrados = codigos_en(res.asunto)
+    encontrados = codigos_en(res.asunto, codigos_conocidos)
     if not encontrados:
         res.motivo = "sin_codigo"
         return res

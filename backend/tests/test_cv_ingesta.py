@@ -105,7 +105,20 @@ class _Gmail:
 
 
 class _VacanteRepo:
-    """DOS vacantes, códigos distintos, EMPRESAS distintas."""
+    """DOS vacantes, códigos distintos, EMPRESAS distintas.
+
+    🔴 `codigos()` DEVUELVE UN TERCERO (`VAC-0003`) QUE `find_by_codigo` NO RESUELVE, y no es un
+    descuido del doble: es el único estado en que `vacante_desconocida` puede ocurrir desde la
+    migración 122. El matcher ya no reconoce una FORMA (`VAC` + 4 dígitos) sino los códigos que
+    EXISTEN, así que un código inventado por el candidato ya no llega hasta el lookup — cae antes
+    como `sin_codigo`. Lo que sí puede pasar es que la lista se lea al empezar la corrida y la
+    vacante se borre mientras la corrida avanza: el código sigue en la lista y el lookup ya no lo
+    encuentra. Sin modelar esa asimetría, el caso `vacante_desconocida` sería inalcanzable y su
+    test pasaría probando otra cosa.
+    """
+
+    def codigos(self):
+        return ["VAC-0001", "VAC-0002", "VAC-0003"]
 
     def find_by_codigo(self, codigo):
         mapa = {"VAC-0001": (V1, E1), "VAC-0002": (V2, E2)}
@@ -164,8 +177,10 @@ class _CvService:
 
 def _correr(mensaje, *, vacantes=None, candidatos=None, cv=None, gmail=None):
     gmail = gmail or _Gmail({"att-ana": CV_ANA, "att-luis": CV_LUIS})
-    return procesar_mail(gmail, "tok", mensaje, vacante_repo=vacantes or _VacanteRepo(),
-                         candidato_repo=candidatos or _CandidatoRepo(), cv_service=cv or _CvService())
+    repo = vacantes or _VacanteRepo()
+    return procesar_mail(gmail, "tok", mensaje, vacante_repo=repo,
+                         candidato_repo=candidatos or _CandidatoRepo(), cv_service=cv or _CvService(),
+                         codigos_conocidos=repo.codigos())
 
 
 # ── 1. El camino feliz ────────────────────────────────────────────────────────
@@ -273,7 +288,8 @@ class TestPendientes:
     @pytest.mark.parametrize("asunto,motivo", [
         ("CV adjunto", "sin_codigo"),
         ("[VAC-0001] y [VAC-0002]", "codigo_ambiguo"),
-        ("[VAC-9999] hola", "vacante_desconocida"),
+        # VAC-0003 SÍ está en `codigos()` y NO lo resuelve `find_by_codigo`: ver el doble.
+        ("[VAC-0003] hola", "vacante_desconocida"),
     ], ids=["sin_codigo", "ambiguo", "vacante_desconocida"])
     def test_sin_match_no_crea_nada_y_queda_pendiente(self, asunto, motivo) -> None:
         """🔴 `candidatos.empresa_id` es NOT NULL y sin vacante no hay de dónde heredarla. El mail

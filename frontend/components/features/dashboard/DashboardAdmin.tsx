@@ -11,6 +11,7 @@ import { bloquesKpi } from "./_kpisDashboard"
 import { AlertasPanel } from "./AlertasPanel"
 import { AtencionPanel } from "./AtencionPanel"
 import { cargarDatosAdmin, type DatosAdmin } from "./dashboardAdminData"
+import { alertasVisibles } from "./_ocultoEnDashboard"
 import { DashboardExtras } from "./DashboardExtras"
 import { HeadcountPanel } from "./HeadcountPanel"
 import { KpiCard, KpiSkeleton } from "./KpiCard"
@@ -19,7 +20,7 @@ import { KpiCard, KpiSkeleton } from "./KpiCard"
  * `rol` llega por prop y NO de un `useRol()` propio, aunque el hook exista y sea de una línea.
  * La página ya lo resolvió —no monta este componente hasta que deja de ser `null`—, así que
  * pedirlo de nuevo acá agregaría un render con `rol === null` en el que `_destinosKpi` es
- * fail-closed: las diez cards aparecerían SIN link y un instante después con link. Un destino
+ * fail-closed: todas las cards aparecerían SIN link y un instante después con link. Un destino
  * que parpadea se lee como un bug de la pantalla, no como la resolución del permiso.
  */
 export function DashboardAdmin({ rol }: { rol: UserRol }) {
@@ -45,7 +46,7 @@ export function DashboardAdmin({ rol }: { rol: UserRol }) {
       await resolverAtencion(eventoId)
       // La alerta se saca de la lista local en vez de recargar todo: el evento resuelto sale de
       // la ventana de aviso, así que un refetch traería lo mismo menos esta fila — y le
-      // agregaría un parpadeo a los diez KPIs para quitar un renglón.
+      // agregaría un parpadeo a todos los KPIs para quitar un renglón.
       setDatos((prev) => prev && {
         ...prev, atencion: prev.atencion.filter((a) => a.evento_id !== eventoId),
       })
@@ -63,9 +64,9 @@ export function DashboardAdmin({ rol }: { rol: UserRol }) {
     <div className="space-y-6">
       <PageHeader title="Dashboard Ejecutivo" description="Resumen del estado de la organización" />
 
-      {/* Los DIEZ KPIs de §6 en sus DOS bloques con título — 1 col mobile / 2 tablet / 3 desktop.
-          Los dos bloques llevan la MISMA cantidad de columnas aunque tengan 6 y 4 cards: el ancho
-          de card uniforme en toda la pantalla pesa más que llenar la última fila del segundo.
+      {/* Los KPIs de §6 en sus DOS bloques con título — 1 col mobile / 2 tablet / 3 desktop.
+          Los dos bloques llevan la MISMA cantidad de columnas aunque tengan 6 y 3 cards (eran 4
+          hasta que la masa salarial se fue con Costos): el ancho de card uniforme pesa más.
           El orden de los bloques y de las cards lo decide `_kpisDashboard`, no este componente. */}
       {loading ? (
         <KpiSkeleton />
@@ -119,7 +120,10 @@ export function DashboardAdmin({ rol }: { rol: UserRol }) {
       {data && (
         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
           <HeadcountPanel areas={data.headcount_por_area} />
-          <AlertasPanel alertas={data.alertas} />
+          {/* `alertasVisibles` saca las que empujan a una sección que salió del menú — hoy las
+              dos de Costos. Va acá y no en el panel para que el CONTADOR del encabezado cuente
+              lo mismo que la lista. Se revierte sacando "/costos" de RUTAS_OCULTAS. */}
+          <AlertasPanel alertas={alertasVisibles(data.alertas)} />
         </div>
       )}
 

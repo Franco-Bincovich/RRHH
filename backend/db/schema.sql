@@ -1354,7 +1354,7 @@ ALTER TABLE public.users ADD CONSTRAINT users_rol_check CHECK (((rol)::text = AN
 ALTER TABLE public.vacantes ADD CONSTRAINT chk_rango_salarial CHECK (((rango_salarial_max IS NULL) OR (rango_salarial_min IS NULL) OR (rango_salarial_max >= rango_salarial_min)));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_cantidad_puestos_check CHECK ((cantidad_puestos > 0));
 -- `{4,}` y no `{4}`: lpad no trunca, la vacante 10.000 emite VAC-10000. Ver migracion 097.
-ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_codigo_formato CHECK ((codigo ~ '^VAC-[0-9]{4,}$'::text));
+ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_codigo_formato CHECK ((codigo ~ '^[A-Z0-9]+(-[A-Z0-9]+)*$'::text) AND (codigo ~ '[A-Z]'::text) AND (char_length(codigo) >= 3) AND (char_length(codigo) <= 30));  -- migracion 122: lo escribe Capital Humano, ya no la secuencia
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_estado_check CHECK (((estado)::text = ANY ((ARRAY['nueva'::character varying, 'en_proceso'::character varying, 'con_candidatos'::character varying, 'cerrada'::character varying])::text[])));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_modalidad_check CHECK (((modalidad)::text = ANY ((ARRAY['presencial'::character varying, 'remoto'::character varying, 'hibrido'::character varying])::text[])));
 ALTER TABLE public.vacantes ADD CONSTRAINT vacantes_nivel_check CHECK (((nivel)::text = ANY ((ARRAY['junior'::character varying, 'semi_senior'::character varying, 'senior'::character varying, 'lider'::character varying, 'manager'::character varying, 'director'::character varying, 'c_level'::character varying])::text[])));

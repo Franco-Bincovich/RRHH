@@ -54,17 +54,27 @@ class VacanteRepo:
         return _vrow(res.data) if (res and res.data) else None
 
     def find_by_codigo(self, codigo: str) -> Optional[VacanteResponse]:
-        """Busca vacante por su código (`VAC-0001`). CASE-INSENSITIVE. None si no existe.
+        """Busca vacante por su código (`ECO-2026`). CASE-INSENSITIVE. None si no existe.
 
         `ilike` y no `eq`: el código llega del ASUNTO DE UN MAIL escrito por un candidato, así
-        que `[vac-0001]` tiene que resolver igual que `[VAC-0001]`. Con `eq` ese fallo no da
-        error — manda el CV a "sin asignar" sin motivo visible. Sin comodines es igualdad exacta
-        (el CHECK de formato solo admite `VAC-` + dígitos, así que `%`/`_` no pueden aparecer).
+        que `[eco-2026]` tiene que resolver igual que `[ECO-2026]`. Con `eq` ese fallo no da
+        error — manda el CV a "sin asignar" sin motivo visible. Sin comodines es igualdad exacta,
+        y el CHECK de la 122 deja `%`/`_` afuera del formato JUSTO por esto: un código con `%`
+        haría que esto devuelva varias filas, y `maybe_single()` sobre varias es un 500.
         🔴 NO RECIBE `empresa_id`, Y NO ES UN OLVIDO: el código es ÚNICO EN TODO EL SISTEMA
         (mig 097): la casilla es una sola y quien manda el mail no aporta empresa. La empresa se
         DERIVA de la vacante encontrada — Vista vs Acción."""
         res = supabase_admin.table(_V).select(_JOIN).ilike("codigo", codigo).maybe_single().execute()
         return _vrow(res.data) if res and res.data else None
+
+    def codigos(self) -> List[str]:
+        """TODOS los códigos del sistema, para que el matcher sepa qué buscar (mig 122: el código
+        ya no tiene forma que adivinar). UNA query por CORRIDA, no por mail — `codigos_en` los
+        recibe como parámetro obligatorio para que ese viaje no se esconda adentro del loop. Sin
+        `empresa_id` por lo mismo que `find_by_codigo`. Solo la columna: con `_JOIN` esto sería
+        el listado entero con sus embeds."""
+        res = supabase_admin.table(_V).select("codigo").execute()
+        return [r["codigo"] for r in (res.data or []) if r.get("codigo")]
 
     # ── Escrituras (delegadas a _vacante_write_repo) ──
 

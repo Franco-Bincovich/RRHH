@@ -1,14 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Check, Copy, Hash, TriangleAlert } from "lucide-react"
+import { Check, Copy, Hash, Pencil, TriangleAlert } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fetchAvisoPostulacion } from "@/services/vacantes"
 import type { AvisoPostulacion } from "@/types/vacantes"
+
+import { EditarCodigoModal } from "./EditarCodigoModal"
 
 /**
  * El código de la vacante y la frase lista para pegar en el aviso de LinkedIn.
@@ -25,18 +27,28 @@ import type { AvisoPostulacion } from "@/types/vacantes"
  *
  * Sin casilla del sistema designada el backend manda `texto: null` y se muestra el aviso de qué
  * falta configurar, en vez de una frase con un agujero adentro. El código se muestra igual.
+ *
+ * 🔴 EL CÓDIGO SE CAMBIA DESDE ACÁ, y no desde un "editar vacante" que no existe en el producto:
+ * es el único lugar donde el código está a la vista CON su contexto —la frase que se pega en el
+ * aviso—, así que corregir un typo y ver cómo queda el texto publicado es un solo movimiento.
  */
 interface CodigoPostulacionProps {
   vacanteId: string
+  /** Cuántos candidatos tiene la búsqueda: decide si el modal avisa sobre el aviso publicado. */
+  candidatos: number
+  canWrite: boolean
 }
 
-export function CodigoPostulacion({ vacanteId }: CodigoPostulacionProps) {
+export function CodigoPostulacion({ vacanteId, candidatos, canWrite }: CodigoPostulacionProps) {
   const router = useRouter()
   const [aviso, setAviso] = useState<AvisoPostulacion | null>(null)
   const [loading, setLoading] = useState(true)
   const [copiado, setCopiado] = useState<"codigo" | "texto" | null>(null)
+  const [editando, setEditando] = useState(false)
 
-  useEffect(() => {
+  // `useCallback`: el modal RECARGA el aviso al guardar. La frase la arma el backend con el
+  // código nuevo, así que sin recargar la pantalla seguiría mostrando la vieja.
+  const cargar = useCallback(() => {
     let vigente = true
     fetchAvisoPostulacion(vacanteId)
       .then((a) => { if (vigente) setAviso(a) })
@@ -44,6 +56,8 @@ export function CodigoPostulacion({ vacanteId }: CodigoPostulacionProps) {
       .finally(() => { if (vigente) setLoading(false) })
     return () => { vigente = false }
   }, [vacanteId])
+
+  useEffect(cargar, [cargar])
 
   async function copiar(valor: string, cual: "codigo" | "texto") {
     try {
@@ -75,6 +89,17 @@ export function CodigoPostulacion({ vacanteId }: CodigoPostulacionProps) {
           {copiado === "codigo" ? <Check className="size-4" /> : <Copy className="size-4" />}
           {copiado === "codigo" ? "Copiado" : "Copiar código"}
         </Button>
+        {canWrite && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-h-10 gap-2"
+            onClick={() => setEditando(true)}
+          >
+            <Pencil className="size-4" />
+            Cambiar
+          </Button>
+        )}
       </div>
 
       {aviso.texto ? (
@@ -111,6 +136,15 @@ export function CodigoPostulacion({ vacanteId }: CodigoPostulacionProps) {
           </p>
         </div>
       )}
+
+      <EditarCodigoModal
+        open={editando}
+        vacanteId={vacanteId}
+        codigoActual={aviso.codigo}
+        candidatos={candidatos}
+        onClose={() => setEditando(false)}
+        onSaved={() => { setEditando(false); cargar() }}
+      />
     </Card>
   )
 }
