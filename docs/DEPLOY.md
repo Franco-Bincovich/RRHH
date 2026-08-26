@@ -79,9 +79,9 @@ procedimiento está en §6.
 ### Verificar que quedó bien — los cuatro comandos
 
 ```bash
-cd backend  && venv/bin/python -m pytest -q       # esperado: 4468 passed, 14 skipped
+cd backend  && venv/bin/python -m pytest -q       # esperado: 4553 passed, 14 skipped
 cd frontend && node_modules/.bin/tsc --noEmit     # esperado: 0 errores
-cd frontend && npm test                           # esperado: 1663 passed en 149 archivos
+cd frontend && npm test                           # esperado: 1717 passed en 152 archivos
 cd frontend && npm run build                      # esperado: "Compiled successfully"
 ```
 
@@ -193,18 +193,35 @@ ya está puesto en el código; conectarlo es decisión de infraestructura.
 🔴 **`backend/db/schema.sql` es la ÚNICA fuente de verdad del schema.** Se lee del catálogo de
 Postgres (`information_schema` / `pg_catalog`), no se deriva del historial de migraciones.
 
-**Estado reverificado el 12/8/2026 contra el catálogo vivo, ya con las migraciones 108–112
-corridas: 52 tablas en las dos puntas · 133 FK declaradas contra 134 en producción · 141 índices
-standalone declarados.** *(La medición anterior —58 tablas, 364 constraints, 151 índices, del
-7/8— quedó vieja el día que corrió la 112: ese drop se llevó 11 tablas.)*
+**Estado reverificado el 26/8/2026 contra el catálogo vivo, ya con las migraciones 113–123
+corridas — objeto por objeto, no por conteo:**
 
-- **La FK de más es `users.id → auth.users(id)`**, y `schema.sql` no la declara **a propósito**:
-  es específica de Supabase y es una de las minas de la migración a RDS (ver `migracionAWS/`).
+| | `schema.sql` | Producción | |
+|---|---|---|---|
+| Tablas | **55** | **55** | ✅ mismos nombres, `EXCEPT` vacío en las dos direcciones |
+| Columnas | **691** | **691** | ✅ y también su tipo, nullable y default |
+| CHECK constraints | **106** | **106** | ✅ comparados por definición, no por nombre |
+| Índices standalone | **164** | **164** | ✅ incluidos los parciales y los funcionales |
+| FKs | **140** | **141** | ✅ la de más es la de `users.id`, ver abajo |
+| Triggers no internos | **0** | **46** | 🔴 el archivo no los trae — ver abajo |
+
+**Las ÚNICAS dos divergencias son la misma decisión y están las dos sobre `users.id`:**
+`schema.sql` **no declara** la FK `users.id → auth.users(id)` y **sí le pone**
+`DEFAULT gen_random_uuid()`. Es específica de Supabase y era el único bloqueante del replay en
+RDS (ver `migracionAWS/` y el encabezado del propio `schema.sql`).
+
 - **No compares "constraints" con un solo número.** El catálogo cuenta cada `NOT NULL` como CHECK
   (hoy da 705 en total), así que ese total no es comparable con nada que se lea del archivo. La
   cuenta de FKs sí lo es.
-- Producción reporta **235 entradas en `pg_indexes`**; la diferencia con las 141 son los índices
-  que Postgres crea solo por PK/UNIQUE, y salen de las constraints que el archivo sí declara.
+- Producción reporta **259 entradas en `pg_indexes`**; la diferencia con las 164 standalone son
+  los índices que Postgres crea solo por PK/UNIQUE, y salen de las constraints que el archivo sí
+  declara.
+- 🔴 **`schema.sql` tampoco trae RLS**, y producción lo tiene encendido en las 55 tablas. Ver
+  [`handoff-aws/RLS.md`](handoff-aws/RLS.md): la decisión es que en AWS **no va**, así que el
+  rebuild nace bien — pero por omisión, no por una línea que lo diga.
+
+*(Acá decía «52 tablas · 133/134 FKs · 141/235 índices», medido el 12/8. Los cinco números
+quedaron viejos con las migraciones 113–123; `handoff-aws/README.md` ya tenía los correctos.)*
 
 ### Procedimiento
 
@@ -217,19 +234,19 @@ standalone declarados.** *(La medición anterior —58 tablas, 364 constraints, 
 ### Lo que `schema.sql` NO trae
 
 🔴 **No trae ninguna función ni ningún trigger.** El snapshot se leyó del catálogo para tablas,
-columnas, constraints, índices y defaults. Producción tiene **43 triggers** no internos y el
-archivo trae **0**. *(Recontado el 12/8/2026: acá decía 50 / 41 / 9, valores previos al bloque J5.)*
+columnas, constraints, índices y defaults. Producción tiene **46 triggers** no internos y el
+archivo trae **0**. *(Recontado contra el catálogo el 26/8/2026: acá decía 43 / 35 / 8, medido el 12/8.)*
 
 | | |
 |---|---|
 | **Datos** | Solo estructura. Los catálogos base (tipos de ausencia, etc.) hay que sembrarlos |
-| 🔴 **Los 35 triggers de `updated_at`** | Se recrean con `migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql` (+ la función `set_updated_at`). **Sin ellos, `updated_at` queda congelado en el valor del INSERT y nadie se entera.** Eran 43 hasta que J5 dropeó 11 tablas; los 8 sobrantes **ya se sacaron de la 077** — si no, `DROP TRIGGER IF EXISTS x ON tabla` aborta el script entero cuando la TABLA no existe |
+| 🔴 **Los 38 triggers de `updated_at`** | Se recrean con `migracionAWS/backend/migrations/077_recrear_triggers_updated_at.sql` (+ la función `set_updated_at`). **Sin ellos, `updated_at` queda congelado en el valor del INSERT y nadie se entera.** La 077 declara exactamente esas 38 tablas, verificado el 26/8. Los sobrantes de las 11 tablas que dropeó J5 **ya se sacaron** — si no, `DROP TRIGGER IF EXISTS x ON tabla` aborta el script entero cuando la TABLA no existe. 🔑 Lo vigila el barrido `tests/test_triggers_updated_at.py`, que compara `schema.sql` contra la 077 |
 | 🔴 **Los 8 triggers `trg_emp_*`** | Se recrean con **`backend/migrations/094_recrear_triggers_empresa.sql`** (+ la función `fn_misma_empresa`). Hacen cumplir que un registro y las filas que referencia sean de la MISMA empresa — una FK garantiza que el área existe, no que sea de la empresa del empleado. **Hasta el 7/8/2026 existían solo en producción, sin ningún artefacto que los recreara: un rebuild los perdía en silencio.** `trg_emp_sucesion` se fue con `sucesion_posiciones` en la 112 |
 | **Esquemas internos de Supabase** (`auth`, `storage`) | La única referencia externa es `users.id → auth.users(id)`. 🔴 **En AWS hay que dropear esa FK** y ponerle `DEFAULT gen_random_uuid()`, o no se puede insertar un usuario |
 
 ### `migrations/` es historial, NO bootstrap
 
-**001 → 121** (119 archivos: faltan la 075, 076 y 077, que viven en `migracionAWS/`). 🔴 **121 es el NÚMERO de la última, no la cantidad.** Documentan cómo se llegó hasta acá. Correrlas en orden contra una
+**000 → 123** (121 archivos: faltan la 075, 076 y 077, que viven en `migracionAWS/`). 🔴 **123 es el NÚMERO de la última, no la cantidad.** Documentan cómo se llegó hasta acá. Correrlas en orden contra una
 base vacía **no reconstruye producción de forma confiable**: hay dependencias de orden rotas,
 operaciones no idempotentes, y parte del modelo multiempresa se aplicó a mano en producción y se
 versionó retroactivamente de forma incompleta.

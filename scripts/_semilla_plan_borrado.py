@@ -21,6 +21,52 @@ limpia todo, y una clave natural que no encuentre nada no deja filas sin dueño.
 ⚠️ VERIFICADO EL 23/8/2026 con los datos puestos: el plan listó exactamente lo sembrado en las
 trece tablas y CERO filas reales — ni los 31 colaboradores, ni la vacante "Analista contable",
 ni el objetivo "búsqueda líder de equipo", ni los 3 candidatos reales.
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+🔴 RESPALDO FORENSE DE `costos_nomina` — PARA LEER, NO PARA EJECUTAR
+═══════════════════════════════════════════════════════════════════════════════════════════════
+Escrito el 26/8/2026, cuando el handoff se cerró desde una Mac que NO tenía el manifiesto y las
+62 filas sembradas iban a quedar en pie. Queda acá para que el próximo que se encuentre sin
+`.semilla-smoke.json` no tenga que redescubrirlo — y para que no lo use mal.
+
+LA CLAVE DE ESA CORRIDA, medida contra el catálogo:
+    · las 62 filas se crearon entre `2026-08-23 19:27:12.197062+00` y `19:27:41.528888+00`
+      — VEINTINUEVE SEGUNDOS — sobre 31 colaboradores y los períodos 2026-07 y 2026-08;
+    · fuera de esa ventana `costos_nomina` tenía **CERO** filas.
+Ese segundo hecho es el que la vuelve segura: no había NADA real que perder. Fue el criterio con
+el que se verificó el plan en seco, y sirve para reconstruirlo a mano si hiciera falta:
+
+    DELETE FROM costos_nomina
+     WHERE created_at BETWEEN '2026-08-23 19:27:00+00' AND '2026-08-23 19:28:00+00';
+
+🔴 Y ACÁ ESTÁ POR QUÉ NO ES CÓDIGO ACTIVO, que es la parte que importa: **NO GENERALIZA, y las
+dos mitades del "62 liquidaciones en 29 segundos con created_by NULL" fallan por motivos
+distintos.**
+
+  1. `created_by IS NULL` NO DISCRIMINA NADA. Se lee como firma de un proceso automático y no lo
+     es: **ninguna capa del repo escribe jamás esa columna** — ni `_costos_write`, ni
+     `nomina_import_service`, ni `nomina_repo` (grep de `created_by` sobre los tres: cero
+     resultados). Una liquidación cargada a mano por RRHH también la deja en NULL. Filtrar por
+     ahí no acota el conjunto: lo deja igual.
+  2. LA RÁFAGA TAMPOCO. El import de nómina por CSV escribe un período entero de un saque, así
+     que **una carga real de RRHH produce exactamente la misma forma**: decenas de filas en
+     segundos, mismo período, `created_by` en NULL. Un limpiador que borrara "la ráfaga" se
+     llevaría la liquidación del mes puesta, y el día que eso pase va a haber datos reales.
+
+O sea: la ventana de arriba es un dato FORENSE de una corrida concreta, no una regla. Ejecutarla
+sin repetir antes la comprobación de "cero filas fuera de la ventana" es borrar sueldos.
+
+🔑 EL ARREGLO DURADERO, PARA CUANDO SE PUEDA TOCAR LA APLICACIÓN: darle a `costos_nomina` la
+marca de agua que hoy no tiene. La columna existe (`costos_nomina.notas`, texto libre y hoy
+siempre NULL) pero **el schema de entrada no la expone**: `NominaCreate` (`backend/schemas/
+costo.py:11`) declara cinco campos y `notas` no está, así que el sembrador —que escribe por la
+API, a propósito— no tiene por dónde mandarla. Sumarle un `notas: Optional[str]` y que
+`_semilla_fases_nomina.sembrar_nomina` mande algo como `"SMK · semilla smoke"` convierte esto en
+una clave natural de verdad, igual que el legajo `SMK-xx` y el dominio `@semilla.hrkarstec.site`
+en el resto de las tablas. **Es un cambio de aplicación y por eso no se hizo acá.**
+⚠️ El docstring de `sembrar_nomina` afirma que "no hay marca de agua posible en una tabla de
+montos". Es cierto de los MONTOS; no de la fila. `notas` es el lugar.
+═══════════════════════════════════════════════════════════════════════════════════════════════
 """
 from typing import List
 
@@ -156,6 +202,8 @@ def plan_de_borrado(datos: dict) -> dict:
         "capacitaciones": caps,
         # 🔴 SOLO POR MANIFIESTO. Estas filas cuelgan de colaboradores REALES: no hay clave
         # natural que las separe de una carga de RRHH del mismo mes. Sin manifiesto no se tocan.
+        # ⚠️ Si corrés el limpiador desde una máquina SIN `.semilla-smoke.json`, esta tabla queda
+        #    intacta y el resto se limpia igual. Ver el bloque `RESPALDO FORENSE` de abajo.
         "costos_nomina": _ids_manifiesto(datos, "costos_nomina"),
         "recategorizaciones": sorted(set(_ids_manifiesto(datos, "recategorizaciones")) |
                                      set(_hijas_de("recategorizaciones", "empleado_id", empleados))),

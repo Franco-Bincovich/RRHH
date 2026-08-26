@@ -168,11 +168,26 @@ CV screening, exports en 25 módulos, clientes globales, desmontaje de `ev_*`). 
 OBJETIVOS se canceló (decisión de producto, ver más abajo).
 
 ### 🔴 EL PROBLEMA #1 NO ES CÓDIGO: RRHH no cargó datos
-Verificado contra el catálogo vivo (**12/8/2026**): **2 empresas, 31 empleados** (19 + 12), y casi todo lo demás vacío:
-- `manager_id` **11/31** · `seniority` 3/31 · `horas_contrato` **0/31**
-- `solicitudes_vacaciones` 0 · `solicitudes_ausencia` 0 · **`costos_nomina` 0**
-- Apenas arrancados: `vacantes` 1 · `objetivos` 1 · `candidatos` 3 · **`clientes` 4 · `horas_proyecto` 1**
-- Poblado: `fecha_nacimiento` 31/31 (por eso el KPI de cumpleaños muestra datos) · `areas` 12 · `auditoria` 156 filas · el lote de evaluaciones (10 evaluados, 307 resultados).
+
+> 🔴 **ESTOS NÚMEROS SON PROYECTADOS, NO MEDIDOS — HAY QUE CONFIRMARLOS.** Describen el estado
+> **posterior** a correr `scripts/limpiar_semilla.py --si`, que se ejecuta desde la Lenovo (es la
+> máquina que tiene `backend/.env` **y** el manifiesto `scripts/.semilla-smoke.json`; sin el
+> manifiesto, `costos_nomina` queda intacta — ver el encabezado de `_semilla_plan_borrado.py`).
+> Salen del plan en seco calculado contra el catálogo vivo el **26/8/2026**, restando fila por
+> fila lo que el limpiador borra. **Al terminar la limpieza hay que remedirlos contra el catálogo
+> y sacar este aviso.** Lo que había cargado el 26/8 ANTES de limpiar —41 empleados, 62 filas de
+> `costos_nomina`, 5 vacantes, 5 offboardings— era en su enorme mayoría la semilla del smoke, no
+> carga de RRHH.
+
+Proyectado tras la limpieza: **2 empresas, 31 empleados** (19 + 12), y casi todo lo demás vacío:
+- `manager_id` **11/31** · `seniority` **3/31** · `categoria` **2/31** · `horas_contrato` **0/31**
+- `solicitudes_vacaciones` 0 · `solicitudes_ausencia` 0 · **`costos_nomina` 0** · `offboarding_instancias` 0 · `perfiles_puesto` 0
+- Apenas arrancados: `vacantes` 1 · `objetivos` 1 · `candidatos` 3 · **`clientes` 4 · `horas_proyecto` 1** · `proyectos` 8
+- Poblado: `fecha_nacimiento` 31/31 (por eso el KPI de cumpleaños muestra datos) · `areas` 12 (9 + 3) · `tipos_ausencia` 7 · **`auditoria` 523 filas** · el lote de evaluaciones (10 evaluados, 307 resultados).
+
+> ⚠️ **`auditoria` NO vuelve atrás con la limpieza y es a propósito** (la tabla es inmutable por
+> diseño). Sin `--con-auditoria`, `/auditoria` va a mostrar el alta de diez personas que ya no
+> existen. Las 523 filas incluyen todo lo que escribió el smoke.
 
 > 🟢 **`manager_id` DEJÓ DE ESTAR EN CERO** (0/19 → 11/31). Es el cambio más importante de este
 > bloque y desbloquea dos cosas que estaban declaradas como no probables: el rol
@@ -192,12 +207,16 @@ Verificado contra el catálogo vivo (**12/8/2026**): **2 empresas, 31 empleados*
 1. Los reportes/KPIs salen vacíos hasta que carguen dotación, vacaciones, ausencias, costos. No están rotos.
 2. `manager_id` **11/31** → `mandos_medios` YA se puede probar, pero solo con un usuario que sea manager de alguien; los otros 20 empleados siguen sin superior y un manager vacío no ve nada.
 3. Los filtros nuevos (área, proyecto, empleado, rango de fechas) están vivos, pero con 31 empleados y un proyecto que concentra 13, **casi todo filtro devuelve casi todo**. No es un filtro roto: es el reparto real de la gente.
-4. **El link público de horas necesita al menos un cliente cargado EN EL SISTEMA** (hay 4, verificado el 12/8/2026): con CERO clientes la identificación por DNI rechaza al padrón entero, y por rechazo único el empleado no ve la diferencia con "tu DNI no existe". 🔴 **El gate es de SISTEMA, no por empresa** (bloque L): antes bastaba con que la sociedad de esa persona no tuviera clientes propios para dejarla afuera con el sistema lleno.
-5. 🔴 **El seniority está cargado en 13 de 41 (32%), o sea que 28 colaboradores no lo tienen.**
-   Después de normalizar, "Distribución de plantilla" va a decir **"Sin especificar: 28"** — y esa
-   vez va a ser el dato correcto, no un bug de agrupación. Hay que decírselo ANTES del recorrido,
-   porque la pantalla se ve exactamente igual que cuando el reporte estaba roto. Lo mismo con
-   `categoria`: 12 de 41. *(Medido contra el catálogo vivo el 25/8/2026.)*
+4. **El link público de horas necesita al menos un cliente cargado EN EL SISTEMA** (hay 4, verificado el 26/8/2026 — el limpiador NO los toca): con CERO clientes la identificación por DNI rechaza al padrón entero, y por rechazo único el empleado no ve la diferencia con "tu DNI no existe". 🔴 **El gate es de SISTEMA, no por empresa** (bloque L): antes bastaba con que la sociedad de esa persona no tuviera clientes propios para dejarla afuera con el sistema lleno.
+5. 🔴 **El seniority queda cargado en 3 de 31 (10%), o sea que 28 colaboradores no lo tienen.**
+   "Distribución de plantilla" va a decir **"Sin especificar: 28"** — y esa vez va a ser el dato
+   correcto, no un bug de agrupación. Hay que decírselo ANTES del recorrido, porque la pantalla se
+   ve exactamente igual que cuando el reporte estaba roto. Lo mismo con `categoria`: **2 de 31**
+   → "Sin especificar: 29".
+   > ⚠️ **Acá decía "13 de 41" y "12 de 41" medido el 25/8, y no era carga de RRHH: 10 de los 41
+   > eran colaboradores de la semilla, sembrados CON seniority y categoría.** El "Sin especificar:
+   > 28" da igual por coincidencia (41−13 = 31−3 = 28), lo que hace que el error no se note
+   > mirando esa pantalla. **Proyectado — confirmar tras la limpieza.**
 6. **El seniority se guarda ya presentable** (`Senior`, `Semi Senior`) y el campo sigue siendo de
    texto libre con sugerencias: si escriben uno nuevo, se ve bien solo. Lo único que no se puede
    adivinar son los acentos —"lider" queda "Lider"— así que conviene tipearlo con acento la
@@ -363,7 +382,8 @@ backend/
                             límite de 200 los primeros, NO los segundos — ver "Líneas")
 ```
 
-**Env vars obligatorias** (sin default → rompen el import si faltan): `supabase_url`, `supabase_anon_key`, `supabase_service_key`, `jwt_secret`, `anthropic_api_key`, `resend_api_key`. Con default: `assessment_enabled`, **`horas_publico_enabled`** (`false` — enciende el link público de carga de horas), `trusted_proxy_hops`, `rate_limit_storage_uri`, `supabase_timeout` (30 s), Google OAuth, `frontend_url`, `allowed_origins`. La migración a AWS agrega `database_url`.
+**Env vars obligatorias** (sin default → rompen el import si faltan): `supabase_url`, `supabase_anon_key`, `supabase_service_key`, `jwt_secret`, `anthropic_api_key`. Con default: `app_env`, `marca`, `assessment_enabled`, **`horas_publico_enabled`** (`false` — enciende el link público de carga de horas), `trusted_proxy_hops`, `rate_limit_storage_uri`, `supabase_timeout` (30 s), `import_presupuesto_segundos`, `mail_presupuesto_segundos`, `jwt_expiration_minutes`, `refresh_token_expiration_days`, Google OAuth, `frontend_url`, `allowed_origins`. La migración a AWS agrega `database_url`.
+> 🔴 **`resend_api_key` YA NO EXISTE y acá estaba listada como OBLIGATORIA.** Se sacó el 2/8/2026 (los mails salen por Gmail). El inventario completo y verificado de variables es **`.env.example` en la raíz** —los 21 campos de `Settings`, con build-time vs runtime marcado—, y su §4 ya declaraba que *"si la ves en un documento viejo, ese documento miente"*: el documento viejo era éste.
 
 **Migraciones y salud de base.** 121 archivos SQL en `backend/migrations/`. La última ESCRITA es **121**
 (`intentos_identificacion_preingreso`, A3.3) — **NO corrida a la fecha de este documento**, la

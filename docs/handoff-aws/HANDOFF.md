@@ -273,7 +273,8 @@ no neutralice los otros cinco los ve caer contra el guard, entrar en su `_safe` 
 | FK `users.id → auth.users(id)` | 🔴 **Dropearla** y poner `DEFAULT gen_random_uuid()`, o no se puede insertar un usuario. `schema.sql` no la declara, a propósito |
 | El `ON DELETE CASCADE` contra `auth.users` | **Es lógica de negocio viva**: el rollback del alta de usuario se apoya en él. Hay que reponerlo en la app |
 | `passlib` está roto (bcrypt 5.0 sacó `__about__`) | `import bcrypt` directo |
-| `schema.sql` **no trae funciones ni triggers** | 43 triggers en producción, 0 en el archivo. Se recrean aparte — ver `DEPLOY.md` §2 |
+| `schema.sql` **no trae funciones ni triggers** | **46** triggers no internos en producción (**38** `updated_at` + **8** `trg_emp_*`), 0 en el archivo. Se recrean aparte — ver `DEPLOY.md` §2. *(Medido contra el catálogo el 26/8/2026; acá decía 43, que era el conteo de agosto)* |
+| `schema.sql` **tampoco trae RLS** | 55 de 55 tablas lo tienen encendido en producción y el archivo no lo declara. **El rebuild en RDS nace sin RLS, que es el resultado correcto pero por omisión.** Ver [`RLS.md`](RLS.md) |
 | `ban_duration` de Supabase Auth | No tiene equivalente. La baja blanda de usuarios hay que reconstruirla revocando refresh tokens. 🔑 **La mitad que corta de verdad es `users.activo`, que es una columna nuestra y sobrevive la mudanza** |
 | Modelo Anthropic | Que ningún string con fecha sobreviva. Alias sin fecha: `claude-sonnet-4-6` |
 | `_BUCKET = "documentos"` hardcodeado en adjuntos | Parametrizar al pasar a S3. El E2E de adjuntos **nunca se ejecutó** por eso mismo |
@@ -332,7 +333,7 @@ antes de que lo descubra un usuario.
 | 7 | `test_contrato_repos.py` | La forma que los repos prometen devolver |
 | 8 | `test_auditoria_coherente.py` | Los eventos de auditoría son coherentes con lo que el módulo hace |
 | 9 | `test_nombres_definidos.py` | No hay nombres usados sin definir |
-| 10 | `test_triggers_updated_at.py` | Los 35 triggers `updated_at` de producción, igualdad estricta en las dos direcciones |
+| 10 | `test_triggers_updated_at.py` | Los **38** triggers `updated_at`, igualdad estricta en las dos direcciones. 🔑 **No compara contra la base: compara `schema.sql` contra la migración 077**, que es lo que lo hace correr sin credenciales |
 | 11 | `test_acceso_a_datos.py` | 🔴 **Sólo `repositories/` habla con la base.** 4 familias de excepción, y un test que impide que pasen de 5 |
 | 12 | `test_storage_punto_unico.py` | Nadie nombra un bucket ni llama al SDK de Storage fuera de `integrations/storage.py` |
 | 13 | `test_columnas_candidatos.py` | Toda columna de `candidatos` está expuesta o declarada — **en las dos direcciones** |
@@ -462,7 +463,8 @@ CREATE TRIGGER trg_emp_empleados ... ON public.empleados
 Con ese trigger vivo, **asignarle a alguien un `manager_id` de otra sociedad falla**. O sea: el
 service layer soporta un caso que la base rechaza.
 
-**Hoy no se nota** porque nadie cargó un manager cruzado (11 de 41 empleados tienen manager, todos
+**Hoy no se nota** porque nadie cargó un manager cruzado (**11 de 31** empleados tienen manager —
+proyectado tras la limpieza de la semilla; el 26/8 eran 15 de 41 contando los 10 sembrados—, todos
 de su propia sociedad). Se va a notar el primer día que RRHH intente cargarlo, y el error va a
 venir de la base con un mensaje que no dice nada de todo esto.
 
@@ -486,8 +488,15 @@ de baja **sin crear instancia**, así que R6 no ve esa vía— pero unificar R6 
 query: el reporte desagrega por `motivo_egreso`, que vive en la instancia, mientras el legajo
 tiene su propio `motivo_baja`. **Es una decisión de producto.**
 
-Hoy es invisible: `offboarding_instancias` tiene 0 filas. Es exactamente la forma en que la masa
-salarial duplicada pasó meses sin que nadie lo notara.
+Hoy es invisible: `offboarding_instancias` vuelve a **0 filas** tras la limpieza de la semilla.
+Es exactamente la forma en que la masa salarial duplicada pasó meses sin que nadie lo notara.
+
+> ⚠️ **Y estuvo visible unos días, que es el dato que hace la advertencia concreta.** Medido el
+> **26/8/2026**, la tabla tenía **5 filas**, las cinco sobre colaboradores de la semilla del
+> smoke; el limpiador se las lleva a todas (verificado en el plan en seco del 26/8: las 5 caen
+> bajo `empleado_id IN (sembrados)`). O sea que la divergencia entre el KPI y R6 **sí se ve en
+> cuanto la tabla tiene filas**, y va a volver a verse el día que RRHH cargue el primer
+> offboarding real. 🔴 **Proyectado: confirmar que quedó en 0 después de correr el limpiador.**
 
 ---
 

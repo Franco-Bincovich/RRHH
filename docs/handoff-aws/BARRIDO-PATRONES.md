@@ -52,15 +52,39 @@ quedan **dos**, y sólo uno es real:
 | Dónde | Qué es |
 |---|---|
 | `services/_audit_payloads_rrhh.py:115` | 🟢 **Falso positivo: es prosa.** La frase `(registro_id == empresa_id)` está dentro de un docstring explicando el diseño |
-| `services/_empleados_utils.py:24` | 🟠 **Real, a revisar al portear.** `if existing and existing.id != exclude_id:` — `existing.id` sale de la base y `exclude_id` del payload. Con Supabase los dos llegan `str` y funciona; **con asyncpg `existing.id` llega como `UUID` nativo y `exclude_id` sigue siendo `str`, así que la comparación da SIEMPRE `True`** y la guarda de unicidad deja de reconocer al propio registro cuando se lo edita |
+| `services/_empleados_utils.py:24` | 🟠 **Real, a revisar al portear.** Ver la lista de abajo |
 
 > 🔴 **PUNTO CIEGO NUEVO, medido acá: el grep NO ve las comparaciones por subíndice.**
 > `if fila["id"] == uid:` no matchea, porque después de `id` viene `"` y el patrón exige espacio
 > o el operador inmediatamente. En un repo cuyos repositorios devuelven **dicts de PostgREST**,
-> ése es justamente el acceso más frecuente. Complemento sugerido:
+> ése es justamente el acceso más frecuente. Complemento, **que hay que correr junto con el grep 1
+> y no en vez de él**:
 > ```bash
 > grep -rnE "\[[\"'](id|[a-z_]+_id)[\"']\][[:space:]]*(==|!=)" backend/ --exclude-dir=venv
 > ```
+> **Corrido el 26/8/2026 devuelve 1 hit fuera de `tests/`, y es real.** Está en la lista de abajo.
+
+### 🔴 LAS DOS COMPARACIONES QUE ROMPEN AL PORTEAR — la lista corta
+
+**El mecanismo es el mismo en las dos, y es el que hay que entender antes de mirarlas:** hoy los
+dos lados de la comparación llegan `str`, porque PostgREST habla HTTP y todo viene serializado.
+**Con asyncpg el lado IZQUIERDO —el que sale de la base— llega como `UUID` nativo, y el DERECHO
+—que sale del payload de la request— sigue siendo `str`.** `UUID('...') != '...'` es `True`
+siempre, así que **la comparación deja de reconocer al propio registro** y la guarda que la
+envuelve empieza a fallar en la dirección exacta en la que no da error: no rompe, decide mal.
+
+| # | Dónde | El código | Qué se rompe |
+|---|---|---|---|
+| 1 | `backend/services/_empleados_utils.py:24`, en `ensure_legajo_unico` | `if existing and existing.id != exclude_id:` | Es la **guarda de unicidad del legajo** (`LEGAJO_DUPLICADO`, 409). Al **editar** un empleado, `exclude_id` es el id de ese mismo empleado y sirve para que su propio registro no cuente como duplicado. Con `UUID != str` siempre verdadero, **guardar la ficha de un empleado sin tocarle el legajo lo rechaza como duplicado de sí mismo** — o sea que el legajo se vuelve inmutable y la edición del legajo deja de funcionar para todos |
+| 2 | `backend/services/objetivos_import_preview.py:63`, en `_resolver_acompanantes` | `if u["id"] != dueno_id:` — *"el dueño entra por su propio camino, no se duplica"* | Deduplicación de responsables del **import de objetivos por Excel**. El dueño se agrega aparte y esta línea lo saca de la lista de acompañantes. Rota, **el dueño entra dos veces**, y `objetivo_responsables` tiene **PK compuesta `(objetivo_id, user_id)`** (verificado contra el catálogo el 26/8), así que el segundo INSERT viola la PK y **se lleva puesto el import** |
+
+⚠️ **La nº 2 no la ve NINGUNO de los cuatro greps**: es por subíndice, y por eso estuvo fuera de
+toda lista hasta el 26/8/2026. Salió corriendo el complemento de arriba.
+
+🔑 **Ninguna de las dos se arregla hoy, a propósito.** Del lado de Supabase el código es correcto
+y cambiarlo ahora sería tocar producción para un problema que todavía no existe; el arreglo
+—coaccionar los dos lados con `str()`, o tipar `UUID` de punta a punta— va **en el cutover**, con
+el porteo del repo que las alimenta. Están acá para que no haya que redescubrirlas.
 
 ## 2 · SDK de Supabase Auth — sólo ve los clientes que se llaman `supabase*`
 

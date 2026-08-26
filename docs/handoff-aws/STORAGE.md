@@ -6,13 +6,26 @@
 
 ---
 
-## Los tres buckets
+## Los tres buckets que usa el código
 
-| Bucket | Qué guarda | Acceso | Quién escribe | Path |
-|---|---|---|---|---|
-| `documentos` | Adjuntos polimórficos (empleado, vacación, ausencia, vacante, offboarding) **y** certificados de capacitación | **Privado** — se lee por URL firmada de 3600 s | `adjunto_service`, `asignacion_service` | `adjuntos/{entidad}/{entidad_id}/{uuid}.{ext}` · `certificados/{asignacion_id}/{uuid}.{ext}` |
-| `cvs` | CVs de candidatos (subidos a mano o bajados de la casilla de Gmail) | **Privado** — URL firmada de 3600 s | `cv_service` | `{empresa_id}/{candidato_id}/{uuid}.{ext}` · `sin_empresa/...` si no hay empresa |
-| `avatars` | Logos de empresa | 🔴 **PÚBLICO** — URL permanente, sin firmar | `_empresa_logo` | `logos/{empresa_id}/{uuid}.{ext}` |
+| Bucket | Qué guarda | Acceso | Quién escribe | Path | Objetos (26/8) |
+|---|---|---|---|---|---|
+| `documentos` | Adjuntos polimórficos (empleado, vacación, ausencia, vacante, offboarding) **y** certificados de capacitación | **Privado** — se lee por URL firmada de 3600 s | `adjunto_service`, `asignacion_service` | `adjuntos/{entidad}/{entidad_id}/{uuid}.{ext}` · `certificados/{asignacion_id}/{uuid}.{ext}` | 1 |
+| `cvs` | CVs de candidatos (subidos a mano o bajados de la casilla de Gmail) | **Privado** — URL firmada de 3600 s | `cv_service` | `{empresa_id}/{candidato_id}/{uuid}.{ext}` · `sin_empresa/...` si no hay empresa | 4 |
+| `avatars` | Logos de empresa | 🔴 **PÚBLICO** — URL permanente, sin firmar | `_empresa_logo` | `logos/{empresa_id}/{uuid}.{ext}` | 0 |
+
+### 🔴 Pero en el proyecto hay CUATRO, y el cuarto no lo crea Terraform
+
+Existe además un bucket **`reportes`**, **vacío (0 objetos)** y con **cero callers**: no aparece en
+`integrations/storage.py`, ningún service lo nombra, y el barrido nº 12 —que prohíbe nombrar un
+bucket fuera de ese archivo— no lo puede ver justamente porque nadie lo nombra. Es un resto de
+cuando se pensó guardar los PDF exportados; hoy los exports se devuelven en la respuesta HTTP y no
+se persisten.
+
+**Qué hacer con él al portear: nada.** Se crean **tres** buckets en Terraform y `reportes` no se
+replica. Está escrito acá para que no aparezca como sorpresa al comparar la consola de Supabase
+contra el `.tf` y no haya que averiguar si falta algo. *(Medido contra `storage.buckets` el
+26/8/2026.)*
 
 🔴 **`avatars` es el único público del sistema.** Su URL se **persiste** en `empresas.logo_url`, así
 que si el dominio del bucket cambia en AWS, esas filas quedan apuntando al viejo. Los otros dos

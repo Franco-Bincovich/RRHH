@@ -41,6 +41,55 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-26 · Cierre del handoff: se borra la semilla y se corrigen los documentos · commit por bloque
+
+**Qué cambió:** ningún código de aplicación. Se limpió **la semilla del smoke de producción** y se
+corrigieron los documentos que el dev de infraestructura va a leer. Lo sustantivo:
+
+- 🔴 **`docs/handoff-aws/RLS.md` — NUEVO.** Era la única entrega prometida que no existía. Dice
+  lo que ningún documento decía: **55 de 55 tablas con RLS encendido, 58 policies en 23 tablas, y
+  32 tablas con RLS y CERO policies**; que hay un **event trigger `ensure_rls` → `rls_auto_enable()`**
+  (`SECURITY DEFINER`) que enciende RLS solo en toda tabla nueva de `public`, y que **no hay que
+  replicarlo**; y que `schema.sql` no trae RLS, así que el rebuild en RDS nace correcto **por
+  omisión y no por decisión escrita**.
+- **`schema.sql` reverificado objeto por objeto** contra el catálogo vivo: 55 tablas, 691 columnas
+  (con tipo, nullable y default), 106 CHECKs, 164 índices standalone, 140/141 FKs. **Las únicas dos
+  divergencias son las de `users.id`, deliberadas.** Los números viejos de `DEPLOY.md` §2
+  (52 tablas · 133/134 FKs · 141/235 índices · 43 triggers · 35 `updated_at`) se corrigieron a
+  55 · 140/141 · 164/259 · **46** · **38**.
+- **`BARRIDO-PATRONES.md` §1** ahora lista las **dos** comparaciones de id que rompen al portear a
+  asyncpg, con el mecanismo escrito. La segunda (`objetivos_import_preview.py:63`) **no la ve
+  ninguno de los cuatro greps** —es por subíndice— y no estaba en ninguna lista.
+- **`STORAGE.md`**: hay **cuatro** buckets, no tres. El cuarto (`reportes`) está vacío y sin
+  callers; **no se replica en Terraform**, y ahora está escrito para que no aparezca como sorpresa.
+
+**Impacto en infraestructura:** ninguno sobre el deploy. Migraciones: ninguna. Variables de
+entorno: ninguna nueva — pero se corrigió `CLAUDE.md`, que listaba `resend_api_key` como
+**obligatoria** cuando se sacó el 2/8. El inventario válido es `.env.example` en la raíz.
+**Versiones confirmadas y ya no asumidas: PostgreSQL de producción es 17.6** (el replay del 13/8
+se probó contra 16.13, que valida sintaxis y orden pero no compatibilidad con 17). **El runtime de
+Python no está pinneado en ningún lado** (`backend/vercel.json` no lo declara, no hay
+`.python-version` ni `runtime.txt`): hoy lo elige Vercel, y en AWS hay que fijarlo en el Dockerfile.
+
+### ⚠️ Nota sobre la migración 122/123 — el argumento se apoya en un ejemplo sembrado
+
+`123_vacantes_codigo_texto_natural.sql` justifica subir el techo de 30 a 60 caracteres con este
+ejemplo: *"«Analista de Sistemas Semi Senior» **no es un ejemplo inventado: es el título de
+VAC-0002, una de las cinco búsquedas reales que hay cargadas hoy**"*.
+
+🔴 **VAC-0002 no es una búsqueda real: es de la semilla del smoke.** Su título es literal del
+catálogo `scripts/_semilla_catalogo.VACANTES`, y se creó el 23/8 junto con VAC-0003, 0004 y 0005.
+**La única vacante real es `VAC-0001 · Analista contable`** (9/8). Al borrar la semilla, las
+cuatro sembradas desaparecen y con ellas el ejemplo que la migración cita.
+
+**Qué NO cambia:** la migración ya corrió y es historia — no se toca. **Y la decisión sigue siendo
+correcta**: hay títulos reales que pasan de 30 caracteres, y rechazar en vez de recortar es lo
+que evita que dos textos distintos colapsen en el mismo código. Lo que queda anotado es que
+**quien lea la 123 en seis meses no va a poder distinguir el ejemplo sembrado del real**, porque
+la fila que cita ya no va a existir.
+
+---
+
 ## 2026-08-26 · El código de vacante se escribe en texto natural y el sistema lo canoniza · commit por bloque
 
 **Qué cambió:** Capital Humano escribe el código de la búsqueda **como le sale** —`Lider de

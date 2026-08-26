@@ -43,7 +43,7 @@ en `docs/`.
 | [`BARRIDO-PATRONES.md`](BARRIDO-PATRONES.md) | ✅ **Escrito (25/8).** El resultado de los 4 greps **más el control positivo de cada uno**: los greps ya estuvieron ciegos una vez, así que un conteo sin control no prueba nada. Dos siguen viendo parcial, con su punto ciego medido y su complemento sugerido | Fase 3 (3.5) |
 | [`STORAGE.md`](STORAGE.md) | ✅ **Escrito (12/8).** Los 3 buckets, qué guarda cada uno, y **qué archivo toca y cuáles NO** el día del cutover | Fase 0 (0.7) |
 | [`ACCESO-A-DATOS.md`](ACCESO-A-DATOS.md) | ✅ **Escrito (12/8).** Dónde vive el acceso a datos: 328 de 386 llamadas en `repositories/`, las 58 restantes con archivo:línea, y **los 2 catálogos de tabla dinámica que un porteo por búsqueda y reemplazo NO ve** | Fase 0 (0.9) |
-| `RLS.md` | Las 58 policies que **no** se portan, y por qué | Fase 3 (J4) |
+| [`RLS.md`](RLS.md) | ✅ **Escrito (26/8).** Las **58 policies** que **no** se portan y por qué · 🔴 las **32 tablas con RLS encendido y CERO policies**, que ningún documento decía · el **event trigger `ensure_rls`** que enciende RLS en toda tabla nueva · y por qué `schema.sql` no lo trae, que hace que el rebuild en RDS nazca bien **por omisión y no por decisión escrita** | Fase 3 (J4) |
 
 ### Artefactos de reconstrucción
 
@@ -56,7 +56,7 @@ se listan para que él sepa dónde buscar:
 | `funciones_y_triggers.sql` | `backend/db/` | `fn_misma_empresa()` + los **8** triggers de cruce de empresa. Leído del catálogo vivo |
 | `077_recrear_triggers_updated_at.sql` | `migracionAWS/backend/migrations/` | Los **35** triggers de `updated_at` + `set_updated_at()` |
 | `seed.sql` | `backend/db/` | Catálogos base sin los cuales el sistema arranca roto |
-| `.env.example` | `backend/` | Verificado contra `settings.py` (Fase 3, J2) |
+| `.env.example` | **la raíz del repo** (`./.env.example`) | Verificado contra `settings.py` (Fase 3, J2) y remedido el 26/8: **los 21 campos de `Settings`, ninguno de más ni de menos**. 🔴 **NO está en `backend/`** — este renglón decía eso y mandaba a buscar un archivo que no existe ahí |
 
 ### El orden de reconstrucción, sobre una base recién creada
 
@@ -145,7 +145,8 @@ queda escrito en `BARRIDO-PATRONES.md`.
 
 > 🔴 **REESCRITOS EL 19/8/2026 — LOS CUATRO ANTERIORES ESTABAN CIEGOS.** Si tenés la versión vieja
 > pegada en algún lado, tirala: cada uno dejaba pasar en silencio justo lo que venía a buscar. El
-> detalle medido de qué no veía cada uno está en `VERIFICACION-BACKEND.md` §11.
+> detalle medido de qué no veía cada uno está en **`VERIFICACION-BACKEND.md` §11, que vive en la
+> RAÍZ del repo** (`./VERIFICACION-BACKEND.md`), no en esta carpeta.
 
 ```bash
 # 1 · comparaciones de id sin coaccionar los dos lados
@@ -192,8 +193,15 @@ listados cuesta una sesión.
 
 ## Coordinación
 
-**Lo que hay que confirmarle antes del 20 de agosto:**
-- Qué versión de PostgreSQL va a tener RDS (asumimos 17, igual que producción)
+**Las versiones, ya no asumidas — medidas el 26/8/2026:**
+
+| | Valor | Cómo se midió |
+|---|---|---|
+| **PostgreSQL de producción** | 🟢 **17.6**, `aarch64-unknown-linux-gnu` (`server_version_num` = `170006`) | `select version()` contra el catálogo vivo. Acá decía *"asumimos 17"* |
+| **PostgreSQL del replay del 13/8** | ⚠️ **16.13** | Es la base contra la que se probaron los cuatro pasos de reconstrucción. 🔴 **Ese replay prueba SINTAXIS Y ORDEN, no compatibilidad con 17.6.** Si RDS va a ser 17, conviene repetirlo ahí antes del cutover |
+| **Python del backend** | ⚠️ **no determinado en producción.** El venv local es **3.12.13**; `CLAUDE.md` declara 3.11 en el stack | 🔴 **`backend/vercel.json` NO pinea el runtime** y no hay `.python-version` ni `runtime.txt` en el repo: hoy la versión la elige Vercel. **En AWS hay que fijarla explícitamente en el Dockerfile** — es una decisión que hoy nadie tomó. Las deps no compilan binarios nativos (ver el comentario de `requirements.txt:27`), así que 3.11 y 3.12 sirven las dos |
+
+**Lo que hay que confirmarle:**
 - Cuándo hace el cutover de Storage a S3 — de eso depende si D2 (rutas de archivos de
   evaluaciones) entra o no
 - Si necesita algo más de nosotros que no esté en esta carpeta
