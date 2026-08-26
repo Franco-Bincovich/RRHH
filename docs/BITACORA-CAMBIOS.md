@@ -41,6 +41,49 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-26 · Los números de producción pasan de PROYECTADOS a MEDIDOS · commit por bloque
+
+**Qué cambió:** ningún código. La limpieza de la semilla (entrada de abajo) se ejecutó y se
+verificó **contra el catálogo vivo**, así que los avisos de "🔴 proyectado — confirmar" salen de
+`CLAUDE.md` y de `HANDOFF` §5.4/§5.5, y los números quedan declarados como medidos el 26/8/2026.
+
+- **Las cuatro tasas de llenado dieron exactamente lo proyectado**: `manager_id` **11/31**,
+  `seniority` **3/31**, `categoria` **2/31**, `horas_contrato` **0/31**. Era lo único que
+  sostenía el aviso, y por eso se saca en vez de reescribirse.
+- **Dos números que el documento afirmaba y NO eran los del catálogo**: `tipos_ausencia` decía 7
+  y son **5** (4 activos + "Injustificada", desactivada a propósito), y `auditoria` decía 523 y
+  son **526**. Las tres filas de diferencia son los `baja_usuario` de la revocación: se revocó por
+  la API justamente para que quedara rastro, así que el número de más **es la prueba de que esa
+  decisión funcionó**, no un desvío.
+- **Se suman los ceros que faltaban** en el inventario: `capacitaciones`, `eventos_agenda`,
+  `periodos_cerrados`, `reportes_generados`. Este último importa porque es la tabla que el
+  barrido nº 43 encontró fuera del limpiador el 24/8 — hoy está en 0.
+- **`HANDOFF` §6 pasa de "🔴 HAY QUE REVOCARLOS" a "✅ YA ESTÁN REVOCADOS".** Verificadas las tres
+  mitades: `users.activo=false`, `auth.users.banned_until` en 2126, y los 3 eventos en `auditoria`.
+  Se corrigieron además los nombres de los tres usuarios, que la tabla listaba como
+  `smk.admin`/`smk.gerencia`/`smk.mando` y en realidad son nombres de persona
+  `@semilla.hrkarstec.site`. `scripts/.smoke.env` —el único archivo del repo con contraseñas en
+  claro— ya no existe.
+- **`HANDOFF` §7 se corrigió aunque no estaba en el pedido**, porque afirmaba *"al 25/8 la semilla
+  sigue entera y no se corrió nunca el limpiador"* y `costos_nomina` con **62 filas**. Actualizar
+  §5.4/§5.5/§6 y dejar §7 habría dejado el documento contradiciéndose consigo mismo tres
+  secciones más abajo.
+- **`CLAUDE.md`: `AUDITORIA_FUNCIONAL.md` SÍ existe** (413 líneas en la raíz) y está
+  **gitignoreado** (`.gitignore:30`). Un diagnóstico previo lo dio por borrado porque lo buscó con
+  git, y `ls-files`/`status`/`grep` callan sobre un archivo ignorado **por diseño**. Queda escrita
+  la regla: para saber si un archivo existe se mira el disco, no el índice de git. De paso, el
+  mismo renglón decía que en la raíz solo quedaban dos `.md` y son tres (falta
+  `VERIFICACION-BACKEND.md`, tracked, 398 líneas).
+
+**Impacto en infraestructura:** ninguno sobre el deploy. Migraciones: ninguna. Variables de
+entorno: ninguna. 🔴 **Lo único que sigue vivo para el dev de infra es lo de §6:
+`ban_duration` no existe en RDS.** De las dos mitades que hoy cortan el acceso de los tres
+usuarios de prueba, después del cutover sobrevive sólo `users.activo` (columna nuestra); el
+`banned_until` se queda en `auth.users`, que no se migra. **El ban hay que reconstruirlo revocando
+los refresh tokens** o los tres vuelven a poder renovar sesión. Es riesgo de migración, no de hoy.
+
+---
+
 ## 2026-08-26 · Cierre del handoff: se borra la semilla y se corrigen los documentos · commit por bloque
 
 **Qué cambió:** ningún código de aplicación. Se limpió **la semilla del smoke de producción** y se

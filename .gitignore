@@ -1,4 +1,4 @@
-# Variables de entorno — NUNCA commitear
+﻿# Variables de entorno â€” NUNCA commitear
 backend/.env
 frontend/.env.local
 frontend/.env
@@ -8,13 +8,13 @@ backend/.venv/
 backend/__pycache__/
 backend/**/__pycache__/
 backend/**/*.pyc
-# 🔴 `scripts/` cuelga de la raíz, así que las reglas de `backend/**` NO lo cubren y su
+# ðŸ”´ `scripts/` cuelga de la raÃ­z, asÃ­ que las reglas de `backend/**` NO lo cubren y su
 # `__pycache__` quedaba fuera del ignore. Hay un .pyc TRACKED de antes
 # (`scripts/__pycache__/medir_escala.cpython-312.pyc`): esta regla no lo destrackea sola,
 # hace falta un `git rm --cached` una vez.
 scripts/__pycache__/
-# Caché de pytest. `v/cache/lastfailed` se reescribe en cada corrida con rojos y acumula
-# node-ids de tests ya renombrados, así que viaja desactualizado y no le sirve a nadie.
+# CachÃ© de pytest. `v/cache/lastfailed` se reescribe en cada corrida con rojos y acumula
+# node-ids de tests ya renombrados, asÃ­ que viaja desactualizado y no le sirve a nadie.
 .pytest_cache/
 
 # Next.js
@@ -27,31 +27,30 @@ frontend/node_modules/
 
 backend/venv/
 
-AUDITORIA_FUNCIONAL.md
 
 # Mensajes de commit redactados aparte para pasarlos con `git commit -F`. Son insumo de UNA
-# sesión: se escriben, se commitea con ellos y se borran. El patrón es genérico a propósito —
-# con tres líneas fijas, la próxima sesión que escriba `_commit4.txt` lo commitea sin querer.
+# sesiÃ³n: se escriben, se commitea con ellos y se borran. El patrÃ³n es genÃ©rico a propÃ³sito â€”
+# con tres lÃ­neas fijas, la prÃ³xima sesiÃ³n que escriba `_commit4.txt` lo commitea sin querer.
 _commit*.txt
-# ⚠️ Y los `_cN.txt`, que es como se nombraron los de A4.2. El patrón de arriba NO los cubría:
-# una regla atada a UN nombre falla en cuanto el nombre cambia, y eso pasó a la sesión siguiente
-# de escribirla. Los dos patrones son deliberadamente angostos —no `_c*.txt`, que se llevaría
-# puesto cualquier `_config.txt`— y por eso son dos y no uno.
+# âš ï¸ Y los `_cN.txt`, que es como se nombraron los de A4.2. El patrÃ³n de arriba NO los cubrÃ­a:
+# una regla atada a UN nombre falla en cuanto el nombre cambia, y eso pasÃ³ a la sesiÃ³n siguiente
+# de escribirla. Los dos patrones son deliberadamente angostos â€”no `_c*.txt`, que se llevarÃ­a
+# puesto cualquier `_config.txt`â€” y por eso son dos y no uno.
 _c[0-9]*.txt
 
 # Manifiesto de la semilla de datos de prueba (scripts/semilla_smoke.py). Es el registro EXACTO
-# de qué filas se sembraron en QUÉ base, así que es de una máquina y una corrida: commitearlo
-# haría que otro clon crea que ya sembró —y no limpiaría nada—, o peor, que intente borrar ids
+# de quÃ© filas se sembraron en QUÃ‰ base, asÃ­ que es de una mÃ¡quina y una corrida: commitearlo
+# harÃ­a que otro clon crea que ya sembrÃ³ â€”y no limpiarÃ­a nadaâ€”, o peor, que intente borrar ids
 # de otra base. Se regenera solo al sembrar.
 scripts/.semilla-smoke.json
 
 # Credenciales de la semilla (SEMILLA_TOKEN o SEMILLA_USUARIO/SEMILLA_PASSWORD). Existe para
-# que la credencial NO viaje por la línea de comandos, donde el historial de PowerShell la
-# guardaría en texto plano y para siempre. Ver `scripts/_semilla_credencial.py`.
+# que la credencial NO viaje por la lÃ­nea de comandos, donde el historial de PowerShell la
+# guardarÃ­a en texto plano y para siempre. Ver `scripts/_semilla_credencial.py`.
 scripts/.semilla.env
 
-# 🔴 CREDENCIALES DE LOS TRES USUARIOS DE PRUEBA DEL SMOKE (uno por rol), con su contraseña EN
-# CLARO. Lo escribe `scripts/_semilla_fases_usuarios.py` y es lo único del repo que contiene una
-# contraseña utilizable contra producción. Commitearlo publicaría tres accesos al sistema.
-# Es de UN SOLO USO: se borra a mano al terminar el smoke (dice cómo adentro del propio archivo).
+# ðŸ”´ CREDENCIALES DE LOS TRES USUARIOS DE PRUEBA DEL SMOKE (uno por rol), con su contraseÃ±a EN
+# CLARO. Lo escribe `scripts/_semilla_fases_usuarios.py` y es lo Ãºnico del repo que contiene una
+# contraseÃ±a utilizable contra producciÃ³n. Commitearlo publicarÃ­a tres accesos al sistema.
+# Es de UN SOLO USO: se borra a mano al terminar el smoke (dice cÃ³mo adentro del propio archivo).
 scripts/.smoke.env

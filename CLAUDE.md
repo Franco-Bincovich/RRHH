@@ -36,8 +36,16 @@ código existente del proyecto manda. Lo que sí sale de ahí son las cuatro reg
 adoptó `PLAN-6-SEPTIEMBRE.md` (IDs `UUID`, un solo lugar para serializar, buckets centralizados,
 nada de RLS en tablas nuevas).
 
-> ✅ **Duplicación resuelta — TODA la doc vive en `docs/`, sin excepciones.** `Plan de trabajo`, `ORDEN-Y-LEGIBILIDAD.md` y `UX-UI.md` estaban tracked **dos veces** (raíz y `docs/`). Los dos `.md` eran idénticos; **`Plan de trabajo` NO**: el de la raíz era la v1 (153 líneas) y el de `docs/` la v2 (282), y nada indicaba cuál mandaba. **Se borraron las tres copias de la raíz.** La v1 queda en el historial de git (`1c5dd30`, última forma en `e9df215`). En la raíz solo quedan `CLAUDE.md` y `AUDITORIA_FUNCIONAL.md`.
+> ✅ **Duplicación resuelta — TODA la doc vive en `docs/`, sin excepciones.** `Plan de trabajo`, `ORDEN-Y-LEGIBILIDAD.md` y `UX-UI.md` estaban tracked **dos veces** (raíz y `docs/`). Los dos `.md` eran idénticos; **`Plan de trabajo` NO**: el de la raíz era la v1 (153 líneas) y el de `docs/` la v2 (282), y nada indicaba cuál mandaba. **Se borraron las tres copias de la raíz.** La v1 queda en el historial de git (`1c5dd30`, última forma en `e9df215`). En la raíz quedan `CLAUDE.md`, `AUDITORIA_FUNCIONAL.md` y `VERIFICACION-BACKEND.md`.
 > **Regla: un documento nuevo va en `docs/`. Si tenés que elegir entre dos copias, ya es tarde.**
+>
+> 🔴 **`AUDITORIA_FUNCIONAL.md` EXISTE (413 líneas) Y ESTÁ GITIGNOREADO (`.gitignore:30`) — no lo
+> declares borrado.** Un diagnóstico del 26/8/2026 concluyó que no existía y estaba mal: lo buscó
+> con git, y `git ls-files` no lo devuelve, `git status` tampoco lo nombra y `git grep` no lo lee
+> **justamente porque está ignorado**. Los tres callan por diseño, no porque el archivo falte.
+> 🔑 **La regla que deja: para saber si un archivo existe se mira el DISCO (`ls`, `wc -l`), no el
+> índice de git.** Un archivo ignorado es invisible a toda herramienta que lea el índice, y esa
+> invisibilidad se lee igual que la ausencia. Antes de "corregir" este renglón, `ls` la raíz.
 
 ---
 
@@ -169,25 +177,31 @@ OBJETIVOS se canceló (decisión de producto, ver más abajo).
 
 ### 🔴 EL PROBLEMA #1 NO ES CÓDIGO: RRHH no cargó datos
 
-> 🔴 **ESTOS NÚMEROS SON PROYECTADOS, NO MEDIDOS — HAY QUE CONFIRMARLOS.** Describen el estado
-> **posterior** a correr `scripts/limpiar_semilla.py --si`, que se ejecuta desde la Lenovo (es la
+> 🟢 **MEDIDOS CONTRA EL CATÁLOGO VIVO EL 26/8/2026, DESPUÉS DE CORRER
+> `scripts/limpiar_semilla.py --si`.** La semilla del smoke está borrada y verificada tabla por
+> tabla. Hasta esta medición los números de abajo eran una PROYECCIÓN —el plan en seco, restando
+> del catálogo lo que el limpiador iba a borrar— y ese aviso se saca acá porque **las cuatro
+> tasas de llenado que lo motivaban dieron exactamente lo proyectado**: `manager_id` 11/31,
+> `seniority` 3/31, `categoria` 2/31, `horas_contrato` 0/31.
+> Lo que había el 26/8 ANTES de limpiar —41 empleados, 62 filas de `costos_nomina`, 5 vacantes,
+> 5 offboardings— era en su enorme mayoría la semilla, no carga de RRHH.
+> ⚠️ Si alguna vez hay que volver a correr el limpiador, se ejecuta desde la Lenovo: es la
 > máquina que tiene `backend/.env` **y** el manifiesto `scripts/.semilla-smoke.json`; sin el
-> manifiesto, `costos_nomina` queda intacta — ver el encabezado de `_semilla_plan_borrado.py`).
-> Salen del plan en seco calculado contra el catálogo vivo el **26/8/2026**, restando fila por
-> fila lo que el limpiador borra. **Al terminar la limpieza hay que remedirlos contra el catálogo
-> y sacar este aviso.** Lo que había cargado el 26/8 ANTES de limpiar —41 empleados, 62 filas de
-> `costos_nomina`, 5 vacantes, 5 offboardings— era en su enorme mayoría la semilla del smoke, no
-> carga de RRHH.
+> manifiesto, `costos_nomina` queda intacta (ver el encabezado de `_semilla_plan_borrado.py`).
 
-Proyectado tras la limpieza: **2 empresas, 31 empleados** (19 + 12), y casi todo lo demás vacío:
+Estado real: **2 empresas, 31 empleados** (19 + 12), y casi todo lo demás vacío:
 - `manager_id` **11/31** · `seniority` **3/31** · `categoria` **2/31** · `horas_contrato` **0/31**
-- `solicitudes_vacaciones` 0 · `solicitudes_ausencia` 0 · **`costos_nomina` 0** · `offboarding_instancias` 0 · `perfiles_puesto` 0
+- **En CERO:** `solicitudes_vacaciones` · `solicitudes_ausencia` · **`costos_nomina`** · `offboarding_instancias` · `perfiles_puesto` · `capacitaciones` · `eventos_agenda` · `periodos_cerrados` · `reportes_generados`
 - Apenas arrancados: `vacantes` 1 · `objetivos` 1 · `candidatos` 3 · **`clientes` 4 · `horas_proyecto` 1** · `proyectos` 8
-- Poblado: `fecha_nacimiento` 31/31 (por eso el KPI de cumpleaños muestra datos) · `areas` 12 (9 + 3) · `tipos_ausencia` 7 · **`auditoria` 523 filas** · el lote de evaluaciones (10 evaluados, 307 resultados).
+- Poblado: `fecha_nacimiento` 31/31 (por eso el KPI de cumpleaños muestra datos) · `areas` 12 (9 + 3) · `tipos_ausencia` **5** (4 activos + "Injustificada", desactivada a propósito) · **`auditoria` 526 filas** · el lote de evaluaciones, intacto (1 lote, 10 evaluados, 307 resultados).
 
 > ⚠️ **`auditoria` NO vuelve atrás con la limpieza y es a propósito** (la tabla es inmutable por
 > diseño). Sin `--con-auditoria`, `/auditoria` va a mostrar el alta de diez personas que ya no
-> existen. Las 523 filas incluyen todo lo que escribió el smoke.
+> existen. Las 526 filas incluyen todo lo que escribió el smoke. 🔑 **Son 526 y no 523 porque la
+> revocación de los tres usuarios de prueba SUMÓ tres eventos** (`baja_usuario`, medidos el
+> 26/8): se revocaron por la API justamente para que quedara rastro — ver `HANDOFF §6`.
+> ⚠️ **`tipos_ausencia` decía 7 acá y son 5**, contados el 26/8; el número viejo nunca se midió
+> contra el catálogo.
 
 > 🟢 **`manager_id` DEJÓ DE ESTAR EN CERO** (0/19 → 11/31). Es el cambio más importante de este
 > bloque y desbloquea dos cosas que estaban declaradas como no probables: el rol
@@ -213,10 +227,11 @@ Proyectado tras la limpieza: **2 empresas, 31 empleados** (19 + 12), y casi todo
    correcto, no un bug de agrupación. Hay que decírselo ANTES del recorrido, porque la pantalla se
    ve exactamente igual que cuando el reporte estaba roto. Lo mismo con `categoria`: **2 de 31**
    → "Sin especificar: 29".
-   > ⚠️ **Acá decía "13 de 41" y "12 de 41" medido el 25/8, y no era carga de RRHH: 10 de los 41
-   > eran colaboradores de la semilla, sembrados CON seniority y categoría.** El "Sin especificar:
-   > 28" da igual por coincidencia (41−13 = 31−3 = 28), lo que hace que el error no se note
-   > mirando esa pantalla. **Proyectado — confirmar tras la limpieza.**
+   > ✅ **Confirmado contra el catálogo el 26/8/2026, ya sin la semilla: 3/31 y 2/31.** Acá decía
+   > "13 de 41" y "12 de 41" medido el 25/8, y no era carga de RRHH: 10 de los 41 eran
+   > colaboradores de la semilla, sembrados CON seniority y categoría. El "Sin especificar: 28"
+   > da igual por coincidencia (41−13 = 31−3 = 28), lo que hace que el error **no se note mirando
+   > esa pantalla** — por eso hubo que ir al catálogo y no a la UI.
 6. **El seniority se guarda ya presentable** (`Senior`, `Semi Senior`) y el campo sigue siendo de
    texto libre con sugerencias: si escriben uno nuevo, se ve bien solo. Lo único que no se puede
    adivinar son los acentos —"lider" queda "Lider"— así que conviene tipearlo con acento la

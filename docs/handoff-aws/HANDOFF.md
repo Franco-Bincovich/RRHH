@@ -463,10 +463,12 @@ CREATE TRIGGER trg_emp_empleados ... ON public.empleados
 Con ese trigger vivo, **asignarle a alguien un `manager_id` de otra sociedad falla**. O sea: el
 service layer soporta un caso que la base rechaza.
 
-**Hoy no se nota** porque nadie cargó un manager cruzado (**11 de 31** empleados tienen manager —
-proyectado tras la limpieza de la semilla; el 26/8 eran 15 de 41 contando los 10 sembrados—, todos
-de su propia sociedad). Se va a notar el primer día que RRHH intente cargarlo, y el error va a
-venir de la base con un mensaje que no dice nada de todo esto.
+**Hoy no se nota** porque nadie cargó un manager cruzado. Medido contra el catálogo vivo el
+**26/8/2026**, ya sin la semilla: **11 de 31** empleados tienen manager (antes de limpiar eran
+15 de 41, contando los 10 sembrados) y **los 11 lo tienen en su propia sociedad — cero cruzados**,
+verificado con un join de `empleados` contra sí misma comparando `empresa_id`. Se va a notar el
+primer día que RRHH intente cargarlo, y el error va a venir de la base con un mensaje que no dice
+nada de todo esto.
 
 **Las dos salidas, y hay que elegir una a conciencia:**
 
@@ -488,51 +490,62 @@ de baja **sin crear instancia**, así que R6 no ve esa vía— pero unificar R6 
 query: el reporte desagrega por `motivo_egreso`, que vive en la instancia, mientras el legajo
 tiene su propio `motivo_baja`. **Es una decisión de producto.**
 
-Hoy es invisible: `offboarding_instancias` vuelve a **0 filas** tras la limpieza de la semilla.
-Es exactamente la forma en que la masa salarial duplicada pasó meses sin que nadie lo notara.
+Hoy es invisible: `offboarding_instancias` está en **0 filas**, medido contra el catálogo vivo el
+**26/8/2026** después de correr el limpiador. Es exactamente la forma en que la masa salarial
+duplicada pasó meses sin que nadie lo notara.
 
-> ⚠️ **Y estuvo visible unos días, que es el dato que hace la advertencia concreta.** Medido el
-> **26/8/2026**, la tabla tenía **5 filas**, las cinco sobre colaboradores de la semilla del
-> smoke; el limpiador se las lleva a todas (verificado en el plan en seco del 26/8: las 5 caen
-> bajo `empleado_id IN (sembrados)`). O sea que la divergencia entre el KPI y R6 **sí se ve en
-> cuanto la tabla tiene filas**, y va a volver a verse el día que RRHH cargue el primer
-> offboarding real. 🔴 **Proyectado: confirmar que quedó en 0 después de correr el limpiador.**
+> ⚠️ **Y estuvo visible unos días, que es el dato que hace la advertencia concreta.** El mismo
+> 26/8, ANTES de limpiar, la tabla tenía **5 filas**, las cinco sobre colaboradores de la semilla
+> del smoke; el limpiador se las llevó a las cinco. O sea que la divergencia entre el KPI y R6
+> **sí se ve en cuanto la tabla tiene filas**, y va a volver a verse el día que RRHH cargue el
+> primer offboarding real — con la diferencia de que esa vez los datos van a ser reales y nadie
+> va a poder atribuirle el desvío a la semilla.
 
 ---
 
-## 6 · Los tres usuarios de prueba — 🔴 HAY QUE REVOCARLOS
+## 6 · Los tres usuarios de prueba — ✅ YA ESTÁN REVOCADOS (26/8/2026)
 
 La semilla del smoke creó **tres usuarios reales en producción**, uno por rol, con contraseñas
-conocidas y guardadas en texto plano en `scripts/.smoke.env`:
+conocidas y guardadas en texto plano en `scripts/.smoke.env`. **Los tres están revocados desde el
+26/8/2026** — esto ya no es una tarea pendiente, es el estado del sistema:
 
-| Usuario | Rol | Para qué existe |
-|---|---|---|
-| `smk.admin` | `admin_rrhh` | El rol que puede todo: el control contra el que se comparan los otros dos |
-| `smk.gerencia` | `gerencia_lectura` | Lee todo y no escribe nada: toda escritura tiene que darle 403 |
-| `smk.mando` | `mandos_medios` | Sólo VACACIONES y AUSENCIAS, y sólo de los suyos |
+| Usuario | Rol | Para qué existía | Estado |
+|---|---|---|---|
+| `mariano.delvalle@semilla.hrkarstec.site` | `admin_rrhh` | El rol que puede todo: el control contra el que se comparan los otros dos | 🔒 revocado |
+| `silvina.achaval@semilla.hrkarstec.site` | `gerencia_lectura` | Lee todo y no escribe nada: toda escritura tiene que darle 403 | 🔒 revocado |
+| `veronica.ledesma@semilla.hrkarstec.site` | `mandos_medios` | Sólo VACACIONES y AUSENCIAS, y sólo de los suyos | 🔒 revocado |
 
-Los tres tienen mail `@semilla.hrkarstec.site`, que es la marca de agua de la semilla.
+El dominio `@semilla.hrkarstec.site` es la marca de agua de la semilla; **no hay ningún otro
+usuario con ese dominio** (verificado contra el catálogo, junto con los 6 usuarios reales, que
+quedaron todos `activo=true`).
 
-🔴 **Un usuario con contraseña conocida es un acceso, y estos tres están vivos en el sistema que
-sirve tráfico real.** Revocarlos es parte de la entrega, no una tarea de limpieza opcional.
+**Verificado contra el catálogo vivo el 26/8/2026, las tres mitades:**
 
-**Cómo se revocan:** los revoca `scripts/limpiar_semilla.py --si` (§7), que para ellos usa
+- `users.activo = false` en los tres.
+- **Ban en Supabase Auth en los tres** — `auth.users.banned_until` en **2126**, o sea permanente
+  en cualquier sentido que importe.
+- **Tres eventos `baja_usuario` en `auditoria`**, con `accion=DELETE`, todos del 26/8 16:10 UTC.
+  Son la razón por la que la tabla pasó de 523 a **526 filas**.
+
+**Cómo se revocaron:** los revocó `scripts/limpiar_semilla.py --si` (§7), que para ellos usa
 `DELETE /api/usuarios/{id}` — **por la API y no por base, a propósito**: un DELETE desde el script
 borraría sin dejar rastro en la auditoría, que es justo lo que no se quiere de un usuario con
-acceso.
+acceso. Los tres eventos de arriba son esa decisión funcionando.
 
-⚠️ **Es una baja BLANDA y está bien que lo sea.** Deja la fila y pone `activo=false` **+ un ban
-permanente en Supabase Auth**. En `/usuarios` se ven como inactivos, que es lo correcto: **un
-acceso revocado tiene que verse.** Un usuario que desaparece de la pantalla es un usuario que
-nadie puede auditar.
+⚠️ **Es una baja BLANDA y está bien que lo sea.** Deja la fila y pone `activo=false` **+ el ban
+en Supabase Auth**. En `/usuarios` se ven como inactivos, que es lo correcto: **un acceso revocado
+tiene que verse.** Un usuario que desaparece de la pantalla es un usuario que nadie puede auditar.
 
 - El `activo=false` corta la API. El ban corta el login **y** el refresh.
-- 🔴 **Al portear: `ban_duration` no existe en RDS.** La mitad que corta de verdad después de la
-  mudanza es `users.activo`, que es una columna nuestra. **El ban hay que reconstruirlo revocando
-  los refresh tokens**, o los tres van a poder seguir renovando su sesión.
-- Este paso pide credencial de `admin_rrhh`. Si no hay token, el resto del limpiador corre igual
-  y los usuarios quedan avisados como pendientes.
-- 🔴 **Y borrar `scripts/.smoke.env`**, que tiene las tres contraseñas en claro.
+- 🔴 **LO ÚNICO QUE QUEDA VIVO DE ESTE PUNTO, Y ES PARA VOS: `ban_duration` no existe en RDS.**
+  Después de la mudanza, de las dos mitades sobrevive sólo `users.activo`, que es una columna
+  nuestra; el `banned_until` de `auth.users` se queda en Supabase junto con `auth`. **El ban hay
+  que reconstruirlo revocando los refresh tokens** (`migracionAWS/token_repo_NEW`), o los tres
+  vuelven a poder renovar sesión el día del cutover. 🔑 **Es un riesgo de MIGRACIÓN, no de hoy:**
+  hoy están cortados por las dos vías.
+- ✅ **`scripts/.smoke.env` ya no existe** — era el único archivo del repo con las tres
+  contraseñas en claro, y estaba gitignoreado. (No confundir con `scripts/.semilla.env`, que sigue
+  ahí y es otra cosa: la credencial de `admin_rrhh` para correr los scripts, también gitignoreada.)
 
 ---
 
@@ -544,10 +557,11 @@ python scripts/limpiar_semilla.py --si   # ejecuta
 python scripts/limpiar_semilla.py --si --con-auditoria
 ```
 
-🔴 **AL 25/8/2026 LA SEMILLA SIGUE ENTERA EN PRODUCCIÓN Y NO SE CORRIÓ NUNCA EL LIMPIADOR.**
-Medido contra el catálogo: **10 colaboradores sembrados, 3 usuarios de prueba, 2 áreas `SMK ·` y
-2 proyectos `SMK ·`**. Si estás leyendo esto y esos números siguen ahí, el limpiador sigue sin
-correrse.
+✅ **CORRIÓ EL 26/8/2026 Y LA SEMILLA ESTÁ BORRADA, verificada tabla por tabla contra el
+catálogo vivo.** Hasta ese día este párrafo decía *"al 25/8 la semilla sigue entera y no se corrió
+nunca el limpiador"*, y era cierto: había **10 colaboradores sembrados, 3 usuarios de prueba, 2
+áreas `SMK ·` y 2 proyectos `SMK ·`**. Ya no queda ninguno de los cuatro grupos. Los tres usuarios
+quedaron revocados, no borrados (§6, que es el comportamiento correcto y está explicado ahí).
 
 **Cómo distingue lo sembrado de lo real — dos capas, y el plan es la UNIÓN:**
 
@@ -569,14 +583,15 @@ se lo borraría.
 
 | Queda | Detalle |
 |---|---|
-| **Los 3 usuarios de prueba, como INACTIVOS** | Baja blanda, no borrado. Ver §6 |
+| **Los 3 usuarios de prueba, como INACTIVOS** | Baja blanda, no borrado: `activo=false` + ban en Auth + 3 eventos en `auditoria`. ✅ Hecho el 26/8. Ver §6 |
 | **Los eventos de `auditoria`** | 🔴 **La tabla es INMUTABLE por diseño en este repo.** Sin `--con-auditoria`, /auditoria va a mostrar el alta de diez personas que ya no existen. Con el flag, se borran los eventos que apuntan a lo sembrado |
 | **Lo que cargó RRHH de verdad** | Los 31 colaboradores reales, la vacante real, el objetivo real, los 4 clientes, las 12 áreas reales |
 
 ### 🔴 Y lo que hay que decirle a quien mire el dashboard después
 
-**`costos_nomina` vuelve a 0 al limpiar, y con eso la mitad del dashboard vuelve al estado sin
-datos.** Hoy tiene **62 filas**, todas sembradas.
+**`costos_nomina` está en 0 y con eso la mitad del dashboard está en el estado sin datos**
+(medido el 26/8/2026, después de limpiar). Antes de limpiar tenía **62 filas, todas sembradas**:
+o sea que el dashboard con datos que se vio esos días era la semilla, no carga de RRHH.
 
 **Qué se va a ver vacío o en cero, y NO es un bug:**
 
@@ -597,8 +612,12 @@ pantalla en blanco.
 
 Lo mismo con otras dos cosas que van a leerse como bugs y no lo son:
 
-- **`seniority` cargado en 13 de 41.** "Distribución de plantilla" va a decir **"Sin especificar:
-  28"**, y esa vez va a ser el dato correcto. Ídem `categoria` (12 de 41).
+- **`seniority` cargado en 3 de 31** (medido el 26/8 sin la semilla). "Distribución de plantilla"
+  va a decir **"Sin especificar: 28"**, y esa vez va a ser el dato correcto. Ídem `categoria`
+  (**2 de 31** → "Sin especificar: 29"). ⚠️ Acá decía "13 de 41" y "12 de 41", que era la
+  medición CON la semilla: los 10 sembrados venían con los dos campos cargados. El
+  "Sin especificar: 28" da igual por coincidencia (41−13 = 31−3), así que **el error no se
+  notaba mirando la pantalla** — hubo que ir al catálogo.
 - **Con 31 colaboradores y un proyecto que concentra 13, casi todo filtro devuelve casi todo.**
   No es un filtro roto: es el reparto real de la gente.
 
