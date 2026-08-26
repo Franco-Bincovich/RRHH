@@ -41,6 +41,58 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-26 · El código de vacante se escribe en texto natural y el sistema lo canoniza · commit por bloque
+
+**Qué cambió:** Capital Humano escribe el código de la búsqueda **como le sale** —`Lider de
+equipo`, `Ecónomo 2026`, `Analista Sr.`— y la aplicación lo convierte al canónico
+(`LIDER-DE-EQUIPO`, `ECONOMO-2026`, `ANALISTA-SR`) **mostrándolo debajo del campo antes de
+guardar**. El CHECK que dejó la 122 rechazaba esos textos, que es lo único que una persona iba a
+escribir. La conversión saca acentos y ñ, convierte en un guion todo lo que no es letra ni
+dígito, y **rechaza —nunca recorta— lo que se pasa del largo**. La unicidad se mide sobre el
+CANÓNICO, así que `Lider de equipo` y `LIDER DE EQUIPO` chocan entre sí.
+
+El matcher de CVs se adaptó en dos puntos: **le saca los acentos al ASUNTO** con la misma función
+que canoniza (si no, `[Ecónomo 2026]` no matchearía `ECONOMO-2026`, que es el caso normal) y
+**tolera entre las partes del código exactamente lo que la conversión colapsa**. Consecuencia
+buscada: un asunto que dice `Lider de equipo` —el título del aviso, que es lo que la gente
+realmente copia— matchea el código `LIDER-DE-EQUIPO`.
+
+**Impacto en infraestructura:**
+
+- 🔴 **Migración nueva: `123_vacantes_codigo_texto_natural.sql`. ESCRITA, NO CORRIDA.**
+  **No es destructiva:** sube el techo de largo del CHECK `vacantes_codigo_formato` de 30 a 60.
+  Todo lo que hoy pasa lo sigue pasando (30 ⊂ 60) y no toca ninguna fila. **Orden: después de la
+  122.**
+  - **Por qué 60:** con 30 rebotaba `Analista de Sistemas Semi Senior`, que es el título de
+    **VAC-0002, una de las cinco búsquedas reales cargadas**, y canoniza a 32 caracteres.
+  - 🔴 **NO toca el índice `vacantes_codigo_uq ON vacantes (upper(codigo))` ni la secuencia.** El
+    índice sigue siendo LA garantía de unicidad, y ahora además es lo que hace que dos textos
+    distintos con el mismo canónico no puedan convivir — porque **la columna guarda siempre el
+    canónico, nunca el texto crudo**.
+- ✅ **CORRECCIÓN a la entrada anterior: la migración 122 YA CORRIÓ.** La bitácora del mismo día
+  decía "escrita, no corrida". Verificado contra el catálogo vivo el 26/8/2026: el CHECK en
+  producción es el suyo, y el índice único está y es funcional sobre `upper(codigo)` sin
+  `empresa_id`. Por eso la 123 es una migración nueva y no un retoque de aquélla.
+- **Variables de entorno:** ninguna nueva.
+- **Dependencias:** ninguna nueva. La conversión usa `unicodedata` (stdlib) del lado del backend y
+  `String.normalize("NFD")` del lado del navegador.
+- **Buckets de Storage:** sin cambios.
+- **Endpoints:** ninguno nuevo, ninguno con contrato distinto. `POST`/`PUT /api/vacantes` siguen
+  aceptando `codigo`; lo que cambió es qué se acepta adentro del campo. Los códigos de error son
+  los mismos (`CODIGO_VACANTE_INVALIDO` 422, `CODIGO_VACANTE_DUPLICADO` 409).
+- **Procesos que no corren en serverless:** sin cambios.
+- **Autenticación:** sin cambios.
+- **URLs/dominios:** sin cambios.
+
+**Para el equipo de Capital Humano, al entregar:**
+1. El campo acepta texto natural y **debajo muestra el código que se va a guardar**. Lo que
+   escriban NO es lo que se guarda, y por eso está a la vista: si dice otra cosa, corrijan antes.
+2. Los 5 códigos existentes (`VAC-0001` a `VAC-0005`) **no se tocan** y siguen siendo válidos.
+3. ⚠️ **Conviene que el código tenga una parte que lo distinga** (`ANALISTA-SISTEMAS-2026` mejor
+   que `ANALISTA`). Con un código genérico, un asunto como "Analista de sistemas - CV" lo
+   matchea, porque el código está literalmente adentro. Está declarado en el encabezado de
+   `services/_gmail_matcher.py`.
+
 ## 2026-08-26 · Costos fuera del dashboard + el código de vacante lo escribe Capital Humano · commit por bloque
 
 **Qué cambió:** dos bloques independientes.

@@ -21,7 +21,8 @@ from typing import Optional
 from uuid import UUID
 
 from schemas.vacante import VacanteCreate, VacanteResponse, VacanteUpdate
-from services._vacante_codigo import asegurar_unico, choque_de_codigo, normalizar
+from services._vacante_codigo import normalizar
+from services._vacante_codigo_choque import asegurar_unico, choque_de_codigo
 from utils.errors import AppError
 from utils.logger import logger
 
@@ -61,8 +62,10 @@ def crear(repo, audit, data: VacanteCreate, created_by: str) -> VacanteResponse:
     """
     Crea una nueva vacante en estado 'nueva'. empresa_id viene en el body.
 
-    El código lo escribe Capital Humano (mig 122): se normaliza a su forma canónica y se verifica
-    que no lo tenga otra búsqueda ANTES de escribir, para poder decir cuál lo tiene.
+    El código lo escribe Capital Humano en TEXTO NATURAL ("Lider de equipo"): se convierte a su
+    forma canónica (`LIDER-DE-EQUIPO`) y se verifica que no la tenga otra búsqueda ANTES de
+    escribir, para poder decir cuál. 🔴 La unicidad se mide sobre el CANÓNICO, no sobre lo
+    tipeado: `Lider de equipo` y `LIDER DE EQUIPO` son el mismo código.
 
     Args:
         repo: VacanteRepo (o doble de test).

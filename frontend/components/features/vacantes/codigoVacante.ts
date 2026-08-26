@@ -1,51 +1,70 @@
 /**
- * La forma del código de la búsqueda, del lado del navegador.
+ * La conversión del código de la búsqueda, del lado del navegador.
+ *
+ * 🔴 CAPITAL HUMANO ESCRIBE TEXTO NATURAL Y ACÁ SE CONVIERTE, EN VIVO. `"Lider de equipo"` →
+ * `LIDER-DE-EQUIPO`. La pantalla muestra el resultado debajo del campo mientras se escribe
+ * (`VacanteCampoCodigo`, "Se va a usar: …") y ésa es la razón de que esta función esté acá y no
+ * sólo en el backend: **convertir en silencio sería peor que rechazar**. Escriben una cosa, el
+ * sistema guarda otra, y se enteran cuando el candidato pregunta por qué su CV no llegó.
  *
  * 🔴 ES UN ESPEJO DE `backend/services/_vacante_codigo.py`, Y ESTÁ DECLARADO COMO TAL. La
- * autoridad es el backend —y detrás suyo el CHECK de la migración 122—: si estas dos reglas
- * divergen, la que decide es la de allá y acá sólo cambia si el error llega antes o después de
- * viajar. Existe igual porque un código mal escrito es de los errores que más se cometen (se
- * tipea a mano, una vez, y después se pega en un aviso) y esperar el round-trip para enterarse
- * de que sobraba un espacio es exactamente lo que §3 pide evitar.
+ * autoridad es el backend —y detrás suyo el CHECK de las migraciones 122/123—: si las reglas
+ * divergen, la que decide es la de allá. Hay un test EN EL BACKEND
+ * (`tests/test_vacante_codigo_unico.py`) que abre este archivo y verifica que sigan diciendo lo
+ * mismo; el viaje va en esa dirección porque el backend es el que manda, mismo criterio que
+ * `test_espejo_permisos.py`.
  *
  * ⚠️ Lo que este archivo NO hace, a propósito: chequear la UNICIDAD. Eso requiere mirar todas las
  * vacantes del sistema —incluidas las de otras empresas— y sólo la base puede contestarlo sin
  * mentir. El front no adivina: manda y muestra el mensaje del backend, que además nombra la
  * búsqueda que ya tiene ese código.
- *
- * Hay un test EN EL BACKEND (`tests/test_vacante_codigo_unico.py`) que abre este archivo y
- * verifica que las tres reglas sigan diciendo lo mismo. El viaje va en esa dirección porque el
- * backend es el que manda — mismo criterio que `test_espejo_permisos.py`.
  */
 
 export const CODIGO_MIN = 3
-export const CODIGO_MAX = 30
+/** 60 y no 30: "Analista de Sistemas Semi Senior" —una vacante real— canoniza a 32. Ver la mig 123. */
+export const CODIGO_MAX = 60
 
-/** Letras, dígitos y guion como separador. Sin guion al principio, al final, ni dos seguidos. */
+/** Letras, dígitos y guion como separador. La conversión no puede producir otra forma. */
 const FORMA = /^[A-Z0-9]+(-[A-Z0-9]+)*$/
 
 /**
- * El código en su forma canónica: MAYÚSCULAS y un guion como único separador.
- * `eco 2026`, ` ECO_2026 ` y `eco--2026` son la misma búsqueda.
+ * El texto convertido a código, SIN validar. `""` si no queda nada utilizable.
+ *
+ * Las dos reglas, y son las mismas que las del backend:
+ *   · **sin acentos ni ñ** — `Ecónomo` → `ECONOMO`, `Diseño` → `DISENO`. El código termina en el
+ *     asunto de un mail que se tipea desde el teléfono, donde una tilde se escribe mal la mitad
+ *     de las veces. (El matcher le saca los acentos AL ASUNTO con la misma regla, así que un
+ *     candidato que escriba `Ecónomo 2026` matchea igual.)
+ *   · **todo lo que no es letra ni dígito es separador**, y un run de separadores es UN guion.
  */
 export function normalizarCodigo(valor: string): string {
-  return valor.trim().toUpperCase().replace(/[\s._-]+/g, "-").replace(/^-+|-+$/g, "")
+  return valor
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{Mn}/gu, "")     // las marcas diacríticas que quedaron sueltas al descomponer
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
 }
 
 /**
- * El mensaje de error del campo, o `undefined` si el código sirve.
+ * El mensaje de error del campo, o `undefined` si el texto sirve.
  *
- * 🔑 El mensaje dice QUÉ CORREGIR y muestra un ejemplo usable, no "formato inválido": quien lo
- * está escribiendo por primera vez no tiene de dónde deducir la regla.
+ * 🔑 Todo mensaje habla del CÓDIGO RESULTANTE, no del texto tipeado, y dice qué hacer: el usuario
+ * ve la conversión debajo del campo, así que decirle "«LI» es muy corto" es lo que conecta lo que
+ * escribió con lo que el sistema entendió.
  */
 export function validarCodigo(valor: string): string | undefined {
   const codigo = normalizarCodigo(valor)
-  if (!codigo) return "El código es requerido: es lo que el candidato pone en el asunto del mail (ej. ECO-2026)"
-  if (codigo.length < CODIGO_MIN) return `Muy corto: mínimo ${CODIGO_MIN} caracteres (ej. ECO-2026)`
-  if (codigo.length > CODIGO_MAX) return `Muy largo: máximo ${CODIGO_MAX} caracteres`
+  if (!codigo) return "El código es requerido: escribí un nombre con letras o números, por ejemplo «Líder de equipo»"
+  if (codigo.length < CODIGO_MIN) return `«${codigo}» es muy corto: necesita al menos ${CODIGO_MIN} caracteres, o va a matchear cualquier palabra de un asunto`
   // Antes que la forma general: "sólo números" es el error que más ayuda explicar, porque el
   // código parece un número de búsqueda y el motivo del rechazo no es evidente.
-  if (!/[A-Z]/.test(codigo)) return "Necesita al menos una letra (ej. ECO-2026): un código de puros números matchearía cualquier año suelto en el asunto"
-  if (!FORMA.test(codigo)) return "Usá sólo letras, números y guiones, sin acentos ni símbolos (ej. ECO-2026)"
+  if (!/[A-Z]/.test(codigo)) return `«${codigo}» no tiene ninguna letra: un código de puros números matchea cualquier año suelto en el asunto de un mail`
+  // 🔴 RECHAZA, NO RECORTA. Dos títulos distintos que empiecen igual recortados al mismo largo
+  // darían EL MISMO código, y la segunda búsqueda se rechazaría como duplicada de una que su
+  // autor nunca escribió. Ver el mismo comentario en `_vacante_codigo.normalizar`.
+  if (codigo.length > CODIGO_MAX) return `El código queda en ${codigo.length} caracteres y el máximo es ${CODIGO_MAX}: acortá el texto ${codigo.length - CODIGO_MAX} caracteres`
+  if (!FORMA.test(codigo)) return "Usá letras, números y espacios (ej. Líder de equipo)"
   return undefined
 }

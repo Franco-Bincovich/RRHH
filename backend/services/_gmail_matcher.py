@@ -23,9 +23,36 @@ perfectamente identificable — y eso no falla con un error: el CV cae en "pendi
 tiene que mirarlo a mano, que es justo lo que el código venía a evitar.
 
 Por eso el reconocimiento sigue siendo **permisivo en la escritura y estricto en la identidad**:
-por cada código conocido se arma un patrón que tolera mayúsculas/minúsculas y cualquier
-separador (`-`, espacio, punto, guion bajo, o ninguno) ENTRE SUS PARTES, pero exige que el
-código completo esté ahí.
+por cada código conocido se arma un patrón que tolera mayúsculas/minúsculas y CUALQUIER cosa que
+no sea letra ni dígito ENTRE SUS PARTES, pero exige que el código completo esté ahí.
+
+## 🔴 EL ASUNTO SE LEE SIN ACENTOS, CON LA MISMA FUNCIÓN QUE LOS SACA AL GUARDAR
+
+El código guardado nunca tiene acentos —`Ecónomo 2026` se guarda `ECONOMO-2026`— pero **el asunto
+del mail SÍ los puede traer**, y ése es el caso normal: el candidato copia el título del aviso tal
+como está escrito. Si el matcher comparara el canónico contra un asunto con tilde, `[Ecónomo
+2026]` NO matchearía y el CV iría a revisión manual — el módulo entero fallando justo en el caso
+que se quería cubrir.
+
+Se resuelve pasando el asunto por `_vacante_codigo.sin_acentos`, **la misma función** que usa la
+conversión. Dos implementaciones de "sacar acentos" que se separaran darían dos lecturas
+distintas del mismo texto en cada punta. Las posiciones que devuelve el regex son sobre el texto
+YA normalizado y sólo se comparan entre sí (contención), así que no hace falta mapearlas de vuelta
+al asunto original.
+
+## 🔴 EL SEPARADOR TOLERADO ES EL MISMO QUE LA CONVERSIÓN COLAPSA — Y POR ESO MATCHEA EL AVISO
+
+`canonico` transforma en `-` **todo lo que no es letra ni dígito**; acá se tolera exactamente eso
+entre las partes. La consecuencia sale gratis y es la que importa: `LIDER-DE-EQUIPO` matchea un
+asunto que dice **`Lider de equipo`**, que es lo que la gente realmente escribe —copian el título
+del aviso, no el código entre corchetes—. Si el separador tolerado fuera más angosto que el que la
+conversión colapsa, habría textos que el sistema acepta al guardar y no reconoce al leer.
+
+⚠️ **EL PRECIO, DECLARADO:** con códigos de texto natural sube el riesgo de falso positivo. Si una
+búsqueda se llama `ANALISTA` a secas, un asunto "Analista de sistemas - CV" la matchea. No es un
+bug —el código está literalmente en el asunto— sino el costo de elegir un código genérico, y la
+salida es de PRODUCTO: **conviene que el código tenga una parte que lo distinga**
+(`ANALISTA-SISTEMAS-2026`). Si además existe la búsqueda larga, la contención ya hace que gane.
 
 ## 🔴 EL BORDE ALFANUMÉRICO ES LO QUE HACE QUE ESTO NO SE ROMPA
 
@@ -67,10 +94,13 @@ import re
 from functools import lru_cache
 from typing import Iterable, List, Optional, Tuple
 
-# Entre las partes de un código: cualquier separador o ninguno. `ECO-2026` reconoce `ECO 2026`,
-# `eco_2026` y `Eco2026`, que es como lo va a escribir quien copia de un aviso.
-_ENTRE_PARTES = r"[\s._\-]*"
-_PARTES = re.compile(r"[\s._\-]+")
+from services._vacante_codigo import sin_acentos
+
+# Entre las partes de un código: cualquier cosa que no sea letra ni dígito, o nada. Es EL MISMO
+# conjunto que `canonico` colapsa a `-` al guardar (ver el bloque de la simetría, arriba), así que
+# `LIDER-DE-EQUIPO` reconoce `Lider de equipo`, `LIDER, DE EQUIPO` y `LIDERDEEQUIPO`.
+_ENTRE_PARTES = r"[^A-Za-z0-9]*"
+_PARTES = re.compile(r"[^A-Za-z0-9]+")
 
 
 @lru_cache(maxsize=512)
@@ -95,16 +125,20 @@ def codigos_en(texto: Optional[str], codigos_conocidos: Iterable[str]) -> List[s
     `codigo_ambiguo`).
 
     Args:
-        texto: el asunto del mail. `None` (un mail sin asunto) devuelve `[]`, no revienta.
+        texto: el asunto del mail, tal como llegó. Se le sacan los acentos acá adentro. `None`
+            (un mail sin asunto) devuelve `[]`, no revienta.
         codigos_conocidos: los códigos de las vacantes que existen, tal como están guardados.
             🔴 SE PASAN, NO SE CONSULTAN: son una query por CORRIDA, no por mail. Es un
             parámetro obligatorio justamente para que no se pueda esconder un N+1 acá adentro.
     """
+    # Sin acentos ANTES de buscar: el asunto los puede traer y el código guardado nunca. Ver el
+    # bloque 🔴 del encabezado — es el caso normal, no el borde.
+    asunto = sin_acentos(texto or "")
     hallados: List[Tuple[int, int, str]] = []
     for codigo in codigos_conocidos:
         if not codigo:
             continue
-        for m in _patron(codigo).finditer(texto or ""):
+        for m in _patron(codigo).finditer(asunto):
             hallados.append((m.start(), m.end(), codigo))
     spans = [(a, b) for a, b, _ in hallados]
     vistos: List[str] = []

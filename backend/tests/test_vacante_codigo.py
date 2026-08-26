@@ -70,6 +70,7 @@ from schemas.vacante import VacanteCreate, VacanteResponse  # noqa: E402
 _MIGRACIONES = Path(__file__).resolve().parent.parent / "migrations"
 _MIGRACION = _MIGRACIONES / "097_vacantes_codigo.sql"
 _MIGRACION_122 = _MIGRACIONES / "122_vacantes_codigo_manual.sql"
+_MIGRACION_123 = _MIGRACIONES / "123_vacantes_codigo_texto_natural.sql"
 EMPRESA, AREA = uuid4(), uuid4()
 
 
@@ -282,6 +283,48 @@ class TestLaMigracion122:
         import re as _re
         assert _re.match(r"^[A-Z0-9]+(-[A-Z0-9]+)*$", "VAC-0001")
         assert 3 <= len("VAC-0001") <= 30 and _re.search(r"[A-Z]", "VAC-0001")
+
+
+class TestLaMigracion123:
+    """La 123 como texto: sube el techo de largo de 30 a 60, y no toca nada más.
+
+    🔴 ES UNA MIGRACIÓN NUEVA Y NO UN RETOQUE DE LA 122 porque **la 122 YA CORRIÓ** — verificado
+    contra el catálogo vivo el 26/8/2026: el CHECK en producción es el suyo. Una migración que ya
+    corrió es historia y no se reescribe.
+    """
+
+    def test_sube_el_techo_a_60(self) -> None:
+        """Con 30, "Analista de Sistemas Semi Senior" —el título de VAC-0002, una de las cinco
+        vacantes reales— no se puede cargar por su nombre: canoniza a 32."""
+        sql = _MIGRACION_123.read_text(encoding="utf-8")
+        assert "BETWEEN 3 AND 60" in sql
+        assert "AND 30" not in sql, "quedó el techo viejo"
+
+    def test_reemplaza_el_check_en_vez_de_agregarle_otro(self) -> None:
+        """Dos CHECKs sobre la misma columna se cumplen por AND: dejar el de la 122 haría que el
+        techo efectivo siguiera siendo 30, sin ningún error que apunte a la migración."""
+        sql = _MIGRACION_123.read_text(encoding="utf-8")
+        assert "DROP CONSTRAINT IF EXISTS vacantes_codigo_formato" in sql
+        assert "ADD CONSTRAINT vacantes_codigo_formato" in sql
+
+    def test_NO_toca_el_indice_unico_ni_la_secuencia(self) -> None:
+        sql = _MIGRACION_123.read_text(encoding="utf-8").upper()
+        assert "DROP INDEX" not in sql and "DROP SEQUENCE" not in sql
+        assert "VACANTES_CODIGO_UQ" in sql, "ni siquiera menciona el índice que cuida"
+
+    def test_conserva_las_otras_dos_reglas_del_formato(self) -> None:
+        """Ensancha el largo, no la forma: un código con acentos o de puros números sigue afuera."""
+        sql = _MIGRACION_123.read_text(encoding="utf-8")
+        assert "^[A-Z0-9]+(-[A-Z0-9]+)*$" in sql
+        assert "codigo ~ '[A-Z]'" in sql
+
+    def test_el_schema_declara_el_mismo_techo_que_la_migracion(self) -> None:
+        """🔴 `db/schema.sql` es la fuente de RECONSTRUCCIÓN: si se queda en 30, el rebuild en RDS
+        levanta una base que rechaza códigos que producción acepta. Es el tercer desfasaje de este
+        archivo que el repo ya pagó."""
+        schema = (Path(__file__).resolve().parents[1] / "db" / "schema.sql").read_text(encoding="utf-8")
+        linea = next(ln for ln in schema.splitlines() if "vacantes_codigo_formato" in ln)
+        assert "<= 60" in linea, f"schema.sql quedó con otro techo: {linea.strip()[:120]}"
 
 
 # ── 2. El lookup del matcher ──────────────────────────────────────────────────

@@ -41,8 +41,9 @@ import pytest  # noqa: E402
 
 from schemas.vacante import VacanteCreate, VacanteUpdate  # noqa: E402
 from services._vacante_codigo import (  # noqa: E402
-    _FORMA, CODIGO_DUPLICADO, CODIGO_INVALIDO, MAX_LARGO, MIN_LARGO, asegurar_unico, normalizar,
+    _FORMA, CODIGO_INVALIDO, MAX_LARGO, MIN_LARGO, canonico, normalizar,
 )
+from services._vacante_codigo_choque import CODIGO_DUPLICADO, asegurar_unico  # noqa: E402
 from services._vacante_write import actualizar, crear  # noqa: E402
 from utils.errors import AppError  # noqa: E402
 
@@ -111,21 +112,41 @@ def _create(codigo: str) -> VacanteCreate:
 
 # ── 1. La forma ───────────────────────────────────────────────────────────────
 
-class TestNormalizar:
+class TestLaConversion:
+    """🔴 CAPITAL HUMANO ESCRIBE TEXTO NATURAL. El sistema lo convierte, no lo rebota.
 
-    @pytest.mark.parametrize("escrito", [
-        "ECO-2026", "eco-2026", " eco-2026 ", "ECO 2026", "eco_2026", "ECO.2026",
-        "ECO  -  2026", "--ECO-2026--",
+    Los casos NO son formas canónicas con variaciones: son títulos de puesto como los escribiría
+    una persona. Ése es el punto de la feature — el CHECK anterior rechazaba «Lider de equipo», y
+    un campo que rebota lo único que alguien va a escribir termina cargado como `L1`.
+    """
+
+    @pytest.mark.parametrize("escrito,esperado", [
+        ("Lider de equipo", "LIDER-DE-EQUIPO"),
+        ("Analista Sr.", "ANALISTA-SR"),
+        ("Ecónomo 2026", "ECONOMO-2026"),                    # acento
+        ("Diseño UX/UI", "DISENO-UX-UI"),                    # ñ y barra
+        ("  Jefe   de   Logística  ", "JEFE-DE-LOGISTICA"),  # espacios de más → UN guion
+        ("Analista (Turno noche)", "ANALISTA-TURNO-NOCHE"),  # paréntesis
+        ("Ventas, Interior", "VENTAS-INTERIOR"),             # coma
+        ("--eco-2026--", "ECO-2026"),                        # bordes
+        ("ECO-2026", "ECO-2026"),                            # ya canónico: no lo toca
     ], ids=lambda v: repr(v))
-    def test_todas_estas_formas_son_el_mismo_codigo(self, escrito) -> None:
-        """El índice único ya es sobre `upper(codigo)`, así que estas variantes NO podían
-        convivir. Sin normalizar, lo que cambia es qué se MUESTRA: la ficha, el aviso de LinkedIn
-        y el export mostrarían la variante que le salió a quien lo cargó primero."""
-        assert normalizar(escrito) == "ECO-2026"
+    def test_convierte_lo_que_escribe_una_persona(self, escrito, esperado) -> None:
+        assert normalizar(escrito) == esperado
+
+    @pytest.mark.parametrize("uno,otro", [
+        ("Lider de equipo", "LIDER DE EQUIPO"),
+        ("Lider de equipo", "lider.de.equipo"),
+        ("Ecónomo 2026", "Economo 2026"),
+    ], ids=lambda v: repr(v))
+    def test_dos_textos_que_dan_EL_MISMO_codigo(self, uno, otro) -> None:
+        """🔴 Es la mitad de la unicidad: si estos dos no colapsaran al mismo canónico, el
+        segundo se guardaría como una búsqueda distinta y el matcher tendría dos candidatas para
+        el mismo asunto. Ver `test_la_unicidad_se_mide_sobre_el_CANONICO`."""
+        assert normalizar(uno) == normalizar(otro)
 
     @pytest.mark.parametrize("malo", [
-        "", "   ", None, "-", "AB", "2026", "123-456", "ECO%2026", "ECO_%", "ECÓ-2026",
-        "A" * 31,
+        "", "   ", None, "-", "...", "AB", "Ñú", "2026", "123 / 456", "( )",
     ], ids=lambda v: repr(v))
     def test_lo_que_no_se_puede_usar_como_codigo(self, malo) -> None:
         with pytest.raises(AppError) as e:
@@ -140,13 +161,66 @@ class TestNormalizar:
         no puede inventar una respuesta distinta."""
         with pytest.raises(AppError):
             normalizar("2026")
-        assert normalizar("ECO2026") == "ECO2026", "con una letra alcanza"
+        assert normalizar("Eco 2026") == "ECO-2026", "con una letra alcanza"
 
-    def test_el_mensaje_dice_QUE_HACER_y_no_solo_que_esta_mal(self) -> None:
+    def test_el_mensaje_habla_del_CODIGO_RESULTANTE_no_del_texto_tipeado(self) -> None:
+        """La pantalla muestra la conversión debajo del campo, así que nombrar el resultado es lo
+        que conecta lo que escribió con lo que el sistema entendió. "«ÑÚ» es muy corto" sería
+        incomprensible; "«NU» es muy corto" se entiende de inmediato."""
         with pytest.raises(AppError) as e:
-            normalizar("ECÓ 2026")
-        assert "ECO-2026" in e.value.message, "el mensaje no muestra un ejemplo utilizable"
-        assert "letra" in e.value.message
+            normalizar("Ñú")
+        assert "«NU»" in e.value.message
+        assert str(MIN_LARGO) in e.value.message
+
+    def test_canonico_NO_valida_porque_la_pantalla_convierte_mientras_se_escribe(self) -> None:
+        """`canonico` existe separada de `normalizar` para la vista previa en vivo: un texto a
+        medio tipear todavía no es un error. Si la pantalla usara `normalizar`, cada tecla
+        levantaría una excepción hasta llegar al tercer carácter."""
+        assert canonico("Li") == "LI"
+        assert canonico("") == ""
+        assert canonico("...") == ""
+
+
+class TestElLargoRechazaNoRecorta:
+    """🔴 LA DECISIÓN MÁS CARA DEL MÓDULO, y por eso tiene su propia clase.
+
+    Recortar en silencio produce **dos códigos iguales a partir de textos distintos**, y ahí la
+    segunda búsqueda se rechaza como duplicada de una que su autor nunca escribió — o el aviso
+    sale publicado con un código que esa persona no vio nunca.
+    """
+
+    LARGO = "Responsable de Administracion y Finanzas del Grupo para la Region Centro"
+
+    def test_pasarse_del_maximo_es_un_rechazo(self) -> None:
+        with pytest.raises(AppError) as e:
+            normalizar(self.LARGO)
+        assert e.value.code == CODIGO_INVALIDO
+        assert str(MAX_LARGO) in e.value.message, "no dice cuál es el máximo"
+        assert "acortá" in e.value.message.lower(), "no dice qué hacer"
+
+    def test_EL_CONTRASTE_no_devuelve_un_codigo_recortado(self) -> None:
+        """Sin esto, un `normalizar` que devolviera `codigo[:MAX_LARGO]` pasaría el test de arriba
+        si además levantara... y no lo haría. Se afirma que NO existe ningún retorno."""
+        with pytest.raises(AppError):
+            normalizar(self.LARGO)
+        assert len(canonico(self.LARGO)) > MAX_LARGO, "el caso de prueba dejó de ser largo"
+
+    def test_dos_titulos_distintos_que_un_recorte_habria_colapsado(self) -> None:
+        """El caso concreto que justifica el rechazo: los dos empiezan igual y sólo se separan
+        después del carácter 40. Recortados a 30 serían el MISMO código."""
+        a = "Analista de Sistemas Senior con especializacion en datos"
+        b = "Analista de Sistemas Senior con especializacion en redes"
+        assert canonico(a)[:30] == canonico(b)[:30], "el caso de prueba ya no colapsa"
+        assert canonico(a) != canonico(b), "enteros son distintos, que es lo que se preserva"
+
+    def test_el_maximo_es_60_porque_con_30_rebotaba_una_vacante_REAL(self) -> None:
+        """🔴 "Analista de Sistemas Semi Senior" es el título de VAC-0002, una de las cinco
+        búsquedas cargadas en producción. Canoniza a 32 caracteres: con el techo de 30 que puso la
+        122, esa búsqueda no se podría dar de alta con su propio nombre."""
+        assert MAX_LARGO == 60
+        codigo = normalizar("Analista de Sistemas Semi Senior")
+        assert codigo == "ANALISTA-DE-SISTEMAS-SEMI-SENIOR"
+        assert len(codigo) == 32 > 30
 
 
 # ── 2. La unicidad ────────────────────────────────────────────────────────────
@@ -190,6 +264,22 @@ class TestNoSePuedeRepetir:
         repo = _Repo()
         vac = crear(repo, _Audit(), _create(" log 01 "), "u1")
         assert repo.guardados == ["LOG-01"] and vac.codigo == "LOG-01"
+
+    def test_la_unicidad_se_mide_sobre_el_CANONICO(self) -> None:
+        """🔴 EL REQUISITO. El doble tiene `ECO-2026` tomado; se da de alta «Ecónomo 2026», que es
+        texto distinto y el MISMO código. Tiene que rechazarse nombrando a la dueña.
+
+        ¿Qué tendría que ser distinto para que falle? Que `crear` consultara con el texto crudo:
+        `find_by_codigo("Ecónomo 2026")` no encontraría nada, el alta pasaría el chequeo previo, y
+        el choque lo cazaría recién el índice — sin poder nombrar a la dueña."""
+        repo = _Repo()
+        repo.usados["LIDER-DE-EQUIPO"] = V_DUEÑA          # ya existe, cargada así
+        with pytest.raises(AppError) as e:
+            crear(repo, _Audit(), _create("Lider de equipo"), "u1")   # texto distinto, mismo código
+        assert e.value.code == CODIGO_DUPLICADO
+        assert "«LIDER-DE-EQUIPO»" in e.value.message, "el mensaje no habla del canónico"
+        assert "Analista contable" in e.value.message
+        assert repo.guardados == []
 
 
 class TestLaCarreraLaResuelveLaBase:
@@ -255,6 +345,28 @@ class TestElFrontDiceLoMismo:
     def test_la_regla_de_al_menos_una_letra_esta_en_los_dos(self) -> None:
         texto = self.FRONT.read_text(encoding="utf-8")
         assert "/[A-Z]/" in texto, "el front no exige al menos una letra: `2026` viajaría"
+
+    def test_el_front_tambien_saca_los_acentos(self) -> None:
+        """🔴 La regla que MÁS caro sale si se separa: el front mostraría "Se va a usar:
+        ECÓNOMO-2026" y el backend guardaría `ECONOMO-2026`. La vista previa —que existe
+        justamente para que nadie se sorprenda con lo que se guardó— estaría mintiendo."""
+        texto = self.FRONT.read_text(encoding="utf-8")
+        assert 'normalize("NFD")' in texto, "el front no descompone: la ñ y las tildes sobrevivirían"
+        assert "\\p{Mn}" in texto, "el front no tira las marcas diacríticas"
+
+    def test_el_front_trata_TODO_lo_no_alfanumerico_como_separador(self) -> None:
+        """Si el front colapsara sólo espacios y el backend todo, «Analista Sr.» daría
+        `ANALISTA-SR.` en la vista previa y `ANALISTA-SR` en la base."""
+        texto = self.FRONT.read_text(encoding="utf-8")
+        assert "[^A-Z0-9]+" in texto, "el front usa otro conjunto de separadores"
+
+    def test_las_dos_puntas_convierten_IGUAL_los_casos_del_enunciado(self) -> None:
+        """La contracara de los tres tests de arriba, que miran el TEXTO del archivo: éste
+        verifica el RESULTADO sobre los casos que Capital Humano va a escribir. Sin él, un espejo
+        que tuviera los mismos literales pero en otro orden pasaría igual."""
+        assert canonico("Lider de equipo") == "LIDER-DE-EQUIPO"
+        assert canonico("Analista Sr.") == "ANALISTA-SR"
+        assert canonico("Ecónomo 2026") == "ECONOMO-2026"
 
 
 # ── 4. El evento de auditoría ─────────────────────────────────────────────────

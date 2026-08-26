@@ -4,9 +4,10 @@
 ## 🔴 CAMBIÓ LA PREMISA EL 26/8/2026 — Y ES LO QUE HAY QUE LEER ANTES DE TOCAR ESTE ARCHIVO
 
 Hasta hoy el código lo emitía la base con formato fijo (`VAC` + 4 dígitos, mig 097) y el matcher
-lo reconocía con UN regex, sin saber qué vacantes existen. Ahora lo escribe Capital Humano y
-puede ser cualquier cosa (mig 122), así que `codigos_en` recibe LOS CÓDIGOS QUE EXISTEN y busca
-esos. Todos los casos de acá pasan por `CONOCIDOS`.
+lo reconocía con UN regex, sin saber qué vacantes existen. Ahora lo escribe Capital Humano **en
+texto natural** y el sistema lo canoniza (`Lider de equipo` → `LIDER-DE-EQUIPO`, migs 122/123),
+así que `codigos_en` recibe LOS CÓDIGOS QUE EXISTEN y busca esos. Todos los casos de acá pasan
+por `CONOCIDOS`.
 
 ## 🚨 ¿QUÉ TENDRÍA QUE SER DISTINTO PARA QUE ESTOS TESTS FALLEN?
 
@@ -19,6 +20,9 @@ esos. Todos los casos de acá pasan por `CONOCIDOS`.
    los rompe. Por eso la lista incluye un código corto que es prefijo de otro.
 3. **Que faltara el contraste de `ECONOMIA`.** Sin él, un matcher que buscara el código como
    substring pelado —sin bordes— pasaría todo el primer bloque.
+4. **Que los casos con acento estuvieran escritos SIN acento.** `TestElAsuntoPuedeTraerAcentos` es
+   el único bloque que puede desmentir que el asunto se normalice, y si sus asuntos vinieran ya
+   sin tilde pasaría con el `sin_acentos` borrado.
 
 Los casos salieron de cómo escribe alguien que copia de un aviso de LinkedIn desde el teléfono,
 no de imaginar bordes.
@@ -43,7 +47,11 @@ from services._gmail_matcher import codigos_en  # noqa: E402
 # Los códigos que EXISTEN. `ECO` y `ECO-2026` conviven a propósito: es el par que rompe un
 # matcher sin regla de contención. `VAC-0001` sobrevive porque es el que tienen las 5 vacantes
 # reales de producción — los códigos viejos siguen siendo códigos válidos.
-CONOCIDOS = ["VAC-0001", "VAC-0002", "VAC-0003", "VAC-10000", "ECO", "ECO-2026"]
+# `LIDER-DE-EQUIPO` y `ECONOMO-2026` son códigos como los produce la conversión desde texto
+# natural: sin acentos, con guiones donde había espacios. Son los que prueban los dos bloques
+# nuevos — el asunto con tilde y el asunto con el título del aviso.
+CONOCIDOS = ["VAC-0001", "VAC-0002", "VAC-0003", "VAC-10000", "ECO", "ECO-2026",
+             "LIDER-DE-EQUIPO", "ECONOMO-2026", "ANALISTA-SR"]
 
 
 @pytest.mark.parametrize("asunto", [
@@ -132,6 +140,74 @@ class TestUnCodigoQueContieneAOtro:
         """Dos menciones DISJUNTAS son dos códigos de verdad: el mail va a revisión, que es lo
         correcto. La regla de contención mira posiciones, no largos."""
         assert codigos_en("[ECO] y [ECO-2026]", CONOCIDOS) == ["ECO", "ECO-2026"]
+
+
+class TestElAsuntoPuedeTraerAcentos:
+    """🔴 EL CÓDIGO GUARDADO NUNCA TIENE ACENTOS; EL ASUNTO SÍ, Y ES EL CASO NORMAL.
+
+    `Ecónomo 2026` se guarda `ECONOMO-2026`, pero el candidato copia el título del aviso tal como
+    está escrito, con la tilde. Si el matcher comparara el canónico contra el asunto crudo, el
+    módulo fallaría justo en el caso que la conversión vino a habilitar.
+
+    Se resuelve pasando el asunto por `_vacante_codigo.sin_acentos`, LA MISMA función que canoniza
+    al guardar: dos implementaciones que se separaran darían dos lecturas del mismo texto.
+    """
+
+    @pytest.mark.parametrize("asunto", [
+        "[Ecónomo 2026]", "Ecónomo 2026 - CV", "económo 2026", "ECÓNOMO-2026",
+        "Postulación al puesto de Ecónomo 2026",
+    ], ids=lambda v: v)
+    def test_el_acento_del_asunto_no_impide_el_match(self, asunto) -> None:
+        assert codigos_en(asunto, CONOCIDOS) == ["ECONOMO-2026"]
+
+    def test_EL_CONTRASTE_sin_acento_tambien(self) -> None:
+        """Si sólo pasara el caso con tilde, `sin_acentos` podría estar rompiendo el otro."""
+        assert codigos_en("[Economo 2026]", CONOCIDOS) == ["ECONOMO-2026"]
+
+    def test_la_ñ_tampoco(self) -> None:
+        """`Diseño` canoniza a `DISENO`; un asunto con la ñ tiene que resolver igual."""
+        assert codigos_en("[Diseño UX]", ["DISENO-UX"]) == ["DISENO-UX"]
+
+
+class TestElAsuntoConELTEXTONATURAL:
+    """🔴 EL CASO REAL: LA GENTE COPIA EL TÍTULO DEL AVISO, NO EL CÓDIGO ENTRE CORCHETES.
+
+    Y matchea, sin ningún trabajo extra: el patrón de cada código tolera entre sus partes
+    exactamente lo que la conversión colapsa a `-` —todo lo que no es letra ni dígito—, así que
+    `LIDER-DE-EQUIPO` reconoce `Lider de equipo`. La simetría es la feature; si el separador
+    tolerado fuera más angosto que el que la conversión colapsa, habría textos que el sistema
+    acepta al guardar y no reconoce al leer.
+    """
+
+    @pytest.mark.parametrize("asunto", [
+        "Lider de equipo",
+        "Líder de equipo",                       # con tilde, como está en el aviso
+        "Postulación: Lider de equipo",
+        "CV para Lider de Equipo - Juan Perez",
+        "LIDER, DE (EQUIPO)",                    # separadores que no son espacio ni guion
+        "liderdeequipo",                         # sin ningún separador
+        "[LIDER-DE-EQUIPO]",                     # y el código canónico, obviamente
+    ], ids=lambda v: v)
+    def test_encuentra_el_titulo_del_aviso(self, asunto) -> None:
+        assert codigos_en(asunto, CONOCIDOS) == ["LIDER-DE-EQUIPO"]
+
+    def test_un_punto_en_el_medio_tampoco_molesta(self) -> None:
+        """`Analista Sr.` canoniza a `ANALISTA-SR`, y el asunto va a traer el punto."""
+        assert codigos_en("Analista Sr. - mi cv", CONOCIDOS) == ["ANALISTA-SR"]
+
+    def test_EL_PRECIO_DECLARADO_un_codigo_generico_matchea_de_mas(self) -> None:
+        """⚠️ No es un bug del matcher: el código está literalmente en el asunto. Es el costo de
+        elegir un código genérico, y está escrito en el encabezado de `_gmail_matcher` — la salida
+        es de producto (que el código lleve una parte que lo distinga), no de código.
+
+        Este test existe para que ese costo esté MEDIDO y no se descubra en producción."""
+        assert codigos_en("Analista Sr de sistemas", ["ANALISTA-SR"]) == ["ANALISTA-SR"]
+
+    def test_pero_las_palabras_sueltas_del_titulo_NO_alcanzan(self) -> None:
+        """El contraste que salva al caso anterior de ser una catástrofe: hace falta el código
+        COMPLETO. Un asunto que sólo trae parte del título no matchea nada."""
+        assert codigos_en("Busco puesto de lider", CONOCIDOS) == []
+        assert codigos_en("equipo de trabajo", CONOCIDOS) == []
 
 
 class TestDosCodigos:
