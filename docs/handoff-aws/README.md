@@ -39,8 +39,8 @@ en `docs/`.
 
 | Archivo | Qué va | Cuándo |
 |---|---|---|
-| `HANDOFF.md` | El documento principal: rutas públicas, techos medidos, decisiones que condicionan el cutover | Fase 3 (J4) |
-| `BARRIDO-PATRONES.md` | El resultado de los 4 greps de control, con lo que se arregló y lo que se declara | Fase 3 (3.5) |
+| [`HANDOFF.md`](HANDOFF.md) | ✅ **Escrito (25/8).** 🔴 **EMPEZAR POR ACÁ.** La arquitectura en una página · las decisiones que parecen raras y por qué (RLS omitido, la barrera en el service, el 404 idéntico, el fail-closed del ownership) · qué se rompe al portear (los 4 ids de ENTRADA, las dos trampas de `maybe_single`, el guard del cliente real) · los 54 barridos · lo que queda abierto y **no es decisión técnica** · los 3 usuarios de prueba a revocar · qué queda después de limpiar la semilla | Fase 3 (J4) |
+| [`BARRIDO-PATRONES.md`](BARRIDO-PATRONES.md) | ✅ **Escrito (25/8).** El resultado de los 4 greps **más el control positivo de cada uno**: los greps ya estuvieron ciegos una vez, así que un conteo sin control no prueba nada. Dos siguen viendo parcial, con su punto ciego medido y su complemento sugerido | Fase 3 (3.5) |
 | [`STORAGE.md`](STORAGE.md) | ✅ **Escrito (12/8).** Los 3 buckets, qué guarda cada uno, y **qué archivo toca y cuáles NO** el día del cutover | Fase 0 (0.7) |
 | [`ACCESO-A-DATOS.md`](ACCESO-A-DATOS.md) | ✅ **Escrito (12/8).** Dónde vive el acceso a datos: 328 de 386 llamadas en `repositories/`, las 58 restantes con archivo:línea, y **los 2 catálogos de tabla dinámica que un porteo por búsqueda y reemplazo NO ve** | Fase 0 (0.9) |
 | `RLS.md` | Las 58 policies que **no** se portan, y por qué | Fase 3 (J4) |

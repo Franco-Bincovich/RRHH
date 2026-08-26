@@ -41,6 +41,67 @@ entrada, la sesión no terminó.
 
 ---
 
+## 2026-08-25 · El handoff: .env.example, DEPLOY desde cero, los 4 greps y el documento de infra · commit por bloque
+
+**Qué cambió:** documentación de entrega, más un borrado de datos. Cinco bloques.
+
+**(1) Residuo del smoke.** Se borraron las 2 filas de `periodos_cerrados` (enero 2019, una por
+empresa). 🔴 **Pero la premisa con la que se pidió el bloque no se sostiene, y el hallazgo real es
+más grande:** `periodos_cerrados` YA estaba en `ORDEN` y el limpiador YA las reconocía por sus
+fechas literales, así que **no hubo cambio de código**. Sobrevivían por otro motivo:
+**`scripts/limpiar_semilla.py` nunca se corrió y la semilla entera sigue viva en producción** —
+medido contra el catálogo: **10 colaboradores sembrados, 3 usuarios de prueba, 2 áreas `SMK ·`,
+2 proyectos `SMK ·`, 62 filas de `costos_nomina`**. Correr el limpiador es la acción pendiente,
+y está documentada en el handoff §7.
+
+**(2) `.env.example` reescrito entero** (raíz, 214 líneas). El que había era de julio y mentía en
+dos cosas: traía `RESEND_API_KEY`/`RESEND_FROM_EMAIL`, que se sacaron el 2/8, y dos
+`NEXT_PUBLIC_SUPABASE_*` que el front no lee (no habla con Supabase). Ahora están **las 20 del
+backend + las 3 del front**, separadas en obligatorias / con default, cada una con qué es, de
+dónde sale, y **marcadas build-time vs runtime** — las tres `NEXT_PUBLIC_*` quedan horneadas en
+el bundle y exigen redeploy, no reinicio. Cierra con una sección de lo que NO va, para que nadie
+reponga Resend.
+
+**(3) `docs/DEPLOY.md`** pasó de 253 a 472 líneas. **No se reescribió** (lo que había estaba
+verificado): se corrigieron dos números viejos —`LIMITE_FILAS_EXPORT` decía 5.000 y son 20.000
+desde el 13/8, y el conteo de migraciones decía 001→112— y se agregaron **§0 levantar desde
+cero** (los dos requirements, el `.env.local` que no es `.env`, crear un usuario a mano en tres
+pasos, los cuatro comandos de verificación), **§6 Google Cloud** (consent screen, los 4 scopes y
+por qué esos, el redirect literal, y que agregar un scope obliga a reconectar con un 403 que
+Google no anticipa) y **§7 qué hacer si una migración falla a la mitad** (Postgres commitea
+statement por statement: un archivo que muere en el 7 de 12 deja 6 aplicados).
+
+**(4) Los 4 greps de porteo** corridos y documentados en `docs/handoff-aws/BARRIDO-PATRONES.md`,
+que el README pedía desde hacía semanas y no existía. 🔴 **Se corrieron además contra un archivo
+de control** con los patrones que cada uno DEBE y NO debe encontrar: dos de los cuatro **siguen
+viendo parcial**, con su punto ciego medido y su complemento escrito. El de comparaciones de id
+tiene un ciego NUEVO que nadie había registrado (no ve `fila["id"] == uid`, que en un repo cuyos
+repositorios devuelven dicts de PostgREST es el acceso más frecuente).
+
+**(5) `docs/handoff-aws/HANDOFF.md`** (615 líneas), el documento principal de entrega. Ocho
+secciones: arquitectura en una página · las decisiones que parecen equivocadas y no lo son ·
+qué se rompe al portear · el índice de los 54 barridos con los 14 que nacieron de un bug real ·
+lo que queda abierto y es decisión de Karstec · los 3 usuarios de prueba · la semilla · qué leer.
+
+**Impacto en infraestructura:** **Ninguno en código.** Sin migraciones, sin variables nuevas, sin
+dependencias, sin buckets, sin endpoints. El único cambio de datos es el DELETE de las 2 filas de
+`periodos_cerrados` en producción.
+
+🔴 **PERO EL HANDOFF DEJA CUATRO COSAS QUE SÍ SON ACCIÓN DE INFRAESTRUCTURA, y conviene que estén
+también acá:**
+- **Los 3 usuarios de prueba (`smk.admin`, `smk.gerencia`, `smk.mando`) siguen ACTIVOS en
+  producción**, con contraseñas conocidas guardadas en claro en `scripts/.smoke.env`. Revocarlos
+  es parte de la entrega. Los revoca el limpiador; el archivo hay que borrarlo a mano.
+- **`ban_duration` de Supabase Auth no tiene equivalente en RDS.** Es la mitad que corta el
+  refresh en la baja blanda de usuarios; del otro lado hay que revocar los refresh tokens.
+- **La casilla de Gmail: si es un Gmail personal en consent screen External + Testing, el
+  `refresh_token` caduca a los 7 días** y no hay ningún aviso — los mails simplemente dejan de
+  salir. La salida es una cuenta de Workspace del dominio.
+- 🔴 **`trg_emp_empleados` (mig 094) PROHÍBE en la base lo que `_alcance_mandos.py` declara
+  soportar**: un empleado con superior de otra empresa del grupo. Hoy no se nota porque nadie lo
+  cargó; se va a notar el primer día que RRHH lo intente, con un error de base que no explica
+  nada. Es decisión de producto, está detallada en el handoff §5.4.
+
 ## 2026-08-25 · Normalización del legajo cargado + tres secciones fuera del menú · commit por bloque
 
 **Qué cambió:** dos cosas independientes.
@@ -77,9 +138,13 @@ el punto (2) es front puro y no cambia una sola ruta servida.
 el 25/8/2026, no reverificados desde el 12/8):
 - **`periodos_cerrados` tiene 2 filas, no 0** como declara CLAUDE.md. Son las DOS empresas con
   `2019-01-01 → 2019-01-31` y `modulo NULL`, creadas el 23/8/2026 por la corrida del smoke.
-  No bloquean nada real —la regla sólo aplica a `mandos_medios` y ningún registro se solapa con
-  enero de 2019— pero son residuo del smoke que el limpiador no borró, que es exactamente la
-  clase de fuga que el barrido nº 43 vino a vigilar.
+  No bloquean nada real: la regla sólo aplica a `mandos_medios` y ningún registro se solapa con
+  enero de 2019.
+  🔴 **CORRECCIÓN (25/8/2026, sesión siguiente): esta entrada decía "residuo del smoke que el
+  limpiador no borró" y eso era una inferencia mía, equivocada.** El limpiador SÍ las conoce —
+  `periodos_cerrados` está en `ORDEN` desde que se escribió y `_semilla_plan_barrera` las
+  reconoce por sus fechas literales. No las borró **porque nunca se corrió**: la semilla entera
+  seguía viva en producción. Ver la entrada de esa sesión.
 - **`costos_nomina` tiene 62 filas, no 0.** O sea que el KPI de masa salarial y el historial
   salarial de la ficha YA muestran datos reales — y la pantalla que los lista es justamente una
   de las tres que salieron del menú. `horas_proyecto` tiene 2 filas.

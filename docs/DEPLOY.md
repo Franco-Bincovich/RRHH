@@ -6,6 +6,101 @@
 
 ---
 
+## 0. Levantar el sistema desde cero
+
+> **Para alguien que nunca vio este repo.** Son cuatro piezas: una base Postgres, un backend
+> Python, un frontend Next.js y —opcional— una cuenta de Google para la integración de Gmail.
+> El orden importa en dos lugares y están marcados.
+
+### Lo que hace falta tener instalado
+
+| | Versión | Por qué esa |
+|---|---|---|
+| Python | **3.11 o 3.12** | 3.11 es la de producción (Vercel). En Mac, 3.12 anda; el `python3` del sistema puede traer una versión vieja de `supabase` que rompe el import — **siempre venv** |
+| Node | **20+** | Next.js 16 |
+| Una base **PostgreSQL** | 15+ | Hoy es Supabase; el destino es RDS |
+
+### El orden, entero
+
+**1 · La base.** Crear una base vacía y correr `backend/db/schema.sql` completo. Después, los
+**dos** scripts de triggers (§2). 🔴 **No correr las migraciones encima**: `schema.sql` ya las
+incluye a todas, y `migrations/` es historial, no bootstrap. El detalle está en §2.
+
+**2 · El backend.**
+
+```bash
+cd backend
+python3 -m venv venv && source venv/bin/activate      # en Windows: venv\Scripts\activate
+pip install -r requirements.txt -r requirements-dev.txt
+cp ../.env.example .env    # y completar los 5 valores obligatorios de §1
+uvicorn main:app --reload --port 8000
+```
+
+🔴 **Los DOS requirements, no sólo el primero.** Sin `requirements-dev.txt` la suite de tests
+falla con **33 errores que no son del código**: sin `pytest-asyncio` los tests async "no están
+soportados nativamente" y sin `python-docx` revientan los de export. Es la confusión más
+repetida de este repo — instalá los dos antes de creerle a un rojo.
+
+Verificación: `curl -i http://localhost:8000/health` → **200** con `{status, env}`. Es el único
+endpoint sin auth del sistema base. 🔴 **`/` da 404 y eso es correcto**: el backend no tiene
+endpoint raíz.
+
+**3 · El frontend.**
+
+```bash
+cd frontend
+npm install
+cp ../.env.example .env.local   # 🔴 .env.local, NO .env — Next sólo lee el primero
+npm run dev
+```
+
+De ese archivo el front sólo usa `NEXT_PUBLIC_API_URL` (obligatoria), `NEXT_PUBLIC_MARCA` y
+`ANTHROPIC_API_KEY` (opcional, sólo el chat). Las demás las ignora.
+
+🔴 **`NEXT_PUBLIC_API_URL` es build-time.** En `npm run dev` se relee al reiniciar, pero en un
+deploy queda horneada en el bundle: cambiarla en el panel sin redeployar no hace absolutamente
+nada. Ver §1.
+
+**4 · Datos mínimos para que las pantallas no salgan vacías.** El schema trae estructura y nada
+más. Hace falta, como mínimo: **una empresa**, **un usuario** y **los tipos de ausencia base**.
+Crear un usuario a mano son tres pasos y el orden no es opcional:
+
+1. Crear el auth user en el dashboard de Supabase con **Auto Confirm** encendido.
+2. Copiar el UUID que quedó.
+3. `INSERT` en `public.users` con **ese mismo id** (hay una FK `users.id → auth.users(id)`),
+   `rol` en `admin_rrhh` | `gerencia_lectura` | `mandos_medios`.
+
+⚠️ En AWS esa FK se dropea y el id pasa a ser `DEFAULT gen_random_uuid()` — ver §5.
+
+**5 · Google, sólo si se quiere Gmail.** Es independiente del resto: sin configurar, conectar
+Gmail devuelve un 503 con `GOOGLE_NOT_CONFIGURED` y **nada más del sistema se rompe**. El
+procedimiento está en §6.
+
+### Verificar que quedó bien — los cuatro comandos
+
+```bash
+cd backend  && venv/bin/python -m pytest -q       # esperado: 4468 passed, 14 skipped
+cd frontend && node_modules/.bin/tsc --noEmit     # esperado: 0 errores
+cd frontend && npm test                           # esperado: 1663 passed en 149 archivos
+cd frontend && npm run build                      # esperado: "Compiled successfully"
+```
+
+🔴 **Los cuatro, y `npm run build` NO es redundante con `tsc`.** Miran cosas distintas: `tsc` los
+tipos, `vitest` el comportamiento, y `build` las reglas de Next y la compilación real de
+Tailwind/Turbopack — un `import` colocado arriba de un `"use client"` rompe el build y `tsc` no
+dice una palabra, porque es una regla de Next y no del sistema de tipos.
+
+> ⚠️ **En Mac, `npm run build` deja basura que rompe el `tsc` siguiente.** Aparecen duplicados
+> de `.next/types/routes.d.ts` con un sufijo numérico que va subiendo (`routes.d 2.ts`, luego
+> `routes.d 3.ts`), y como `tsconfig.json` incluye `.next/types/**/*.ts`, el `tsc` siguiente da 3
+> errores que no son del código. Limpiar con `find .next -name "* [0-9].*" -delete`, o correr el
+> build **último**.
+>
+> ⚠️ **En Mac, `npx tsc` a secas baja el paquete equivocado** (`tsc@2.0.4`, que no es TypeScript).
+> Usar siempre el binario local: `node_modules/.bin/tsc`.
+
+---
+
 ## 1. Variables de entorno
 
 ### Backend — OBLIGATORIAS (sin default)
@@ -134,7 +229,7 @@ archivo trae **0**. *(Recontado el 12/8/2026: acá decía 50 / 41 / 9, valores p
 
 ### `migrations/` es historial, NO bootstrap
 
-**001 → 112** (110 archivos). Documentan cómo se llegó hasta acá. Correrlas en orden contra una
+**001 → 121** (119 archivos: faltan la 075, 076 y 077, que viven en `migracionAWS/`). 🔴 **121 es el NÚMERO de la última, no la cantidad.** Documentan cómo se llegó hasta acá. Correrlas en orden contra una
 base vacía **no reconstruye producción de forma confiable**: hay dependencias de orden rotas,
 operaciones no idempotentes, y parte del modelo multiempresa se aplicó a mano en producción y se
 versionó retroactivamente de forma incompleta.
@@ -189,7 +284,7 @@ eso mismo.
 | Constante | Valor | Dónde | Por qué |
 |---|---|---|---|
 | `MAX_SIZE_SUBIDA` | **4,2 MB** | `utils/files.py:27` | Por debajo de los 4,5 de plataforma: el multipart agrega headers y el nombre del archivo, así que un archivo de exactamente 4,5 MB ya se pasa |
-| `LIMITE_FILAS_EXPORT` | **5000** | `services/_limite_export.py:36` | 🔴 **El techo real de un export no son las filas, es el TIEMPO.** Manda el timeout de 30 s. Un número alto "por las dudas" reproduce el bug con otra cara: en vez de un archivo truncado, un timeout sin mensaje |
+| `LIMITE_FILAS_EXPORT` | **20000** | `services/_limite_export.py` | 🔴 **El techo real de un export no son las filas, es el TIEMPO — y el timeout que corta NO es el de PostgREST.** Medido sobre 27.597 filas: traer las filas 4,2 s, CSV 4,1 s, Excel 39-53 s, **PDF 126 s**. La base aporta el 8%; el 92% es construir el archivo, así que el que rige es el techo de **función (300 s)**, no los 30 s de httpx. Era 5.000 hasta el 13/8/2026 y no alcanzaba ni para UN MES de auditoría a escala. ⚠️ Lo que 20.000 NO cubre es el año entero (~64.000 eventos): eso pide export asíncrono, no un número más grande |
 | `IMPORT_PRESUPUESTO_SEGUNDOS` | **280** | env | Debajo de los 300. Al agotarse, el import corta **entre filas** y devuelve el reporte parcial |
 | `MAIL_PRESUPUESTO_SEGUNDOS` | **120** | env | Más chico: cada unidad es una llamada de red externa |
 
@@ -240,6 +335,130 @@ El código nuevo vive aislado en `migracionAWS/`, sin tocar `backend/`. Minas ya
   infra): timeout de conexión explícito (el default de 60 s cuelga el arranque si RDS es
   inalcanzable) y `verify-full` en vez de `require`.
 - **Modelo Anthropic:** que ningún string con fecha sobreviva. Alias sin fecha: `claude-sonnet-4-6`.
+
+---
+
+## 6. Google Cloud — la integración de Gmail
+
+**Qué es.** Una sola conexión OAuth que hace **dos** cosas: **recibe** los mails de candidatos
+(`gmail_service.py`) y **envía** los mails de RRHH (`services/mailer/`). No hay dos integraciones.
+
+🔴 **Lo primero que hay que entender, porque no es evidente: la casilla es UNA SOLA, del
+SISTEMA, y no la del usuario que aprieta el botón.** Es una decisión de producto, no una
+limitación: un proceso automático no tiene un `user_id` que aportar, y con casilla designada el
+circuito de prueba y el real son el MISMO. Quien conecta define de qué dirección van a salir
+todos los mails del sistema.
+
+### Los pasos en la consola
+
+1. **Crear (o elegir) un proyecto** en `console.cloud.google.com`.
+2. **Habilitar la Gmail API**: APIs & Services → Library → "Gmail API" → Enable. Sin esto el
+   OAuth completa bien y la primera llamada falla con `accessNotConfigured`.
+3. **Configurar la OAuth consent screen.**
+   - Tipo **Internal** si la casilla es de un Google Workspace del dominio: es lo que
+     corresponde y evita el proceso de verificación de Google.
+   - Tipo **External** si la casilla es un Gmail común. 🔴 En External, mientras la app esté en
+     **Testing**, el `refresh_token` **caduca a los 7 días** y hay que reconectar. Es la mina
+     más cara de esta integración y no da ningún error hasta que se rompe. Ver "Lo que queda
+     abierto" en el handoff.
+   - Agregar los cuatro scopes de abajo y, en Testing, agregar la casilla como **Test user**.
+4. **Crear las credenciales**: Credentials → Create → OAuth client ID → **Web application**.
+   Copiar `Client ID` y `Client secret` a `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
+5. **Registrar el redirect URI**, en "Authorized redirect URIs", **exactamente igual** al valor
+   de `GOOGLE_REDIRECT_URI`:
+
+   ```
+   http://localhost:8000/api/integraciones/google/callback     ← desarrollo
+   https://<host-del-backend>/api/integraciones/google/callback ← producción
+   ```
+
+   🔴 **Google compara string por string.** Una barra final de más, `http` en lugar de `https` o
+   un host distinto dan `redirect_uri_mismatch` y el flujo ni siquiera arranca. Van los dos
+   dados de alta, no uno.
+6. **Conectar desde la app**: /configuracion → Integraciones → Conectar Google, con la casilla
+   del sistema.
+
+### Los cuatro scopes que se piden, y por qué esos
+
+| Scope | Para qué |
+|---|---|
+| `gmail.readonly` | Recibir los mails de candidatos |
+| `gmail.send` | Enviar. **Es el mínimo que permite mandar**: sólo mandar, ni leer ni borrar. Se prefiere a `gmail.modify` o `mail.google.com`, que dan el buzón entero para la misma tarea |
+| `userinfo.email` + `openid` | Saber qué casilla quedó conectada, para mostrarla en pantalla |
+
+> 🔴 **AGREGAR UN SCOPE OBLIGA A RECONECTAR, y Google no avisa.** No amplía retroactivamente un
+> grant ya otorgado: el `refresh_token` viejo sigue siendo válido y sigue sirviendo para lo que
+> ya tenía, pero el primer intento de usar el scope nuevo devuelve **403
+> `ACCESS_TOKEN_SCOPE_INSUFFICIENT`** — un 403, no un 401, porque el token es válido y lo que
+> falta es el permiso. Por eso el sistema persiste los scopes **realmente concedidos** (no los
+> pedidos) y la pantalla de integraciones avisa ANTES, en vez de que alguien se entere por un
+> 403 en medio de un envío masivo.
+
+### El `state` del callback no es el `user_id`
+
+Vale saberlo antes de tocar el flujo: el `state` es un **nonce de un solo uso** de 256 bits
+(`secrets.token_urlsafe(32)`), persistido **hasheado** en la tabla `oauth_states` (migración
+080) con TTL de 10 minutos, y **la identidad del usuario sale de la fila persistida, nunca del
+query param**. El consumo es un `DELETE ... RETURNING`: el borrado ES la verificación, así que
+si dos callbacks llegan a la vez con el mismo valor, la base le da la fila a uno solo.
+
+🔴 **La tabla `oauth_states` tiene que existir antes de que el flujo funcione.** Si el destino se
+levanta desde `schema.sql` ya está incluida; si se migra a mano, es la 080.
+
+---
+
+## 7. Si una migración falla a la mitad
+
+### Lo primero: ¿en qué estado quedó?
+
+**PostgreSQL ejecuta cada statement en su propia transacción implícita, no el archivo entero.**
+O sea que un `.sql` que muere en el statement 7 de 12 deja **los 6 primeros aplicados y
+commiteados**. No hay rollback automático del archivo. Esto es lo contrario de lo que mucha
+gente asume, y es la razón por la que el diagnóstico se hace **mirando el objeto**, no el log.
+
+```sql
+-- ¿existe la tabla / la columna / el índice que la migración iba a crear?
+select table_name, column_name from information_schema.columns
+ where table_name = 'la_tabla' order by ordinal_position;
+select indexname from pg_indexes where tablename = 'la_tabla';
+select conname, contype from pg_constraint
+ where conrelid = 'public.la_tabla'::regclass;
+```
+
+🔴 **Contar tablas NO alcanza para decir en qué estado quedó la base, y en este repo eso ya
+costó una vez.** El encabezado de `schema.sql` afirmó que las migraciones 108–112 estaban todas
+corridas habiendo verificado **sólo el conteo de tablas** (52 = 52). La 109 no crea ni borra
+tablas —borra una columna y tres objetos— así que era invisible a esa comprobación, y estuvo
+pendiente sin que nadie lo notara. **Hay que mirar el objeto que la migración toca.**
+
+### Cómo se sale, según qué falló
+
+| Caso | Qué hacer |
+|---|---|
+| **Aditiva** (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, índices) | **Arreglar la causa y volver a correr el archivo entero.** Son idempotentes por construcción: los statements ya aplicados no hacen nada la segunda vez. Es el caso de la enorme mayoría |
+| **Destructiva** (`DROP COLUMN` / `DROP TABLE`) | 🔴 **No hay vuelta atrás sin backup.** Antes de correr una, tomar un snapshot de la base. Hoy son cuatro y las cuatro ya corrieron: 084, 109, 112 y 080 |
+| **Falló por dependencia de orden** (una FK a una tabla que todavía no existe) | Correr la que falta primero. Las migraciones declaran en su propio encabezado si exigen orden |
+| **Falló a mitad y NO es idempotente** | Aplicar a mano **sólo los statements que faltan**, verificando objeto por objeto con las queries de arriba. No reejecutar el archivo: los primeros statements van a chocar |
+
+### La mina concreta que ya está identificada
+
+🔴 **`migrations/094_recrear_triggers_empresa.sql` aborta en un rebuild desde cero.** Declara 9
+triggers `trg_emp_*`; el noveno es sobre `sucesion_posiciones`, **tabla que la migración 112
+dropeó**. Y `DROP TRIGGER IF EXISTS x ON tabla` falla igual si la que no existe es la TABLA — el
+`IF EXISTS` cubre el trigger, no la relación.
+
+**Para el rebuild no se usa la 094**: se usa `backend/db/funciones_y_triggers.sql`, generado del
+catálogo vivo. La 094 queda como historial. (Es la misma mina que la 077 ya tenía desactivada;
+a la 094 no se le hizo.)
+
+### Antes de correr cualquier migración en producción
+
+1. **Snapshot de la base.** Es un botón en Supabase; en RDS es un snapshot manual.
+2. **Leer el encabezado del archivo**: dice si es destructiva y si exige orden.
+3. **Correrla en una branch de Supabase o en una copia**, no directo contra producción.
+4. **Después, regenerar `backend/db/schema.sql` desde el catálogo.** Una migración aplicada sin
+   regenerar el snapshot deja el documento de reconstrucción mintiendo, que es la deuda que este
+   repo ya pagó tres veces.
 
 ---
 
